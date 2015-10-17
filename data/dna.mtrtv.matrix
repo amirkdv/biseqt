@@ -1,0 +1,7 @@
+#! * mode: python *
+[  # A  C   G   T
+  [ m, tv, tr, tv], # A
+  [tv,  m, tv, tv], # C
+  [tr, tv,  m, tr], # G
+  [tv, tv, tr,  m]  # T
+]
