@@ -60,9 +60,12 @@ class Alphabet(CffiObject):
 class Sequence():
     """Wraps a C char[] and its corresponding `idx_seq int[]`. Note that this
     is *not* a CffiObject subclass since there's no underlying C struct. String
-    indexing and splicing are supported:
+    indexing and slicing are supported:
+
         x = seq.Sequence("A2C3A2", seq.Alphabet(["A2", "C3"]))
-        print x[:-1] # => "A2C3"
+        x[1]   # => "C3"
+        x[:2]  # => "C3A2"
+        x[:-2] # => "A2"
 
     Attributes:
         alphabet (Alphabet)
@@ -71,11 +74,11 @@ class Sequence():
     """
     def __init__(self, string, alphabet):
         assert(len(string) % alphabet.letter_length == 0)
+        self.alphabet = alphabet
+        self.length = len(string)/alphabet.letter_length
         global lib
         self.c_charseq = ffi.new('char[]', string)
-        self.length = len(string)/alphabet.letter_length
         self.c_idxseq = lib.idxseq_from_charseq(alphabet.c_obj, self.c_charseq, self.length)
-        self.alphabet = alphabet
 
     def __repr__(self):
         N, L = self.length, self.alphabet.letter_length
@@ -97,8 +100,9 @@ class Sequence():
         return ffi.string(self.c_charseq)[s*self.alphabet.letter_length: f*self.alphabet.letter_length]
 
     def mutate(self, go_prob=0, ge_prob=0, subst_probs=None, insert_dist=None):
-        """Mutates a given sequence with specified probabilities. The sequence is
-        scanned and copied to the mutated sequence where at each position:
+        """Returns a mutant of this sequence with specified probabilities. The
+        sequence is scanned and copied to the mutated sequence where at each
+        position:
         * the current letter will be replaced by an arbitrary letter with a
             distribution that depends on the original letter.
         * with a certain fixed probability a gap may be openned with random length
@@ -107,8 +111,8 @@ class Sequence():
         to the performed edit sequence.
 
         :param S(seq.Sequence): original sequence.
-        :param gap_open(float): probability of a gap starting at any position.
-        :param gap_continue(float): Bernoulli success probability of the gap
+        :param go_prob(float): probability of a gap starting at any position.
+        :param ge_prob(float): Bernoulli success probability of the gap
             extension distribution
         :param subst_probs(list[list]): the probability distribution for each
             pair of possible substitutions such that subst_probs[i][j] is the
@@ -158,10 +162,10 @@ class Sequence():
         :param len_var (float):   the variance of the normal distribution or read lengths.
         """
         N = self.length
-        num = int(1.0*N*coverage/len_mean)
+        num = int(1.0 * N * coverage/len_mean)
         for i in range(num):
             length = max(10, min(N-1, int(np.random.normal(len_mean, len_var))))
             start = np.random.randint(0, N-length)
-            x = Sequence(''.join([self[k] for k in range(start,start+length)]), self.alphabet)
-            read,_ = mutate(x, go_prob=go_prob, ge_prob=ge_prob, subst_probs=subst_probs)
+            x = Sequence(''.join([self[k] for k in range(start, start + length)]), self.alphabet)
+            read, _ = x.mutate(go_prob=go_prob, ge_prob=ge_prob, subst_probs=subst_probs)
             yield read

@@ -76,9 +76,8 @@ delegated, via SQL, to SQLite). The following operations are implemented; see th
 
 A set of experimental methods are [implemented](/align/distillery.py) to
 condense sequences into an alternative alphabet where each homopolymeric
-substring is translated to a single letter(e.g `AACCC` becomes `A2C3`). The
-following are implemented; see the [tests](/align/tests/distillery.py) for
-example usage:
+substring is translated to a single letter(e.g `AACCC` becomes `A2C3`). See the
+[tests](/align/tests/distillery.py) for example usage:
 
 * Translating a sequence from an arbitrary alphabet to a distilled alphabet.
   This requires specifying a whole number `maxlen`:
@@ -100,11 +99,12 @@ example usage:
   Translating edit transcripts (i.e `opseq`s) does not have an issue with this.
 
 ## Missing
-* complete [seed expansion](/align/tuples.py)
-* make tuple methods aware of distilled sequences.
-* support hompolymeric-specific indel parameters in [random generation](/align/seq.py)
-  of whole genome reads.
+* complete seed expansion (cf. [`tuples.Query.expand_seed()`](/align/tuples.py)).
+* make tuple methods aware of distilled sequences (cf. [`tuples.Query` and `tuples.TuplesDB`](/align/tuples.py)).
+* support hompolymeric-specific indel parameters in random generation
+  of genome sequencing reads (cf. [`seq.Sequence.randread()`](/align/seq.py))
+* figure out if tuple scanning can be sped up (cf. [`tuples.TuplesDB.index()`](/align/tuples.py).
 * better [tests](/tests).
 * support [Hirschberg](https://en.wikipedia.org/wiki/Hirschberg's_algorithm)-style
-[linear space](/align/libalign.c) optimization.
+linear space optimization (cf. [`libalign::solve()` and `libalign::tracback()`](/align/libalign.c)).
 * make it work with Python 3.
