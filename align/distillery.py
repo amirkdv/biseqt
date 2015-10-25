@@ -73,6 +73,7 @@ class Translator(object):
         return orig
 
     def expand_opseq(self, S, T, opseq):
+        S, T = str(S), str(T)
         """Expands a given sequence of edit ops (string of B/M/S/I/D) generated
         for the distilled versions of S and T to the equivalent op sequence for
         S and T.

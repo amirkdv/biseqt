@@ -9,3 +9,10 @@ ffi = cffi.FFI()
 lib = ffi.dlopen(os.path.join(os.path.dirname(__file__), 'libalign.so'))
 with open(os.path.join(os.path.dirname(__file__), 'libalign.h')) as f:
     ffi.cdef(f.read())
+
+def scan(string, wordlen):
+    """A generator for (string, idx) tuples to scan through any given string.
+    """
+    for idx in range(len(string) - wordlen):
+        yield (string[idx:idx + wordlen], idx)
+

@@ -17,7 +17,9 @@ limit = -1
 SRC = './test.fa'
 QUERY = './query.fa'
 DB = 'test.db'
-B = tuples.TuplesDB(db=DB, wordlen=wordlen)
+
+A = align.Alphabet('ACGT')
+B = tuples.TuplesDB(db=DB, wordlen=wordlen, alphabet=A)
 B.initdb()
 B.populate(SRC, lim=limit)
 B.index()
@@ -37,7 +39,7 @@ with open('data/dna.mtrtv.matrix') as f:
 
 window = 10
 num_seeds = 10 # number of seeds to pursue
-C = align.AlignParams(alphabet='ACGT',subst_scores=subst_scores,
+C = align.AlignParams(alphabet=A,subst_scores=subst_scores,
     gap_open_score=params['go'], gap_extend_score=params['ge'],
     max_diversion=params['band'])
 

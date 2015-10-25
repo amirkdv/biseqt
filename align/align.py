@@ -18,7 +18,7 @@ class CffiObject(object):
     constructors with a pointer to their underlying C struct.
 
     Attributes:
-        c_obj (cffi.cdata): points to the the underlying C pointer.
+        c_obj (cffi.cdata): the underlying C pointer.
     """
     def __init__(self, c_type, **kw):
         self.c_obj = ffi.new('%s *' % c_type)
@@ -26,57 +26,79 @@ class CffiObject(object):
     def __getattr__(self, name):
         return getattr(self.c_obj, name)
 
+class Alphabet(CffiObject):
+    """Wraps a C `sequence_alphabet*`.
+
+    Attributes:
+        c_obj (cffi.cdata): points to a sequence_alphabet struct.
+        _c_letters_ka (list[cffi.cdata]): has ownership of (keeps alive) C
+            pointers to each letter (which is a `char[]`) of the alphabet.
+        _c_alph_ka (cffi.cdata): has ownership of (keeps alive) the C
+            pointer to the full substitution matrix.
+    """
+    def __init__(self, alphabet):
+        if isinstance(alphabet, str):
+            alphabet = [c for c in alphabet]
+        assert(len(set([len(s) for s in alphabet])) == 1)
+        # each letter string in the alphabet must be "owned" by an object
+        # that's kept alive.
+        self._c_letters_ka = [ffi.new('char[]', alphabet[i]) for i in range(len(alphabet))]
+        self._c_alph_ka = ffi.new('char *[]', self._c_letters_ka)
+        self.c_obj = ffi.new('sequence_alphabet*', {
+            'length': len(alphabet),
+            'letter_length': len(alphabet[0]),
+            'letters': self._c_alph_ka
+        })
+
+    def __getattr__(self, name):
+        if name == 'letters':
+            N, L = self.length, self.letter_length
+            return [''.join([self.c_obj.letters[i][j] for j in range(L)]) for i in range(N)]
+        else:
+            return super(Alphabet, self).__getattr__(name)
+
+
 class Sequence(CffiObject):
-    """Wraps a C char[] and keeps its length. Placeholder for potential
+    """Wraps a C `char[]` and keeps its length. Placeholder for potential
     additions.
 
     Attributes:
-        c_obj (cffi.cdata): points to the the underlying C char[].
+        alphabet (Alphabet)
+        c_charseq (cffi.cdata): points to the underlying C char[].
+        c_idxseq  (cffi.cdata): points to the actually used int*.
     """
-    def __init__(self, string):
-        self.c_obj = ffi.new('char[]', string)
-        self._len = len(string)
+    def __init__(self, string, alphabet):
+        assert(len(string) % alphabet.letter_length == 0)
+        global lib
+        self.c_charseq = ffi.new('char[]', string)
+        self.length = len(string)/alphabet.letter_length
+        self.c_idxseq = lib.idxseq_from_charseq(alphabet.c_obj, self.c_charseq, self.length)
+        self.alphabet = alphabet
 
     def __repr__(self):
-        return ''.join([self.c_obj[i] for i in range(self._len)])
-
+        N, L = self.length, self.alphabet.letter_length
+        return ''.join([''.join([self.c_charseq[i][j] for j in range(L)]) for i in range(self.length)])
 
 class AlignParams(CffiObject):
     """Wraps the C struct align_params, see `libalign.h`
 
     Attributes:
-        alphabet (str|list): a string or a list of strings with equal length
-        _c_subst_rows_ka (cffi.cdata): has ownership of (keeps alive) C pointers
+        alphabet (Alphabet): alphabet used to represent the sequences.
+        _c_subst_rows_ka (list[cffi.cdata]): has ownership of (keeps alive) C pointers
             to rows in the substitution matrix.
         _c_subst_full_ka (cffi.cdata): has ownership of (keeps alive) the C
             pointer to the full substitution matrix.
-        _alph_letters_ka (cffi.cdata): has ownership of (keeps alive) the C
-            pointers to strings, each a letter of the alphabet.
         c_obj (cffi.cdata): points to the underlying `align_params` struct.
-        c_alph (cffi.cdata): points to the underlying `sequence_alphabet` struct.
     """
-    def __init__(self, alphabet='ACGT', subst_scores=[],
+    def __init__(self, alphabet=None, subst_scores=[],
         gap_open_score=0, gap_extend_score=-1, max_diversion=10):
-        if isinstance(alphabet, str):
-            alphabet = [c for c in alphabet]
-            alph_letter_len = 1
-        assert(len(set([len(s) for s in alphabet])) == 1)
-        self.alph_len, self.alph_let_len = len(alphabet), len(alphabet[0])
-        # each letter string in the alphabet must be "owned" by an object
-        # that's kept alive.
-        self._c_alph_letters_ka = [ffi.new('char[]', alphabet[i]) for i in range(self.alph_len)]
-        self._c_alph_ka = ffi.new('char *[]', self._c_alph_letters_ka)
-        self.c_alph = ffi.new('sequence_alphabet*', {
-            'length': self.alph_len,
-            'letter_length': self.alph_let_len,
-            'letters': self._c_alph_ka
-        })
+        self.alphabet = alphabet
         # each row in the subst matrix must be "owned" by an object that's kept
         # alive.
-        self._c_subst_rows_ka = [ffi.new('double[]', subst_scores[i]) for i in range(self.alph_len)]
+        self._c_subst_rows_ka = [ffi.new('double[]', subst_scores[i]) for i in range(self.alphabet.length)]
         self._c_subst_full_ka = ffi.new('double *[]', self._c_subst_rows_ka)
         self.c_obj = ffi.new('align_params*', {
-            'alphabet': self.c_alph,
+            'alphabet': self.alphabet.c_obj,
             'subst_scores': self._c_subst_full_ka,
             'gap_open_score': gap_open_score,
             'gap_extend_score': gap_extend_score,
@@ -89,7 +111,7 @@ class AlignParams(CffiObject):
         a python list of lists from the corresponding C data structure.
         """
         if name == 'subst_scores':
-            idx = range(self.alph_len)
+            idx = range(self.alphabet.length)
             return [[self.c_obj.subst_scores[i][j] for j in idx] for i in idx]
         else:
             return super(AlignParams, self).__getattr__(name)
@@ -109,16 +131,14 @@ class AlignProblem(CffiObject):
     def __init__(self, S=None, T=None, params=None, align_type=ALIGN_GLOBAL,
         S_min_idx=0, T_min_idx=0, S_max_idx=None, T_max_idx=None):
 
-        # the maximum *possible* last indices for S and T
-        S_Max = S._len/params.alphabet.letter_length
-        T_Max = T._len/params.alphabet.letter_length
-        S_max_idx = min(S_Max, S_max_idx) if S_max_idx else S_Max
-        T_max_idx = min(T_Max, T_max_idx) if T_max_idx else T_Max
+        # protect against index overflows
+        S_max_idx = min(S.length, S_max_idx) if S_max_idx else S.length
+        T_max_idx = min(T.length, T_max_idx) if T_max_idx else T.length
 
         self.S, self.T, self.params, self.align_type = S, T, params, align_type
         self.c_obj = ffi.new('align_problem*', {
-            'S': S.c_obj,
-            'T': T.c_obj,
+            'S': S.c_idxseq,
+            'T': T.c_idxseq,
             'S_min_idx': S_min_idx,
             'S_max_idx': S_max_idx,
             'T_min_idx': T_min_idx,
@@ -130,6 +150,16 @@ class AlignProblem(CffiObject):
         self.c_dp_table = lib.define(self.c_obj)
         if self.c_dp_table == -1:
             raise('Got -1 from align.define().')
+
+    #def score(self, opseq): FIXME
+        #assert(opseq[0] == 'B')
+        #opseq.pop(0)
+        #assert(all([k in 'MSID' for k in opseq])
+        #subst_scores = self.params.subst_scores
+        #idx_S = idx_T = score = 0
+        #for string,idx in scan(opseq):
+            #if string[0] == 'MS':
+                #score += subst_scores[]
 
     def solve(self, print_dp_table=False):
         """Populates the DP table and traces back an (any) optimal alignment.

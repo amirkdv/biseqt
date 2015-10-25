@@ -21,12 +21,12 @@ typedef struct {
 } align_params;
 
 typedef struct {
-  char* S; // "from" sequence, order of S/T only affects I/D's in transcript
-  char* T; // "to" sequence
+  int* S; // "from" sequence, each letter translated to its position in alphabet
+  int* T; // "to" sequence, each letter ...
   int S_min_idx; // opening index for the frame of S: inclusive
   int S_max_idx; // closing index for the frame of S: exclusive
-  int T_min_idx; // ... of T: inclusive
-  int T_max_idx; // ... of T: exclusive
+  int T_min_idx; // opening ... of T: inclusive
+  int T_max_idx; // closing ... of T: exclusive
   align_type type;
   align_params *params;
 } align_problem;
@@ -50,4 +50,4 @@ typedef struct {
 align_dp_cell** define(align_problem* def);
 int solve(align_dp_cell** P, align_problem* def);
 char* traceback(align_dp_cell** P, align_problem* def);
-int* _to_idx_sequence(sequence_alphabet* alphabet, char* sequence, int length);
+int* idxseq_from_charseq(sequence_alphabet* alphabet, char* sequence, int length);

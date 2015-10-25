@@ -50,10 +50,7 @@ int solve(align_dp_cell** P, align_problem* def) {
   int i,j,k;
   int *max_score_alts;
   align_choice *alts;
-  int* S_idx_seq = _to_idx_sequence(def->params->alphabet,
-    def->S + def->S_min_idx, def->S_max_idx - def->S_min_idx);
-  int* T_idx_seq = _to_idx_sequence(def->params->alphabet,
-    def->T + def->T_min_idx, def->T_max_idx - def->T_min_idx);
+  int s,t;
 
   // Base case
   P[0][0].num_choices = 1;
@@ -164,9 +161,12 @@ int solve(align_dp_cell** P, align_problem* def) {
       if ((i > 0) && (j > 0)) {
         // Are there choices for (i-1,j-1)? (We must be in band if (i-1,j-1) is:
         if (P[i-1][j-1].num_choices > 0) {
+          // the indices in the table are on ahead of the indices of letters:
+          s = def->S[def->S_min_idx + i - 1];
+          t = def->T[def->T_min_idx + j - 1];
           // All choices to (i-1,j-1) have the same score as there is no
           // gap open distinction, add the choice right away:
-          if (S_idx_seq[i] == T_idx_seq[j]) {
+          if (s == t) {
             alts[num_choices].op = 'M';
           } else {
             alts[num_choices].op = 'S';
@@ -175,7 +175,7 @@ int solve(align_dp_cell** P, align_problem* def) {
           alts[num_choices].score = P[i-1][j-1].choices[0].diversion;
           alts[num_choices].base = &(P[i-1][j-1].choices[0]);
           alts[num_choices].score = P[i-1][j-1].choices[0].score
-            + def->params->subst_scores[S_idx_seq[i-1]][T_idx_seq[j-1]];
+            + def->params->subst_scores[s][t];
 
           num_choices++;
         }
@@ -222,8 +222,6 @@ int solve(align_dp_cell** P, align_problem* def) {
     }
   }
   free(alts);
-  free(S_idx_seq);
-  free(T_idx_seq);
   return 0;
 }
 
@@ -371,7 +369,7 @@ char *traceback(align_dp_cell** P, align_problem* def) {
  * so that we don't have to worry about alphabet pecularities (e.g letters
  * longer than one character each).
  */
-int* _to_idx_sequence(sequence_alphabet* alphabet, char* sequence, int length) {
+int* idxseq_from_charseq(sequence_alphabet* alphabet, char* sequence, int length) {
   int i,j;
   int cur_idx;
   int* idx_seq = malloc(length * sizeof(int));

@@ -4,20 +4,14 @@ import sqlite3
 from Bio import SeqIO
 from collections import namedtuple
 
-from . import align
 from . import utils
+from . import align
+from . import scan
 
 Seed = namedtuple('Seed', ['seqid', 'idx', 'idx_q', 'len'])
 
 class MaxConcurrentQueries(RuntimeError):
     pass
-
-
-def scan(string, wordlen):
-    """A generator for (string, idx) tuples to scan through any given string.
-    """
-    for idx in range(len(string) - wordlen):
-        yield (string[idx:idx + wordlen], idx)
 
 class TuplesDB(object):
     """Wraps an Sqlite database containing tuple indices for sequences. For now,
@@ -42,7 +36,9 @@ class TuplesDB(object):
             use it to bulk-write tuple-hits to `tuples_N_hits` tables.
 
     """
-    def __init__(self, db=None, wordlen=10):
+    def __init__(self, db=None, wordlen=10, alphabet=None):
+        assert isinstance(alphabet, align.Alphabet)
+        self.alphabet = alphabet
         self.db, self.wordlen = db, wordlen
         assert isinstance(self.wordlen, int)
         # we want an Upsert to avoid changing tuple
@@ -171,7 +167,7 @@ class Query(object):
             c.execute(q)
             c.executemany(tuplesdb.tup_insert_q, give_tup())
 
-        self.S = align.Sequence(qseq)
+        self.S = align.Sequence(qseq, tuplesdb.alphabet)
 
     def seeds(self, seqid=None):
         """Finds all the seeds in their maximal form given a query string. A
@@ -232,7 +228,7 @@ class Query(object):
         `window`) of the query and target sequences until a threshold low score
         is met.
         """
-        T = align.Sequence(self.tuplesdb.loadseq(seed.seqid))
+        T = align.Sequence(self.tuplesdb.loadseq(seed.seqid), self.tuplesdb.alphabet)
         S_min_idx, S_max_idx = seed.idx_q + seed.len, seed.idx_q + seed.len + window,
         T_min_idx, T_max_idx = seed.idx   + seed.len, seed.idx   + seed.len + window
         P = align.AlignProblem(
@@ -244,6 +240,8 @@ class Query(object):
         transcript = P.solve()
         # FIXME inspect transcript and keep extending if we are scoring well.
         if transcript[:3] != 'Err':
-            utils.print_alignment(str(self.S), str(T), transcript, sys.stderr, margin=10)
+            infostr, transcript = transcript.split(':')
+            transcript = infostr + ':B' + 'M' * seed.len + transcript[1:]
+            utils.print_alignment(self.S, T, transcript, sys.stderr, margin=10)
         return transcript
 
