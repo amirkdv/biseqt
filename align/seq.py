@@ -34,6 +34,28 @@ class Alphabet(CffiObject):
         else:
             return super(Alphabet, self).__getattr__(name)
 
+    def randstr(self, length, letters_dist=None):
+        """Generates a random sequence of the specified length from this
+        alphabet. Optionally a discrete distribution may be specified.
+
+        :param length(int): length of generated sequence.
+        :param letters_dist(dict): Optional; The probability distribution of
+            letters as a list of probabilities in order of letters in
+            self.c_obj.letters. Default is uniform.
+        """
+        if letters_dist is None:
+            letters_dist = [1.0/self.length for _ in range(self.length)]
+
+        assert(abs(1-sum(letters_dist)) < 0.001)
+        space = []
+        for i in range(self.length):
+            # NOTE this effectively sets the max precision of subst_probs to .01
+            space += [ffi.string(self._c_letters_ka[i])] * int(100 * length * letters_dist[i])
+        return ''.join(random.sample(space, length))
+
+
+    def randseq(self, length, letters_dist=None):
+        return Sequence(self.randstr(length, letters_dist), self)
 
 class Sequence():
     """Wraps a C char[] and its corresponding `idx_seq int[]`. Note that this
@@ -74,109 +96,72 @@ class Sequence():
             raise TypeError('Sequence indices must be integers not {}'.format(type(key).__name__))
         return ffi.string(self.c_charseq)[s*self.alphabet.letter_length: f*self.alphabet.letter_length]
 
-def _rawrandseq(length, dist):
-    """Generates a random string with the given length from letters chosen from
-    the keys of the given distribution and specified probability distribution.
-    """
-    space = []
-    for k in dist.keys():
-        # NOTE this effectively sets the maximum precision of error rates to .01
-        space += [k] * int(100 * length * dist[k])
-    return ''.join(random.sample(space, length))
+    def mutate(self, go_prob=0, ge_prob=0, subst_probs=None, insert_dist=None):
+        """Mutates a given sequence with specified probabilities. The sequence is
+        scanned and copied to the mutated sequence where at each position:
+        * the current letter will be replaced by an arbitrary letter with a
+            distribution that depends on the original letter.
+        * with a certain fixed probability a gap may be openned with random length
+            with geometric distribution.
+        Accordingly, an opseq (see `align.solve()`) is generated which corresponds
+        to the performed edit sequence.
 
-def randseq(length, alphabet, dist=None):
-    """Generates a random sequence of the specified length within the alphabet
-    specified by the keys in the distribution matrix. The distribution matrix
-    should look like this for nucleotide sequences:
-        {'A': 0.25,
-         'C': 0.25,
-         'G': 0.25,
-         'T': 0.25}
+        :param S(seq.Sequence): original sequence.
+        :param gap_open(float): probability of a gap starting at any position.
+        :param gap_continue(float): Bernoulli success probability of the gap
+            extension distribution
+        :param subst_probs(list[list]): the probability distribution for each
+            pair of possible substitutions such that subst_probs[i][j] is the
+            probability of letter i (integer index) of the alphabet being
+            substituted by letter j (integer index).
+        :param insert_dist(list): the distribution passed to Alphabet.randstr()
+            when inserting arbitrary strings; default is uniform.
+        """
+        assert(go_prob < 1)
+        assert(ge_prob < 1)
+        T = ''
+        k = 0
+        opseq = 'B'
+        while k < self.length:
+            if go_prob:
+                # NOTE max precision for gap_open is .01
+                if random.randint(0, 100) < go_prob * 100:
+                    length = np.random.geometric(1 - ge_prob)
+                    if random.choice([0,1]):
+                        # deletion
+                        opseq += 'D' * length
+                        k += length
+                        continue
+                    else:
+                        # insertion
+                        opseq += 'I' * length
+                        T += self.alphabet.randstr(length, insert_dist)
+                        continue
+            # no gap, substitute:
+            T += self.alphabet.randstr(1, subst_probs[self.c_idxseq[k]])[0]
+            opseq += 'M' if T[-1] == self[k] else 'S'
+            k += 1
+        return (Sequence(T, self.alphabet), opseq)
 
-    :param length(int): length of generated sequence.
-    :param dist(dict): Optional; keys are the letters in the alphabet and values
-        are the probability of an arbitrary nucleatoride being each letter.
-        Default is uniform.
-    """
-    if dist is None:
-        letters, L = alphabet.letters, alphabet.length
-        dist = {k:1.0/L for k in letters}
+    def randread(self, subst_probs=None, go_prob=0, ge_prob=0, coverage=40, len_mean=6000, len_var=1000):
+        """Generates a random collection of lossy reads from the current sequence.
 
-    assert abs(1-sum(dist.values())) < 0.001
-    return Sequence(_rawrandseq(length, dist), alphabet)
-
-# TODO support hompolymeric-specific gap parameters
-def mutate(S, gap_open=0.1, gap_continue=0.5, error_rates=None, insert_dist=None):
-    """Mutates a given sequence with specified probabilities. The sequence is
-    scanned and copied to the mutated sequence where at each position:
-    * the current letter will be replaced by an arbitrary letter with a
-        distribution that depends on the original letter.
-    * with a certain fixed probability a gap may be openned with random length
-        with geometric distribution.
-    Accordingly, an opseq (see `align.solve()`) is generated which corresponds
-    to the performed edit sequence.
-
-    :param S(seq.Sequence): original sequence.
-    :param gap_open(float): probability of a gap starting at any position.
-    :param gap_continue(float): Bernoulli success probability of the gap
-        extension distribution
-    :param error_rates(dict): a letter-by-letter error probability matrix. For
-        nucleotides, for example, it should have the following structure:
-
-            {'A':{'A': 0.7,
-                  'C': 0.1,
-                  'G': 0.1,
-                  'T': 0.1},
-             'C':{...
-             ...
-            }
-    :param insert_dist(dict): the distribution passed to randseq() when
-        inserting arbitrary strings; default is uniform.
-    """
-    assert(all([k in error_rates for k in S.alphabet.letters]))
-    if insert_dist is None:
-        letters, L = S.alphabet.letters, S.alphabet.length
-        insert_dist = {k:1.0/L for k in letters}
-    T = ''
-    k = 0
-    transcript = ''
-    while k < S.length:
-        if gap_open is not None:
-            assert(gap_open < 1) # if not none, gap_open is assumed to be the gap probability
-            assert(gap_continue < 1)
-            if random.randint(0, 1000) < gap_open * 1000:
-                length = np.random.geometric(1 - gap_continue)
-                if random.choice([0,1]):
-                    # deletion
-                    transcript += 'D' * length
-                    k += length
-                    continue
-                else:
-                    # insertion
-                    transcript += 'I' * length
-                    T += _rawrandseq(length, insert_dist)
-                    k += 1
-                    continue
-        T += _rawrandseq(1, error_rates[S[k]])[0]
-        transcript += 'M' if T[-1] == S[k] else 'S'
-        k += 1
-    return (Sequence(T, S.alphabet), transcript)
-
-# TODO use homopolymeric-specific gap parameters
-def randread(genome, error_rates=None, coverage=40, len_mean=6000, len_var=1000):
-    """Generates a random collection of lossy reads from a given genome.
-
-    :param genome(str): the "true" original genome.
-    :param coverage (float): the expected number of times each letter in the
-        sequence appears in the entire read collection.
-    :param len_mean (float):  the mean of the normal distribution of read lengths.
-    :param len_var (float):   the variance of the normal distribution or read lengths.
-    """
-    N = genome.length
-    num = int(1.0*N*coverage/len_mean)
-    for i in range(num):
-        length = max(10, min(N-1, int(np.random.normal(len_mean, len_var))))
-        start = np.random.randint(0, N-length)
-        x = Sequence(''.join([genome[k] for k in range(start,start+length)]), genome.alphabet)
-        read,_ = mutate(x, gap_open=0.1, error_rates=error_rates)
-        yield read
+        :param subst_probs(list[list]): as in mutate(), letter-by-letter
+            probabilities of substitutions by the seqeuencing process.
+        :param go_prob(float): as in mutate(), probability that at any point in any
+            read a gap will be opened (use 1 for linear gap penalty)
+        :param ge_prob(float): as in mutate(), probability that at any point in any
+            gap in a read, the gap will be extended.
+        :param coverage (float): the expected number of times each letter in the
+            sequence appears in the entire read collection.
+        :param len_mean (float):  the mean of the normal distribution of read lengths.
+        :param len_var (float):   the variance of the normal distribution or read lengths.
+        """
+        N = self.length
+        num = int(1.0*N*coverage/len_mean)
+        for i in range(num):
+            length = max(10, min(N-1, int(np.random.normal(len_mean, len_var))))
+            start = np.random.randint(0, N-length)
+            x = Sequence(''.join([self[k] for k in range(start,start+length)]), self.alphabet)
+            read,_ = mutate(x, go_prob=go_prob, ge_prob=ge_prob, subst_probs=subst_probs)
+            yield read

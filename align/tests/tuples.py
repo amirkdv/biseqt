@@ -21,8 +21,8 @@ params = {
     'm':        3, # match score
     'tr':      -2, # transition score (A<->G and C<->T)
     'tv':      -2, # transversion score
-    'go':      -3, # gap open score
-    'ge':      -2, # gap extend score
+    'go_score':      -3, # gap open score
+    'ge_score':      -2, # gap extend score
     'band':    -1, # band width if positive
     'show_dp':  0, # whether to print the DP table
     'type': align.ALIGN_GLOBAL, # type of alignments
@@ -33,7 +33,7 @@ with open('data/dna.mtrtv.matrix') as f:
 window = 10
 num_seeds = 10 # number of seeds to pursue
 C = align.AlignParams(alphabet=A,subst_scores=subst_scores,
-    gap_open_score=params['go'], gap_extend_score=params['ge'],
+    go_score=params['go_score'], ge_score=params['ge_score'],
     max_diversion=params['band'])
 
 with open(QUERY) as f:

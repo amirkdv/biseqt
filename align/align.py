@@ -1,3 +1,5 @@
+from math import log
+
 from . import ffi, lib, utils, CffiObject
 from .distillery import hp_tokenize
 
@@ -22,7 +24,7 @@ class AlignParams(CffiObject):
         c_obj (cffi.cdata): points to the underlying `align_params` struct.
     """
     def __init__(self, alphabet=None, subst_scores=[],
-        gap_open_score=0, gap_extend_score=-1, max_diversion=10):
+        go_score=0, ge_score=0, max_diversion=10):
         self.alphabet = alphabet
         # each row in the subst matrix must be "owned" by an object that's kept
         # alive.
@@ -31,10 +33,46 @@ class AlignParams(CffiObject):
         self.c_obj = ffi.new('align_params*', {
             'alphabet': self.alphabet.c_obj,
             'subst_scores': self._c_subst_full_ka,
-            'gap_open_score': gap_open_score,
-            'gap_extend_score': gap_extend_score,
+            'gap_open_score': go_score,
+            'gap_extend_score': ge_score,
             'max_diversion': max_diversion,
         })
+
+    @classmethod
+    def subst_scores_from_probs(cls, subst_probs, alphabet, letter_dist=None):
+        """Converts a substitution probability matrix to a substitution score
+        matrix using a null-hypothesis letters distribution. The scores are
+        natural logs of odds ratios.
+
+        :param subst_probs(list[list]): as in seq.Sequence.mutate()
+        :param alphabet(Alphabet): the underlying alphabet, needed since
+            probabilities are in order of letter index in alphabet.
+        :param letter_dist(list[float]): probability distributions of each
+            letter of the alphabet in the null (random) hypothesis.
+
+        :return subst_scores(list[list]): as expected in AlignParams.__init__().
+        """
+        L = alphabet.length
+        if letter_dist is None:
+            letter_dist = [1.0/L for k in range(L)]
+        subst_scores = [[0 for _ in range(L)] for _ in range(L)]
+        for i in range(L):
+            assert(abs(1-sum([subst_probs[i][j] for j in range(L)])) < 0.001)
+            for j in range(L):
+                assert(subst_probs[i][j] > 0)
+                assert(letter_dist[i] * letter_dist[j] != 0)
+                subst_scores[i][j] = log(subst_probs[i][j]) + \
+                    log(letter_dist[i]) - log(letter_dist[j])
+        return subst_scores
+
+    @classmethod
+    def gap_scores_from_probs(cls, go_prob, ge_prob):
+        """Converts gap open/extend probabilities to gap open/extend scores
+        in an affine gap penalty scheme. If go_prob = 1 (which means gap
+        extension does not require a separate "opening" event) we get a linear
+        gap penalty scheme.
+        """
+        return log(go_prob), log(ge_prob)
 
     def __getattr__(self, name):
         """Allow attributes to access members of the underlying `align_params`
@@ -103,7 +141,7 @@ class AlignProblem(CffiObject):
                     score += subst_scores[self.S.c_idxseq[i+k]][self.T.c_idxseq[j+k]]
                 i, j = i+num, j+num
             elif op in 'ID':
-                score += self.gap_open_score + self.gap_extend_score * num
+                score += self.params.gap_open_score + self.params.gap_extend_score * num
                 if op == 'I':
                     j = j + num
                 else:

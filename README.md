@@ -7,6 +7,20 @@ python setup.py develop
 make clean tests
 ```
 
+## Random processes
+
+The following are random processes are implemented for verification purposes:
+
+* Generating random sequences given a probability distribution of letters from
+  an alphabet.
+* Generating random mutants given a substition probability distribution.
+* Generating collections of random sequencing reads from a genome with specified
+  expected coverage and substitution/gap probabilties.
+* Translating substitution and gap open/extend probabilities to substitution
+  scores as log odds ratios.
+* Scoring arbitrary edit transcripts (look for `opseq`) for two sequences given
+  alignment scores for substitutions and gaps.
+
 ## Pairwise alignments
 
 The core dynamic programming algorithm is [implemented](/align/libalign.c) in C

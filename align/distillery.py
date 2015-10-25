@@ -127,7 +127,7 @@ class Translator(object):
         return orig
 
     def translate_subst_scores(self, subst_scores, alphabet='ACGT',
-        homopoly_gopen=0, homopoly_gextend=-0.5, gopen=-3, gextend=-2):
+        hp_go_score=0, hp_ge_score=-0.5, go_score=-3, ge_score=-2):
         alphabet_d = [x for x in self.translate_alphabet(alphabet)]
         L = len(alphabet_d)
         scores = [[None for _ in range(L)] for _ in range(L)]
@@ -137,7 +137,7 @@ class Translator(object):
                 cj, nj, _ = alphabet_d[j]
                 ki, kj = alphabet.index(ci), alphabet.index(cj)
                 if ci == cj:
-                    scores[i][j] = min(ni, nj) * subst_scores[ki][kj] + homopoly_gopen + homopoly_gextend * abs(ni-nj)
+                    scores[i][j] = min(ni, nj) * subst_scores[ki][kj] + hp_go_score + hp_ge_score * abs(ni-nj)
                 else:
-                    scores[i][j] = min(ni, nj) * subst_scores[ki][kj] + gopen + gextend * abs(ni - nj)
+                    scores[i][j] = min(ni, nj) * subst_scores[ki][kj] + go_score + ge_score* abs(ni - nj)
         return scores
