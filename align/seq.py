@@ -35,9 +35,12 @@ class Alphabet(CffiObject):
             return super(Alphabet, self).__getattr__(name)
 
 
-class Sequence(CffiObject):
-    """Wraps a C `char[]` and keeps its length. Placeholder for potential
-    additions.
+class Sequence():
+    """Wraps a C char[] and its corresponding `idx_seq int[]`. Note that this
+    is *not* a CffiObject subclass since there's no underlying C struct. String
+    indexing and splicing are supported:
+        x = seq.Sequence("A2C3A2", seq.Alphabet(["A2", "C3"]))
+        print x[:-1] # => "A2C3"
 
     Attributes:
         alphabet (Alphabet)
@@ -56,13 +59,25 @@ class Sequence(CffiObject):
         N, L = self.length, self.alphabet.letter_length
         return ''.join([self.__getitem__(i) for i in range(self.length)])
 
-    def __getitem__(self, key):
-        if isinstance(key, int) and key < self.length:
-            return ''.join([self.alphabet._c_letters_ka[self.c_idxseq[key]][i] for i in range(self.alphabet.letter_length)])
-        else:
-            raise KeyError
+    def __len__(self):
+        return self.length
 
-def rawrand(length, dist):
+    def __getitem__(self, key):
+        if isinstance(key, int):
+            if key < self.length:
+                s, f = key, key + 1
+            else:
+                raise IndexError('Sequence index out of range')
+        elif isinstance(key, slice):
+            s, f, _ = key.indices(self.length)
+        else:
+            raise TypeError('Sequence indices must be integers not {}'.format(type(key).__name__))
+        return ffi.string(self.c_charseq)[s*self.alphabet.letter_length: f*self.alphabet.letter_length]
+
+def _rawrandseq(length, dist):
+    """Generates a random string with the given length from letters chosen from
+    the keys of the given distribution and specified probability distribution.
+    """
     space = []
     for k in dist.keys():
         # NOTE this effectively sets the maximum precision of error rates to .01
@@ -88,7 +103,7 @@ def randseq(length, alphabet, dist=None):
         dist = {k:1.0/L for k in letters}
 
     assert abs(1-sum(dist.values())) < 0.001
-    return Sequence(rawrand(length, dist), alphabet)
+    return Sequence(_rawrandseq(length, dist), alphabet)
 
 # TODO support hompolymeric-specific gap parameters
 def mutate(S, gap_open=0.1, gap_continue=0.5, error_rates=None, insert_dist=None):
@@ -139,10 +154,10 @@ def mutate(S, gap_open=0.1, gap_continue=0.5, error_rates=None, insert_dist=None
                 else:
                     # insertion
                     transcript += 'I' * length
-                    T += rawrand(length, insert_dist)
+                    T += _rawrandseq(length, insert_dist)
                     k += 1
                     continue
-        T += rawrand(1, error_rates[S[k]])[0]
+        T += _rawrandseq(1, error_rates[S[k]])[0]
         transcript += 'M' if T[-1] == S[k] else 'S'
         k += 1
     return (Sequence(T, S.alphabet), transcript)
