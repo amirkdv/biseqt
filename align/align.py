@@ -82,15 +82,35 @@ class AlignProblem(CffiObject):
         if self.c_dp_table == -1:
             raise('Got -1 from align.define().')
 
-    #def score(self, opseq): FIXME
-        #assert(opseq[0] == 'B')
-        #opseq.pop(0)
-        #assert(all([k in 'MSID' for k in opseq])
-        #subst_scores = self.params.subst_scores
-        #idx_S = idx_T = score = 0
-        #for string,idx in scan(opseq):
-            #if string[0] == 'MS':
-                #score += subst_scores[]
+    def score(self, opseq):
+        """Calculates the score for an arbitray opseq. Opseqs are allowed to be
+        partial alignments (i.e finishing before reaching the end of frame).
+
+            P = AlignProblem(...)
+            P.score('BMMMSSISSD') #=> 23.50
+        """
+        assert(opseq[0] == 'B')
+        opseq = opseq[1:]
+        subst_scores = self.params.subst_scores
+        score = 0
+        i, j = self.S_min_idx, self.T_min_idx
+        for op,num in hp_tokenize(opseq):
+            if op == 'M':
+                score += num * subst_scores[self.S.c_idxseq[i]][self.T.c_idxseq[j]]
+                i, j = i+num, j+num
+            elif op == 'S':
+                for k in range(num):
+                    score += subst_scores[self.S.c_idxseq[i+k]][self.T.c_idxseq[j+k]]
+                i, j = i+num, j+num
+            elif op in 'ID':
+                score += self.gap_open_score + self.gap_extend_score * num
+                if op == 'I':
+                    j = j + num
+                else:
+                    j = i + num
+            else:
+                raise ValueError('Invalid edit operation: %c' % op)
+        return score
 
     def solve(self, print_dp_table=False):
         """Populates the DP table and traces back an (any) optimal alignment.
