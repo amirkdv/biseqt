@@ -18,7 +18,7 @@ class CffiObject(object):
     constructors with a pointer to their underlying C struct.
 
     Attributes:
-        c_obj (cffi.cdata): points the the underlying C pointer.
+        c_obj (cffi.cdata): points to the the underlying C pointer.
     """
     def __init__(self, c_type, **kw):
         self.c_obj = ffi.new('%s *' % c_type)
@@ -31,7 +31,7 @@ class Sequence(CffiObject):
     additions.
 
     Attributes:
-        c_obj (cffi.cdata): points the the underlying C char[].
+        c_obj (cffi.cdata): points to the the underlying C char[].
     """
     def __init__(self, string):
         self.c_obj = ffi.new('char[]', string)
@@ -41,19 +41,18 @@ class Sequence(CffiObject):
         return ''.join([self.c_obj[i] for i in range(self._len)])
 
 
-#
 class AlignParams(CffiObject):
     """Wraps the C struct align_params, see `libalign.h`
 
     Attributes:
-        alphabet (str): TODO should be array of strings.
+        alphabet (str|list): a string or a list of strings with equal length
         _c_subst_rows_ka (cffi.cdata): has ownership of (keeps alive) C pointers
             to rows in the substitution matrix.
         _c_subst_full_ka (cffi.cdata): has ownership of (keeps alive) the C
             pointer to the full substitution matrix.
         _alph_letters_ka (cffi.cdata): has ownership of (keeps alive) the C
             pointers to strings, each a letter of the alphabet.
-        c_obj (cffi.cdata): points the underlying `align_params` struct.
+        c_obj (cffi.cdata): points to the underlying `align_params` struct.
         c_alph (cffi.cdata): points to the underlying `sequence_alphabet` struct.
     """
     def __init__(self, alphabet='ACGT', subst_scores=[],
@@ -104,8 +103,8 @@ class AlignProblem(CffiObject):
         params (AlignParams): parameters for the alignment problem.
         align_type (int): any of the ALIGN_* constants defined here (pointing to
             values of C enum `align_type`).
-        c_obj (cffi.cdata): points the underlying `align_problem` struct.
-        c_dp_table (cffi.cdata): points the underlying `double **` DP table.
+        c_obj (cffi.cdata): points to the underlying `align_problem` struct.
+        c_dp_table (cffi.cdata): points to the underlying `double **` DP table.
     """
     def __init__(self, S=None, T=None, params=None, align_type=ALIGN_GLOBAL,
         S_min_idx=0, T_min_idx=0, S_max_idx=None, T_max_idx=None):

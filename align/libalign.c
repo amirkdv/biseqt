@@ -353,7 +353,6 @@ char *traceback(align_dp_cell** P, align_problem* def) {
       infolen += 1;
     }
   }
-  // Dragons:
   infostr = malloc(infolen);
   sprintf(infostr, "(%d,%d),%.2f:", (idx_S + def->S_min_idx), (idx_T + def->T_min_idx), max);
   // the backtraced transcript was written backwords to the end of rtranscript

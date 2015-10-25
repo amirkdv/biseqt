@@ -2,7 +2,6 @@
 import numpy as np
 import random
 
-# distribution is a dict of letter -> probability
 def gen(length, dist={k:0.25 for k in 'ACGT'}):
     """Generates a random sequence of the specified length within the alphabet
     specified by the keys in the distribution matrix. The distribution matrix
