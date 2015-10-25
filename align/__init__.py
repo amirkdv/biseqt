@@ -8,12 +8,6 @@ lib = ffi.dlopen(os.path.join(os.path.dirname(__file__), 'libalign.so'))
 with open(os.path.join(os.path.dirname(__file__), 'libalign.h')) as f:
     ffi.cdef(f.read())
 
-def scan(string, wordlen):
-    """A generator for (string, idx) tuples to scan through any given string.
-    """
-    for idx in range(len(string) - wordlen):
-        yield (string[idx:idx + wordlen], idx)
-
 class CffiObject(object):
     """Generic cffi wrapper for C structs, delegates all unknown attributes to
     the underlying C pointer. Subclasses must populate self.c_obj in their

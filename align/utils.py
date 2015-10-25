@@ -1,6 +1,5 @@
 #!/usr/bin/env python
 from termcolor import colored
-from . import scan
 
 def print_alignment(S, T, transcript, f, width=120, margin=20, colors=True):
     """Deciphers a given transcript and writes pretiffied output to f.

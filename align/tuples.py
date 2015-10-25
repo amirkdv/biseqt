@@ -4,12 +4,18 @@ import sqlite3
 from Bio import SeqIO
 from collections import namedtuple
 
-from . import utils, align, scan, seq
+from . import utils, align, seq
 
 Seed = namedtuple('Seed', ['seqid', 'idx', 'idx_q', 'len'])
 
 class MaxConcurrentQueries(RuntimeError):
     pass
+
+def tup_scan(string, wordlen):
+    """A generator for (string, idx) tuples to scan through any given string.
+    """
+    for idx in range(len(string) - wordlen):
+        yield (string[idx:idx + wordlen], idx)
 
 class TuplesDB(object):
     """Wraps an Sqlite database containing tuple indices for sequences. For now,
@@ -110,11 +116,11 @@ class TuplesDB(object):
         """
         sys.stderr.write('indexing sequences:')
         def give_hit(seqid, string):
-            for s,idx in scan(string, self.wordlen):
+            for s,idx in tup_scan(string, self.wordlen):
                 yield (seqid, idx, s)
 
         def give_tup(string):
-            for s,idx in scan(string, self.wordlen):
+            for s,idx in tup_scan(string, self.wordlen):
                 yield (s, s, -1)
 
         with sqlite3.connect(self.db) as conn:
@@ -157,7 +163,7 @@ class Query(object):
     def __init__(self, qseq, tuplesdb=None, align_params=None):
         self.tuplesdb, self.qseq, self.align_params = tuplesdb, qseq, align_params
         def give_tup():
-            for s, idx in scan(self.qseq, self.tuplesdb.wordlen):
+            for s, idx in tup_scan(self.qseq, self.tuplesdb.wordlen):
                 yield (s, s, idx)
 
         # index the query string:

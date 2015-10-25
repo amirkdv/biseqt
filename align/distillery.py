@@ -3,7 +3,7 @@
 from math import log10, floor
 from .seq import Alphabet
 
-def tokenize(string):
+def hp_tokenize(string):
     """Generator for homopolymeric substrings in a given sequences. Each value
     is a (char, num) tuple.
     """
@@ -49,7 +49,7 @@ class Translator(object):
 
     def distill(self, string):
         distilled = ''
-        for char, num in tokenize(string):
+        for char, num in hp_tokenize(string):
             num = str(min(num, self.maxlen)).rjust(self.letlen - 1, '0')
             distilled += char + num
         return distilled
@@ -81,8 +81,8 @@ class Translator(object):
         """
         assert all([s in 'BMISD' for s in opseq])
         orig = ''
-        tokens_S = tokenize(S)
-        tokens_T = tokenize(T)
+        tokens_S = hp_tokenize(S)
+        tokens_T = hp_tokenize(T)
 
         char_S, num_S = tokens_S.next()
         char_T, num_T = tokens_T.next()

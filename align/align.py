@@ -1,4 +1,5 @@
 from . import ffi, lib, utils, CffiObject
+from .distillery import hp_tokenize
 
 global lib
 """Values for enum `align_type`.
