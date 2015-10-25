@@ -20,9 +20,8 @@ with open('data/dna.mtrtv.matrix') as f:
 
 #S = align.Sequence('ACCCGT', A)
 #T = align.Sequence('CC', A)
-S = seq.Sequence(seq.randgen(1000, dist={k:0.25 for k in 'ACGT'}), A)
-T, m_transcript = seq.mutate(str(S), gap_open=0.2, gap_continue=0.3, rates=mutation_rates)
-T = seq.Sequence(T, A)
+S = seq.randseq(1000, A)
+T, m_transcript = seq.mutate(S, gap_open=0.2, gap_continue=0.3, error_rates=mutation_rates)
 
 C = align.AlignParams(subst_scores=subst_scores, alphabet=A,
     gap_open_score=params['go'], gap_extend_score=params['ge'],

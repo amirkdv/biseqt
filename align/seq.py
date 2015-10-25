@@ -1,6 +1,3 @@
-# TODO make function/variable names indicate whether they
-# carry/accept/return raw strings or seq.Sequence seq.Alphabet objects.
-
 import numpy as np
 import random
 
@@ -57,10 +54,22 @@ class Sequence(CffiObject):
 
     def __repr__(self):
         N, L = self.length, self.alphabet.letter_length
-        return ''.join([''.join([self.c_charseq[i][j] for j in range(L)]) for i in range(self.length)])
+        return ''.join([self.__getitem__(i) for i in range(self.length)])
 
+    def __getitem__(self, key):
+        if isinstance(key, int) and key < self.length:
+            return ''.join([self.alphabet._c_letters_ka[self.c_idxseq[key]][i] for i in range(self.alphabet.letter_length)])
+        else:
+            raise KeyError
 
-def randgen(length, dist=None):
+def rawrand(length, dist):
+    space = []
+    for k in dist.keys():
+        # NOTE this effectively sets the maximum precision of error rates to .01
+        space += [k] * int(100 * length * dist[k])
+    return ''.join(random.sample(space, length))
+
+def randseq(length, alphabet, dist=None):
     """Generates a random sequence of the specified length within the alphabet
     specified by the keys in the distribution matrix. The distribution matrix
     should look like this for nucleotide sequences:
@@ -70,17 +79,19 @@ def randgen(length, dist=None):
          'T': 0.25}
 
     :param length(int): length of generated sequence.
-    :param dist(dict): keys are the letters in the alphabet and values are the
-        probability of an arbitrary nucleatoride being each letter.
+    :param dist(dict): Optional; keys are the letters in the alphabet and values
+        are the probability of an arbitrary nucleatoride being each letter.
+        Default is uniform.
     """
+    if dist is None:
+        letters, L = alphabet.letters, alphabet.length
+        dist = {k:1.0/L for k in letters}
+
     assert abs(1-sum(dist.values())) < 0.001
-    space = []
-    for k in dist:
-        space.extend([k] * int(100*dist[k]))
-    return ''.join([random.choice(space) for _ in range(length)])
+    return Sequence(rawrand(length, dist), alphabet)
 
 # TODO support hompolymeric-specific gap parameters
-def mutate(S, gap_open=None, gap_continue=0.5, rates=None):
+def mutate(S, gap_open=0.1, gap_continue=0.5, error_rates=None, insert_dist=None):
     """Mutates a given sequence with specified probabilities. The sequence is
     scanned and copied to the mutated sequence where at each position:
     * the current letter will be replaced by an arbitrary letter with a
@@ -90,11 +101,11 @@ def mutate(S, gap_open=None, gap_continue=0.5, rates=None):
     Accordingly, an opseq (see `align.solve()`) is generated which corresponds
     to the performed edit sequence.
 
-    :param S(str): original sequence.
+    :param S(seq.Sequence): original sequence.
     :param gap_open(float): probability of a gap starting at any position.
     :param gap_continue(float): Bernoulli success probability of the gap
         extension distribution
-    :param rates(dict): a letter-by-letter error probability matrix. For
+    :param error_rates(dict): a letter-by-letter error probability matrix. For
         nucleotides, for example, it should have the following structure:
 
             {'A':{'A': 0.7,
@@ -104,12 +115,17 @@ def mutate(S, gap_open=None, gap_continue=0.5, rates=None):
              'C':{...
              ...
             }
+    :param insert_dist(dict): the distribution passed to randseq() when
+        inserting arbitrary strings; default is uniform.
     """
-    L = len(rates.keys()) # number of letters in alphabet
+    assert(all([k in error_rates for k in S.alphabet.letters]))
+    if insert_dist is None:
+        letters, L = S.alphabet.letters, S.alphabet.length
+        insert_dist = {k:1.0/L for k in letters}
     T = ''
     k = 0
     transcript = ''
-    while k < len(S):
+    while k < S.length:
         if gap_open is not None:
             assert(gap_open < 1) # if not none, gap_open is assumed to be the gap probability
             assert(gap_continue < 1)
@@ -123,16 +139,16 @@ def mutate(S, gap_open=None, gap_continue=0.5, rates=None):
                 else:
                     # insertion
                     transcript += 'I' * length
-                    T += randgen(length, dist={k:1.0/L for k in rates})
+                    T += rawrand(length, insert_dist)
                     k += 1
                     continue
-        T += randgen(1, dist=rates[S[k]])[0]
+        T += rawrand(1, error_rates[S[k]])[0]
         transcript += 'M' if T[-1] == S[k] else 'S'
         k += 1
-    return (T, transcript)
+    return (Sequence(T, S.alphabet), transcript)
 
 # TODO use homopolymeric-specific gap parameters
-def readgen(genome, error_rates=None, coverage=40, len_mean=6000, len_var=1000):
+def randread(genome, error_rates=None, coverage=40, len_mean=6000, len_var=1000):
     """Generates a random collection of lossy reads from a given genome.
 
     :param genome(str): the "true" original genome.
@@ -141,11 +157,11 @@ def readgen(genome, error_rates=None, coverage=40, len_mean=6000, len_var=1000):
     :param len_mean (float):  the mean of the normal distribution of read lengths.
     :param len_var (float):   the variance of the normal distribution or read lengths.
     """
-    N = len(genome)
+    N = genome.length
     num = int(1.0*N*coverage/len_mean)
     for i in range(num):
-        length = max(5, min(N, int(np.random.normal(len_mean, len_var))))
+        length = max(10, min(N-1, int(np.random.normal(len_mean, len_var))))
         start = np.random.randint(0, N-length)
-        x = genome[start:start+length]
-        read,_ = mutate(x, gap_open=0.1, rates=error_rates)
+        x = Sequence(''.join([genome[k] for k in range(start,start+length)]), genome.alphabet)
+        read,_ = mutate(x, gap_open=0.1, error_rates=error_rates)
         yield read

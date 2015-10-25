@@ -22,7 +22,6 @@ def print_alignment(S, T, transcript, f, width=120, margin=20, colors=True):
     assert(S.alphabet.letter_length == T.alphabet.letter_length)
     assert(S.alphabet.letters == T.alphabet.letters)
     letlen = S.alphabet.letter_length
-    letters = S.alphabet.letters
     infostr, transcript = transcript.split(':', 1)
     transcript = transcript[1:] # skip the B
     indices, score = infostr.split('),', 1)
@@ -50,8 +49,8 @@ def print_alignment(S, T, transcript, f, width=120, margin=20, colors=True):
     for i in reversed(range(1, pre_margin)):
         if counter >= width:
             counter, sline, tline = new_line(sline, tline, idx_S+i, idx_T+i, f)
-        sline += letters[S.c_idxseq[idx_S-i]] if i <= idx_S else ' '
-        tline += letters[T.c_idxseq[idx_T-i]] if i <= idx_T else ' '
+        sline += S[idx_S-i] if i <= idx_S else ' '
+        tline += T[idx_T-i] if i <= idx_T else ' '
         counter += letlen
 
     # The alignment itself:
@@ -59,14 +58,14 @@ def print_alignment(S, T, transcript, f, width=120, margin=20, colors=True):
         if counter >= width:
             counter, sline, tline = new_line(sline, tline, idx_S, idx_T, f)
         if op in 'MS':
-            s, t = letters[S.c_idxseq[idx_S]], letters[T.c_idxseq[idx_T]]
+            s, t = S[idx_S], T[idx_T]
             idx_S += 1
             idx_T += 1
         elif op == 'I':
-            s, t = '-', letters[T.c_idxseq[idx_T]]
+            s, t = '-', T[idx_T]
             idx_T += 1
         elif op == 'D':
-            s, t = letters[S.c_idxseq[idx_S]], '-'
+            s, t = S[idx_S], '-'
             idx_S += 1
         on_color = color = None
         if colors:
@@ -86,8 +85,8 @@ def print_alignment(S, T, transcript, f, width=120, margin=20, colors=True):
         if counter >= width:
             counter, sline, tline = new_line(
                 sline, tline, idx_S+i, idx_T+i, f)
-        sline += letters[S.c_idxseq[idx_S+i]] if idx_S + i < S.length else ' '
-        tline += letters[T.c_idxseq[idx_T+i]] if idx_T + i < T.length else ' '
+        sline += S[idx_S+i] if idx_S + i < S.length else ' '
+        tline += T[idx_T+i] if idx_T + i < T.length else ' '
         counter += letlen
 
     print_lines(sline, tline, f)

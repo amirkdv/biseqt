@@ -220,8 +220,7 @@ class Query(object):
                 ORDER BY count(H.seq) DESC
             """.format(self.tuplesdb.wordlen, self.tuplesdb.wordlen)
             c.execute(q)
-            res = {row[0]:row[1] for row in c}
-            return res
+            return {row[0]:row[1] for row in c}
 
     def expand_seed(self, seed, window=20):
         """Expands a seed by repeatedly aligning portions (of length
