@@ -48,7 +48,7 @@ def print_alignment(S, T, transcript, f, width=120, margin=20, colors=True):
     tline = 'T[%d]: ' % max(0, idx_T - pre_margin + 1)
     counter = max(len(sline), len(tline))
     for i in reversed(range(1, pre_margin)):
-        if counter == width:
+        if counter >= width:
             counter, sline, tline = new_line(sline, tline, idx_S+i, idx_T+i, f)
         sline += letters[S.c_idxseq[idx_S-i]] if i <= idx_S else ' '
         tline += letters[T.c_idxseq[idx_T-i]] if i <= idx_T else ' '
@@ -56,7 +56,7 @@ def print_alignment(S, T, transcript, f, width=120, margin=20, colors=True):
 
     # The alignment itself:
     for i,op in enumerate(transcript):
-        if counter == width:
+        if counter >= width:
             counter, sline, tline = new_line(sline, tline, idx_S, idx_T, f)
         if op in 'MS':
             s, t = letters[S.c_idxseq[idx_S]], letters[T.c_idxseq[idx_T]]
@@ -83,7 +83,7 @@ def print_alignment(S, T, transcript, f, width=120, margin=20, colors=True):
     # The post margin:
     post_margin = min(margin, max(S.length-idx_S, T.length-idx_T))
     for i in range(post_margin):
-        if counter == width:
+        if counter >= width:
             counter, sline, tline = new_line(
                 sline, tline, idx_S+i, idx_T+i, f)
         sline += letters[S.c_idxseq[idx_S+i]] if idx_S + i < S.length else ' '
