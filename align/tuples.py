@@ -83,6 +83,7 @@ class TuplesDB(object):
             c.execute(q)
         sys.stderr.write('initialized tuples DB at: %s\n' % self.db)
 
+    # TODO allow specifying a distillery.Translator.
     def populate(self, fasta_src=None, lim=False):
         """Given a FASTA source file, loads all the sequences (up to a limit,
         if specified) into the `seq` table. No indexing is done; see index().
@@ -152,6 +153,7 @@ class Query(object):
     NOTE Due to the way queries are implemented (see hitsummary(), for example)
     only one query at a time can be using the same tuples database file.
     """
+    # TODO make qseq a seq.Sequence
     def __init__(self, qseq, tuplesdb=None, align_params=None):
         self.tuplesdb, self.qseq, self.align_params = tuplesdb, qseq, align_params
         def give_tup():

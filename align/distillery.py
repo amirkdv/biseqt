@@ -1,3 +1,5 @@
+# TODO make function/variable names indicate whether they
+# carry/accept/return raw strings or seq.Sequence seq.Alphabet objects.
 from math import log10, floor
 from .seq import Alphabet
 

@@ -1,3 +1,6 @@
+# TODO make function/variable names indicate whether they
+# carry/accept/return raw strings or seq.Sequence seq.Alphabet objects.
+
 import numpy as np
 import random
 
@@ -57,7 +60,7 @@ class Sequence(CffiObject):
         return ''.join([''.join([self.c_charseq[i][j] for j in range(L)]) for i in range(self.length)])
 
 
-def randgen(length, dist={k:0.25 for k in 'ACGT'}):
+def randgen(length, dist=None):
     """Generates a random sequence of the specified length within the alphabet
     specified by the keys in the distribution matrix. The distribution matrix
     should look like this for nucleotide sequences:
@@ -76,6 +79,7 @@ def randgen(length, dist={k:0.25 for k in 'ACGT'}):
         space.extend([k] * int(100*dist[k]))
     return ''.join([random.choice(space) for _ in range(length)])
 
+# TODO support hompolymeric-specific gap parameters
 def mutate(S, gap_open=None, gap_continue=0.5, rates=None):
     """Mutates a given sequence with specified probabilities. The sequence is
     scanned and copied to the mutated sequence where at each position:
@@ -101,6 +105,7 @@ def mutate(S, gap_open=None, gap_continue=0.5, rates=None):
              ...
             }
     """
+    L = len(rates.keys()) # number of letters in alphabet
     T = ''
     k = 0
     transcript = ''
@@ -118,10 +123,29 @@ def mutate(S, gap_open=None, gap_continue=0.5, rates=None):
                 else:
                     # insertion
                     transcript += 'I' * length
-                    T += randgen(length)
+                    T += randgen(length, dist={k:1.0/L for k in rates})
                     k += 1
                     continue
         T += randgen(1, dist=rates[S[k]])[0]
         transcript += 'M' if T[-1] == S[k] else 'S'
         k += 1
     return (T, transcript)
+
+# TODO use homopolymeric-specific gap parameters
+def readgen(genome, error_rates=None, coverage=40, len_mean=6000, len_var=1000):
+    """Generates a random collection of lossy reads from a given genome.
+
+    :param genome(str): the "true" original genome.
+    :param coverage (float): the expected number of times each letter in the
+        sequence appears in the entire read collection.
+    :param len_mean (float):  the mean of the normal distribution of read lengths.
+    :param len_var (float):   the variance of the normal distribution or read lengths.
+    """
+    N = len(genome)
+    num = int(1.0*N*coverage/len_mean)
+    for i in range(num):
+        length = max(5, min(N, int(np.random.normal(len_mean, len_var))))
+        start = np.random.randint(0, N-length)
+        x = genome[start:start+length]
+        read,_ = mutate(x, gap_open=0.1, rates=error_rates)
+        yield read

@@ -19,7 +19,7 @@ tests: align/libalign.so test.fa
 	python -m align.tests.tuples
 
 test.fa:
-	python -c "from align.seq import randgen, mutate; x = randgen(60); print '> orig\n' + x; print '\n'.join(['> seq_%d\n' % i + mutate(x, gap_open=0.1, rates={i:{k:0.94 if k==i else 0.02 for k in 'ACGT'} for i in 'ACGTG'})[0] for i in range(10)]);" > /tmp/$@
+	python -c "from align.seq import randgen, mutate; x = randgen(60, dist={k:0.25 for k in 'ACGT'}); print '> orig\n' + x; print '\n'.join(['> seq_%d\n' % i + mutate(x, gap_open=0.1, rates={i:{k:0.94 if k==i else 0.02 for k in 'ACGT'} for i in 'ACGTG'})[0] for i in range(10)]);" > /tmp/$@
 	head -n +2 /tmp/$@ | tail -n1 > query.fa
 	tail -n +3 /tmp/$@ > $@
 	rm -f /tmp/$@

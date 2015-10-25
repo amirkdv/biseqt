@@ -34,7 +34,7 @@ see the [tests](/align/tests/align.py) for example usage:
 2. Time complexity is quadratic in sequence lengths except for banded global
   alignment which is linear with a constant proportional to
   band width. As an example, finding the optimal local alignment for two related
-  sequences (one is an [artificial mutant](/align/randseq.py) of the other)
+  sequences (one is an [artificial mutant](/align/seq.py) of the other)
   with length 5 Kbp takes on average 3 seconds on a 3.67 GHz quad-core Intel
   CPU.
 1. Space complexity is quadratic. Currently an average of roughly 100 bytes is
@@ -87,7 +87,9 @@ example usage:
 
 ## Missing
 * complete [seed expansion](/align/tuples.py)
-* support [random generation](/align/randseq.py) of assembly reads.
+* make tuple methods aware of distilled sequences.
+* support hompolymeric-specific indel parameters in [random generation](/align/seq.py)
+  of whole genome reads.
 * better [tests](/tests).
 * support [Hirschberg](https://en.wikipedia.org/wiki/Hirschberg's_algorithm)-style
 [linear space](/align/libalign.c) optimization.
