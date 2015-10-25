@@ -1,8 +1,63 @@
-#!/usr/bin/env python
 import numpy as np
 import random
 
-def gen(length, dist={k:0.25 for k in 'ACGT'}):
+from . import ffi, lib, utils, CffiObject
+
+class Alphabet(CffiObject):
+    """Wraps a C `sequence_alphabet*`.
+
+    Attributes:
+        c_obj (cffi.cdata): points to a sequence_alphabet struct.
+        _c_letters_ka (list[cffi.cdata]): has ownership of (keeps alive) C
+            pointers to each letter (which is a `char[]`) of the alphabet.
+        _c_alph_ka (cffi.cdata): has ownership of (keeps alive) the C
+            pointer to the full substitution matrix.
+    """
+    def __init__(self, alphabet):
+        if isinstance(alphabet, str):
+            alphabet = [c for c in alphabet]
+        assert(len(set([len(s) for s in alphabet])) == 1)
+        # each letter string in the alphabet must be "owned" by an object
+        # that's kept alive.
+        self._c_letters_ka = [ffi.new('char[]', alphabet[i]) for i in range(len(alphabet))]
+        self._c_alph_ka = ffi.new('char *[]', self._c_letters_ka)
+        self.c_obj = ffi.new('sequence_alphabet*', {
+            'length': len(alphabet),
+            'letter_length': len(alphabet[0]),
+            'letters': self._c_alph_ka
+        })
+
+    def __getattr__(self, name):
+        if name == 'letters':
+            N, L = self.length, self.letter_length
+            return [''.join([self.c_obj.letters[i][j] for j in range(L)]) for i in range(N)]
+        else:
+            return super(Alphabet, self).__getattr__(name)
+
+
+class Sequence(CffiObject):
+    """Wraps a C `char[]` and keeps its length. Placeholder for potential
+    additions.
+
+    Attributes:
+        alphabet (Alphabet)
+        c_charseq (cffi.cdata): points to the underlying C char[].
+        c_idxseq  (cffi.cdata): points to the actually used int*.
+    """
+    def __init__(self, string, alphabet):
+        assert(len(string) % alphabet.letter_length == 0)
+        global lib
+        self.c_charseq = ffi.new('char[]', string)
+        self.length = len(string)/alphabet.letter_length
+        self.c_idxseq = lib.idxseq_from_charseq(alphabet.c_obj, self.c_charseq, self.length)
+        self.alphabet = alphabet
+
+    def __repr__(self):
+        N, L = self.length, self.alphabet.letter_length
+        return ''.join([''.join([self.c_charseq[i][j] for j in range(L)]) for i in range(self.length)])
+
+
+def randgen(length, dist={k:0.25 for k in 'ACGT'}):
     """Generates a random sequence of the specified length within the alphabet
     specified by the keys in the distribution matrix. The distribution matrix
     should look like this for nucleotide sequences:
@@ -63,10 +118,10 @@ def mutate(S, gap_open=None, gap_continue=0.5, rates=None):
                 else:
                     # insertion
                     transcript += 'I' * length
-                    T += gen(length)
+                    T += randgen(length)
                     k += 1
                     continue
-        T += gen(1, dist=rates[S[k]])[0]
+        T += randgen(1, dist=rates[S[k]])[0]
         transcript += 'M' if T[-1] == S[k] else 'S'
         k += 1
     return (T, transcript)

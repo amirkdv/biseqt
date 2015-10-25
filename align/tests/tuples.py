@@ -2,9 +2,7 @@
 import sys
 import os
 
-from .. import align
-from .. import tuples
-from .. import utils
+from .. import align, tuples, utils, seq
 
 #DATA_DIR = os.path.join(os.path.dirname(__file__), '../../../pacbio.c-elegans')
 #SRC = os.path.join(DATA_DIR, 'm140928_184123_42139_c100719602550000001823155305141590_s1_p0.1.subreads.fasta')
@@ -18,7 +16,7 @@ SRC = './test.fa'
 QUERY = './query.fa'
 DB = 'test.db'
 
-A = align.Alphabet('ACGT')
+A = seq.Alphabet('ACGT')
 B = tuples.TuplesDB(db=DB, wordlen=wordlen, alphabet=A)
 B.initdb()
 B.populate(SRC, lim=limit)

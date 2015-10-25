@@ -1,8 +1,6 @@
 #!/usr/bin/env python
 import sys
-from .. import align
-from .. import utils
-from .. import randseq
+from .. import align, utils, seq
 
 params = {
     'm':        3, # match score
@@ -15,16 +13,16 @@ params = {
     'type': align.ALIGN_LOCAL, # type of alignments
 }
 mutation_rates = {i:{k:0.7 if k==i else 0.1 for k in 'ACGT'} for i in 'ACGT'}
-A = align.Alphabet('ACGT')
+A = seq.Alphabet('ACGT')
 
 with open('data/dna.mtrtv.matrix') as f:
     subst_scores = eval(f.read().strip(), params)
 
-S = align.Sequence('ACCCGT', A)
-T = align.Sequence('CC', A)
-#S = align.Sequence(randseq.gen(1000), A)
-#T, m_transcript = randseq.mutate(str(S), gap_open=0.2, gap_continue=0.3, rates=mutation_rates)
-#T = align.Sequence(T, A)
+#S = align.Sequence('ACCCGT', A)
+#T = align.Sequence('CC', A)
+S = seq.Sequence(seq.randgen(1000), A)
+T, m_transcript = seq.mutate(str(S), gap_open=0.2, gap_continue=0.3, rates=mutation_rates)
+T = seq.Sequence(T, A)
 
 C = align.AlignParams(subst_scores=subst_scores, alphabet=A,
     gap_open_score=params['go'], gap_extend_score=params['ge'],

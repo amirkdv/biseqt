@@ -1,6 +1,5 @@
-#!/usr/bin/env python
-
 from math import log10, floor
+from .seq import Alphabet
 
 def tokenize(string):
     """Generator for homopolymeric substrings in a given sequences. Each value

@@ -1,7 +1,4 @@
-#!/usr/bin/env python
-from . import ffi
-from . import lib
-from . import utils
+from . import ffi, lib, utils, CffiObject
 
 global lib
 """Values for enum `align_type`.
@@ -11,73 +8,6 @@ ALIGN_LOCAL = lib.LOCAL
 ALIGN_START_ANCHORED = lib.START_ANCHORED
 ALIGN_END_ANCHORED = lib.END_ANCHORED
 ALIGN_OVERLAP = lib.OVERLAP
-
-class CffiObject(object):
-    """Generic cffi wrapper for C structs, delegates all unknown attributes to
-    the underlying C pointer. Subclasses must populate self.c_obj in their
-    constructors with a pointer to their underlying C struct.
-
-    Attributes:
-        c_obj (cffi.cdata): the underlying C pointer.
-    """
-    def __init__(self, c_type, **kw):
-        self.c_obj = ffi.new('%s *' % c_type)
-
-    def __getattr__(self, name):
-        return getattr(self.c_obj, name)
-
-class Alphabet(CffiObject):
-    """Wraps a C `sequence_alphabet*`.
-
-    Attributes:
-        c_obj (cffi.cdata): points to a sequence_alphabet struct.
-        _c_letters_ka (list[cffi.cdata]): has ownership of (keeps alive) C
-            pointers to each letter (which is a `char[]`) of the alphabet.
-        _c_alph_ka (cffi.cdata): has ownership of (keeps alive) the C
-            pointer to the full substitution matrix.
-    """
-    def __init__(self, alphabet):
-        if isinstance(alphabet, str):
-            alphabet = [c for c in alphabet]
-        assert(len(set([len(s) for s in alphabet])) == 1)
-        # each letter string in the alphabet must be "owned" by an object
-        # that's kept alive.
-        self._c_letters_ka = [ffi.new('char[]', alphabet[i]) for i in range(len(alphabet))]
-        self._c_alph_ka = ffi.new('char *[]', self._c_letters_ka)
-        self.c_obj = ffi.new('sequence_alphabet*', {
-            'length': len(alphabet),
-            'letter_length': len(alphabet[0]),
-            'letters': self._c_alph_ka
-        })
-
-    def __getattr__(self, name):
-        if name == 'letters':
-            N, L = self.length, self.letter_length
-            return [''.join([self.c_obj.letters[i][j] for j in range(L)]) for i in range(N)]
-        else:
-            return super(Alphabet, self).__getattr__(name)
-
-
-class Sequence(CffiObject):
-    """Wraps a C `char[]` and keeps its length. Placeholder for potential
-    additions.
-
-    Attributes:
-        alphabet (Alphabet)
-        c_charseq (cffi.cdata): points to the underlying C char[].
-        c_idxseq  (cffi.cdata): points to the actually used int*.
-    """
-    def __init__(self, string, alphabet):
-        assert(len(string) % alphabet.letter_length == 0)
-        global lib
-        self.c_charseq = ffi.new('char[]', string)
-        self.length = len(string)/alphabet.letter_length
-        self.c_idxseq = lib.idxseq_from_charseq(alphabet.c_obj, self.c_charseq, self.length)
-        self.alphabet = alphabet
-
-    def __repr__(self):
-        N, L = self.length, self.alphabet.letter_length
-        return ''.join([''.join([self.c_charseq[i][j] for j in range(L)]) for i in range(self.length)])
 
 class AlignParams(CffiObject):
     """Wraps the C struct align_params, see `libalign.h`
