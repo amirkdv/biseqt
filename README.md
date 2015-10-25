@@ -3,6 +3,7 @@ This is a library of some sequence alignment algorithms in python and C. To get
 started:
 
 ```sh
+python setup.py develop
 make clean tests
 ```
 
