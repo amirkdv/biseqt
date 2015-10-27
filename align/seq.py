@@ -130,19 +130,18 @@ class Sequence():
             if go_prob:
                 # NOTE max precision for gap_open is .01
                 if random.randint(0, 100) < go_prob * 100:
+                    # deletion of length with geometric distribution, but not
+                    # more than we can actually delete:
+                    length = min(np.random.geometric(1 - ge_prob), self.length - k)
+                    opseq += 'D' * length
+                    k += length
+                    continue
+                if random.randint(0, 100) < go_prob * 100:
                     length = np.random.geometric(1 - ge_prob)
-                    # don't claim you deleted more than you can:
-                    length = min(length, self.length - k)
-                    if random.choice([0,1]):
-                        # deletion
-                        opseq += 'D' * length
-                        k += length
-                        continue
-                    else:
-                        # insertion
-                        opseq += 'I' * length
-                        T += self.alphabet.randstr(length, insert_dist)
-                        continue
+                    # insert of length with geometric distribution:
+                    opseq += 'I' * length
+                    T += self.alphabet.randstr(length, insert_dist)
+                    continue
             # no gap, substitute:
             T += self.alphabet.randstr(1, subst_probs[self.c_idxseq[k]])[0]
             opseq += 'M' if T[-1] == self[k] else 'S'
