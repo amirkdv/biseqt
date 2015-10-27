@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 import sys
-from .. import align, utils, seq
+from .. import align, seq
 
 params = {
     'length': 500,
@@ -30,7 +30,7 @@ print 'Pr(go) = %.2f, Pr(ge) = %.2f +----> Score(go)=%.2f, Score(ge)=%.2f' % \
 #T = seq.Sequence('GTCGAGT', A)
 
 S = A.randseq(params['length'])
-T, m_transcript = S.mutate(go_prob=params['go_prob'], ge_prob=params['ge_prob'],
+T, m_opseq = S.mutate(go_prob=params['go_prob'], ge_prob=params['ge_prob'],
     subst_probs=params['subst_probs'])
 C = align.AlignParams(subst_scores=subst_scores, alphabet=A,
     go_score=go_score, ge_score=ge_score, max_diversion=params['band'])
@@ -38,10 +38,10 @@ P = align.AlignProblem(S=S, T=T, params=C,
     align_type=params['type'])
 transcript = P.solve(print_dp_table=params['show_dp'])
 
-print '\n--> optimal alignment:\n%s\n' % transcript
-if transcript[:3] != 'Err':
-    utils.print_alignment(S, T, transcript, sys.stdout, margin=10)
+print '\n--> optimal alignment:\n%s\n' % str(transcript)
+if transcript:
+    seq.print_transcript(S, T, transcript, sys.stdout, margin=10)
 
-m_transcript = '(0,0),%.2f:%s' % (P.score(m_transcript), m_transcript)
-print '\n--> mutation transcript:\n%s\n' % m_transcript
-utils.print_alignment(S, T, m_transcript, sys.stdout, margin=10)
+m_transcript = seq.Transcript(opseq=m_opseq, S_idx=0, T_idx=0, score=P.score(m_opseq))
+print '\n--> mutation transcript:\n%s\n' % str(m_transcript)
+seq.print_transcript(S, T, m_transcript, sys.stdout, margin=10)

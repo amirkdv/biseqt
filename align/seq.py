@@ -1,7 +1,126 @@
 import numpy as np
 import random
+from termcolor import colored
+from collections import namedtuple
 
-from . import ffi, lib, utils, CffiObject
+
+from . import ffi, lib, CffiObject
+
+"""A tuple wrapper for alignment strings. Solutions to the alignment problem are
+represented by transcript strings with the following format:
+
+    (<Si,Tj>),<score>:...
+
+Si and Tj are integers specifying the positiong along each string where
+the alignment begins. Score is the score of the transcript to 2 decimal
+places. What follows the ':' is a sequence of "ops" defined as follows:
+    B begin
+    M match
+    S substitution
+    I insert
+    D delete
+All op sequences begin with a B and insertion/deletions are meant to
+mean "from S to T".
+"""
+# FIXME when libalign::solve can return only scores make this in to a class
+Transcript = namedtuple('Transcript', ['S_idx', 'T_idx', 'score', 'opseq'])
+
+def parse_transcript(transcript):
+    """Parses a raw transcript as given by `libalign.so` and returns an
+    Transcript tuple. Raw transcripts are expected to have the following
+    format:
+
+        (<Si,Tj>),<score>:<opseq>
+    """
+
+    infostr, opseq = transcript.split(':', 1)
+    indices, score = infostr.rsplit(',', 1)
+    S_idx, T_idx = indices[1:-1].split(',') # skip the open/close parens
+    return Transcript(S_idx=int(S_idx), T_idx=int(T_idx), opseq=opseq, score=float(score))
+
+def print_transcript(S, T, transcript, f, width=120, margin=20, colors=True):
+    """Pretty prints a given transcript to f.
+
+    :param S: "from" sequence (anything that casts to the correct str object).
+    :param T: "to" sequence (like S).
+    :param transcript(Transcript): the transcript output of libalign.
+    :param f: file handle to write the output to; for standard output use
+        `sys.stdout`.
+    :param width(optional): terminal width (int) used for wrapping; default 120.
+    :param margin(optional): length (int) of leading and trailing sequences in S
+        and T before and after the alignment; default 20.
+    :param colors(optional): whether or not (truthy) to use colors in output;
+        default True.
+    """
+    assert(S.alphabet.letter_length == T.alphabet.letter_length)
+    assert(S.alphabet.letters == T.alphabet.letters)
+    letlen = S.alphabet.letter_length
+    S_idx, T_idx = transcript.S_idx, transcript.T_idx
+
+    slines = tlines = []
+    sline = tline = ''
+
+    def print_lines(sline, tline, f):
+        maxlen = max(len(sline), len(tline))
+        sline, tline = sline.rjust(maxlen), tline.rjust(maxlen)
+        f.write('%s\n%s\n' % (sline,tline))
+
+    def new_line(sline, tline, _S_idx, _T_idx, f):
+        print_lines(sline, tline, f)
+        sline, tline = 'S[%d]: ' % _S_idx, 'T[%d]: ' % _T_idx
+        return (max(len(sline), len(tline)), sline, tline)
+
+    # The pre margin:
+    pre_margin = min(margin, max(S_idx, T_idx))
+    sline = 'S[%d]: ' % max(0, S_idx - pre_margin + 1)
+    tline = 'T[%d]: ' % max(0, T_idx - pre_margin + 1)
+    counter = max(len(sline), len(tline))
+    for i in reversed(range(1, pre_margin)):
+        if counter >= width:
+            counter, sline, tline = new_line(sline, tline, S_idx+i, T_idx+i, f)
+        sline += S[S_idx-i] if i <= S_idx else ' '
+        tline += T[T_idx-i] if i <= T_idx else ' '
+        counter += letlen
+
+    # The alignment itself:
+    for i,op in enumerate(transcript.opseq):
+        if op == 'B':
+            continue
+        if counter >= width:
+            counter, sline, tline = new_line(sline, tline, S_idx, T_idx, f)
+        if op in 'MS':
+            s, t = S[S_idx], T[T_idx]
+            S_idx += 1
+            T_idx += 1
+        elif op == 'I':
+            s, t = '-', T[T_idx]
+            T_idx += 1
+        elif op == 'D':
+            s, t = S[S_idx], '-'
+            S_idx += 1
+        on_color = color = None
+        if colors:
+            if op in 'MS':
+                color = 'green' if op == 'M' else 'red'
+            elif op == 'I':
+                on_color = 'on_red'
+            elif op == 'D':
+                on_color = 'on_red'
+        sline += colored(s, color=color, on_color=on_color)
+        tline += colored(t, color=color, on_color=on_color)
+        counter += letlen
+
+    # The post margin:
+    post_margin = min(margin, max(S.length-S_idx, T.length-T_idx))
+    for i in range(post_margin):
+        if counter >= width:
+            counter, sline, tline = new_line(
+                sline, tline, S_idx+i, T_idx+i, f)
+        sline += S[S_idx+i] if S_idx + i < S.length else ' '
+        tline += T[T_idx+i] if T_idx + i < T.length else ' '
+        counter += letlen
+
+    print_lines(sline, tline, f)
 
 class Alphabet(CffiObject):
     """Wraps a C `sequence_alphabet*`.

@@ -2,7 +2,7 @@
 import sys
 from math import erf, sqrt, log
 
-from .. import distillery, utils, align, seq
+from .. import distillery, align, seq
 
 maxlen = 5
 
@@ -43,7 +43,7 @@ opseq_d = 'BMSSS'
 opseq = Tr.expand_opseq(s, t, opseq_d)
 print opseq_d
 print opseq
-utils.print_alignment(S, T, '(0,0),0:' + opseq, sys.stdout)
+seq.print_transcript(S, T, seq.Transcript(S_idx=0, T_idx=0, score=0,opseq=opseq), sys.stdout)
 S_d = seq.Sequence(s_d, A_d)
 T_d = seq.Sequence(t_d, A_d)
 C = align.AlignParams(alphabet=A_d,subst_scores=scores,
@@ -51,11 +51,12 @@ C = align.AlignParams(alphabet=A_d,subst_scores=scores,
     max_diversion=params['band'])
 P = align.AlignProblem(S=S_d, T=T_d, params=C,
     align_type=params['type'])
-transcript = P.solve(print_dp_table=params['show_dp'])
+transcript_d = P.solve(print_dp_table=params['show_dp'])
 print "opseq score: %.2f" % P.score(opseq_d)
 
-print '\n' + transcript + '\n'
-if transcript[:3] != 'Err':
-    info,opseq_d = transcript.split(':')
-    opseq = Tr.expand_opseq(S, T, opseq_d)
-    utils.print_alignment(S, T, info + ':' + opseq, sys.stdout, margin=10)
+if transcript_d:
+    print '\n' + str(transcript_d) + '\n'
+    opseq = Tr.expand_opseq(S, T, transcript_d.opseq)
+    transcript = seq.Transcript(S_idx=transcript_d.S_idx * A_d.letter_length,
+        T_idx=transcript_d.T_idx * A_d.letter_length, opseq=opseq_d, score=0)
+    seq.print_transcript(S, T, transcript, sys.stdout, margin=10)

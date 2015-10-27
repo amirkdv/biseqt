@@ -1,6 +1,6 @@
 from math import log
 
-from . import ffi, lib, utils, CffiObject
+from . import ffi, lib, seq, CffiObject
 from .distillery import hp_tokenize
 
 global lib
@@ -101,8 +101,10 @@ class AlignProblem(CffiObject):
         S_min_idx=0, T_min_idx=0, S_max_idx=None, T_max_idx=None):
 
         # protect against index overflows
-        S_max_idx = min(S.length, S_max_idx) if S_max_idx else S.length
-        T_max_idx = min(T.length, T_max_idx) if T_max_idx else T.length
+        S_max_idx = S.length if S_max_idx else S.length
+        T_max_idx = T.length if T_max_idx else T.length
+        assert(S_max_idx <= S.length)
+        assert(T_max_idx <= T.length)
 
         self.S, self.T, self.params, self.align_type = S, T, params, align_type
         self.c_obj = ffi.new('align_problem*', {
@@ -152,21 +154,6 @@ class AlignProblem(CffiObject):
 
     def solve(self, print_dp_table=False):
         """Populates the DP table and traces back an (any) optimal alignment.
-        Solutions to the alignment problem are represented by transcript
-        strings with the following format:
-
-            (<Si,Tj>),<score>:...
-
-        Si and Tj are integers specifying the positiong along each string where
-        the alignment begins. Score is the score of the transcript to 2 decimal
-        places. What follows the ':' is a sequence of "ops" defined as follows:
-            B begin
-            M match
-            S substitution
-            I insert
-            D delete
-        All op sequences begin with a B and insertion/deletions are meant to
-        mean "from S to T".
 
         :param print_dp_table(optional): whether or not (truthy) to print the
             fully calculated DP table.
@@ -181,9 +168,10 @@ class AlignProblem(CffiObject):
                 print mat[i]
         ret = lib.traceback(self.c_dp_table, self.c_obj)
         if ret == ffi.NULL:
-            return 'Err: No Alignment found (go=%.2f, ge=%.2f, max_div=%d)' % \
+            print 'Err: No Alignment found (go=%.2f, ge=%.2f, max_div=%d)' % \
                 (self.params.gap_open_score, self.params.gap_extend_score, self.params.max_diversion)
-        return ffi.string(ret)
+            return None
+        return seq.parse_transcript(ffi.string(ret))
 
     def __getattr__(self, name):
         """Allow attributes to access members of the underlying `align_problem`

@@ -2,7 +2,7 @@
 import sys
 import os
 
-from .. import align, tuples, utils, seq
+from .. import align, tuples, seq
 
 wordlen = 5
 limit = -1
