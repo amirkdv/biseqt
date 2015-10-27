@@ -61,8 +61,8 @@ class AlignParams(CffiObject):
             for j in range(L):
                 assert(subst_probs[i][j] > 0)
                 assert(letter_dist[i] * letter_dist[j] != 0)
-                subst_scores[i][j] = log(subst_probs[i][j]) + \
-                    log(letter_dist[i]) - log(letter_dist[j])
+                subst_scores[i][j] = log(subst_probs[i][j]) \
+                    - log(letter_dist[i]) - log(letter_dist[j])
         return subst_scores
 
     @classmethod
