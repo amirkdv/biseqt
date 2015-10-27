@@ -135,17 +135,17 @@ class AlignProblem(CffiObject):
         for op,num in hp_tokenize(opseq):
             if op == 'M':
                 score += num * subst_scores[self.S.c_idxseq[i]][self.T.c_idxseq[j]]
-                i, j = i+num, j+num
+                i, j = i + num, j + num
             elif op == 'S':
                 for k in range(num):
                     score += subst_scores[self.S.c_idxseq[i+k]][self.T.c_idxseq[j+k]]
-                i, j = i+num, j+num
+                i, j = i + num, j + num
             elif op in 'ID':
                 score += self.params.gap_open_score + self.params.gap_extend_score * num
                 if op == 'I':
                     j = j + num
                 else:
-                    j = i + num
+                    i = i + num
             else:
                 raise ValueError('Invalid edit operation: %c' % op)
         return score
