@@ -1,10 +1,12 @@
 GCC = gcc -shared -Wall -fPIC -std=c99 -g
 
+# To get coredumps:
+# 	$ ulimit -c unlimited
+# To debug coredump:
+# 	$ gdb align/libalign.so core
 align/libalign.so: align/libalign.c align/libalign.h
 	$(GCC) align/libalign.c -o $@
 
-# To get coredumps: ulimit -c unlimited
-# To debug coredump: gdb align.so core
 clean:
 	find . -regex .\*.pyc | while read f; do rm -f $$f; done
 	find . -regex .\*.swp | while read f; do rm -f $$f; done

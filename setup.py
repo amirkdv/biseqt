@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-from setuptools import setup, find_packages
+from setuptools import setup
 from os import path
 
 here = path.abspath(path.dirname(__file__))
@@ -12,7 +12,7 @@ with open(path.join(here, 'README.md')) as f:
 setup(
     name='align.py',
     version='0.0.1',
-    description='A library for sequence alignment',
+    description='A sequence alignment library',
     long_description=long_description,
     url='https://github.com/amirkdv/align.py',
     author='Amir Kadivar',
