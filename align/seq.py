@@ -131,6 +131,8 @@ class Sequence():
                 # NOTE max precision for gap_open is .01
                 if random.randint(0, 100) < go_prob * 100:
                     length = np.random.geometric(1 - ge_prob)
+                    # don't claim you deleted more than you can:
+                    length = min(length, self.length - k)
                     if random.choice([0,1]):
                         # deletion
                         opseq += 'D' * length
