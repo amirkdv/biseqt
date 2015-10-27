@@ -46,8 +46,4 @@ cands.sort(key=lambda k: hits[k], reverse=True)
 # purse num_seeds for the best candidate
             # seeds.sort(key=lambda k: k.len, reverse=True)
 for seed in query.seeds(seqid=cands[0]):
-    if not num_seeds:
-        break
-    num_seeds -= 1
-    transcript = query.expand_seed(seed)
-    print transcript
+    print 'expanded seed: %s' % str(query.expand_seed(seed))

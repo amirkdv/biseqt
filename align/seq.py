@@ -30,20 +30,22 @@ def parse_transcript(transcript):
     Transcript tuple. Raw transcripts are expected to have the following
     format:
 
-        (<Si,Tj>),<score>:<opseq>
+        (<S_idx,T_idx>),<score>:<opseq>
     """
+    # TODO assert regex matches given raw string
 
     infostr, opseq = transcript.split(':', 1)
     indices, score = infostr.rsplit(',', 1)
     S_idx, T_idx = indices[1:-1].split(',') # skip the open/close parens
     return Transcript(S_idx=int(S_idx), T_idx=int(T_idx), opseq=opseq, score=float(score))
 
+# FIXME this function should only be concerned with opseq not whole transcript
 def print_transcript(S, T, transcript, f, width=120, margin=20, colors=True):
     """Pretty prints a given transcript to f.
 
-    :param S: "from" sequence (anything that casts to the correct str object).
-    :param T: "to" sequence (like S).
-    :param transcript(Transcript): the transcript output of libalign.
+    :param S(Sequence): "from" sequence.
+    :param T(Sequence): "to" sequence.
+    :param transcript(Transcript): alignment transcript to print
     :param f: file handle to write the output to; for standard output use
         `sys.stdout`.
     :param width(optional): terminal width (int) used for wrapping; default 120.

@@ -4,7 +4,7 @@ import sqlite3
 from Bio import SeqIO
 from collections import namedtuple
 
-from . import utils, align, seq
+from . import align, seq
 
 Seed = namedtuple('Seed', ['seqid', 'idx', 'idx_q', 'len'])
 
@@ -233,21 +233,55 @@ class Query(object):
         `window`) of the query and target sequences until a threshold low score
         is met.
         """
+        # FIXME in expand_*_once(): update the trasncript score too
         T = seq.Sequence(self.tuplesdb.loadseq(seed.seqid), self.tuplesdb.alphabet)
-        S_min_idx, S_max_idx = seed.idx_q + seed.len, seed.idx_q + seed.len + window,
-        T_min_idx, T_max_idx = seed.idx   + seed.len, seed.idx   + seed.len + window
-        P = align.AlignProblem(
-            S=self.S, T=T, params=self.align_params,
-            align_type=align.ALIGN_START_ANCHORED,
-            S_min_idx=S_min_idx, S_max_idx=S_max_idx,
-            T_min_idx=T_min_idx, T_max_idx=T_max_idx
-        )
-        transcript = P.solve()
-        # FIXME check boundary handling, something is buggy here.
-        # FIXME inspect transcript and keep extending if we are scoring well.
-        if transcript[:3] != 'Err':
-            infostr, transcript = transcript.split(':')
-            transcript = infostr + ':B' + 'M' * seed.len + transcript[1:]
-            utils.print_alignment(self.S, T, transcript, sys.stderr, margin=10)
-        return transcript
+        def expand_fwd_once(seed):
+            S_min_idx, S_max_idx = seed.idx_q + seed.len, seed.idx_q + seed.len + window,
+            T_min_idx, T_max_idx = seed.idx   + seed.len, seed.idx   + seed.len + window
+            if S_min_idx < 0 or T_min_idx < 0 or S_max_idx > self.S.length or T_max_idx > T.length:
+                return None
+            P = align.AlignProblem(
+                S=self.S, T=T, params=self.align_params,
+                align_type=align.ALIGN_START_ANCHORED,
+                S_min_idx=S_min_idx, S_max_idx=S_max_idx,
+                T_min_idx=T_min_idx, T_max_idx=T_max_idx
+            )
+            if P.solve():
+                seed = Seed(seqid=seed.seqid, idx=seed.idx, idx_q=seed.idx_q,
+                    len=seed.len + window)
+                return seed
+            else:
+                return None
+
+        def expand_bwd_once(seed):
+            S_min_idx, S_max_idx = seed.idx_q - window, seed.idx_q
+            T_min_idx, T_max_idx = seed.idx   - window, seed.idx
+            if S_min_idx < 0 or T_min_idx < 0 or S_max_idx > self.S.length or T_max_idx > T.length:
+                return None
+            P = align.AlignProblem(
+                S=self.S, T=T, params=self.align_params,
+                align_type=align.ALIGN_END_ANCHORED,
+                S_min_idx=S_min_idx, S_max_idx=S_max_idx,
+                T_min_idx=T_min_idx, T_max_idx=T_max_idx
+            )
+            if P.solve():
+                seed = Seed(seqid=seed.seqid, idx=seed.idx - window,
+                    idx_q=seed.idx_q - window, len=seed.len + window)
+                return seed
+            else:
+                return None
+
+        out = expand_fwd_once(seed)
+        while True:
+            if not out:
+                break
+            seed = out
+            out = expand_fwd_once(seed)
+        out = expand_bwd_once(seed)
+        while True:
+            if not out:
+                break
+            seed = out
+            out = expand_bwd_once(seed)
+        return seed
 

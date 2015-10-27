@@ -70,7 +70,7 @@ delegated, via SQL, to SQLite). The following operations are implemented; see th
 * Querying the index for sequences in order of number of hits they share with a
   query string.
 * Finding seeds for a given query string by collapsing overlaping hits.
-* (**incomplete**) Extending seeds by repeated anchored alignments.
+* Extending seeds by repeated anchored alignments (see [to-do](#missing))
 
 ## Alphabet translation
 
@@ -99,10 +99,13 @@ substring is translated to a single letter(e.g `AACCC` becomes `A2C3`). See the
   Translating edit transcripts (i.e `opseq`s) does not have an issue with this.
 
 ## Missing
-* complete seed expansion (cf. [`tuples.Query.expand_seed()`](/align/tuples.py)).
+* use score threshold for seed expansion (cf. [`tuples.Query.expand_seed()`](/align/tuples.py)).
 * make tuple methods aware of distilled sequences (cf. [`tuples.Query` and `tuples.TuplesDB`](/align/tuples.py)).
 * support hompolymeric-specific indel parameters in random generation
   of genome sequencing reads (cf. [`seq.Sequence.randread()`](/align/seq.py))
+* allow getting the optimal score of an alignment problem without traceback (cf.
+  [`align.AlignProblem.solve()`](/align/align.py) and
+  [`libalign::solve()`](/align/libalign.c))
 * figure out if tuple scanning can be sped up (cf. [`tuples.TuplesDB.index()`](/align/tuples.py).
 * better [tests](/tests).
 * support [Hirschberg](https://en.wikipedia.org/wiki/Hirschberg's_algorithm)-style
