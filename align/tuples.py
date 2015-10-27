@@ -243,6 +243,7 @@ class Query(object):
             T_min_idx=T_min_idx, T_max_idx=T_max_idx
         )
         transcript = P.solve()
+        # FIXME check boundary handling, something is buggy here.
         # FIXME inspect transcript and keep extending if we are scoring well.
         if transcript[:3] != 'Err':
             infostr, transcript = transcript.split(':')
