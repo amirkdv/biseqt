@@ -2,11 +2,12 @@
 import sys
 from math import erf, sqrt, log
 
-from .. import distillery, align, seq
+from .. import align, seq
+from ..homopolymeric import HpCondensor
 
 maxlen = 5
 
-Tr = distillery.Translator(maxlen=5)
+Tr = HpCondensor(maxlen=5)
 
 params = {
     'm':        3, # match score
@@ -33,8 +34,8 @@ A_d = seq.Alphabet(alphabet)
 
 s = 'AACCCCGGGGGGGGGGGGT'
 t = 'AATGGGGGGGGGTTT'
-s_d = Tr.distill(s)
-t_d = Tr.distill(t)
+s_d = Tr.condense(s)
+t_d = Tr.condense(t)
 S = seq.Sequence(s, A)
 T = seq.Sequence(t, A)
 print S

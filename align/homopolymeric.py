@@ -19,12 +19,12 @@ def hp_tokenize(string):
     if counter and len(string):
         yield string[0], counter
 
-class Translator(object):
+class HpCondensor(object):
     """Transforms a sequence back and forth to an alternative alphabet by
     collapsing all homopolymeric substrings into single "letters". For example:
 
-        T = Translator()
-        T.distill("AACCCCGGT") #=> A2C4G2T1
+        T = HpCondensor()
+        T.condense("AACCCCGGT") #=> A2C4G2T1
         T.expand("A2C4G2T1")   #=> AACCCCGGT
 
     Attributes:
@@ -45,22 +45,22 @@ class Translator(object):
                 letter = char + str(min(num, self.maxlen)).rjust(self.letlen - 1, '0')
                 yield char, num, letter
 
-    def distill(self, string):
-        distilled = ''
+    def condense(self, string):
+        condensed = ''
         for char, num in hp_tokenize(string):
             num = str(min(num, self.maxlen)).rjust(self.letlen - 1, '0')
-            distilled += char + num
-        return distilled
+            condensed += char + num
+        return condensed
 
     def expand(self, string):
-        """The inverse of distill(). For exmaple:
+        """The inverse of condense(). For exmaple:
 
-            distill("A2C4G2") #=> AACCCCGGT
+            condense("A2C4G2") #=> AACCCCGGT
 
         Note: if the original sequence contains homopolymeric substrings longer
-        than the maxlen provided to distill() the expad(distill()) is not identity.
+        than the maxlen provided to condense() the expad(condense()) is not identity.
 
-        :param string(str): distilled sequence
+        :param string(str): condensed sequence
         :return str: original sequence
         """
         assert len(string) % self.letlen == 0
@@ -75,7 +75,7 @@ class Translator(object):
     def expand_opseq(self, S, T, opseq):
         S, T = str(S), str(T)
         """Expands a given sequence of edit ops (string of B/M/S/I/D) generated
-        for the distilled versions of S and T to the equivalent op sequence for
+        for the condensed versions of S and T to the equivalent op sequence for
         S and T.
         """
         assert all([s in 'BMISD' for s in opseq])

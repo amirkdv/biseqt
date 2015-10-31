@@ -74,33 +74,33 @@ delegated, via SQL, to SQLite). The following operations are implemented; see th
 
 ## Alphabet translation
 
-A set of experimental methods are [implemented](/align/distillery.py) to
+A set of experimental methods are [implemented](/align/homopolymeric.py) to
 condense sequences into an alternative alphabet where each homopolymeric
 substring is translated to a single letter(e.g `AACCC` becomes `A2C3`). See the
-[tests](/align/tests/distillery.py) for example usage:
+[tests](/align/tests/homopolymeric.py) for example usage:
 
-* Translating a sequence from an arbitrary alphabet to a distilled alphabet.
+* Translating a sequence from an arbitrary alphabet to a condensed alphabet.
   This requires specifying a whole number `maxlen`:
   homopolymeric substrings longer than `maxlen` are considered to have only
   `maxlen` characters. This is needed to ensure constant letter length across
-  the distilled alphabet.
+  the condensed alphabet.
 * Translating a substitution score matrix for the original alphabet into a
-  substitution score matrix for the (larger) distilled alphabet. This requires
+  substitution score matrix for the (larger) condensed alphabet. This requires
   specifying an affine gap penalty scheme for homopolymeric indels.
-* Expanding a distilled sequence back to the original sequence.
-* Translating an alignment `opseq` for distilled versions of two sequences back
+* Expanding a condensed sequence back to the original sequence.
+* Translating an alignment `opseq` for condensed versions of two sequences back
   to an alignment for the original sequences.
 
 *Notes*:
 
 1. If source alphabet sequences contain homopolymeric substrings that are
-  longer than the specified `maxlen`, the distilling process is lossy (expanding
-  a distilled sequence does not necessarily give its original sequence).
+  longer than the specified `maxlen`, the condensing process is lossy (expanding
+  a condensed sequence does not necessarily give its original sequence).
   Translating edit transcripts (i.e `opseq`s) does not have an issue with this.
 
 ## Missing
 * use score threshold for seed expansion (cf. [`tuples.Query.expand_seed()`](/align/tuples.py)).
-* make tuple methods aware of distilled sequences (cf. [`tuples.Query` and `tuples.TuplesDB`](/align/tuples.py)).
+* make tuple methods aware of condensed sequences (cf. [`tuples.Query` and `tuples.TuplesDB`](/align/tuples.py)).
 * support hompolymeric-specific indel parameters in random generation
   of genome sequencing reads (cf. [`seq.Sequence.randread()`](/align/seq.py))
 * allow getting the optimal score of an alignment problem without traceback (cf.

@@ -1,7 +1,7 @@
 from math import log
 
 from . import ffi, lib, seq, CffiObject
-from .distillery import hp_tokenize
+from .homopolymeric import hp_tokenize
 
 global lib
 """Values for enum `align_type`.

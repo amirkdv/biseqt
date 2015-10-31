@@ -89,7 +89,7 @@ class TuplesDB(object):
             c.execute(q)
         sys.stderr.write('initialized tuples DB at: %s\n' % self.db)
 
-    # TODO allow specifying a distillery.Translator.
+    # TODO allow specifying a homopolymeric.HpCondenser
     def populate(self, fasta_src=None, lim=False):
         """Given a FASTA source file, loads all the sequences (up to a limit,
         if specified) into the `seq` table. No indexing is done; see index().

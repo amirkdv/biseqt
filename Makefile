@@ -17,7 +17,7 @@ clean:
 
 tests: align/libalign.so test.fa
 	python -m align.tests.align
-	python -m align.tests.distillery
+	python -m align.tests.homopolymeric
 	python -m align.tests.tuples
 
 test.fa:
