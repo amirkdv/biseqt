@@ -44,6 +44,6 @@ print '\n--> optimal alignment:\n%s\n' % str(transcript)
 if transcript:
     transcript.pretty_print(S, T, sys.stdout, margin=10)
 
-m_transcript = seq.Transcript('(0,0),%.2f:%s' % (P.score(m_opseq), m_opseq))
+m_transcript = align.Transcript('(0,0),%.2f:%s' % (P.score(m_opseq), m_opseq))
 print '\n--> mutation transcript:\n%s\n' % str(m_transcript)
 m_transcript.pretty_print(S, T, sys.stdout, margin=10)
