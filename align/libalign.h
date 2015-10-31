@@ -40,14 +40,14 @@ typedef struct align_choice { // we need the name to be able to reference oursel
 } align_choice;
 
 typedef struct {
-  int idx_S; // horizontal position in the DP table
-  int idx_T; // vertical position in the DP table
+  int row; // vertical position (row number) in the DP table
+  int col; // horizontal position (col number) in the DP table
   int num_choices; // number of optimal scoring choices for the subproblem
   struct align_choice *choices; // optimal scoring choices
-  double score;
 } align_dp_cell;
 
 align_dp_cell** define(align_problem* def);
-int solve(align_dp_cell** P, align_problem* def);
-char* traceback(align_dp_cell** P, align_problem* def);
+align_dp_cell* solve(align_dp_cell** P, align_problem* def);
+align_dp_cell* find_optimal(align_dp_cell** P, align_problem* def);
+char* traceback(align_dp_cell** P, align_problem* def, align_dp_cell* end);
 int* idxseq_from_charseq(sequence_alphabet* alphabet, char* sequence, int length);

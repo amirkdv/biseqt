@@ -160,18 +160,24 @@ class AlignProblem(CffiObject):
         :returns: a transcript string with the specified format.
         """
         global lib
-        if -1 == lib.solve(self.c_dp_table, self.c_obj):
-            raise RuntimeError('Got -1 from align.solve()')
+        self.opt = lib.solve(self.c_dp_table, self.c_obj)
         if (print_dp_table):
             mat = self.dp_table
             for i in range(len(mat)):
                 print mat[i]
-        ret = lib.traceback(self.c_dp_table, self.c_obj)
-        if ret == ffi.NULL:
+        if self.opt == ffi.NULL:
             print 'Err: No Alignment found (go=%.2f, ge=%.2f, max_div=%d)' % \
                 (self.params.gap_open_score, self.params.gap_extend_score, self.params.max_diversion)
+            self.opt = None
             return None
-        return seq.parse_transcript(ffi.string(ret))
+        return self.opt.choices[0].score
+
+    def traceback(self):
+        if self.opt is None:
+            return None
+
+        rtranscript = lib.traceback(self.c_dp_table, self.c_obj, self.opt)
+        return seq.parse_transcript(ffi.string(rtranscript))
 
     def __getattr__(self, name):
         """Allow attributes to access members of the underlying `align_problem`

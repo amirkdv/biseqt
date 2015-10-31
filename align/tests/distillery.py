@@ -51,7 +51,8 @@ C = align.AlignParams(alphabet=A_d,subst_scores=scores,
     max_diversion=params['band'])
 P = align.AlignProblem(S=S_d, T=T_d, params=C,
     align_type=params['type'])
-transcript_d = P.solve(print_dp_table=params['show_dp'])
+P.solve(print_dp_table=params['show_dp'])
+transcript_d = P.traceback()
 print "opseq score: %.2f" % P.score(opseq_d)
 
 if transcript_d:

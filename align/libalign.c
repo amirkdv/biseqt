@@ -31,7 +31,7 @@ align_dp_cell** define(align_problem* def) {
       return NULL;
     }
     for (int j = 0; j < m+1; j++) {
-      P[i][j] = (align_dp_cell) {i, j, 0, NULL, -DBL_MAX};
+      P[i][j] = (align_dp_cell) {i, j, 0, NULL};
     }
   }
   return P;
@@ -42,7 +42,7 @@ align_dp_cell** define(align_problem* def) {
  * populates the alignment table). The optimal score and transcript can then
  * be obtained by calling traceback on P.
  */
-int solve(align_dp_cell** P, align_problem* def) {
+align_dp_cell* solve(align_dp_cell** P, align_problem* def) {
   int n = def->S_max_idx - def->S_min_idx;
   int m = def->T_max_idx - def->T_min_idx;
   double max_score, prev_score, max_prev_score;
@@ -57,7 +57,7 @@ int solve(align_dp_cell** P, align_problem* def) {
   P[0][0].choices = malloc(sizeof(align_choice));
   if (P[0][0].choices == NULL) {
     printf("Failed to allocate memory.\n");
-    return -1;
+    return NULL;
   }
   P[0][0].choices[0].op = 'B';
   P[0][0].choices[0].diversion = 0;
@@ -79,7 +79,7 @@ int solve(align_dp_cell** P, align_problem* def) {
       alts = malloc(4 * sizeof(align_choice));
       if (alts == NULL) {
         printf("Failed to allocate memory.\n");
-        return -1;
+        return NULL;
       }
       // Build all the alternatives at cell (i,j)
       num_choices = 0;
@@ -194,7 +194,7 @@ int solve(align_dp_cell** P, align_problem* def) {
       max_score_alts = malloc(num_choices * sizeof(int));
       if (max_score_alts == NULL) {
         printf("Failed to allocate memory.\n");
-        return -1;
+        return NULL;
       }
       num_max_scores = 0;
       max_score = alts[0].score;
@@ -213,7 +213,7 @@ int solve(align_dp_cell** P, align_problem* def) {
       P[i][j].choices = malloc(num_max_scores * sizeof(align_choice));
       if (P[i][j].choices == NULL) {
         printf("Failed to allocate memory.\n");
-        return -1;
+        return NULL;
       }
       for (k = 0; k < num_max_scores; k++) {
         P[i][j].choices[k] = alts[max_score_alts[k]];
@@ -222,51 +222,27 @@ int solve(align_dp_cell** P, align_problem* def) {
     }
   }
   free(alts);
-  return 0;
+  return find_optimal(P, def);
 }
 
 /**
- * Finds and traces back the optimal solution to the alignment problem.
+ * Finds the optimal cell to start traceback from given a populated DP table
+ * and an alignment problem definition (to know where to look for the optimal
+ * cell).
  * @param P (align_dp_cell**):  pointer to a solved alignment DP table.
  * @param def (align_problem*): pointer to the align_problem struct.
  *
- * @return char*: string with the following format:
- *
- *           (<Si,Tj>),<score>:<opseq>
- *
- *     Si and Tj are integers specifying the positiong along each string where
- *     the alignment begins. Score is the score of the transcript to 2 decimal
- *     places. What follows the ':' is a sequence of "ops" defined as follows:
- *       B begin
- *       M match
- *       S substitution
- *       I insert
- *       D delete
- *     All op sequences begin with a B and insertion/deletions are meant to
- *     mean "from S to T".
- *
- * Limitations:
- *  1 For now, there is no way to only get the optimal score and not the
- *    transcript.
- *  2 Finding more than one optimal alignment is a nontrivial search problem,
- *    and requires some sort of global state keeping to avoid convoluted
- *    recursions. I couldn't get it right in the first go; leave for later.
+ * @return align_dp_cell*: pointer to the optimal cell of the table.
  */
-char *traceback(align_dp_cell** P, align_problem* def) {
-  char *ret, *infostr, *transcript;
-  char op;
+align_dp_cell* find_optimal(align_dp_cell** P, align_problem* def) {
   double max;
-  align_dp_cell curr;
   int i,j;
-  // idx_S and idx_T will be populated to the optimal point to start traceback:
-  int idx_S = -1, idx_T = -1;
-  // string manipulation indices for the transcript:
-  int len, infolen, pos;
+  int row = -1, col = -1;
   if (def->type == GLOBAL || def->type == END_ANCHORED) {
     // Global and end-anchored alignments must end at the bottom right corner
-    idx_S = def->S_max_idx - def->S_min_idx;
-    idx_T = def->T_max_idx - def->T_min_idx;
-    if (P[idx_S][idx_T].num_choices == 0) {
+    row = def->S_max_idx - def->S_min_idx;
+    col = def->T_max_idx - def->T_min_idx;
+    if (P[row][col].num_choices == 0) {
       return NULL;
     }
   }
@@ -285,8 +261,8 @@ char *traceback(align_dp_cell** P, align_problem* def) {
           continue;
         }
         if (P[i][j].choices[0].score > max) {
-          idx_S = i;
-          idx_T = j;
+          row = i;
+          col = j;
           max = P[i][j].choices[0].score;
         }
       }
@@ -301,18 +277,55 @@ char *traceback(align_dp_cell** P, align_problem* def) {
           continue;
         }
         if (P[i][j].choices[0].score > max) {
-          idx_S = i;
-          idx_T = j;
+          row = i;
+          col = j;
           max = P[i][j].choices[0].score;
         }
       }
     }
   }
-  if (idx_S == -1 || idx_T == -1 || P[idx_S][idx_T].num_choices == 0) {
+  if (row == -1 || col == -1 || P[row][col].num_choices == 0) {
     return NULL;
   }
-  max = P[idx_S][idx_T].choices[0].score;
-  curr = P[idx_S][idx_T];
+  return &(P[row][col]);
+}
+
+/**
+ * Traces back the calculated optimal solutions backwards starting from a given
+ * "end" point:
+ * @param P (align_dp_cell**):  pointer to a solved alignment DP table.
+ * @param def (align_problem*): pointer to the align_problem struct.
+ * @param end (align_dp_cell*): ending point of alignment, starting point of
+ *    traceback
+ *
+ * @return char*: string with the following format:
+ *
+ *           (<Si,Tj>),<score>:<opseq>
+ *
+ *     Si and Tj are integers specifying the positiong along each string where
+ *     the alignment begins. Score is the score of the transcript to 2 decimal
+ *     places. What follows the ':' is a sequence of "ops" defined as follows:
+ *       B begin
+ *       M match
+ *       S substitution
+ *       I insert
+ *       D delete
+ *     All op sequences begin with a B and insertion/deletions are meant to
+ *     mean "from S to T".
+ *
+ * Limitations:
+ *  - Finding more than one optimal alignment is a nontrivial search problem,
+ *    and requires some sort of global state keeping to avoid convoluted
+ *    recursions. I couldn't get it right in the first go; leave for later.
+ */
+char *traceback(align_dp_cell** P, align_problem* def, align_dp_cell* end) {
+  char *infostr, *transcript, *ret;
+  char op;
+  int idx_S = end->row,
+      idx_T = end->col;
+  align_dp_cell curr = P[idx_S][idx_T];
+  // string manipulation indices for the transcript:
+  int len, infolen, pos;
   // allocate more than enough memory for the transcript as we trace back.
   len = idx_S + idx_T + 1;
   // We write ops to rtranscript backwards starting from the end (position `len')
@@ -345,14 +358,14 @@ char *traceback(align_dp_cell** P, align_problem* def) {
   if (idx_T + def->T_min_idx > 0 ) {
     infolen += (int)floor(log10(idx_T + def->T_min_idx)) + 1;
   }
-  if (max != 0) {
-    infolen += (int)floor(log10(fabs(max))) + 3;
-    if (max < 0) {
+  if (end->choices[0].score != 0) {
+    infolen += (int)floor(log10(fabs(end->choices[0].score))) + 3;
+    if (end->choices[0].score < 0) {
       infolen += 1;
     }
   }
   infostr = malloc(infolen);
-  sprintf(infostr, "(%d,%d),%.2f:", (idx_S + def->S_min_idx), (idx_T + def->T_min_idx), max);
+  sprintf(infostr, "(%d,%d),%.2f:", (idx_S + def->S_min_idx), (idx_T + def->T_min_idx), end->choices[0].score);
   // the backtraced transcript was written backwords to the end of rtranscript
   len = len - pos - 1;
   transcript = malloc(len + 1);

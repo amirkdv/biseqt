@@ -36,7 +36,9 @@ C = align.AlignParams(subst_scores=subst_scores, alphabet=A,
     go_score=go_score, ge_score=ge_score, max_diversion=params['band'])
 P = align.AlignProblem(S=S, T=T, params=C,
     align_type=params['type'])
-transcript = P.solve(print_dp_table=params['show_dp'])
+score = P.solve(print_dp_table=params['show_dp'])
+transcript = P.traceback()
+print 'optimal alignment has score %.2f' % score
 
 print '\n--> optimal alignment:\n%s\n' % str(transcript)
 if transcript:
