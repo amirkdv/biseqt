@@ -13,17 +13,14 @@ clean:
 	rm -f align/libalign.so
 	rm -f core
 	rm -f *.db
-	rm -f test.fa query.fa
+	rm -f genome.fa query.fa reads.fa
 
-tests: align/libalign.so test.fa
+tests: align/libalign.so genome.fa
 	python -m align.tests.align
 	python -m align.tests.homopolymeric
 	python -m align.tests.tuples
 
-test.fa:
-	python -c "import sys; from align.seq import Alphabet; A = Alphabet('ACGT'); x = A.randseq(160);p=[[0.94 if k==i else 0.02 for k in range(4)] for i in range(4)]; print '> orig\n' + str(x); print '\n'.join(['>seq_{}\n'.format(i) + str(x.mutate(go_prob=0.1, ge_prob=0.5, subst_probs=p)[0]) for i in range(10)]);" > /tmp/$@
-	head -n +2 /tmp/$@ | tail -n1 > query.fa
-	tail -n +3 /tmp/$@ > $@
-	rm -f /tmp/$@
+genome.fa:
+	python -c "from align.seq import make_sequencing_fixture as msf; msf('genome.fa', 'reads.fa', 'query.fa');"
 
 .PHONY: clean tests

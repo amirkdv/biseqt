@@ -3,18 +3,20 @@ import sys
 import os
 
 from .. import align, tuples, seq
+from Bio import SeqIO
 
 wordlen = 5
 limit = -1
 
-SRC = './test.fa'
+GENOME = './genome.fa'
+READS = './reads.fa'
 QUERY = './query.fa'
 DB = 'test.db'
 
 A = seq.Alphabet('ACGT')
 B = tuples.TuplesDB(db=DB, wordlen=wordlen, alphabet=A)
 B.initdb()
-B.populate(SRC, lim=limit)
+B.populate(READS, lim=limit)
 B.index()
 
 params = {
@@ -36,8 +38,9 @@ C = align.AlignParams(alphabet=A,subst_scores=subst_scores,
     go_score=params['go_score'], ge_score=params['ge_score'],
     max_diversion=params['band'])
 
-with open(QUERY) as f:
-    query = tuples.Query(f.read().strip(), tuplesdb=B, align_params=C)
+for seq in SeqIO.parse(QUERY, 'fasta'):
+    query = tuples.Query(str(seq.seq), tuplesdb=B, align_params=C)
+    break
 
 hits = query.hitsummary()
 cands = hits.keys()

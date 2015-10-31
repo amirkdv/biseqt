@@ -1,5 +1,6 @@
 import numpy as np
 import random
+from Bio import SeqIO, Seq, SeqRecord
 
 from . import ffi, lib, CffiObject
 
@@ -148,7 +149,7 @@ class Sequence():
             k += 1
         return (Sequence(T, self.alphabet), opseq)
 
-    def randread(self, subst_probs=None, go_prob=0, ge_prob=0, coverage=40, len_mean=6000, len_var=1000):
+    def randread(self, subst_probs=None, go_prob=0.1, ge_prob=0.5, coverage=40, len_mean=100, len_var=15):
         """Generates a random collection of lossy reads from the current sequence.
 
         :param subst_probs(list[list]): as in mutate(), letter-by-letter
@@ -169,4 +170,36 @@ class Sequence():
             start = np.random.randint(0, N-length)
             x = Sequence(''.join([self[k] for k in range(start, start + length)]), self.alphabet)
             read, _ = x.mutate(go_prob=go_prob, ge_prob=ge_prob, subst_probs=subst_probs)
-            yield read
+            yield read, start
+
+def make_sequencing_fixture(genome_file, reads_file, query_file, **kw):
+    """Generates a random genome and a random sequence of reads from it. Output
+    is written to files in FASTA format.
+
+    :param genome_file(str): path to file to write genome to
+    :param reads_file(str): path to file to write sequencing reads to
+    :param genome_length(int): length of random genome
+
+    All other keyword parameters are passed as-is to Sequence.randread()."""
+    A = Alphabet('ACGT')
+    length = kw.pop('genome_length', 200)
+    if 'go_prob' not in kw:
+        kw['go_prob'] = 0.1
+    if 'go_prob' not in kw:
+        kw['ge_prob'] = 0.5
+    if 'subst_probs' not in kw:
+	kw['subst_probs'] = [[0.94 if k==i else 0.02 for k in range(4)] for i in range(4)]
+    G = A.randseq(length)
+    seqrec = SeqRecord.SeqRecord(Seq.Seq(str(G)), id='genome')
+    SeqIO.write([seqrec], genome_file, 'fasta')
+    readrecs = []
+    for idx, (read, start) in enumerate(G.randread(**kw)):
+        readrecs += [
+            SeqRecord.SeqRecord(
+                Seq.Seq(str(read)),
+                id="read_%d" % idx,
+                description="hint: starts from genome[%d]" % start
+            )
+        ]
+    SeqIO.write(readrecs, reads_file, 'fasta')
+    SeqIO.write(readrecs[-1], query_file, 'fasta')
