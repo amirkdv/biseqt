@@ -222,18 +222,23 @@ class Transcript(object):
         """Parses a raw transcript as given by `libalign.so` and populates class
         attributes. Raw transcripts are expected to have the following format:
 
-            (<S_idx,T_idx>),<score>:<opseq>
+            (<idx_S,idx_T>),<score>:<opseq>
         """
         if rtranscript is None:
-            self.S_idx, self.T_idx, self.score, self.opseq = 0, 0, 0, 'B'
+            self.idx_S, self.idx_T, self.score, self.opseq = 0, 0, 0, 'B'
             return
 
         assert(re.match('\([0-9]+,[0-9]+\),[0-9\.]+:B[MISD]+', rtranscript) is not None)
         infostr, opseq = rtranscript.split(':', 1)
         indices, score = infostr.rsplit(',', 1)
-        S_idx, T_idx = indices[1:-1].split(',') # skip the open/close parens
-        self.S_idx, self.T_idx = int(S_idx), int(T_idx)
+        idx_S, idx_T = indices[1:-1].split(',') # skip the open/close parens
+        self.idx_S, self.idx_T = int(idx_S), int(idx_T)
         self.opseq, self.score = opseq, float(score)
+
+    def __repr__(self):
+        return '(%d,%d),%.2f:%s' % (self.idx_S, self.idx_T, self.score, self.opseq)
+
+    # TODO allow appending another transcript to the front or back
 
     def pretty_print(self, S, T, f, width=120, margin=20, colors=True):
         """Pretty prints a transcript to f.
@@ -252,7 +257,7 @@ class Transcript(object):
         assert(S.alphabet.letter_length == T.alphabet.letter_length)
         assert(S.alphabet.letters == T.alphabet.letters)
         letlen = S.alphabet.letter_length
-        S_idx, T_idx = self.S_idx, self.T_idx
+        idx_S, idx_T = self.idx_S, self.idx_T
 
         slines = tlines = []
         sline = tline = ''
@@ -262,21 +267,21 @@ class Transcript(object):
             sline, tline = sline.rjust(maxlen), tline.rjust(maxlen)
             f.write('%s\n%s\n' % (sline,tline))
 
-        def new_line(sline, tline, _S_idx, _T_idx, f):
+        def new_line(sline, tline, _idx_S, _idx_T, f):
             print_lines(sline, tline, f)
-            sline, tline = 'S[%d]: ' % _S_idx, 'T[%d]: ' % _T_idx
+            sline, tline = 'S[%d]: ' % _idx_S, 'T[%d]: ' % _idx_T
             return (max(len(sline), len(tline)), sline, tline)
 
         # The pre margin:
-        pre_margin = min(margin, max(S_idx, T_idx))
-        sline = 'S[%d]: ' % max(0, S_idx - pre_margin + 1)
-        tline = 'T[%d]: ' % max(0, T_idx - pre_margin + 1)
+        pre_margin = min(margin, max(idx_S, idx_T))
+        sline = 'S[%d]: ' % max(0, idx_S - pre_margin + 1)
+        tline = 'T[%d]: ' % max(0, idx_T - pre_margin + 1)
         counter = max(len(sline), len(tline))
         for i in reversed(range(1, pre_margin)):
             if counter >= width:
-                counter, sline, tline = new_line(sline, tline, S_idx+i, T_idx+i, f)
-            sline += S[S_idx-i] if i <= S_idx else ' '
-            tline += T[T_idx-i] if i <= T_idx else ' '
+                counter, sline, tline = new_line(sline, tline, idx_S+i, idx_T+i, f)
+            sline += S[idx_S-i] if i <= idx_S else ' '
+            tline += T[idx_T-i] if i <= idx_T else ' '
             counter += letlen
 
         # The alignment itself:
@@ -284,17 +289,17 @@ class Transcript(object):
             if op == 'B':
                 continue
             if counter >= width:
-                counter, sline, tline = new_line(sline, tline, S_idx, T_idx, f)
+                counter, sline, tline = new_line(sline, tline, idx_S, idx_T, f)
             if op in 'MS':
-                s, t = S[S_idx], T[T_idx]
-                S_idx += 1
-                T_idx += 1
+                s, t = S[idx_S], T[idx_T]
+                idx_S += 1
+                idx_T += 1
             elif op == 'I':
-                s, t = '-', T[T_idx]
-                T_idx += 1
+                s, t = '-', T[idx_T]
+                idx_T += 1
             elif op == 'D':
-                s, t = S[S_idx], '-'
-                S_idx += 1
+                s, t = S[idx_S], '-'
+                idx_S += 1
             on_color = color = None
             if colors:
                 if op in 'MS':
@@ -308,13 +313,13 @@ class Transcript(object):
             counter += letlen
 
         # The post margin:
-        post_margin = min(margin, max(S.length-S_idx, T.length-T_idx))
+        post_margin = min(margin, max(S.length-idx_S, T.length-idx_T))
         for i in range(post_margin):
             if counter >= width:
                 counter, sline, tline = new_line(
-                    sline, tline, S_idx+i, T_idx+i, f)
-            sline += S[S_idx+i] if S_idx + i < S.length else ' '
-            tline += T[T_idx+i] if T_idx + i < T.length else ' '
+                    sline, tline, idx_S+i, idx_T+i, f)
+            sline += S[idx_S+i] if idx_S + i < S.length else ' '
+            tline += T[idx_T+i] if idx_T + i < T.length else ' '
             counter += letlen
 
         print_lines(sline, tline, f)

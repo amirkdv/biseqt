@@ -60,8 +60,8 @@ if transcript_d:
     print '\n' + str(transcript_d) + '\n'
     opseq = Tr.expand_opseq(S, T, transcript_d.opseq)
     transcript = align.Transcript('(%d,%d),0:%s' % ( \
-        transcript_d.S_idx * A_d.letter_length,
-        transcript_d.T_idx * A_d.letter_length,
+        transcript_d.idx_S * A_d.letter_length,
+        transcript_d.idx_T * A_d.letter_length,
         opseq_d)
     )
     transcript.pretty_print(S, T, sys.stdout, margin=10)
