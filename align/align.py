@@ -177,7 +177,9 @@ class AlignProblem(CffiObject):
             return None
 
         rtranscript = lib.traceback(self.c_dp_table, self.c_obj, self.opt)
-        return seq.parse_transcript(ffi.string(rtranscript))
+        if rtranscript == ffi.NULL:
+            return None
+        return seq.Transcript(ffi.string(rtranscript))
 
     def __getattr__(self, name):
         """Allow attributes to access members of the underlying `align_problem`

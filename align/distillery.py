@@ -1,5 +1,3 @@
-# TODO make function/variable names indicate whether they
-# carry/accept/return raw strings or seq.Sequence seq.Alphabet objects.
 from math import log10, floor
 from .seq import Alphabet
 
@@ -73,6 +71,7 @@ class Translator(object):
             orig +=  char * num
         return orig
 
+    # TODO allow translating Transcript objects (requires translatin scores)
     def expand_opseq(self, S, T, opseq):
         S, T = str(S), str(T)
         """Expands a given sequence of edit ops (string of B/M/S/I/D) generated
