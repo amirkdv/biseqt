@@ -124,6 +124,16 @@ class AlignProblem(CffiObject):
         if self.c_dp_table == -1:
             raise('Got -1 from align.define().')
 
+    # TODO test and incorporate
+    def reset_boundaries(self, S_min_idx, S_max_idx, T_min_idx, T_max_idx):
+        lib.free(self.c_dp_table)
+        self.c_obj.S_min_idx, self.c_obj.S_max_idx = S_min_idx, S_max_idx
+        self.c_obj.T_min_idx, self.c_obj.T_max_idx = T_min_idx, T_max_idx
+
+        self.c_dp_table = lib.define(self.c_obj)
+        if self.c_dp_table == -1:
+            raise('Got -1 from align.define().')
+
     def score(self, opseq):
         """Calculates the score for an arbitray opseq. Opseqs are allowed to be
         partial alignments (i.e finishing before reaching the end of frame).
