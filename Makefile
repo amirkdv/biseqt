@@ -13,6 +13,7 @@ clean:
 	rm -f align/libalign.so
 	rm -f core
 	rm -f genome.fa reads.fa genome.db
+	rm -f overlap.svg
 
 tests: align/libalign.so genome.db
 	python -m align.tests.align
@@ -20,7 +21,8 @@ tests: align/libalign.so genome.db
 	python -m align.tests.tuples
 
 genome.db: genome.fa
-	python -c 'from align.tuples import TuplesDB as DB; \
+	python -c '\
+		from align.tuples import TuplesDB as DB; \
 		from align.seq import Alphabet as A; \
 		B = DB("genome.db", wordlen=10, alphabet=A("ACGT")); \
 		B.initdb(); B.populate("reads.fa", lim=-1); B.index()'

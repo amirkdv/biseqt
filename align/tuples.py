@@ -6,7 +6,8 @@ from collections import namedtuple
 
 from . import align, seq
 
-Seed = namedtuple('Seed', ['seqid', 'idx', 'idx_q', 'len'])
+# a pair of equal-length substrings of two sequences
+Segment = namedtuple('Segment', ['id_S', 'id_T', 'idx_S', 'idx_T', 'len'])
 
 class MaxConcurrentQueries(RuntimeError):
     pass
@@ -146,142 +147,146 @@ class TuplesDB(object):
             c = conn.cursor()
             c.execute('SELECT seq FROM seq WHERE id = ?', (seqid,))
             for row in c:
-                return str(row[0])
+                return seq.Sequence(str(row[0]), self.alphabet)
 
-class Query(object):
-    """A helper class to deal with queries and seeds against a TuplesDB
-
-    Attributes:
-        tuplesdb (TuplesDB): the database to use.
-        align_params (align.AlignParams): alignment parameters used to expand
-            seeds.
-
-    NOTE Due to the way queries are implemented (see hitsummary(), for example)
-    only one query at a time can be using the same tuples database file.
-    """
-    # TODO make qseq a seq.Sequence
-    def __init__(self, qseq, tuplesdb=None, align_params=None):
-        self.tuplesdb, self.qseq, self.align_params = tuplesdb, qseq, align_params
-        def give_tup():
-            for s, idx in tup_scan(self.qseq, self.tuplesdb.wordlen):
-                yield (s, s, idx)
-
-        # index the query string:
-        with sqlite3.connect(tuplesdb.db) as conn:
+    def seqids(self):
+        """Returns a list of all seqids.
+        """
+        with sqlite3.connect(self.db) as conn:
             c = conn.cursor()
-            q = 'UPDATE tuples_{} SET query = -1'.format(tuplesdb.wordlen)
-            c.execute(q)
-            c.executemany(tuplesdb.tup_insert_q, give_tup())
+            c.execute('SELECT id FROM seq')
+            return [row[0] for row in c]
 
-        self.S = seq.Sequence(qseq, tuplesdb.alphabet)
-
-    def seeds(self, seqid=None):
-        """Finds all the seeds in their maximal form given a query string. A
-        seed is in its maximal form if there are no other seeds whose span
+    def exactly_matching_segments(self, s1, s2):
+        """Given two seqids, finds all maximal exactly matching segments between
+        the two self.seqid) and another given sequence. A segment is in its
+        maximal form if there are no other exactly-matching segments whose span
         is a unit shift in both the query and target sequences.
         """
-        seeds = []
-        w = self.tuplesdb.wordlen
+        segments = []
         q = """
-            SELECT T.query, H.idx, H.seq FROM tuples_{}_hits H
-            INNER JOIN tuples_{} T ON T.id = H.tuple
-            WHERE T.query <> -1
-            AND H.seq = ?
-        """.format(w, w, w)
-        row_factory = lambda c,r: Seed(seqid=r[2], len=w, idx_q=r[0], idx=r[1])
-        with sqlite3.connect(self.tuplesdb.db) as conn:
+            SELECT H1.idx, H2.idx FROM tuples_{}_hits H1 -- H1 is s1, H2 is s2
+            INNER JOIN tuples_{}_hits H2
+            ON H1.tuple = H2.tuple
+            WHERE H1.seq = ? AND H2.seq = ?
+        """.format(self.wordlen, self.wordlen)
+        def row_factory(cursor, row):
+            return Segment(id_S=s1, id_T=s2, len=self.wordlen,
+                idx_S=row[0], idx_T=row[1])
+
+        with sqlite3.connect(self.db) as conn:
             conn.row_factory = row_factory
             c = conn.cursor()
-            c.execute(q, (seqid,))
-            seeds = [r for r in c]
+            c.execute(q, (s1,s2))
+            segments = [r for r in c]
 
-        seeds.sort(key=lambda k: k.idx)
+        segments.sort(key=lambda s: s.idx_S)
         # merge overlapping tuples:
-        for idx,s in enumerate(seeds):
-            if idx == 0:
-                continue
-            if seeds[idx-1].idx + seeds[idx-1].len + 1 == s.idx + s.len and \
-                seeds[idx-1].idx_q + seeds[idx-1].len + 1 == s.idx_q + s.len:
-                seeds[idx-1] = Seed(
-                    seqid=seeds[idx-1].seqid,
-                    idx=seeds[idx-1].idx,
-                    idx_q=seeds[idx-1].idx_q,
-                    len=seeds[idx-1].len + 1
+        idx = 0
+        while idx < len(segments):
+            cand = idx + 1
+            while cand < len(segments):
+                shift_S = segments[cand].idx_S - segments[idx].idx_S
+                shift_T = segments[cand].idx_T - segments[idx].idx_T
+                if shift_S == shift_T and shift_S > 0 and shift_S < segments[idx].len:
+                    segments[idx] = Segment(
+                        id_S=s1, id_T=s2, len=segments[cand].len + shift_S,
+                        idx_S=segments[idx].idx_S, idx_T=segments[idx].idx_T,
+                    )
+                    if segments[idx].idx_S == 67 and segments[idx].idx_T == 38:
+                        print 'merging (shift = %d) %s to get: %s' % (shift_S, str(segments[cand]), str(segments[idx]))
+                    segments.pop(cand)
+                else:
+                    cand += 1
+            idx += 1
+        segments.sort(key=lambda s: s.len, reverse=True)
+        return segments
+
+class OverlapFinder(object):
+    """TODO"""
+    def __init__(self, S, T, align_params):
+        self.S, self.T, self.align_params = S, T, align_params
+        self.P = align.AlignProblem(
+            S=S, T=T, params=align_params,
+            align_type=align.ALIGN_GLOBAL,
+            S_min_idx=0, S_max_idx=0, T_min_idx=0, T_max_idx=0
+        )
+
+    def extend_one_way_once(self, segment, window, direction='fwd'):
+        """TODO"""
+        # avoid overflows
+        if direction == 'fwd':
+            window = min(window, min(
+                self.S.length - segment.idx_S - segment.len,
+                self.T.length - segment.idx_T - segment.len
                 )
-                seeds.pop(idx)
-        return seeds
-
-    def hitsummary(self):
-        """Returns a dict of internal numeric seqids mapped to the number of
-        hits they generate from the given query string.
-        """
-        with sqlite3.connect(self.tuplesdb.db) as conn:
-            c = conn.cursor()
-            q = """
-                SELECT H.seq, count(H.seq) FROM tuples_{}_hits H
-                INNER JOIN tuples_{} T
-                ON T.id = H.tuple
-                WHERE T.query <> -1
-                GROUP BY H.seq
-                ORDER BY count(H.seq) DESC
-            """.format(self.tuplesdb.wordlen, self.tuplesdb.wordlen)
-            c.execute(q)
-            return {row[0]:row[1] for row in c}
-
-    def expand_seed(self, seed, window=20):
-        """Expands a seed by repeatedly aligning portions (of length
-        `window`) of the query and target sequences until a threshold low score
-        is met.
-        """
-        # FIXME in expand_*_once(): update the trasncript score too
-        T = seq.Sequence(self.tuplesdb.loadseq(seed.seqid), self.tuplesdb.alphabet)
-        def expand_fwd_once(seed):
-            S_min_idx, S_max_idx = seed.idx_q + seed.len, seed.idx_q + seed.len + window,
-            T_min_idx, T_max_idx = seed.idx   + seed.len, seed.idx   + seed.len + window
-            if S_min_idx < 0 or T_min_idx < 0 or S_max_idx > self.S.length or T_max_idx > T.length:
-                return None
-            P = align.AlignProblem(
-                S=self.S, T=T, params=self.align_params,
-                align_type=align.ALIGN_START_ANCHORED,
-                S_min_idx=S_min_idx, S_max_idx=S_max_idx,
-                T_min_idx=T_min_idx, T_max_idx=T_max_idx
             )
-            if P.solve():
-                seed = Seed(seqid=seed.seqid, idx=seed.idx, idx_q=seed.idx_q,
-                    len=seed.len + window)
-                return seed
-            else:
-                return None
+            self.P.S_min_idx = segment.idx_S + segment.len
+            self.P.T_min_idx = segment.idx_T + segment.len
+            self.P.S_max_idx = self.P.S_min_idx + window
+            self.P.T_max_idx = self.P.T_min_idx + window
+        elif direction == 'bwd':
+            window = min(window, min(segment.idx_S, segment.idx_T))
+            self.P.S_max_idx = segment.idx_S
+            self.P.T_max_idx = segment.idx_T
+            self.P.S_min_idx = self.P.S_max_idx - window
+            self.P.T_min_idx = self.P.T_max_idx - window
 
-        def expand_bwd_once(seed):
-            S_min_idx, S_max_idx = seed.idx_q - window, seed.idx_q
-            T_min_idx, T_max_idx = seed.idx   - window, seed.idx
-            if S_min_idx < 0 or T_min_idx < 0 or S_max_idx > self.S.length or T_max_idx > T.length:
-                return None
-            P = align.AlignProblem(
-                S=self.S, T=T, params=self.align_params,
-                align_type=align.ALIGN_END_ANCHORED,
-                S_min_idx=S_min_idx, S_max_idx=S_max_idx,
-                T_min_idx=T_min_idx, T_max_idx=T_max_idx
+        if window == 0:
+            return None, None
+
+        extension_score = self.P.solve()
+        if direction == 'fwd':
+            segment = Segment(
+                len=segment.len + window,
+                id_S=segment.id_S, id_T=segment.id_T,
+                idx_S=segment.idx_S, idx_T=segment.idx_T,
             )
-            if P.solve():
-                seed = Seed(seqid=seed.seqid, idx=seed.idx - window,
-                    idx_q=seed.idx_q - window, len=seed.len + window)
-                return seed
-            else:
-                return None
+        elif direction == 'bwd':
+            segment = Segment(
+                len=segment.len + window,
+                id_S=segment.id_S, id_T=segment.id_T,
+                idx_S=segment.idx_S - window, idx_T=segment.idx_T - window,
+            )
+        return segment, extension_score
 
-        out = expand_fwd_once(seed)
+    def extend_one_way(self, segment, max_decr_allowed, decr_defn, direction='fwd'):
+        """TODO"""
+        window = segment.len
+        cands = [(segment, 0)]
         while True:
-            if not out:
-                break
-            seed = out
-            out = expand_fwd_once(seed)
-        out = expand_bwd_once(seed)
-        while True:
-            if not out:
-                break
-            seed = out
-            out = expand_bwd_once(seed)
-        return seed
+            offset = 0
+            for i in range(max_decr_allowed):
+                extended_seg, extension_score = self.extend_one_way_once(
+                    cands[-1][0], window, direction=direction
+                )
+                if extended_seg is None:
+                    return cands[-1][0], sum([cand[1] for cand in cands])
+                cands += [(extended_seg, extension_score)]
+            if len(cands) > max_decr_allowed and all([c[1] <= decr_defn for c in cands[1:]]):
+                return None, None
+            cands = [(cands[-1][0], sum([x[1] for x in cands[1:]]))]
 
+        return cands[0]
+
+    def extend(self, segments):
+        """TODO"""
+        # FIXME max_decr and decr_def should somehow be related statistically to
+        # guarantee something.
+        max_decr = 3
+        decr_def = 0
+        scores_by_segment = {}
+        for segment in segments:
+            window = len(segment)
+            fwd_extended, fwd_score = self.extend_one_way(segment, max_decr, decr_def, 'fwd')
+            bwd_extended, bwd_score = self.extend_one_way(segment, max_decr, decr_def, 'bwd')
+            # FIXME should we be checking fwd_score + bwd_score > decr_def?
+            if fwd_extended and bwd_extended and fwd_score + bwd_score > decr_def:
+                segment = Segment(
+                    id_S=segment.id_S, id_T=segment.id_T,
+                    idx_S=bwd_extended.idx_S,
+                    idx_T=bwd_extended.idx_T,
+                    len=bwd_extended.len + fwd_extended.len - segment.len
+                )
+                scores_by_segment[segment] = fwd_score + bwd_score
+        return sorted(scores_by_segment.items(), key=lambda x: x[1], reverse=True)

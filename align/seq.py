@@ -182,7 +182,7 @@ def make_sequencing_fixture(genome_file, reads_file, query_file, **kw):
 
     All other keyword parameters are passed as-is to Sequence.randread()."""
     A = Alphabet('ACGT')
-    length = kw.pop('genome_length', 200)
+    length = kw.pop('genome_length', 500)
     if 'go_prob' not in kw:
         kw['go_prob'] = 0.1
     if 'go_prob' not in kw:
