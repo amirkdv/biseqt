@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 import sys
+import re
 import sqlite3
 from Bio import SeqIO
 from collections import namedtuple
@@ -66,6 +67,7 @@ class TuplesDB(object):
                 CREATE TABLE seq (
                   'id' integer PRIMARY KEY ASC,
                   'name' text,
+                  'description' text,
                   'seq' text
                 );
             """
@@ -98,13 +100,13 @@ class TuplesDB(object):
         def give_seq():
             for idx, seq in enumerate(SeqIO.parse(fasta_src, "fasta")):
                 if lim < 0 or idx < lim:
-                    yield (str(seq.id), str(seq.seq))
+                    yield (str(seq.id), str(seq.description), str(seq.seq))
                 else:
                     break
 
         with sqlite3.connect(self.db) as conn:
             c = conn.cursor()
-            q = "INSERT INTO seq (name, seq) VALUES (?,?)"
+            q = "INSERT INTO seq (name, description, seq) VALUES (?,?,?)"
             c.executemany(q, give_seq())
 
     def index(self):
@@ -149,13 +151,24 @@ class TuplesDB(object):
             for row in c:
                 return seq.Sequence(str(row[0]), self.alphabet)
 
-    def seqids(self):
+    def seqids(self, info=False):
         """Returns a list of all seqids.
         """
         with sqlite3.connect(self.db) as conn:
             c = conn.cursor()
-            c.execute('SELECT id FROM seq')
-            return [row[0] for row in c]
+            if info:
+                c.execute("SELECT id, description, LENGTH(seq) FROM seq")
+                seqs = {}
+                for row in c:
+                    seqs[row[0]] = {}
+                    seqs[row[0]]['description'] = row[1]
+                    seqs[row[0]]['length'] = row[2]
+                    # see seq.make_sequencing_fixture()
+                    seqs[row[0]]['start'] = int(re.split('\(|\)', row[1])[1].split(':')[1])
+                return seqs
+            else:
+                c.execute('SELECT id FROM seq')
+                return [row[0] for row in c]
 
     def exactly_matching_segments(self, s1, s2):
         """Given two seqids, finds all maximal exactly matching segments between
@@ -201,7 +214,6 @@ class TuplesDB(object):
         return segments
 
 class OverlapFinder(object):
-    """TODO"""
     def __init__(self, S, T, align_params):
         self.S, self.T, self.align_params = S, T, align_params
         self.P = align.AlignProblem(
@@ -211,7 +223,7 @@ class OverlapFinder(object):
         )
 
     def extend_one_way_once(self, segment, window, direction='fwd'):
-        """TODO"""
+        """Helper method for extend_one_way."""
         # avoid overflows
         if direction == 'fwd':
             window = min(window, min(
@@ -249,7 +261,12 @@ class OverlapFinder(object):
         return segment, extension_score
 
     def extend_one_way(self, segment, max_decr_allowed, decr_defn, direction='fwd'):
-        """TODO"""
+        """Extends a given segment (presumably maximally-exactly-matching) in
+        the given direction (fwd or bwd). Extension is done by repeatedly
+        performing global alignments on a rolling window along the two sequences
+        and stopping once a decrease in score is observed for a certain number
+        of times"""
+        assert(direction in ['fwd', 'bwd'])
         window = segment.len
         cands = [(segment, 0)]
         while True:
@@ -267,8 +284,11 @@ class OverlapFinder(object):
 
         return cands[0]
 
-    def extend(self, segments, max_decr=3, decr_def=0):
-        """TODO"""
+    def extend(self, segments, max_decr, decr_def):
+        """Given a number of matching segments for the two sequences finds all
+        extended matching gap containing segments by repeatedly aligning a
+        rolling frame along the two sequences and dropping a segment once it
+        is observed to not be a high-scoring overlap alignment"""
         scores_by_segment = {}
         for segment in segments:
             self.P.S_min_idx, self.P.T_min_idx = segment.idx_S, segment.idx_T

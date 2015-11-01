@@ -149,7 +149,7 @@ class Sequence():
             k += 1
         return (Sequence(T, self.alphabet), opseq)
 
-    def randread(self, subst_probs=None, go_prob=0.1, ge_prob=0.5, coverage=10, len_mean=100, len_var=15):
+    def randread(self, subst_probs=None, go_prob=0.1, ge_prob=0.5, coverage=5, len_mean=100, len_var=25):
         """Generates a random collection of lossy reads from the current sequence.
 
         :param subst_probs(list[list]): as in mutate(), letter-by-letter
@@ -172,7 +172,7 @@ class Sequence():
             read, _ = x.mutate(go_prob=go_prob, ge_prob=ge_prob, subst_probs=subst_probs)
             yield read, start
 
-def make_sequencing_fixture(genome_file, reads_file, query_file, **kw):
+def make_sequencing_fixture(genome_file, reads_file, genome_length=1000, **kw):
     """Generates a random genome and a random sequence of reads from it. Output
     is written to files in FASTA format.
 
@@ -182,14 +182,13 @@ def make_sequencing_fixture(genome_file, reads_file, query_file, **kw):
 
     All other keyword parameters are passed as-is to Sequence.randread()."""
     A = Alphabet('ACGT')
-    length = kw.pop('genome_length', 500)
     if 'go_prob' not in kw:
         kw['go_prob'] = 0.1
     if 'go_prob' not in kw:
         kw['ge_prob'] = 0.5
     if 'subst_probs' not in kw:
 	kw['subst_probs'] = [[0.94 if k==i else 0.02 for k in range(4)] for i in range(4)]
-    G = A.randseq(length)
+    G = A.randseq(genome_length)
     seqrec = SeqRecord.SeqRecord(Seq.Seq(str(G)), id='genome', description="(full correct genome)")
     SeqIO.write([seqrec], genome_file, 'fasta')
     readrecs = []
@@ -202,4 +201,3 @@ def make_sequencing_fixture(genome_file, reads_file, query_file, **kw):
             )
         ]
     SeqIO.write(readrecs, reads_file, 'fasta')
-    SeqIO.write(readrecs[-1], query_file, 'fasta')
