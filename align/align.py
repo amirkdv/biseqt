@@ -206,6 +206,14 @@ class AlignProblem(CffiObject):
         else:
             return super(AlignProblem, self).__getattr__(name)
 
+    def __setattr__(self, name, value):
+        """TODO
+        """
+        if name[0] in 'ST' and name[1:] in ['_min_idx', '_max_idx']:
+            setattr(self.c_obj, name, value)
+        else:
+            return super(AlignProblem, self).__setattr__(name, value)
+
 
 class Transcript(object):
     """A wrapper for alignment transcripts. Solutions to the alignment problem are
