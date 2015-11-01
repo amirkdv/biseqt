@@ -134,10 +134,7 @@ class AlignProblem(CffiObject):
         score = 0
         i, j = self.S_min_idx, self.T_min_idx
         for op,num in hp_tokenize(opseq):
-            if op == 'M':
-                score += num * subst_scores[self.S.c_idxseq[i]][self.T.c_idxseq[j]]
-                i, j = i + num, j + num
-            elif op == 'S':
+            if op in 'MS':
                 for k in range(num):
                     score += subst_scores[self.S.c_idxseq[i+k]][self.T.c_idxseq[j+k]]
                 i, j = i + num, j + num
