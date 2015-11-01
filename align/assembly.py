@@ -9,6 +9,8 @@ def overlap_graph_by_alignment(tuplesdb, align_params, min_score=80):
     seqids = tuplesdb.seqids()
     for idx_of_S in range(len(seqids)):
         for idx_of_T in range(idx_of_S + 1, len(seqids)):
+            G.add_node(seqids[idx_of_S])
+            G.add_node(seqids[idx_of_T])
             S = tuplesdb.loadseq(seqids[idx_of_S])
             T = tuplesdb.loadseq(seqids[idx_of_T])
             P = align.AlignProblem(
@@ -30,6 +32,8 @@ def overlap_graph_by_tuple_extension(tuplesdb, align_params, max_decr=3, decr_de
     seqids = tuplesdb.seqids()
     for idx_of_S in range(len(seqids)):
         for idx_of_T in range(idx_of_S + 1, len(seqids)):
+            G.add_node(seqids[idx_of_S])
+            G.add_node(seqids[idx_of_T])
             S = tuplesdb.loadseq(seqids[idx_of_S])
             T = tuplesdb.loadseq(seqids[idx_of_T])
             F = tuples.OverlapFinder(S, T, align_params)
