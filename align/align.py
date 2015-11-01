@@ -242,7 +242,7 @@ class Transcript(object):
             self.idx_S, self.idx_T, self.score, self.opseq = 0, 0, 0, 'B'
             return
 
-        assert(re.match('\([0-9]+,[0-9]+\),[0-9\.]+:B[MISD]+', rtranscript) is not None)
+        assert(re.match('\([0-9]+,[0-9]+\),[0-9-\.]+:B[MISD]+', rtranscript) is not None)
         infostr, opseq = rtranscript.split(':', 1)
         indices, score = infostr.rsplit(',', 1)
         idx_S, idx_T = indices[1:-1].split(',') # skip the open/close parens
