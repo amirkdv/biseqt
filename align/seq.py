@@ -190,7 +190,7 @@ def make_sequencing_fixture(genome_file, reads_file, query_file, **kw):
     if 'subst_probs' not in kw:
 	kw['subst_probs'] = [[0.94 if k==i else 0.02 for k in range(4)] for i in range(4)]
     G = A.randseq(length)
-    seqrec = SeqRecord.SeqRecord(Seq.Seq(str(G)), id='genome')
+    seqrec = SeqRecord.SeqRecord(Seq.Seq(str(G)), id='genome', description="(full correct genome)")
     SeqIO.write([seqrec], genome_file, 'fasta')
     readrecs = []
     for idx, (read, start) in enumerate(G.randread(**kw)):
@@ -198,7 +198,7 @@ def make_sequencing_fixture(genome_file, reads_file, query_file, **kw):
             SeqRecord.SeqRecord(
                 Seq.Seq(str(read)),
                 id="read_%d" % idx,
-                description="hint: starts from genome[%d]" % start
+                description="(pos:%d)" % start
             )
         ]
     SeqIO.write(readrecs, reads_file, 'fasta')
