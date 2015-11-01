@@ -193,8 +193,6 @@ class TuplesDB(object):
                         id_S=s1, id_T=s2, len=segments[cand].len + shift_S,
                         idx_S=segments[idx].idx_S, idx_T=segments[idx].idx_T,
                     )
-                    if segments[idx].idx_S == 67 and segments[idx].idx_T == 38:
-                        print 'merging (shift = %d) %s to get: %s' % (shift_S, str(segments[cand]), str(segments[idx]))
                     segments.pop(cand)
                 else:
                     cand += 1
@@ -269,14 +267,12 @@ class OverlapFinder(object):
 
         return cands[0]
 
-    def extend(self, segments):
+    def extend(self, segments, max_decr=3, decr_def=0):
         """TODO"""
-        # FIXME max_decr and decr_def should somehow be related statistically to
-        # guarantee something.
-        max_decr = 3
-        decr_def = 0
         scores_by_segment = {}
         for segment in segments:
+            self.P.S_min_idx, self.P.T_min_idx = segment.idx_S, segment.idx_T
+            core_score = self.P.score('B' + 'M'*segment.len)
             window = len(segment)
             fwd_extended, fwd_score = self.extend_one_way(segment, max_decr, decr_def, 'fwd')
             bwd_extended, bwd_score = self.extend_one_way(segment, max_decr, decr_def, 'bwd')
@@ -288,5 +284,6 @@ class OverlapFinder(object):
                     idx_T=bwd_extended.idx_T,
                     len=bwd_extended.len + fwd_extended.len - segment.len
                 )
-                scores_by_segment[segment] = fwd_score + bwd_score
+                assert(segment.idx_S == 0 or segment.idx_T == 0)
+                scores_by_segment[segment] = fwd_score + bwd_score + core_score
         return sorted(scores_by_segment.items(), key=lambda x: x[1], reverse=True)
