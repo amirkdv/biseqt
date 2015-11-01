@@ -285,8 +285,8 @@ class Transcript(object):
 
         # The pre margin:
         pre_margin = min(margin, max(idx_S, idx_T))
-        sline = 'S[%d]: ' % max(0, idx_S - pre_margin + 1)
-        tline = 'T[%d]: ' % max(0, idx_T - pre_margin + 1)
+        sline = 'S[%d]: ' % max(0, idx_S - pre_margin)
+        tline = 'T[%d]: ' % max(0, idx_T - pre_margin)
         counter = max(len(sline), len(tline))
         for i in reversed(range(1, pre_margin)):
             if counter >= width:
