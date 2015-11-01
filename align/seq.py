@@ -149,7 +149,7 @@ class Sequence():
             k += 1
         return (Sequence(T, self.alphabet), opseq)
 
-    def randread(self, subst_probs=None, go_prob=0.1, ge_prob=0.5, coverage=40, len_mean=100, len_var=15):
+    def randread(self, subst_probs=None, go_prob=0.1, ge_prob=0.5, coverage=10, len_mean=100, len_var=15):
         """Generates a random collection of lossy reads from the current sequence.
 
         :param subst_probs(list[list]): as in mutate(), letter-by-letter
