@@ -120,19 +120,6 @@ class AlignProblem(CffiObject):
             'params': params.c_obj
         })
         global lib
-        self.c_dp_table = lib.define(self.c_obj)
-        if self.c_dp_table == -1:
-            raise('Got -1 from align.define().')
-
-    # TODO test and incorporate
-    def reset_boundaries(self, S_min_idx, S_max_idx, T_min_idx, T_max_idx):
-        lib.free(self.c_dp_table)
-        self.c_obj.S_min_idx, self.c_obj.S_max_idx = S_min_idx, S_max_idx
-        self.c_obj.T_min_idx, self.c_obj.T_max_idx = T_min_idx, T_max_idx
-
-        self.c_dp_table = lib.define(self.c_obj)
-        if self.c_dp_table == -1:
-            raise('Got -1 from align.define().')
 
     def score(self, opseq):
         """Calculates the score for an arbitray opseq. Opseqs are allowed to be
@@ -172,6 +159,12 @@ class AlignProblem(CffiObject):
         :returns: a transcript string with the specified format.
         """
         global lib
+        #print 'S range: %d, %d' % (self.S_min_idx, self.S_max_idx)
+        #print 'T range: %d, %d' % (self.T_min_idx, self.T_max_idx)
+        self.c_dp_table = lib.define(self.c_obj)
+        if self.c_dp_table == -1:
+            raise('Got -1 from align.define().')
+
         self.opt = lib.solve(self.c_dp_table, self.c_obj)
         if (print_dp_table):
             mat = self.dp_table
@@ -182,7 +175,10 @@ class AlignProblem(CffiObject):
                 (self.params.gap_open_score, self.params.gap_extend_score, self.params.max_diversion)
             self.opt = None
             return None
-        return self.opt.choices[0].score
+        score = self.opt.choices[0].score
+        # TODO how do I do this?
+        # lib.free(self.c_dp_table)
+        return score
 
     def traceback(self):
         if self.opt is None:
