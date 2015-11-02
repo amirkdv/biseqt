@@ -18,7 +18,7 @@ def overlap_graph_by_alignment(tuplesdb, align_params, min_score=80):
                 params=align_params,
                 align_type=align.ALIGN_OVERLAP
             )
-            score = P.solve()
+            _, score = P.solve()
             if score >= min_score:
                 transcript = P.traceback()
                 if transcript.idx_T == 0:

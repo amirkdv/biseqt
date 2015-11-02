@@ -175,7 +175,7 @@ class AlignProblem(CffiObject):
         score = self.opt.choices[0].score
         # TODO how do I do this?
         # lib.free(self.c_dp_table)
-        return score
+        return self.opt, score
 
     def traceback(self):
         if self.opt is None:
