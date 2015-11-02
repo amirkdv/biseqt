@@ -16,7 +16,7 @@ class MaxConcurrentQueries(RuntimeError):
 def tup_scan(string, wordlen):
     """A generator for (string, idx) tuples to scan through any given string.
     """
-    for idx in range(len(string) - wordlen):
+    for idx in range(len(string) - wordlen + 1):
         yield (string[idx:idx + wordlen], idx)
 
 class TuplesDB(object):
