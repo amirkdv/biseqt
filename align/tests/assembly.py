@@ -64,5 +64,5 @@ def overlap_by_alignment(db, path):
 
 def overlap_by_known_order(db, path):
     B = tuples.TuplesDB(db, wordlen=params['wordlen'], alphabet=A)
-    G = assembly.overlap_graph_by_alignment(B, C, min_score=params['min_align_score'])
+    G = assembly.overlap_graph_by_known_order(B, C, min_score=params['min_align_score'])
     assembly.save_overlap_graph(G, path)

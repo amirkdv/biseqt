@@ -166,6 +166,7 @@ class Sequence():
         N = self.length
         num = int(1.0 * N * coverage/len_mean)
         for i in range(num):
+            # minimum read leangth is 10, and max is N-1
             length = max(10, min(N-1, int(np.random.normal(len_mean, len_var))))
             start = np.random.randint(0, N-length)
             x = Sequence(''.join([self[k] for k in range(start, start + length)]), self.alphabet)
@@ -196,7 +197,7 @@ def make_sequencing_fixture(genome_file, reads_file, genome_length=1000, **kw):
         readrecs += [
             SeqRecord.SeqRecord(
                 Seq.Seq(str(read)),
-                id="read_%d" % idx,
+                id="read_%d" % (idx+1),
                 description="(pos:%d)" % start
             )
         ]
