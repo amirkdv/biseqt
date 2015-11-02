@@ -28,7 +28,7 @@ class AlignParams(CffiObject):
         c_obj (cffi.cdata): points to the underlying `align_params` struct.
     """
     def __init__(self, alphabet=None, subst_scores=[],
-        go_score=0, ge_score=0, max_diversion=10):
+        go_score=0, ge_score=0, max_diversion=-1):
         self.alphabet = alphabet
         # each row in the subst matrix must be "owned" by an object that's kept
         # alive.
@@ -163,15 +163,15 @@ class AlignProblem(CffiObject):
             raise('Got -1 from align.define().')
 
         self.opt = lib.solve(self.c_dp_table, self.c_obj)
-        if (print_dp_table):
+        if print_dp_table:
             mat = self.dp_table
             for i in range(len(mat)):
-                print mat[i]
+                print [round(f,2) for f in mat[i]]
         if self.opt == ffi.NULL:
             print 'Err: No Alignment found (go=%.2f, ge=%.2f, max_div=%d)' % \
                 (self.params.gap_open_score, self.params.gap_extend_score, self.params.max_diversion)
             self.opt = None
-            return None
+            return None, None
         score = self.opt.choices[0].score
         # TODO how do I do this?
         # lib.free(self.c_dp_table)
@@ -206,7 +206,7 @@ class AlignProblem(CffiObject):
     def __setattr__(self, name, value):
         """TODO
         """
-        if name[0] in 'ST' and name[1:] in ['_min_idx', '_max_idx']:
+        if name in ['S_min_idx', 'S_max_idx', 'T_min_idx', 'T_max_idx', 'type']:
             setattr(self.c_obj, name, value)
         else:
             return super(AlignProblem, self).__setattr__(name, value)
