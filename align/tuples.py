@@ -245,7 +245,7 @@ class OverlapFinder(object):
         if window == 0:
             return None, None
 
-        extension_score = self.P.solve()
+        score = self.P.solve()
         if direction == 'fwd':
             segment = Segment(
                 len=segment.len + window,
@@ -258,9 +258,9 @@ class OverlapFinder(object):
                 id_S=segment.id_S, id_T=segment.id_T,
                 idx_S=segment.idx_S - window, idx_T=segment.idx_T - window,
             )
-        return segment, extension_score
+        return segment, score
 
-    def extend_one_way(self, segment, max_decr_allowed, decr_defn, direction='fwd'):
+    def extend_one_way(self, segment, drop_threshold, direction='fwd'):
         """Extends a given segment (presumably maximally-exactly-matching) in
         the given direction (fwd or bwd). Extension is done by repeatedly
         performing global alignments on a rolling window along the two sequences
@@ -268,23 +268,19 @@ class OverlapFinder(object):
         of times"""
         assert(direction in ['fwd', 'bwd'])
         window = segment.len
-        cands = [(segment, 0)]
-        while True:
+        cur_seg, cur_score = segment, 0
+        while cur_score >= drop_threshold:
             offset = 0
-            for i in range(max_decr_allowed):
-                extended_seg, extension_score = self.extend_one_way_once(
-                    cands[-1][0], window, direction=direction
-                )
-                if extended_seg is None:
-                    return cands[-1][0], sum([cand[1] for cand in cands])
-                cands += [(extended_seg, extension_score)]
-            if len(cands) > max_decr_allowed and all([c[1] <= decr_defn for c in cands[1:]]):
-                return None, None
-            cands = [(cands[-1][0], sum([x[1] for x in cands[1:]]))]
+            seg, score  = self.extend_one_way_once(cur_seg, window, direction=direction)
+            if seg is None:
+                # hit the end:
+                return cur_seg, cur_score
+            cur_score += score
+            cur_seg = seg
 
-        return cands[0]
+        return None, None
 
-    def extend(self, segments, max_decr, decr_def):
+    def extend(self, segments, drop_threshold):
         """Given a number of matching segments for the two sequences finds all
         extended matching gap containing segments by repeatedly aligning a
         rolling frame along the two sequences and dropping a segment once it
@@ -294,10 +290,9 @@ class OverlapFinder(object):
             self.P.S_min_idx, self.P.T_min_idx = segment.idx_S, segment.idx_T
             core_score = self.P.score('B' + 'M'*segment.len)
             window = len(segment)
-            fwd_extended, fwd_score = self.extend_one_way(segment, max_decr, decr_def, 'fwd')
-            bwd_extended, bwd_score = self.extend_one_way(segment, max_decr, decr_def, 'bwd')
-            # FIXME should we be checking fwd_score + bwd_score > decr_def?
-            if fwd_extended and bwd_extended and fwd_score + bwd_score > decr_def:
+            fwd_extended, fwd_score = self.extend_one_way(segment, drop_threshold, 'fwd')
+            bwd_extended, bwd_score = self.extend_one_way(segment, drop_threshold, 'bwd')
+            if fwd_extended and bwd_extended and fwd_score + bwd_score > drop_threshold:
                 segment = Segment(
                     id_S=segment.id_S, id_T=segment.id_T,
                     idx_S=bwd_extended.idx_S,

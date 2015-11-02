@@ -55,9 +55,7 @@ def create_example(db):
 
 def overlap_by_tuple_extension(db, path):
     B = tuples.TuplesDB(db, wordlen=params['wordlen'], alphabet=A)
-    G = assembly.overlap_graph_by_tuple_extension(
-        B, C, max_decr=params['max_decr'], decr_def=params['decr_def']
-    )
+    G = assembly.overlap_graph_by_tuple_extension(B, C, params['drop_threshold'])
     assembly.save_overlap_graph(G, path)
 
 def overlap_by_alignment(db, path):

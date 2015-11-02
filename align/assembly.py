@@ -27,7 +27,7 @@ def overlap_graph_by_alignment(tuplesdb, align_params, min_score=80):
                     G.add_edge(seqids[idx_of_T], seqids[idx_of_S], score=score)
     return G
 
-def overlap_graph_by_tuple_extension(tuplesdb, align_params, max_decr=3, decr_def=0):
+def overlap_graph_by_tuple_extension(tuplesdb, align_params, drop_threshold):
     G = nx.DiGraph()
     seqids = tuplesdb.seqids()
     for idx_of_S in range(len(seqids)):
@@ -42,7 +42,7 @@ def overlap_graph_by_tuple_extension(tuplesdb, align_params, max_decr=3, decr_de
             )
             if not exacts:
                 continue
-            segments = F.extend(exacts, max_decr, decr_def)
+            segments = F.extend(exacts, drop_threshold)
             if not segments:
                 continue
             overlap, score = segments[0]
