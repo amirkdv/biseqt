@@ -7,19 +7,18 @@ from .. import align, tuples, seq, assembly
 A = seq.Alphabet('ACGT')
 
 params = {
-    'wordlen': 5,           # tuple word lengths
-    'genome_length': 500,   # length of randomly generated genome
+    'wordlen': 3,           # tuple word lengths
+    'genome_length': 50,    # length of randomly generated genome
     'coverage': 3,          # coverage of random sequencing reads
-    'read_len_mean': 70,    # average length of sequencing read
-    'read_len_var': 25,     # variance of sequencing read length
-    'min_align_score': 30,  # minimum overlap alignment score to constitue an edge
-    'go_prob': 0.1,         # gap open score
-    'ge_prob': 0.3,         # gap extend score
-    'subst_probs': [[0.91 if k==i else 0.03 for k in range(4)] for i in range(4)],
+    'read_len_mean': 20,    # average length of sequencing read
+    'read_len_var': 1,      # variance of sequencing read length
+    'min_align_score': 5,   # minimum overlap alignment score to constitue an edge
+    'go_prob': 0.0001,      # gap open score
+    'ge_prob': 0.0003,      # gap extend score
+    'subst_probs': [[0.999 if k==i else 0.0001 for k in range(4)] for i in range(4)],
     # FIXME max_decr and decr_def should somehow be related statistically to
     # guarantee something.
-    'max_decr': 3,          # max number of decreasing windows to drop a seed
-    'decr_def': 0,          # what consistutes a "decrease" in windows of seed extension
+    'drop_threshold': -10   # maximum total score drop allowed before dropping a seed
 }
 subst_scores = align.AlignParams.subst_scores_from_probs(params['subst_probs'], A)
 go_score, ge_score = align.AlignParams.gap_scores_from_probs(params['go_prob'], params['ge_prob'])
