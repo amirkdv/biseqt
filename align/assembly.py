@@ -61,7 +61,7 @@ def overlap_graph_by_known_order(tuplesdb):
                 continue
             overlap = seqs[sid]['start'] + seqs[sid]['length'] - seqs[tid]['start']
             if seqs[tid]['start'] >= seqs[sid]['start'] and overlap > 0:
-                G.add_edge(sid, tid)
+                G.add_edge(sid, tid, score=overlap)
 
     return G
 
@@ -69,12 +69,12 @@ def overlap_graph_by_known_order(tuplesdb):
 def save_overlap_graph(G, path, figsize=(50,50)):
     pos = nx.circular_layout(G)
     plt.figure(figsize=figsize)
-    nx.draw_networkx_nodes(G, pos, node_size=2000, node_color='w')
-    nx.draw_networkx_labels(G, pos, font_size=30)
+    nx.draw_networkx_nodes(G, pos, node_size=10000, node_color='w')
+    nx.draw_networkx_labels(G, pos, font_size=50)
     nx.draw_networkx_edges(G, pos, width=5)
     edge_data = G.edges(data=True)
-    if edge_data and 'score' in edge_data[0]:
-        nx.draw_networkx_edge_labels(G, pos, font_size=26, edge_labels={(f,t):w['score'] for f,t,w in G.edges(data=True)})
+    if edge_data and 'score' in edge_data[0][2]:
+        nx.draw_networkx_edge_labels(G, pos, font_size=26, edge_labels={(f,t):'%.2f' % a['score'] for f,t,a in edge_data})
     plt.xticks([])
     plt.yticks([])
-    plt.savefig(path)
+    plt.savefig(path, bbox_inches='tight')

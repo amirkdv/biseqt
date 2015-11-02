@@ -43,7 +43,10 @@ def create_example(db):
         genome_length=params['genome_length'],
         coverage=params['coverage'],
         len_mean=params['read_len_mean'],
-        len_var=params['read_len_var']
+        len_var=params['read_len_var'],
+        subst_probs=params['subst_probs'],
+        ge_prob=params['ge_prob'],
+        go_prob=params['go_prob']
     )
     B = tuples.TuplesDB(db, wordlen=params['wordlen'], alphabet=A)
     B.initdb()
@@ -64,5 +67,5 @@ def overlap_by_alignment(db, path):
 
 def overlap_by_known_order(db, path):
     B = tuples.TuplesDB(db, wordlen=params['wordlen'], alphabet=A)
-    G = assembly.overlap_graph_by_known_order(B, C, min_score=params['min_align_score'])
+    G = assembly.overlap_graph_by_known_order(B)
     assembly.save_overlap_graph(G, path)
