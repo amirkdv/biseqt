@@ -11,7 +11,9 @@ global lib
 ALIGN_GLOBAL = lib.GLOBAL
 ALIGN_LOCAL = lib.LOCAL
 ALIGN_START_ANCHORED = lib.START_ANCHORED
+ALIGN_START_ANCHORED_WEAK = lib.START_ANCHORED_WEAK
 ALIGN_END_ANCHORED = lib.END_ANCHORED
+ALIGN_END_ANCHORED_WEAK = lib.END_ANCHORED_WEAK
 ALIGN_OVERLAP = lib.OVERLAP
 
 class AlignParams(CffiObject):
@@ -156,8 +158,6 @@ class AlignProblem(CffiObject):
         :returns: a transcript string with the specified format.
         """
         global lib
-        #print 'S range: %d, %d' % (self.S_min_idx, self.S_max_idx)
-        #print 'T range: %d, %d' % (self.T_min_idx, self.T_max_idx)
         self.c_dp_table = lib.define(self.c_obj)
         if self.c_dp_table == -1:
             raise('Got -1 from align.define().')

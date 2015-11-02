@@ -86,12 +86,16 @@ align_dp_cell* solve(align_dp_cell** P, align_problem* def) {
       if (def->type == LOCAL ||
           (def->type == OVERLAP && j == 0) ||
           (def->type == OVERLAP && i == 0) ||
-          (def->type == END_ANCHORED)
+          (def->type == END_ANCHORED) ||
+          (def->type == END_ANCHORED_WEAK) ||
+          (def->type == START_ANCHORED_WEAK && (i * j) == 0)
         ) {
         // 1. local alignments can start anywhere,
         // 2. overlap alignments can start anywhere on the left column or the
         //    top row,
         // 3. end-anchored alignments can start anywhere.
+        // 4. weak-start anchored alignments can start anywhere on the top row
+        //    or the left column.
         alts[num_choices].op = 'B';
         alts[num_choices].score = 0;
         alts[num_choices].diversion = 0;
@@ -238,7 +242,8 @@ align_dp_cell* find_optimal(align_dp_cell** P, align_problem* def) {
   double max;
   int i,j;
   int row = -1, col = -1;
-  if (def->type == GLOBAL || def->type == END_ANCHORED) {
+  if (def->type == GLOBAL ||
+      def->type == END_ANCHORED) {
     // Global and end-anchored alignments must end at the bottom right corner
     row = def->S_max_idx - def->S_min_idx;
     col = def->T_max_idx - def->T_min_idx;
@@ -246,9 +251,10 @@ align_dp_cell* find_optimal(align_dp_cell** P, align_problem* def) {
       return NULL;
     }
   }
-  else if (def->type == OVERLAP) {
-    // Overlap alignments must end on the bottom row or the right column,
-    // find the best:
+  else if (def->type == OVERLAP ||
+           def->type == END_ANCHORED_WEAK) {
+    // Overlap and weak end-anchored alignments must end on the bottom row or
+    // the right column, find the best:
     max = -INT_MAX;
     for (i = 0; i < def->S_max_idx - def->S_min_idx + 1; i++){
       for (j = 0; j < def->T_max_idx - def->T_min_idx + 1; j++) {
@@ -268,7 +274,9 @@ align_dp_cell* find_optimal(align_dp_cell** P, align_problem* def) {
       }
     }
   }
-  else if (def->type == LOCAL || def->type == START_ANCHORED) {
+  else if (def->type == LOCAL ||
+           def->type == START_ANCHORED ||
+           def->type == START_ANCHORED_WEAK) {
     // Local and start-anchored alignments can end anywhere, find the best:
     max = P[0][0].choices[0].score;
     for (i = 0; i < def->S_max_idx - def->S_min_idx + 1; i++){
