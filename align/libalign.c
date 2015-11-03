@@ -341,11 +341,11 @@ char *traceback(align_dp_cell** P, align_problem* def, align_dp_cell* end) {
   pos = len - 2;
   while (1) {
     op = curr.choices[0].op;
-    rtranscript[pos] = op;
     if (op == 'B') {
       break;
     }
     pos--;
+    rtranscript[pos] = op;
     if (op == 'M' || op == 'S') {
       idx_S --;
       idx_T --;

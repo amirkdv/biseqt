@@ -40,7 +40,7 @@ S = seq.Sequence(s, A)
 T = seq.Sequence(t, A)
 print S
 print T
-opseq_d = 'BMSSS'
+opseq_d = 'MSSS'
 opseq = Tr.expand_opseq(s, t, opseq_d)
 print opseq_d
 print opseq

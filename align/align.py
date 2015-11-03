@@ -128,10 +128,8 @@ class AlignProblem(CffiObject):
         partial alignments (i.e finishing before reaching the end of frame).
 
             P = AlignProblem(...)
-            P.score('BMMMSSISSD') #=> 23.50
+            P.score('MMMSSISSD') #=> 23.50
         """
-        assert(opseq[0] == 'B')
-        opseq = opseq[1:]
         subst_scores = self.params.subst_scores
         score = 0
         i, j = self.S_min_idx, self.T_min_idx
@@ -221,7 +219,6 @@ class Transcript(object):
     Si and Tj are integers specifying the positiong along each string where
     the alignment begins. Score is the score of the transcript to 2 decimal
     places. What follows the ':' is a sequence of "ops" defined as follows:
-        B begin
         M match
         S substitution
         I insert
@@ -236,10 +233,11 @@ class Transcript(object):
             (<idx_S,idx_T>),<score>:<opseq>
         """
         if rtranscript is None:
-            self.idx_S, self.idx_T, self.score, self.opseq = 0, 0, 0, 'B'
+            self.idx_S, self.idx_T, self.score, self.opseq = 0, 0, 0, ''
             return
 
-        assert(re.match('\([0-9]+,[0-9]+\),[0-9-\.]+:B[MISD]+', rtranscript) is not None)
+        print rtranscript
+        assert(re.match('\([0-9]+,[0-9]+\),[0-9-\.]+:[MISD]+', rtranscript) is not None)
         infostr, opseq = rtranscript.split(':', 1)
         indices, score = infostr.rsplit(',', 1)
         idx_S, idx_T = indices[1:-1].split(',') # skip the open/close parens
@@ -297,8 +295,6 @@ class Transcript(object):
 
         # The alignment itself:
         for i,op in enumerate(self.opseq):
-            if op == 'B':
-                continue
             if counter >= width:
                 counter, sline, tline = new_line(sline, tline, idx_S, idx_T, f)
             if op in 'MS':
