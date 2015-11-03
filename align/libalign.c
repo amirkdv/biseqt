@@ -328,8 +328,8 @@ char *traceback(align_dp_cell** P, align_problem* def, align_dp_cell* end) {
   int len, infolen, pos;
   // allocate more than enough memory for the transcript as we trace back.
   len = idx_S + idx_T + 1;
-  // We write ops to rtranscript backwards starting from the end (position `len')
-  char rtranscript[len];
+  // We write ops to rev_transcript backwards starting from the end (position `len')
+  char rev_transcript[len];
   pos = len - 2;
   while (1) {
     op = curr.choices[0].op;
@@ -337,7 +337,7 @@ char *traceback(align_dp_cell** P, align_problem* def, align_dp_cell* end) {
       break;
     }
     pos--;
-    rtranscript[pos] = op;
+    rev_transcript[pos] = op;
     if (op == 'M' || op == 'S') {
       idx_S --;
       idx_T --;
@@ -366,10 +366,10 @@ char *traceback(align_dp_cell** P, align_problem* def, align_dp_cell* end) {
   }
   infostr = malloc(infolen);
   sprintf(infostr, "(%d,%d),%.2f:", (idx_S + def->S_min_idx), (idx_T + def->T_min_idx), end->choices[0].score);
-  // the backtraced transcript was written backwords to the end of rtranscript
+  // the backtraced transcript was written backwords to the end of rev_transcript
   len = len - pos - 1;
   transcript = malloc(len + 1);
-  strncpy(transcript, rtranscript + pos, len);
+  strncpy(transcript, rev_transcript + pos, len);
   transcript[len] = '\0';
   ret = malloc(infolen + len + 1);
   sprintf(ret, "%s%s", infostr, transcript);
