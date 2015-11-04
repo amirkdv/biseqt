@@ -347,7 +347,7 @@ char *traceback(align_dp_cell** P, align_problem* def, align_dp_cell* end) {
   len = idx_S + idx_T + 1;
   // We write ops to rev_transcript backwards starting from the end (position `len')
   char rev_transcript[len];
-  pos = len - 2;
+  pos = len - 1;
   while (1) {
     op = curr.choices[0].op;
     if (op == 'B') {
@@ -367,7 +367,7 @@ char *traceback(align_dp_cell** P, align_problem* def, align_dp_cell* end) {
     }
     curr = P[idx_S][idx_T];
   }
-  if (pos == len - 2) {
+  if (pos == len - 1) {
     // empty opseq
     return NULL;
   }
