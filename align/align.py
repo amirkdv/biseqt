@@ -310,7 +310,7 @@ class Transcript(object):
             counter += letlen
 
         # The alignment itself:
-        for i,op in enumerate(self.opseq):
+        for op in self.opseq:
             if counter >= width:
                 counter, sline, tline = new_line(sline, tline, idx_S, idx_T, f)
             if op in 'MS':
@@ -323,6 +323,8 @@ class Transcript(object):
             elif op == 'D':
                 s, t = S[idx_S], '-'
                 idx_S += 1
+            else:
+                raise ValueError('Invalid edit operation: %c' % op)
             on_color = color = None
             if colors:
                 if op in 'MS':
@@ -336,11 +338,11 @@ class Transcript(object):
             counter += letlen
 
         # The post margin:
-        post_margin = min(margin, max(S.length-idx_S, T.length-idx_T))
+        post_margin = min(margin, max(S.length - idx_S, T.length - idx_T))
         for i in range(post_margin):
             if counter >= width:
                 counter, sline, tline = new_line(
-                    sline, tline, idx_S+i, idx_T+i, f)
+                    sline, tline, idx_S + i, idx_T + i, f)
             sline += S[idx_S+i] if idx_S + i < S.length else ' '
             tline += T[idx_T+i] if idx_T + i < T.length else ' '
             counter += letlen
