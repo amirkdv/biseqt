@@ -87,6 +87,35 @@ class AlignParams(CffiObject):
         else:
             return super(AlignParams, self).__getattr__(name)
 
+    def score(self, S, T, opseq, S_min_idx=0, T_min_idx=0):
+        """Calculates the score for an arbitray opseq over given sequences.
+        Opseqs are allowed to be partial alignments (i.e finishing before
+        reaching the end of frame).
+
+            C = AlignParams(...)
+            C.score('ACC', 'AGC', 'MSM')
+
+        :param S(seq.Sequence)
+        :param T(seq.Sequence)
+        :param opseq(str)
+        """
+        score = 0.0
+        i, j = S_min_idx, T_min_idx
+        for op,num in hp_tokenize(opseq):
+            if op in 'MS':
+                for k in range(num):
+                    score += self.subst_scores[S.c_idxseq[i+k]][T.c_idxseq[j+k]]
+                i, j = i + num, j + num
+            elif op in 'ID':
+                score += self.gap_open_score + self.gap_extend_score * num
+                if op == 'I':
+                    j = j + num
+                else:
+                    i = i + num
+            else:
+                raise ValueError('Invalid edit operation: %c' % op)
+        return score
+
 class AlignProblem(CffiObject):
     """Wraps the C struct `align_problem', see `libalign.h`
 
@@ -128,23 +157,7 @@ class AlignProblem(CffiObject):
             P = AlignProblem(...)
             P.score('MMMSSISSD') #=> 23.50
         """
-        subst_scores = self.params.subst_scores
-        score = 0
-        i, j = self.S_min_idx, self.T_min_idx
-        for op,num in hp_tokenize(opseq):
-            if op in 'MS':
-                for k in range(num):
-                    score += subst_scores[self.S.c_idxseq[i+k]][self.T.c_idxseq[j+k]]
-                i, j = i + num, j + num
-            elif op in 'ID':
-                score += self.params.gap_open_score + self.params.gap_extend_score * num
-                if op == 'I':
-                    j = j + num
-                else:
-                    i = i + num
-            else:
-                raise ValueError('Invalid edit operation: %c' % op)
-        return score
+        return self.params.score(self.S, self.T, opseq, self.S_min_idx, self.T_min_idx)
 
     def solve(self, print_dp_table=False):
         """Populates the DP table and traces back an (any) optimal alignment.
@@ -179,10 +192,10 @@ class AlignProblem(CffiObject):
         if self.opt is None:
             return None
 
-        rtranscript = lib.traceback(self.c_dp_table, self.c_obj, self.opt)
-        if rtranscript == ffi.NULL:
+        raw_transcript = lib.traceback(self.c_dp_table, self.c_obj, self.opt)
+        if raw_transcript == ffi.NULL:
             return None
-        return Transcript(ffi.string(rtranscript))
+        return Transcript(raw_transcript=ffi.string(raw_transcript))
 
     def __getattr__(self, name):
         """Allow attributes to access members of the underlying `align_problem`
@@ -226,19 +239,20 @@ class Transcript(object):
     All op sequences begin with a B and insertion/deletions are meant to
     mean "from S to T".
     """
-    def __init__(self, rtranscript=None):
-        """Parses a raw transcript as given by `libalign.so` and populates class
-        attributes. Raw transcripts are expected to have the following format:
+    def __init__(self, idx_S=0, idx_T=0, score=0.0, opseq='', raw_transcript=None):
+        """FIXME Parses a raw transcript as given by `libalign.so` and populates
+        class attributes. Raw transcripts are expected to have the following
+        format:
 
             (<idx_S,idx_T>),<score>:<opseq>
         """
-        if rtranscript is None:
-            self.idx_S, self.idx_T, self.score, self.opseq = 0, 0, 0, ''
+        if raw_transcript is None:
+            self.idx_S, self.idx_T = idx_S, idx_T
+            self.score, self.opseq = score, opseq
             return
 
-        print rtranscript
-        assert(re.match('\([0-9]+,[0-9]+\),[0-9-\.]+:[MISD]+', rtranscript) is not None)
-        infostr, opseq = rtranscript.split(':', 1)
+        assert(re.match('\([0-9]+,[0-9]+\),[0-9-\.]+:[MISD]+', raw_transcript) is not None)
+        infostr, opseq = raw_transcript.split(':', 1)
         indices, score = infostr.rsplit(',', 1)
         idx_S, idx_T = indices[1:-1].split(',') # skip the open/close parens
         self.idx_S, self.idx_T = int(idx_S), int(idx_T)

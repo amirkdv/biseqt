@@ -126,7 +126,7 @@ class Sequence():
         assert(ge_prob < 1)
         T = ''
         k = 0
-        opseq = 'B'
+        opseq = ''
         while k < self.length:
             if go_prob:
                 # NOTE max precision for gap_open is .01

@@ -44,7 +44,7 @@ opseq_d = 'MSSS'
 opseq = Tr.expand_opseq(s, t, opseq_d)
 print opseq_d
 print opseq
-align.Transcript('(0,0),0:%s' % opseq).pretty_print(S, T, sys.stdout)
+align.Transcript(raw_transcript='(0,0),0:%s' % opseq).pretty_print(S, T, sys.stdout)
 S_d = seq.Sequence(s_d, A_d)
 T_d = seq.Sequence(t_d, A_d)
 C = align.AlignParams(alphabet=A_d,subst_scores=scores,
@@ -59,9 +59,7 @@ print "opseq score: %.2f" % P.score(opseq_d)
 if transcript_d:
     print '\n' + str(transcript_d) + '\n'
     opseq = Tr.expand_opseq(S, T, transcript_d.opseq)
-    transcript = align.Transcript('(%d,%d),0:%s' % ( \
-        transcript_d.idx_S * A_d.letter_length,
-        transcript_d.idx_T * A_d.letter_length,
-        opseq_d)
-    )
+    transcript = align.Transcript(
+        idx_S=transcript_d.idx_S * A_d.letter_length,
+        idx_T=transcript_d.idx_T * A_d.letter_length, score=0, opseq=opseq_d)
     transcript.pretty_print(S, T, sys.stdout, margin=10)
