@@ -245,7 +245,10 @@ class OverlapFinder(object):
         self.P.S_max_idx = self.P.S_min_idx + window
         self.P.T_max_idx = self.P.T_min_idx + window
 
-        _, score = self.P.solve()
+        score = self.P.solve()
+        if score is None:
+            return None
+
         transcript = self.P.traceback()
         if transcript is None:
             return None
@@ -259,7 +262,10 @@ class OverlapFinder(object):
         self.P.S_min_idx = self.P.S_max_idx - window
         self.P.T_min_idx = self.P.T_max_idx - window
 
-        _, score = self.P.solve()
+        score = self.P.solve()
+        if score is None:
+            return None
+
         transcript = self.P.traceback()
         if transcript is None:
             return None

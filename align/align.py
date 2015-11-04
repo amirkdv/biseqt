@@ -181,9 +181,9 @@ class AlignProblem(CffiObject):
                 print [round(f,2) for f in mat[i]]
         if self.opt == ffi.NULL:
             self.opt = None
-            return None, None
+            return None
         score = self.opt.choices[0].score
-        return self.opt, score
+        return score
 
     def traceback(self):
         if self.opt is None:
