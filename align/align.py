@@ -138,6 +138,9 @@ class AlignProblem(CffiObject):
         assert(T_max_idx <= T.length)
 
         self.S, self.T, self.params, self.align_type = S, T, params, align_type
+        # we need to remember the size of the dynamically allocated matrix, so
+        # we know how much to free, everytime solve() is called.
+        self._c_dp_table_size = S_max_idx - S_min_idx + 1;
         self.c_obj = ffi.new('align_problem*', {
             'S': S.c_idxseq,
             'T': T.c_idxseq,
@@ -168,11 +171,12 @@ class AlignProblem(CffiObject):
         :returns: a transcript string with the specified format.
         """
         global lib
-        if self.c_dp_table != ffi.NULL:
-            lib.free_dp_table(self.c_obj, self.c_dp_table)
+        if self.c_dp_table not in [ffi.NULL, -1]:
+            lib.free_dp_table(self.c_dp_table, self._c_dp_table_size)
         self.c_dp_table = lib.define(self.c_obj)
         if self.c_dp_table == -1:
             raise('Got -1 from align.define().')
+        self._c_dp_table_size = self.S_max_idx - self.S_min_idx + 1
 
         self.opt = lib.solve(self.c_dp_table, self.c_obj)
         if print_dp_table:

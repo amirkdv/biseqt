@@ -44,11 +44,11 @@ align_dp_cell** define(align_problem* def) {
  * Frees the allocated memory for a given alignment problem so that we can reuse
  * the same align_problem* over and over.
  */
-void free_dp_table(align_problem* def, align_dp_cell** P) {
+void free_dp_table(align_dp_cell** P, int size) {
   if (P == NULL) {
     return;
   }
-  for (int i = 0; i < def->S_max_idx - def->S_min_idx + 1; i++) {
+  for (int i = 0; i < size; i++) {
     free(P[i]);
   }
   free(P);
