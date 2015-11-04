@@ -170,8 +170,6 @@ class AlignProblem(CffiObject):
         global lib
         if self.c_dp_table != ffi.NULL:
             lib.free_dp_table(self.c_obj, self.c_dp_table)
-        #print 'S range: %d, %d' % (self.S_min_idx, self.S_max_idx)
-        #print 'T range: %d, %d' % (self.T_min_idx, self.T_max_idx)
         self.c_dp_table = lib.define(self.c_obj)
         if self.c_dp_table == -1:
             raise('Got -1 from align.define().')
@@ -182,8 +180,6 @@ class AlignProblem(CffiObject):
             for i in range(len(mat)):
                 print [round(f,2) for f in mat[i]]
         if self.opt == ffi.NULL:
-            print 'Err: No Alignment found (go=%.2f, ge=%.2f, max_div=%d)' % \
-                (self.params.gap_open_score, self.params.gap_extend_score, self.params.max_diversion)
             self.opt = None
             return None, None
         score = self.opt.choices[0].score
