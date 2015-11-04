@@ -15,7 +15,7 @@ The following are random processes are implemented for verification purposes:
   an alphabet.
 * Generating random mutants given a substition probability distribution.
 * Generating collections of random sequencing reads from a genome with specified
-  expected coverage and substitution/gap probabilties.
+  expected coverage and substitution/gap probabilties (see [ToDo](#to-do)).
 * Translating substitution and gap open/extend probabilities to substitution
   scores as log odds ratios.
 * Scoring arbitrary edit transcripts (look for `opseq`) for two sequences given
@@ -37,15 +37,15 @@ see the [tests](/align/tests/align.py) for example usage:
 
 *Notes*:
 
-3. Alignments are represented (and transported from C to Python) in a special
+1. Alignments are represented (and transported from C to Python) in a special
   format which looks like this:
 
-      (100,12),12.50:BMMMISSSMMMMDDD
+      (100,12),12.50:MMMISSSMMMMDDD
 
   The first two integers are starting positions of the alignment, the following
   number is the score of the aligment and what follows is an edit transcript
   (look for [`opseq`](/align/align.py)) for the alignment.
-2. Time complexity is quadratic in sequence lengths except for banded global
+1. Time complexity is quadratic in sequence lengths except for banded global
   alignment which is linear with a constant proportional to
   band width. As an example, finding the optimal local alignment for two related
   sequences (one is an [artificial mutant](/align/seq.py) of the other)
@@ -53,8 +53,7 @@ see the [tests](/align/tests/align.py) for example usage:
   CPU.
 1. Space complexity is quadratic. Currently an average of roughly 100 bytes is
   required per DP table cell. For example, it takes more than 6GB of space to
-  align two related sequences of length 8000. See [todo list](#missing) below.
-
+  align two related sequences of length 8000 (See [To Do](#to-do)).
 
 ## Tuple methods
 
@@ -70,7 +69,10 @@ delegated, via SQL, to SQLite). The following operations are implemented; see th
 * Querying the index for sequences in order of number of hits they share with a
   query string.
 * Finding seeds for a given query string by collapsing overlaping hits.
-* Extending seeds by repeated anchored alignments (see [to-do](#missing))
+* Extending seeds by repeated anchored alignments (see [to-do](#to-do)). This is
+  specifically geared towards the genome assembly problem and unlike, say,
+  BLAST, it does not try to find *all* significant local alignments, but only
+  those that would correspond to a suffix-prefix alignment.
 
 ## Alphabet translation
 
@@ -98,16 +100,24 @@ substring is translated to a single letter(e.g `AACCC` becomes `A2C3`). See the
   a condensed sequence does not necessarily give its original sequence).
   Translating edit transcripts (i.e `opseq`s) does not have an issue with this.
 
-## Missing
-* use score threshold for seed expansion (cf. [`tuples.Query.expand_seed()`](/align/tuples.py)).
-* make tuple methods aware of condensed sequences (cf. [`tuples.Query` and `tuples.TuplesDB`](/align/tuples.py)).
+## Genome assembly
+
+An overlap-layout-consensus assembly algorithm is
+[implemented](/align/assembly.py):
+* Build a weighted, directed overlap graph by finding all reads that have a
+significant overlap alignment. Overlaps are finding using seed expansion based
+on tuple methods (see `make genome.db overlap_tuple.svg`).
+* Build the *true* overlap graph based on hints left in articial read sequences
+  (see `make genome.db overlap_true.svg`).
+* (*not implemented*) Perform an alphabet-translation transformation (as
+  described above) to reduce sensitivity to homopolymeric indels in reads.
+
+## To Do
+* make tuple methods aware of condensed sequences (cf. [`tuples.OverlapFinder` and `tuples.TuplesDB`](/align/tuples.py)).
 * support hompolymeric-specific indel parameters in random generation
   of genome sequencing reads (cf. [`seq.Sequence.randread()`](/align/seq.py))
-* allow getting the optimal score of an alignment problem without traceback (cf.
-  [`align.AlignProblem.solve()`](/align/align.py) and
-  [`libalign::solve()`](/align/libalign.c))
-* figure out if tuple scanning can be sped up (cf. [`tuples.TuplesDB.index()`](/align/tuples.py).
+* implement an ungapped seed expansion phase (cf. [`tuples.OverlapFinder.expand()`](/align/tuples.py)).
 * better [tests](/tests).
 * support [Hirschberg](https://en.wikipedia.org/wiki/Hirschberg's_algorithm)-style
-linear space optimization (cf. [`libalign::solve()` and `libalign::tracback()`](/align/libalign.c)).
+  linear space optimization (cf. [`libalign::solve()` and `libalign::tracback()`](/align/libalign.c)).
 * make it work with Python 3.
