@@ -7,8 +7,9 @@ from collections import namedtuple
 
 from . import align, seq
 
-# a pair of equal-length substrings of two sequences
-Segment = namedtuple('Segment', ['id_S', 'id_T', 'idx_S', 'idx_T', 'len'])
+# an aligned pair of substrings in two sequences, the alignments are represented
+# by a Transcript object (tx) which may contain substitutions or gaps.
+Segment = namedtuple('Segment', ['id_S', 'id_T', 'tx'])
 
 class MaxConcurrentQueries(RuntimeError):
     pass
@@ -170,11 +171,24 @@ class TuplesDB(object):
                 c.execute('SELECT id FROM seq')
                 return [row[0] for row in c]
 
+class OverlapFinder(object):
+    def __init__(self, S, T, align_params, tuplesdb=None):
+        self.tuplesdb = tuplesdb
+        self.S, self.T, self.align_params = S, T, align_params
+        self.P = align.AlignProblem(
+            S=S, T=T, params=align_params,
+            align_type=align.ALIGN_START_ANCHORED,
+            S_min_idx=0, S_max_idx=0, T_min_idx=0, T_max_idx=0
+        )
+
     def exactly_matching_segments(self, s1, s2):
         """Given two seqids, finds all maximal exactly matching segments between
         the two self.seqid) and another given sequence. A segment is in its
         maximal form if there are no other exactly-matching segments whose span
         is a unit shift in both the query and target sequences.
+
+        Note: Scores of transcripts for exact matches are left as 0 to avoid
+        unnecessary cycles, we populate the score first thing in extend()
         """
         segments = []
         q = """
@@ -182,123 +196,140 @@ class TuplesDB(object):
             INNER JOIN tuples_{}_hits H2
             ON H1.tuple = H2.tuple
             WHERE H1.seq = ? AND H2.seq = ?
-        """.format(self.wordlen, self.wordlen)
+        """.format(self.tuplesdb.wordlen, self.tuplesdb.wordlen)
         def row_factory(cursor, row):
-            return Segment(id_S=s1, id_T=s2, len=self.wordlen,
-                idx_S=row[0], idx_T=row[1])
+            tx = align.Transcript(row[0], row[1], 0, 'M'*self.tuplesdb.wordlen)
+            return Segment(id_S=s1, id_T=s2, tx=tx)
 
-        with sqlite3.connect(self.db) as conn:
+        with sqlite3.connect(self.tuplesdb.db) as conn:
             conn.row_factory = row_factory
             c = conn.cursor()
             c.execute(q, (s1,s2))
-            segments = [r for r in c]
+            exacts = [r for r in c]
 
-        segments.sort(key=lambda s: s.idx_S)
+        exacts.sort(key=lambda s: s.tx.idx_S)
         # merge overlapping tuples:
         idx = 0
-        while idx < len(segments):
+        while idx < len(exacts):
             cand = idx + 1
-            while cand < len(segments):
-                shift_S = segments[cand].idx_S - segments[idx].idx_S
-                shift_T = segments[cand].idx_T - segments[idx].idx_T
-                if shift_S == shift_T and shift_S > 0 and shift_S < segments[idx].len:
-                    segments[idx] = Segment(
-                        id_S=s1, id_T=s2, len=segments[cand].len + shift_S,
-                        idx_S=segments[idx].idx_S, idx_T=segments[idx].idx_T,
+            while cand < len(exacts):
+                shift_S = exacts[cand].tx.idx_S - exacts[idx].tx.idx_S
+                shift_T = exacts[cand].tx.idx_T - exacts[idx].tx.idx_T
+                # we know the transcripts are all M's.
+                if shift_S == shift_T and shift_S > 0 and \
+                   shift_S < len(exacts[idx].tx.opseq):
+                    tx = align.Transcript(
+                        exacts[idx].tx.idx_S, exacts[idx].tx.idx_T,
+                        0, # score
+                        exacts[cand].tx.opseq + 'M'*shift_S # transcript
                     )
-                    segments.pop(cand)
+                    exacts[idx] = Segment(id_S=s1, id_T=s2, tx=tx)
+                    exacts.pop(cand)
                 else:
                     cand += 1
             idx += 1
-        segments.sort(key=lambda s: s.len, reverse=True)
-        return segments
+        exacts.sort(key=lambda s: len(s.tx.opseq), reverse=True)
+        return exacts
 
-class OverlapFinder(object):
-    def __init__(self, S, T, align_params):
-        self.S, self.T, self.align_params = S, T, align_params
-        self.P = align.AlignProblem(
-            S=S, T=T, params=align_params,
-            align_type=align.ALIGN_GLOBAL,
-            S_min_idx=0, S_max_idx=0, T_min_idx=0, T_max_idx=0
-        )
 
-    def extend_one_way_once(self, segment, window, direction='fwd'):
-        """Helper method for extend_one_way."""
-        # avoid overflows
-        if direction == 'fwd':
-            window = min(window, min(
-                self.S.length - segment.idx_S - segment.len,
-                self.T.length - segment.idx_T - segment.len
-                )
-            )
-            self.P.S_min_idx = segment.idx_S + segment.len
-            self.P.T_min_idx = segment.idx_T + segment.len
-            self.P.S_max_idx = self.P.S_min_idx + window
-            self.P.T_max_idx = self.P.T_min_idx + window
-        elif direction == 'bwd':
-            window = min(window, min(segment.idx_S, segment.idx_T))
-            self.P.S_max_idx = segment.idx_S
-            self.P.T_max_idx = segment.idx_T
-            self.P.S_min_idx = self.P.S_max_idx - window
-            self.P.T_min_idx = self.P.T_max_idx - window
+    def score_gap(self, L):
+        if not L:
+            return 0
+        return self.P.params.gap_open_score + L*self.P.params.gap_extend_score
 
-        if window == 0:
-            return None, None
+    def extend_fwd_once(self, segment, window):
+        S_len, T_len = self._S_len(segment.tx), self._T_len(segment.tx)
+        self.P.type = align.ALIGN_START_ANCHORED
+        self.P.S_min_idx = segment.tx.idx_S + S_len
+        self.P.T_min_idx = segment.tx.idx_T + T_len
+        self.P.S_max_idx = self.P.S_min_idx + window
+        self.P.T_max_idx = self.P.T_min_idx + window
 
-        score = self.P.solve()
-        if direction == 'fwd':
-            segment = Segment(
-                len=segment.len + window,
-                id_S=segment.id_S, id_T=segment.id_T,
-                idx_S=segment.idx_S, idx_T=segment.idx_T,
-            )
-        elif direction == 'bwd':
-            segment = Segment(
-                len=segment.len + window,
-                id_S=segment.id_S, id_T=segment.id_T,
-                idx_S=segment.idx_S - window, idx_T=segment.idx_T - window,
-            )
-        return segment, score
+        _, score = self.P.solve()
+        transcript = self.P.traceback()
+        if transcript is None:
+            return None
 
-    def extend_one_way(self, segment, drop_threshold, direction='fwd'):
+        return Segment(id_S=segment.id_S, id_T=segment.id_T, tx=transcript)
+
+    def extend_bwd_once(self, segment, window):
+        self.P.type = align.ALIGN_END_ANCHORED
+        self.P.S_max_idx = segment.tx.idx_S
+        self.P.T_max_idx = segment.tx.idx_T
+        self.P.S_min_idx = self.P.S_max_idx - window
+        self.P.T_min_idx = self.P.T_max_idx - window
+
+        _, score = self.P.solve()
+        transcript = self.P.traceback()
+        if transcript is None:
+            return None
+
+        return Segment(id_S=segment.id_S, id_T=segment.id_T, tx=transcript)
+
+    def _S_len(self, transcript):
+        return sum([transcript.opseq.count(op) for op in 'DMS'])
+
+    def _T_len(self, transcript):
+        return sum([transcript.opseq.count(op) for op in 'IMS'])
+
+    def extend1d(self, segment, drop_threshold, max_succ_drops=3, backwards=False):
         """Extends a given segment (presumably maximally-exactly-matching) in
         the given direction (fwd or bwd). Extension is done by repeatedly
         performing global alignments on a rolling window along the two sequences
         and stopping once a decrease in score is observed for a certain number
         of times"""
-        assert(direction in ['fwd', 'bwd'])
-        window = segment.len
+        print segment
+        window = min(self._S_len(segment.tx), self._T_len(segment.tx)) * 2
         cur_seg, cur_score = segment, 0
-        while cur_score >= drop_threshold:
-            offset = 0
-            seg, score  = self.extend_one_way_once(cur_seg, window, direction=direction)
-            if seg is None:
+        score_history = [segment.tx.score]
+        while True:
+            if backwards:
+                w = min(window, min(cur_seg.tx.idx_S, cur_seg.tx.idx_T))
+            else:
+                S_wiggle = self.S.length - (cur_seg.tx.idx_S + self._S_len(cur_seg.tx))
+                T_wiggle = self.T.length - (cur_seg.tx.idx_T + self._T_len(cur_seg.tx))
+                w = min(window, min(S_wiggle, T_wiggle))
+
+            if w == 0:
                 # hit the end:
-                return cur_seg, cur_score
-            cur_score += score
+                return cur_seg
+
+            if backwards:
+                seg = self.extend_bwd_once(cur_seg, w)
+            else:
+                seg = self.extend_fwd_once(cur_seg, w)
+
+            if seg is None:
+                break
+
+            score_history += [seg.tx.score]
+            if len(score_history) > max_succ_drops:
+                score_history = score_history[-max_succ_drops:]
+            if all([x <= drop_threshold for x in score_history]):
+                break
+
             cur_seg = seg
 
-        return None, None
+        return None
 
     def extend(self, segments, drop_threshold):
         """Given a number of matching segments for the two sequences finds all
         extended matching gap containing segments by repeatedly aligning a
         rolling frame along the two sequences and dropping a segment once it
         is observed to not be a high-scoring overlap alignment"""
-        scores_by_segment = {}
+        res = []
         for segment in segments:
-            self.P.S_min_idx, self.P.T_min_idx = segment.idx_S, segment.idx_T
-            core_score = self.P.score('B' + 'M'*segment.len)
+            self.P.S_min_idx, self.P.T_min_idx = segment.tx.idx_S, segment.tx.idx_T
+            core_score = self.P.score(segment.tx.opseq)
             window = len(segment)
-            fwd_extended, fwd_score = self.extend_one_way(segment, drop_threshold, 'fwd')
-            bwd_extended, bwd_score = self.extend_one_way(segment, drop_threshold, 'bwd')
-            if fwd_extended and bwd_extended and fwd_score + bwd_score > drop_threshold:
-                segment = Segment(
-                    id_S=segment.id_S, id_T=segment.id_T,
-                    idx_S=bwd_extended.idx_S,
-                    idx_T=bwd_extended.idx_T,
-                    len=bwd_extended.len + fwd_extended.len - segment.len
+            fwd = self.extend1d(segment, drop_threshold)
+            bwd = self.extend1d(segment, drop_threshold, backwards=True)
+            if fwd and bwd and fwd.tx.score + bwd.tx.score > drop_threshold:
+                tx = align.Transcript(
+                    idx_S=bwd.tx.idx_S, idx_T=bwd.tx.idx_T,
+                    score=core_score + bwd.tx.score + fwd.tx.score,
+                    opseq=bwd.tx.opseq[:-len(segment.tx.opseq)] + segment.tx.opseq + fwd.tx.opseq
                 )
-                assert(segment.idx_S == 0 or segment.idx_T == 0)
-                scores_by_segment[segment] = fwd_score + bwd_score + core_score
-        return sorted(scores_by_segment.items(), key=lambda x: x[1], reverse=True)
+                assert(bwd.tx.idx_S == 0 or bwd.tx.idx_T == 0)
+                res += [Segment(id_S=segment.id_S, id_T=segment.id_T, tx=tx)]
+        return sorted(res, key=lambda s: s.tx.score, reverse=True)

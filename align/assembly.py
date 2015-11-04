@@ -36,8 +36,8 @@ def overlap_graph_by_tuple_extension(tuplesdb, align_params, drop_threshold):
             G.add_node(seqids[idx_of_T])
             S = tuplesdb.loadseq(seqids[idx_of_S])
             T = tuplesdb.loadseq(seqids[idx_of_T])
-            F = tuples.OverlapFinder(S, T, align_params)
-            exacts = tuplesdb.exactly_matching_segments(
+            F = tuples.OverlapFinder(S, T, align_params, tuplesdb=tuplesdb)
+            exacts = F.exactly_matching_segments(
                 seqids[idx_of_S], seqids[idx_of_T]
             )
             if not exacts:
@@ -45,11 +45,11 @@ def overlap_graph_by_tuple_extension(tuplesdb, align_params, drop_threshold):
             segments = F.extend(exacts, drop_threshold)
             if not segments:
                 continue
-            overlap, score = segments[0]
-            if overlap.idx_T == 0:
-                G.add_edge(seqids[idx_of_S], seqids[idx_of_T], score=score)
-            if overlap.idx_S == 0:
-                G.add_edge(seqids[idx_of_T], seqids[idx_of_S], score=score)
+            overlap = segments[0]
+            if overlap.tx.idx_T == 0:
+                G.add_edge(seqids[idx_of_S], seqids[idx_of_T], score=overlap.tx.score)
+            if overlap.tx.idx_S == 0:
+                G.add_edge(seqids[idx_of_T], seqids[idx_of_S], score=overlap.tx.score)
     return G
 
 def overlap_graph_by_known_order(tuplesdb):

@@ -53,6 +53,7 @@ def create_example(db):
     B.index()
 
 def overlap_by_tuple_extension(db, path):
+    show_params()
     B = tuples.TuplesDB(db, wordlen=params['wordlen'], alphabet=A)
     G = assembly.overlap_graph_by_tuple_extension(B, C, params['drop_threshold'])
     assembly.save_overlap_graph(G, path)
