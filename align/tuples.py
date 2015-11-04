@@ -278,7 +278,6 @@ class OverlapFinder(object):
         performing global alignments on a rolling window along the two sequences
         and stopping once a decrease in score is observed for a certain number
         of times"""
-        print segment
         window = min(self._S_len(segment.tx), self._T_len(segment.tx)) * 2
         cur_seg, cur_score = segment, 0
         score_history = [segment.tx.score]
