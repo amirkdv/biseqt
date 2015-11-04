@@ -51,4 +51,4 @@ align_dp_cell* solve(align_dp_cell** P, align_problem* def);
 align_dp_cell* find_optimal(align_dp_cell** P, align_problem* def);
 char* traceback(align_dp_cell** P, align_problem* def, align_dp_cell* end);
 int* idxseq_from_charseq(sequence_alphabet* alphabet, char* sequence, int length);
-void free_dp_table(align_problem* def, align_dp_cell** P);
+void free_dp_table(align_dp_cell** P, int size);
