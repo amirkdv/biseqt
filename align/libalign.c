@@ -350,6 +350,10 @@ char *traceback(align_dp_cell** P, align_problem* def, align_dp_cell* end) {
     }
     curr = P[idx_S][idx_T];
   }
+  if (pos == len - 2) {
+    // empty opseq
+    return NULL;
+  }
   // build the info string: "(<idx_S>,<idx_T>),<score>:"
   infolen = 8; // for "(,),:" and the 2 decimal points
   if (idx_S + def->S_min_idx > 0 ) {
