@@ -24,6 +24,8 @@ align_dp_cell** define(align_problem* def) {
     printf("Failed to allocate memory.\n");
     return NULL;
   }
+  // We need an additional row/col in the beginning. Table indices are therefore
+  // exactly one ahead of subproblem indices.
   for (int i = 0; i < n+1; i++) {
     P[i] = malloc((m+1) * sizeof(align_dp_cell));
     if (P[i] == NULL) {
@@ -35,6 +37,21 @@ align_dp_cell** define(align_problem* def) {
     }
   }
   return P;
+}
+
+
+/**
+ * Frees the allocated memory for a given alignment problem so that we can reuse
+ * the same align_problem* over and over.
+ */
+void free_dp_table(align_problem* def, align_dp_cell** P) {
+  if (P == NULL) {
+    return;
+  }
+  for (int i = 0; i < def->S_max_idx - def->S_min_idx + 1; i++) {
+    free(P[i]);
+  }
+  free(P);
 }
 
 /**

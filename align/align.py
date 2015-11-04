@@ -148,6 +148,7 @@ class AlignProblem(CffiObject):
             'type': align_type,
             'params': params.c_obj
         })
+        self.c_dp_table = ffi.NULL;
         global lib
 
     def score(self, opseq):
@@ -167,6 +168,8 @@ class AlignProblem(CffiObject):
         :returns: a transcript string with the specified format.
         """
         global lib
+        if self.c_dp_table != ffi.NULL:
+            lib.free_dp_table(self.c_obj, self.c_dp_table)
         #print 'S range: %d, %d' % (self.S_min_idx, self.S_max_idx)
         #print 'T range: %d, %d' % (self.T_min_idx, self.T_max_idx)
         self.c_dp_table = lib.define(self.c_obj)
@@ -184,8 +187,6 @@ class AlignProblem(CffiObject):
             self.opt = None
             return None, None
         score = self.opt.choices[0].score
-        # TODO how do I do this?
-        # lib.free(self.c_dp_table)
         return self.opt, score
 
     def traceback(self):
