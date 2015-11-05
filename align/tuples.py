@@ -239,8 +239,7 @@ class OverlapFinder(object):
         return self.align_params.gap_open_score + L*self.align_params.gap_extend_score
 
     def extend_fwd_once(self, segment, window):
-        #print 'fwd (window=%d): %s' % (window, segment)
-        S_len, T_len = self._S_len(segment.tx), self._T_len(segment.tx)
+        S_len, T_len = self._S_len(segment.tx.opseq), self._T_len(segment.tx.opseq)
         kw = self.align_problem_kw
         kw.update({
             'S_min_idx': segment.tx.idx_S + S_len,
@@ -255,14 +254,18 @@ class OverlapFinder(object):
             score = P.solve()
             assert(score is not None)
             transcript = P.traceback()
-            #transcript.pretty_print(self.S, self.T, sys.stdout)
             if transcript is None:
                 return None
 
-        return Segment(id_S=segment.id_S, id_T=segment.id_T, tx=transcript)
+        tx = align.Transcript(
+            idx_S=segment.tx.idx_S,
+            idx_T=segment.tx.idx_T,
+            score=segment.tx.score + transcript.score,
+            opseq=segment.tx.opseq + transcript.opseq
+        )
+        return Segment(id_S=segment.id_S, id_T=segment.id_T, tx=tx)
 
     def extend_bwd_once(self, segment, window):
-        #print 'bwd (window=%d): %s' % (window, segment)
         kw = self.align_problem_kw
         kw.update({
             'S_max_idx': segment.tx.idx_S,
@@ -277,17 +280,22 @@ class OverlapFinder(object):
             score = P.solve()
             assert(score is not None)
             transcript = P.traceback()
-            #transcript.pretty_print(self.S, self.T, sys.stdout)
             if transcript is None:
                 return None
 
-        return Segment(id_S=segment.id_S, id_T=segment.id_T, tx=transcript)
+        tx = align.Transcript(
+            idx_S=transcript.idx_S,
+            idx_T=transcript.idx_T,
+            score=transcript.score + segment.tx.score,
+            opseq=transcript.opseq + segment.tx.opseq
+        )
+        return Segment(id_S=segment.id_S, id_T=segment.id_T, tx=tx)
 
-    def _S_len(self, transcript):
-        return sum([transcript.opseq.count(op) for op in 'DMS'])
+    def _S_len(self, opseq):
+        return sum([opseq.count(op) for op in 'DMS'])
 
-    def _T_len(self, transcript):
-        return sum([transcript.opseq.count(op) for op in 'IMS'])
+    def _T_len(self, opseq):
+        return sum([opseq.count(op) for op in 'IMS'])
 
     def extend1d(self, segment, drop_threshold, max_succ_drops=3, backwards=False):
         """Extends a given segment (presumably maximally-exactly-matching) in
@@ -295,15 +303,15 @@ class OverlapFinder(object):
         performing global alignments on a rolling window along the two sequences
         and stopping once a decrease in score is observed for a certain number
         of times"""
-        window = min(self._S_len(segment.tx), self._T_len(segment.tx)) * 2
+        window = min(self._S_len(segment.tx.opseq), self._T_len(segment.tx.opseq)) * 2
         cur_seg = segment
         score_history = [segment.tx.score]
         while True:
             if backwards:
                 w = min(window, min(cur_seg.tx.idx_S, cur_seg.tx.idx_T))
             else:
-                S_wiggle = self.S.length - (cur_seg.tx.idx_S + self._S_len(cur_seg.tx))
-                T_wiggle = self.T.length - (cur_seg.tx.idx_T + self._T_len(cur_seg.tx))
+                S_wiggle = self.S.length - (cur_seg.tx.idx_S + self._S_len(cur_seg.tx.opseq))
+                T_wiggle = self.T.length - (cur_seg.tx.idx_T + self._T_len(cur_seg.tx.opseq))
                 w = min(window, min(S_wiggle, T_wiggle))
 
             if w == 0:
@@ -319,7 +327,7 @@ class OverlapFinder(object):
                 # no non-empty alignment found.
                 break
 
-            score_history += [seg.tx.score]
+            score_history += [seg.tx.score - segment.tx.score]
             if len(score_history) > max_succ_drops:
                 score_history = score_history[-max_succ_drops:]
             if all([x <= drop_threshold for x in score_history]):
@@ -336,19 +344,22 @@ class OverlapFinder(object):
         is observed to not be a high-scoring overlap alignment"""
         res = []
         for segment in segments:
-            core_score = self.align_params.score(
-                self.S, self.T, segment.tx.opseq,
-                S_min_idx=segment.tx.idx_S, T_min_idx=segment.tx.idx_T
-            )
             window = len(segment)
             fwd = self.extend1d(segment, drop_threshold)
             bwd = self.extend1d(segment, drop_threshold, backwards=True)
             if fwd and bwd and fwd.tx.score + bwd.tx.score > drop_threshold:
-                tx = align.Transcript(
-                    idx_S=bwd.tx.idx_S, idx_T=bwd.tx.idx_T,
-                    score=core_score + bwd.tx.score + fwd.tx.score,
-                    opseq=bwd.tx.opseq[:-len(segment.tx.opseq)] + segment.tx.opseq + fwd.tx.opseq
-                )
                 assert(bwd.tx.idx_S == 0 or bwd.tx.idx_T == 0)
+                opseq = bwd.tx.opseq[:-len(segment.tx.opseq)] + fwd.tx.opseq
+                score = self.align_params.score(
+                    self.S, self.T, opseq,
+                    S_min_idx=bwd.tx.idx_S,
+                    T_min_idx=bwd.tx.idx_T
+                )
+                tx = align.Transcript(
+                    idx_S=bwd.tx.idx_S,
+                    idx_T=bwd.tx.idx_T,
+                    score=score,
+                    opseq=opseq
+                )
                 res += [Segment(id_S=segment.id_S, id_T=segment.id_T, tx=tx)]
         return sorted(res, key=lambda s: s.tx.score, reverse=True)

@@ -29,6 +29,7 @@ def overlap_graph_by_tuple_extension(tuplesdb, align_params, drop_threshold):
     seqids = tuplesdb.seqids()
     for idx_of_S in range(len(seqids)):
         for idx_of_T in range(idx_of_S + 1, len(seqids)):
+            print idx_of_S+1, idx_of_T+1
             G.add_node(seqids[idx_of_S])
             G.add_node(seqids[idx_of_T])
             S = tuplesdb.loadseq(seqids[idx_of_S])
@@ -63,11 +64,14 @@ def overlap_graph_by_known_order(tuplesdb):
     return G
 
 
-def save_overlap_graph(G, path, figsize=(50,50)):
+def save_overlap_graph(G, path, figsize=None):
     pos = nx.circular_layout(G)
+    if figsize is None:
+        n = G.number_of_nodes()
+        figsize = (n*5,n*5)
     plt.figure(figsize=figsize)
     nx.draw_networkx_nodes(G, pos, node_size=10000, node_color='w')
-    nx.draw_networkx_labels(G, pos, font_size=50)
+    nx.draw_networkx_labels(G, pos, font_size=100)
     nx.draw_networkx_edges(G, pos, width=5)
     edge_data = G.edges(data=True)
     if edge_data and 'score' in edge_data[0][2]:

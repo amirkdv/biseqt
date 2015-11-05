@@ -132,9 +132,8 @@ class AlignProblem(CffiObject):
     def __init__(self, S=None, T=None, params=None, align_type=ALIGN_GLOBAL,
         S_min_idx=0, T_min_idx=0, S_max_idx=None, T_max_idx=None):
 
-        # protect against index overflows
-        S_max_idx = S.length if S_max_idx else S.length
-        T_max_idx = T.length if T_max_idx else T.length
+        S_max_idx = S.length if S_max_idx is None else S_max_idx
+        T_max_idx = T.length if T_max_idx is None else T_max_idx
         assert(S_max_idx <= S.length)
         assert(T_max_idx <= T.length)
 
@@ -295,8 +294,8 @@ class Transcript(object):
 
         # The pre margin:
         pre_margin = min(margin, max(idx_S, idx_T))
-        sline = 'S[%d]: ' % max(0, idx_S - pre_margin)
-        tline = 'T[%d]: ' % max(0, idx_T - pre_margin)
+        sline = 'S[%d]: ' % idx_S
+        tline = 'T[%d]: ' % idx_T
         counter = max(len(sline), len(tline))
         for i in reversed(range(1, pre_margin)):
             if counter >= width:
