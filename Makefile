@@ -25,10 +25,8 @@ overlap_align.svg:
 overlap_tuple.svg:
 	python -c 'import align.tests.assembly as T; T.overlap_by_tuple_extension("genome.db", "$@")'
 
-overlap_true.svg:
-	python -c 'import align.tests.assembly as T; T.overlap_by_known_order("genome.db", "$@")'
-
 genome.db: align/libalign.so
 	python -c 'import align.tests.assembly as T; T.create_example("$@")'
+	python -c 'import align.tests.assembly as T; T.overlap_by_known_order("genome.db", "overlap_true.svg")'
 
 .PHONY: clean tests *.svg
