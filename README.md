@@ -117,6 +117,13 @@ on tuple methods (see `make genome.db overlap_tuple.svg`).
 * support hompolymeric-specific indel parameters in random generation
   of genome sequencing reads (cf. [`seq.Sequence.randread()`](/align/seq.py))
 * implement an ungapped seed expansion phase (cf. [`tuples.OverlapFinder.expand()`](/align/tuples.py)).
+* move seed expansion from Python to C.
+* adapt Karlin-Altschul statistics (references:
+  [[1]](http://www.pnas.org/content/87/6/2264.full.pdf),
+  [[2]](https://publications.mpi-cbg.de/Altschul_1990_5424.pdf),
+  [[3]](http://www.jstor.org/stable/1427732?seq=1#page_scan_tab_contents), and
+  chap. 7-9 [[4]](https://books.google.ca/books?id=uZvlBwAAQBAJ)) to the
+  alignment problem of assembly.
 * better [tests](/tests).
 * support [Hirschberg](https://en.wikipedia.org/wiki/Hirschberg's_algorithm)-style
   linear space optimization (cf. [`libalign::solve()` and `libalign::tracback()`](/align/libalign.c)).
