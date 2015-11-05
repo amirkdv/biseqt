@@ -175,11 +175,12 @@ class OverlapFinder(object):
     def __init__(self, S, T, align_params, tuplesdb=None):
         self.tuplesdb = tuplesdb
         self.S, self.T, self.align_params = S, T, align_params
-        self.P = align.AlignProblem(
-            S=S, T=T, params=align_params,
-            align_type=align.ALIGN_START_ANCHORED,
-            S_min_idx=0, S_max_idx=0, T_min_idx=0, T_max_idx=0
-        )
+        self.align_problem_kw = {
+            'S': self.S,
+            'T': self.T,
+            'params': self.align_params,
+            'align_type': align.ALIGN_GLOBAL,
+        }
 
     def exactly_matching_segments(self, s1, s2):
         """Given two seqids, finds all maximal exactly matching segments between
@@ -235,40 +236,50 @@ class OverlapFinder(object):
     def score_gap(self, L):
         if not L:
             return 0
-        return self.P.params.gap_open_score + L*self.P.params.gap_extend_score
+        return self.align_params.gap_open_score + L*self.align_params.gap_extend_score
 
     def extend_fwd_once(self, segment, window):
+        #print 'fwd (window=%d): %s' % (window, segment)
         S_len, T_len = self._S_len(segment.tx), self._T_len(segment.tx)
-        self.P.type = align.ALIGN_START_ANCHORED
-        self.P.S_min_idx = segment.tx.idx_S + S_len
-        self.P.T_min_idx = segment.tx.idx_T + T_len
-        self.P.S_max_idx = self.P.S_min_idx + window
-        self.P.T_max_idx = self.P.T_min_idx + window
+        kw = self.align_problem_kw
+        kw.update({
+            'S_min_idx': segment.tx.idx_S + S_len,
+            'T_min_idx': segment.tx.idx_T + T_len,
+        })
+        kw.update({
+            'S_max_idx': kw['S_min_idx'] + window,
+            'T_max_idx': kw['T_min_idx'] + window
+        })
 
-        score = self.P.solve()
-        if score is None:
-            return None
-
-        transcript = self.P.traceback()
-        if transcript is None:
-            return None
+        with align.AlignProblem(**kw) as P:
+            score = P.solve()
+            assert(score is not None)
+            transcript = P.traceback()
+            #transcript.pretty_print(self.S, self.T, sys.stdout)
+            if transcript is None:
+                return None
 
         return Segment(id_S=segment.id_S, id_T=segment.id_T, tx=transcript)
 
     def extend_bwd_once(self, segment, window):
-        self.P.type = align.ALIGN_END_ANCHORED
-        self.P.S_max_idx = segment.tx.idx_S
-        self.P.T_max_idx = segment.tx.idx_T
-        self.P.S_min_idx = self.P.S_max_idx - window
-        self.P.T_min_idx = self.P.T_max_idx - window
+        #print 'bwd (window=%d): %s' % (window, segment)
+        kw = self.align_problem_kw
+        kw.update({
+            'S_max_idx': segment.tx.idx_S,
+            'T_max_idx': segment.tx.idx_T,
+        })
+        kw.update({
+            'S_min_idx': kw['S_max_idx'] - window,
+            'T_min_idx': kw['T_max_idx'] - window
+        })
 
-        score = self.P.solve()
-        if score is None:
-            return None
-
-        transcript = self.P.traceback()
-        if transcript is None:
-            return None
+        with align.AlignProblem(**kw) as P:
+            score = P.solve()
+            assert(score is not None)
+            transcript = P.traceback()
+            #transcript.pretty_print(self.S, self.T, sys.stdout)
+            if transcript is None:
+                return None
 
         return Segment(id_S=segment.id_S, id_T=segment.id_T, tx=transcript)
 
@@ -285,7 +296,7 @@ class OverlapFinder(object):
         and stopping once a decrease in score is observed for a certain number
         of times"""
         window = min(self._S_len(segment.tx), self._T_len(segment.tx)) * 2
-        cur_seg, cur_score = segment, 0
+        cur_seg = segment
         score_history = [segment.tx.score]
         while True:
             if backwards:
@@ -305,6 +316,7 @@ class OverlapFinder(object):
                 seg = self.extend_fwd_once(cur_seg, w)
 
             if seg is None:
+                # no non-empty alignment found.
                 break
 
             score_history += [seg.tx.score]
@@ -324,8 +336,10 @@ class OverlapFinder(object):
         is observed to not be a high-scoring overlap alignment"""
         res = []
         for segment in segments:
-            self.P.S_min_idx, self.P.T_min_idx = segment.tx.idx_S, segment.tx.idx_T
-            core_score = self.P.score(segment.tx.opseq)
+            core_score = self.align_params.score(
+                self.S, self.T, segment.tx.opseq,
+                S_min_idx=segment.tx.idx_S, T_min_idx=segment.tx.idx_T
+            )
             window = len(segment)
             fwd = self.extend1d(segment, drop_threshold)
             bwd = self.extend1d(segment, drop_threshold, backwards=True)

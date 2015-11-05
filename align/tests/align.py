@@ -34,11 +34,10 @@ T, m_opseq = S.mutate(go_prob=params['go_prob'], ge_prob=params['ge_prob'],
     subst_probs=params['subst_probs'])
 C = align.AlignParams(subst_scores=subst_scores, alphabet=A,
     go_score=go_score, ge_score=ge_score, max_diversion=params['band'])
-P = align.AlignProblem(S=S, T=T, params=C,
-    align_type=params['type'])
-score = P.solve(print_dp_table=params['show_dp'])
-transcript = P.traceback()
-print 'optimal alignment has score %.2f' % score
+with align.AlignProblem(S=S, T=T, params=C, align_type=params['type']) as P:
+    score = P.solve(print_dp_table=params['show_dp'])
+    transcript = P.traceback()
+    print 'optimal alignment has score %.2f' % score
 
 print '\n--> optimal alignment:\n%s\n' % str(transcript)
 if transcript:

@@ -13,18 +13,15 @@ def overlap_graph_by_alignment(tuplesdb, align_params, min_score=80):
             G.add_node(seqids[idx_of_T])
             S = tuplesdb.loadseq(seqids[idx_of_S])
             T = tuplesdb.loadseq(seqids[idx_of_T])
-            P = align.AlignProblem(
-                S=S, T=T,
-                params=align_params,
-                align_type=align.ALIGN_OVERLAP
-            )
-            score = P.solve()
-            if score >= min_score:
-                transcript = P.traceback()
-                if transcript.idx_T == 0:
-                    G.add_edge(seqids[idx_of_S], seqids[idx_of_T], score=score)
-                if transcript.idx_S == 0:
-                    G.add_edge(seqids[idx_of_T], seqids[idx_of_S], score=score)
+            with align.AlignProblem(S=S, T=T, params=align_params,
+                align_type=align.ALIGN_OVERLAP) as P:
+                score = P.solve()
+                if score >= min_score:
+                    transcript = P.traceback()
+                    if transcript.idx_T == 0:
+                        G.add_edge(seqids[idx_of_S], seqids[idx_of_T], score=score)
+                    if transcript.idx_S == 0:
+                        G.add_edge(seqids[idx_of_T], seqids[idx_of_S], score=score)
     return G
 
 def overlap_graph_by_tuple_extension(tuplesdb, align_params, drop_threshold):

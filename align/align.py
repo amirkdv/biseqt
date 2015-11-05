@@ -1,6 +1,7 @@
 from math import log
 import re
 from termcolor import colored
+from contextlib import contextmanager
 
 from . import ffi, lib, seq, CffiObject
 from .homopolymeric import hp_tokenize
@@ -138,9 +139,6 @@ class AlignProblem(CffiObject):
         assert(T_max_idx <= T.length)
 
         self.S, self.T, self.params, self.align_type = S, T, params, align_type
-        # we need to remember the size of the dynamically allocated matrix, so
-        # we know how much to free, everytime solve() is called.
-        self._c_dp_table_size = S_max_idx - S_min_idx + 1;
         self.c_obj = ffi.new('align_problem*', {
             'S': S.c_idxseq,
             'T': T.c_idxseq,
@@ -151,8 +149,20 @@ class AlignProblem(CffiObject):
             'type': align_type,
             'params': params.c_obj
         })
-        self.c_dp_table = ffi.NULL;
+
+    def __enter__(self):
+        """TODO"""
         global lib
+        self.c_dp_table = lib.init_dp_table(self.c_obj)
+        if self.c_dp_table == -1:
+            raise('Got -1 from align.define().')
+        self.c_dp_row_cnt = self.S_max_idx - self.S_min_idx + 1
+        self.c_dp_col_cnt = self.T_max_idx - self.T_min_idx + 1
+        return self
+
+    def __exit__(self, *args):
+        if self.c_dp_table not in [ffi.NULL, -1]:
+            lib.free_dp_table(self.c_dp_table, self.c_dp_row_cnt, self.c_dp_col_cnt)
 
     def score(self, opseq):
         """Calculates the score for an arbitray opseq. Opseqs are allowed to be
@@ -163,6 +173,7 @@ class AlignProblem(CffiObject):
         """
         return self.params.score(self.S, self.T, opseq, self.S_min_idx, self.T_min_idx)
 
+
     def solve(self, print_dp_table=False):
         """Populates the DP table and traces back an (any) optimal alignment.
 
@@ -170,14 +181,6 @@ class AlignProblem(CffiObject):
             fully calculated DP table.
         :returns: a transcript string with the specified format.
         """
-        global lib
-        if self.c_dp_table not in [ffi.NULL, -1]:
-            lib.free_dp_table(self.c_dp_table, self._c_dp_table_size)
-        self.c_dp_table = lib.define(self.c_obj)
-        if self.c_dp_table == -1:
-            raise('Got -1 from align.define().')
-        self._c_dp_table_size = self.S_max_idx - self.S_min_idx + 1
-
         self.opt = lib.solve(self.c_dp_table, self.c_obj)
         if print_dp_table:
             mat = self.dp_table
@@ -196,7 +199,9 @@ class AlignProblem(CffiObject):
         raw_transcript = lib.traceback(self.c_dp_table, self.c_obj, self.opt)
         if raw_transcript == ffi.NULL:
             return None
-        return Transcript(raw_transcript=ffi.string(raw_transcript))
+        tx = Transcript(raw_transcript=ffi.string(raw_transcript))
+        lib.free(raw_transcript)
+        return tx
 
     def __getattr__(self, name):
         """Allow attributes to access members of the underlying `align_problem`
@@ -214,15 +219,6 @@ class AlignProblem(CffiObject):
             return [[score(i,j) for j in j_idx] for i in i_idx]
         else:
             return super(AlignProblem, self).__getattr__(name)
-
-    def __setattr__(self, name, value):
-        """TODO
-        """
-        if name in ['S_min_idx', 'S_max_idx', 'T_min_idx', 'T_max_idx', 'type']:
-            setattr(self.c_obj, name, value)
-        else:
-            return super(AlignProblem, self).__setattr__(name, value)
-
 
 # TODO make this a namedtuple as well
 class Transcript(object):

@@ -16,7 +16,7 @@
  *
  * @return align_dp_cell**: pointer to the malloced DP matrix.
  */
-align_dp_cell** define(align_problem* def) {
+align_dp_cell** init_dp_table(align_problem* def) {
   int n = def->S_max_idx - def->S_min_idx;
   int m = def->T_max_idx - def->T_min_idx;
   align_dp_cell** P = malloc((n+1) * sizeof(align_dp_cell *));
@@ -44,11 +44,17 @@ align_dp_cell** define(align_problem* def) {
  * Frees the allocated memory for a given alignment problem so that we can reuse
  * the same align_problem* over and over.
  */
-void free_dp_table(align_dp_cell** P, int size) {
+void free_dp_table(align_dp_cell** P, int row_cnt, int col_cnt) {
   if (P == NULL) {
     return;
   }
-  for (int i = 0; i < size; i++) {
+  int i,j;
+  for (i = 0; i < row_cnt; i++) {
+    for (j = 0; j < col_cnt; j++) {
+      if (P[i][j].num_choices > 0) {
+        free(P[i][j].choices);
+      }
+    }
     free(P[i]);
   }
   free(P);
@@ -65,8 +71,8 @@ align_dp_cell* solve(align_dp_cell** P, align_problem* def) {
   double max_score, prev_score, max_prev_score;
   int num_choices, max_prev_choice_idx, num_max_scores;
   int i,j,k;
-  int *max_score_alts;
-  align_choice *alts;
+  int *max_score_alts = NULL;
+  align_choice *alts = NULL;
   int s,t;
 
   // Base case
@@ -82,7 +88,6 @@ align_dp_cell* solve(align_dp_cell** P, align_problem* def) {
   P[0][0].choices[0].base = NULL;
 
   // Populate the table
-  int infocounter = 0;
   for (i = 0; i < n+1; i++) {
     for (j = 0; j < m+1; j++) {
       if (i == 0 && j == 0) {
@@ -92,6 +97,12 @@ align_dp_cell* solve(align_dp_cell** P, align_problem* def) {
       // Sane default so we can continue when a cell is not worth pursuing
       P[i][j].num_choices = 0;
 
+      if (alts != NULL) {
+        free(alts);
+      }
+      if (max_score_alts != NULL) {
+        free(max_score_alts);
+      }
       // Allocate for all 4 possible choices (B,M/S,I,D)
       alts = malloc(4 * sizeof(align_choice));
       if (alts == NULL) {
@@ -202,10 +213,6 @@ align_dp_cell* solve(align_dp_cell** P, align_problem* def) {
       if (num_choices == 0) {
         continue;
       }
-      infocounter ++;
-      if (infocounter % 1000 == 0) {
-        /*print_mem_usage();*/
-      }
 
       // indices of maximum choices in the `alts' array
       max_score_alts = malloc(num_choices * sizeof(int));
@@ -235,10 +242,10 @@ align_dp_cell* solve(align_dp_cell** P, align_problem* def) {
       for (k = 0; k < num_max_scores; k++) {
         P[i][j].choices[k] = alts[max_score_alts[k]];
       }
-      free(max_score_alts);
     }
   }
   free(alts);
+  free(max_score_alts);
   return find_optimal(P, def);
 }
 
@@ -373,15 +380,23 @@ char *traceback(align_dp_cell** P, align_problem* def, align_dp_cell* end) {
   }
   // build the info string: "(<idx_S>,<idx_T>),<score>:"
   infolen = 8; // for "(,),:" and the 2 decimal points
+  // add the space for S_min_idx and T_min_idx, default 0
+  infolen += 2;
   if (idx_S + def->S_min_idx > 0 ) {
-    infolen += (int)floor(log10(idx_S + def->S_min_idx)) + 1;
+    // if nonzero, we need this many more digits:
+    infolen += (int)floor(log10(idx_S + def->S_min_idx));
   }
   if (idx_T + def->T_min_idx > 0 ) {
-    infolen += (int)floor(log10(idx_T + def->T_min_idx)) + 1;
+    // potential additional digits for T_min_idx
+    infolen += (int)floor(log10(idx_T + def->T_min_idx));
   }
+  // add the space for the score, default 0.00
+  infolen += 3;
   if (end->choices[0].score != 0) {
-    infolen += (int)floor(log10(fabs(end->choices[0].score))) + 3;
+    // if nonzero we need this many more digits for the integer part:
+    infolen += (int)floor(log10(fabs(end->choices[0].score)));
     if (end->choices[0].score < 0) {
+      // for the negative sign
       infolen += 1;
     }
   }
@@ -394,6 +409,9 @@ char *traceback(align_dp_cell** P, align_problem* def, align_dp_cell* end) {
   transcript[len] = '\0';
   ret = malloc(infolen + len + 1);
   sprintf(ret, "%s%s", infostr, transcript);
+
+  free(infostr);
+  free(transcript);
   return ret;
 }
 

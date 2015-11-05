@@ -50,11 +50,10 @@ T_d = seq.Sequence(t_d, A_d)
 C = align.AlignParams(alphabet=A_d,subst_scores=scores,
     go_score=params['go_score'], ge_score=params['ge_score'],
     max_diversion=params['band'])
-P = align.AlignProblem(S=S_d, T=T_d, params=C,
-    align_type=params['type'])
-P.solve(print_dp_table=params['show_dp'])
-transcript_d = P.traceback()
-print "opseq score: %.2f" % P.score(opseq_d)
+with align.AlignProblem(S=S_d, T=T_d, params=C, align_type=params['type']) as P:
+    P.solve(print_dp_table=params['show_dp'])
+    transcript_d = P.traceback()
+    print "opseq score: %.2f" % P.score(opseq_d)
 
 if transcript_d:
     print '\n' + str(transcript_d) + '\n'
