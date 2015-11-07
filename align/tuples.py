@@ -152,24 +152,28 @@ class TuplesDB(object):
             for row in c:
                 return seq.Sequence(str(row[0]), self.alphabet)
 
-    def seqids(self, info=False):
+    def seqinfo(self):
+        """TODO
+        """
+        with sqlite3.connect(self.db) as conn:
+            c = conn.cursor()
+            c.execute("SELECT id, name, LENGTH(seq) FROM seq")
+            seqs = {}
+            for row in c:
+                seqs[row[0]] = {}
+                # see seq.make_sequencing_fixture()
+                seqs[row[0]]['name'], seqs[row[0]]['start'] = row[1].split('_')
+                seqs[row[0]]['start'] = int(seqs[row[0]]['start'][1:])
+                seqs[row[0]]['length'] = row[2]
+            return seqs
+
+    def seqids(self):
         """Returns a list of all seqids.
         """
         with sqlite3.connect(self.db) as conn:
             c = conn.cursor()
-            if info:
-                c.execute("SELECT id, description, LENGTH(seq) FROM seq")
-                seqs = {}
-                for row in c:
-                    seqs[row[0]] = {}
-                    seqs[row[0]]['description'] = row[1]
-                    seqs[row[0]]['length'] = row[2]
-                    # see seq.make_sequencing_fixture()
-                    seqs[row[0]]['start'] = int(re.split('\(|\)', row[1])[1].split(':')[1])
-                return seqs
-            else:
-                c.execute('SELECT id FROM seq')
-                return [row[0] for row in c]
+            c.execute('SELECT id FROM seq')
+            return [row[0] for row in c]
 
 class OverlapFinder(object):
     def __init__(self, S, T, align_params, tuplesdb=None):
