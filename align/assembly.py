@@ -132,7 +132,10 @@ def draw_graph(G, fname, figsize=None, path=[]):
 
 def compare_graphs(G1, G2, f):
     E1, E2 = set(G1.edges()), set(G2.edges())
-    diff = [('-', edge) for edge in E1 - E2] + [('+', edge) for edge in E2 - E1]
+    missing, added = E1 - E2, E2 - E1
+    f.write('G1 (%d edges) --> G2 (%d edges): %%%.2f lost, %%%.2f added\n' %
+        (len(E1), len(E2), len(missing)*100.0/len(E1), len(added)*100.0/len(E1)))
+    diff = [('-', edge) for edge in missing] + [('+', edge) for edge in added]
     N1 = nx.get_node_attributes(G1, 'name')
     N2 = nx.get_node_attributes(G2, 'name')
     for edge in sorted(diff, cmp=lambda x, y: cmp(x[1], y[1])):
