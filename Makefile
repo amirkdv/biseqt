@@ -43,4 +43,6 @@ $(TRUE_GRAPH).layout.pdf:
 $(DB): align/libalign.so
 	python -c 'import align.tests.assembly as T; T.create_example("$@")'
 
-.PHONY: clean tests *.gml *.pdf compare
+loc:
+	find . -type f -regex '.*\(\.py\|\.c\|\.h\)' | xargs wc -l
+.PHONY: clean tests *.gml *.pdf loc
