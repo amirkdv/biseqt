@@ -195,6 +195,6 @@ def make_sequencing_fixture(genome_file, reads_file, genome_length=1000, **kw):
     readrecs = []
     for idx, (read, start) in enumerate(G.randread(**kw)):
         readrecs += [
-            SeqRecord.SeqRecord(Seq.Seq(str(read)), id="R%d_P%d" % (idx+1, start))
+            SeqRecord.SeqRecord(Seq.Seq(str(read)), id="R%d_P%d" % (idx, start))
         ]
     SeqIO.write(readrecs, reads_file, 'fasta')
