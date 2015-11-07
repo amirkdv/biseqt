@@ -333,7 +333,9 @@ class OverlapFinder(object):
             score_history += [seg.tx.score - segment.tx.score]
             if len(score_history) > max_succ_drops:
                 score_history = score_history[-max_succ_drops:]
-            if all([x <= drop_threshold for x in score_history]):
+
+            if len(score_history) == max_succ_drops and \
+                all([x <= drop_threshold for x in score_history]):
                 break
 
             cur_seg = seg
@@ -349,7 +351,7 @@ class OverlapFinder(object):
         for segment in segments:
             fwd = self.extend1d(segment, drop_threshold)
             bwd = self.extend1d(segment, drop_threshold, backwards=True)
-            if fwd and bwd and fwd.tx.score + bwd.tx.score > drop_threshold:
+            if fwd and bwd and fwd.tx.score > drop_threshold and bwd.tx.score:
                 assert(bwd.tx.idx_S == 0 or bwd.tx.idx_T == 0)
                 opseq = bwd.tx.opseq[:-len(segment.tx.opseq)] + fwd.tx.opseq
                 score = self.align_params.score(
