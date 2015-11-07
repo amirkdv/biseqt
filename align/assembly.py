@@ -1,10 +1,13 @@
-from . import tuples
-from . import align
 import re
+import sys
 import networkx as nx
 import matplotlib.pyplot as plt
+from termcolor import colored
 
-def overlap_graph_by_alignment(tuplesdb, align_params, min_score=80):
+from . import tuples
+from . import align
+
+def overlap_graph_by_alignment(tuplesdb, align_params=None, min_score=80):
     G = nx.DiGraph()
     seqids = tuplesdb.seqids()
     for idx_of_S in range(len(seqids)):
@@ -24,58 +27,91 @@ def overlap_graph_by_alignment(tuplesdb, align_params, min_score=80):
                         G.add_edge(seqids[idx_of_T], seqids[idx_of_S], score=score)
     return G
 
-def overlap_graph_by_tuple_extension(tuplesdb, align_params, drop_threshold):
+def overlap_graph_by_tuple_extension(tuplesdb, align_params=None, window=20,
+    drop_threshold=None):
     G = nx.DiGraph()
-    seqids = tuplesdb.seqids()
-    for idx_of_S in range(len(seqids)):
-        for idx_of_T in range(idx_of_S + 1, len(seqids)):
-            print idx_of_S+1, idx_of_T+1
-            G.add_node(seqids[idx_of_S])
-            G.add_node(seqids[idx_of_T])
-            S = tuplesdb.loadseq(seqids[idx_of_S])
-            T = tuplesdb.loadseq(seqids[idx_of_T])
+    seqinfo = tuplesdb.seqinfo()
+    seqids = seqinfo.keys()
+    sys.stdout.write('finding adjacent reads for sequence: ')
+    for sid_idx in range(len(seqids)):
+        sys.stdout.write('%d ' % seqids[sid_idx])
+        sys.stdout.flush()
+        for tid_idx in range(sid_idx + 1, len(seqids)):
+            S_id, T_id = seqids[sid_idx], seqids[tid_idx]
+            S_info, T_info = seqinfo[S_id], seqinfo[T_id]
+            S_name = '%s_P%d' % (S_info['name'], S_info['start'])
+            T_name = '%s_P%d' % (T_info['name'], T_info['start'])
+            G.add_node(S_id, name=S_name)
+            G.add_node(T_id, name=T_name)
+
+            # do they overlap?
+            S, T = tuplesdb.loadseq(S_id), tuplesdb.loadseq(T_id)
             F = tuples.OverlapFinder(S, T, align_params, tuplesdb=tuplesdb)
-            exacts = F.exactly_matching_segments(
-                seqids[idx_of_S], seqids[idx_of_T]
-            )
+            exacts = F.exactly_matching_segments(S_id, T_id)
             if not exacts:
                 continue
-            segments = F.extend(exacts, drop_threshold)
+            segments = F.extend(exacts, window=window, drop_threshold=drop_threshold)
             if not segments:
                 continue
             overlap = segments[0]
             if overlap.tx.idx_T == 0:
-                G.add_edge(seqids[idx_of_S], seqids[idx_of_T], score=overlap.tx.score)
+                G.add_edge(S_id, T_id, score=overlap.tx.score)
             if overlap.tx.idx_S == 0:
-                G.add_edge(seqids[idx_of_T], seqids[idx_of_S], score=overlap.tx.score)
+                G.add_edge(T_id, S_id, score=overlap.tx.score)
+
+    sys.stdout.write('\n')
     return G
 
 def overlap_graph_by_known_order(tuplesdb):
     G = nx.DiGraph()
-    seqs = tuplesdb.seqids(info=True)
-    for sid in seqs:
-        for tid in seqs:
-            if sid == tid:
-                continue
-            overlap = seqs[sid]['start'] + seqs[sid]['length'] - seqs[tid]['start']
-            if seqs[tid]['start'] >= seqs[sid]['start'] and overlap > 0:
-                G.add_edge(sid, tid, score=overlap)
+    seqinfo = tuplesdb.seqinfo()
+    seqids = seqinfo.keys()
+    for sid_idx in range(len(seqids)):
+        for tid_idx in range(sid_idx + 1, len(seqids)):
+            S_id, T_id = seqids[sid_idx], seqids[tid_idx]
+            S_info, T_info = seqinfo[S_id], seqinfo[T_id]
+            S_name = '%s_P%d' % (S_info['name'], S_info['start'])
+            T_name = '%s_P%d' % (T_info['name'], T_info['start'])
+            G.add_node(S_id, name=S_name)
+            G.add_node(T_id, name=T_name)
+            intersect_min = max(S_info['start'], T_info['start'])
+            intersect_max = min(S_info['start'] + S_info['length'], T_info['start'] + T_info['length'])
+            if intersect_min < intersect_max:
+                overlap = intersect_max - intersect_min
+                if S_info['start'] <= T_info['start']:
+                    G.add_edge(S_id, T_id, score=overlap)
+                if S_info['start'] >= T_info['start']:
+                    G.add_edge(T_id, S_id, score=overlap)
 
     return G
 
+def save_graph(G, path):
+    nx.write_gml(G, path)
 
-def save_overlap_graph(G, path, figsize=None):
+def draw_graph(G, path, figsize=None):
     pos = nx.circular_layout(G)
     if figsize is None:
         n = G.number_of_nodes()
         figsize = (n*5,n*5)
     plt.figure(figsize=figsize)
-    nx.draw_networkx_nodes(G, pos, node_size=10000, node_color='w')
-    nx.draw_networkx_labels(G, pos, font_size=100)
+    nx.draw_networkx_nodes(G, pos, node_size=30000, node_color='w')
+    nx.draw_networkx_labels(G, pos, nx.get_node_attributes(G, 'name'), font_size=30) # node labels
     nx.draw_networkx_edges(G, pos, width=5)
     edge_data = G.edges(data=True)
     if edge_data and 'score' in edge_data[0][2]:
-        nx.draw_networkx_edge_labels(G, pos, font_size=26, edge_labels={(f,t):'%.2f' % a['score'] for f,t,a in edge_data})
+        nx.draw_networkx_edge_labels(G, pos, font_size=26,
+            edge_labels={(f,t):'%.2f' % a['score'] for f,t,a in edge_data})
     plt.xticks([])
     plt.yticks([])
     plt.savefig(path, bbox_inches='tight')
+
+def compare_graphs(G1, G2, f):
+    E1, E2 = set(G1.edges()), set(G2.edges())
+    diff = [('-', edge) for edge in E1 - E2] + [('+', edge) for edge in E2 - E1]
+    for edge in sorted(diff, cmp=lambda x, y: cmp(x[1], y[1])):
+        if edge[0] == '-':
+            line = '- [%d]--(%.2f)-->[%d]\n' % (edge[1][0], G1.get_edge_data(*edge[1])['score'], edge[1][1])
+            f.write(colored(line, color='red'))
+        else:
+            line = '+ [%d]--(%.2f)-->[%d]\n' % (edge[1][0], G2.get_edge_data(*edge[1])['score'], edge[1][1])
+            f.write(colored(line, color='green'))

@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 import sys
 import os
+import networkx as nx
 
 from .. import align, tuples, seq, assembly
 
@@ -56,15 +57,15 @@ def create_example(db):
 def overlap_by_tuple_extension(db, path):
     show_params()
     B = tuples.TuplesDB(db, wordlen=params['wordlen'], alphabet=A)
-    G = assembly.overlap_graph_by_tuple_extension(B, C, params['drop_threshold'])
-    assembly.save_overlap_graph(G, path)
-
-def overlap_by_alignment(db, path):
-    B = tuples.TuplesDB(db, wordlen=params['wordlen'], alphabet=A)
-    G = assembly.overlap_graph_by_alignment(B, C, min_score=params['min_align_score'])
-    assembly.save_overlap_graph(G, path)
+    G = assembly.overlap_graph_by_tuple_extension(B, align_params=C, window=params['window'], drop_threshold=params['drop_threshold'])
+    assembly.save_graph(G, path)
 
 def overlap_by_known_order(db, path):
     B = tuples.TuplesDB(db, wordlen=params['wordlen'], alphabet=A)
     G = assembly.overlap_graph_by_known_order(B)
-    assembly.save_overlap_graph(G, path)
+    assembly.save_graph(G, path)
+
+def compare_results(true_overlap, overlap):
+    G1 = nx.read_gml(true_overlap)
+    G2 = nx.read_gml(overlap)
+    assembly.compare_graphs(G1, G2, sys.stdout)

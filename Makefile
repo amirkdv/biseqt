@@ -1,4 +1,7 @@
 GCC = gcc -shared -Wall -fPIC -std=c99 -g
+TRUE_GRAPH = true_overlap
+ASSEMBLED_GRAPH = overlap
+DB = genome.db
 
 # To get coredumps:
 # 	$ ulimit -c unlimited
@@ -10,23 +13,28 @@ align/libalign.so: align/libalign.c align/libalign.h
 clean:
 	find . -regex .\*.pyc | while read f; do rm -f $$f; done
 	find . -regex .\*.swp | while read f; do rm -f $$f; done
-	rm -f align/libalign.so
-	rm -f core
-	rm -f genome.fa reads.fa genome.db
-	rm -f overlap.svg
+	rm -f align/libalign.so core
+	rm -f genome.fa reads.fa $(DB)
+	rm -f *.svg *.gml
 
-tests: align/libalign.so genome.db overlap_align.svg overlap_tuple.svg overlap_true.svg
+tests: align/libalign.so $(DB) $(TRUE_GRAPH).gml $(ASSEMBLED_GRAPH).gml
 	python -m align.tests.homopolymeric
 	python -m align.tests.align
 
-overlap_align.svg:
-	python -c 'import align.tests.assembly as T; T.overlap_by_alignment("genome.db", "$@")'
+$(ASSEMBLED_GRAPH).gml:
+	python -c 'import align.tests.assembly as T; T.overlap_by_tuple_extension("$(DB)", "$@")'
+	python -c 'import align.tests.assembly as T; T.compare_results("$(TRUE_GRAPH).gml", "$@")'
 
-overlap_tuple.svg:
-	python -c 'import align.tests.assembly as T; T.overlap_by_tuple_extension("genome.db", "$@")'
+$(TRUE_GRAPH).gml:
+	python -c 'import align.tests.assembly as T; T.overlap_by_known_order("$(DB)", "$@")'
 
-genome.db: align/libalign.so
+$(ASSEMBLED_GRAPH).svg: $(ASSEMBLED_GRAPH).gml
+	python -c 'import align.assembly as A, networkx as nx; A.draw_graph(nx.read_gml("$(ASSEMBLED_GRAPH).gml"), "$@");'
+
+$(TRUE_GRAPH).svg: $(TRUE_GRAPH).gml
+	python -c 'import align.assembly as A, networkx as nx; A.draw_graph(nx.read_gml("$(TRUE_GRAPH).gml"), "$@");'
+
+$(DB): align/libalign.so
 	python -c 'import align.tests.assembly as T; T.create_example("$@")'
-	python -c 'import align.tests.assembly as T; T.overlap_by_known_order("genome.db", "overlap_true.svg")'
 
-.PHONY: clean tests *.svg
+.PHONY: clean tests *.gml *.svg
