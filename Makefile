@@ -15,7 +15,7 @@ clean:
 	find . -regex .\*.swp | while read f; do rm -f $$f; done
 	rm -f align/libalign.so core
 	rm -f genome.fa reads.fa $(DB)
-	rm -f *.svg *.gml
+	rm -f *.gml *.pdf
 
 tests: align/libalign.so $(DB) $(TRUE_GRAPH).gml $(ASSEMBLED_GRAPH).gml
 	python -m align.tests.homopolymeric
@@ -23,18 +23,21 @@ tests: align/libalign.so $(DB) $(TRUE_GRAPH).gml $(ASSEMBLED_GRAPH).gml
 
 $(ASSEMBLED_GRAPH).gml:
 	python -c 'import align.tests.assembly as T; T.overlap_by_tuple_extension("$(DB)", "$@")'
-	python -c 'import align.tests.assembly as T; T.compare_results("$(TRUE_GRAPH).gml", "$@")'
+	$(MAKE) compare
+
+compare:
+	python -c 'import align.tests.assembly as T; T.compare_results("$(TRUE_GRAPH).gml", "$(ASSEMBLED_GRAPH).gml")'
 
 $(TRUE_GRAPH).gml:
 	python -c 'import align.tests.assembly as T; T.overlap_by_known_order("$(DB)", "$@")'
 
-$(ASSEMBLED_GRAPH).svg: $(ASSEMBLED_GRAPH).gml
+$(ASSEMBLED_GRAPH).pdf:
 	python -c 'import align.assembly as A, networkx as nx; A.draw_graph(nx.read_gml("$(ASSEMBLED_GRAPH).gml"), "$@");'
 
-$(TRUE_GRAPH).svg: $(TRUE_GRAPH).gml
+$(TRUE_GRAPH).pdf:
 	python -c 'import align.assembly as A, networkx as nx; A.draw_graph(nx.read_gml("$(TRUE_GRAPH).gml"), "$@");'
 
 $(DB): align/libalign.so
 	python -c 'import align.tests.assembly as T; T.create_example("$@")'
 
-.PHONY: clean tests *.gml *.svg
+.PHONY: clean tests *.gml *.pdf compare

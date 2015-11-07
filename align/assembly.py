@@ -92,14 +92,14 @@ def draw_graph(G, path, figsize=None):
     pos = nx.circular_layout(G)
     if figsize is None:
         n = G.number_of_nodes()
-        figsize = (n*5,n*5)
+        figsize = (n*1.2,n*1.2)
     plt.figure(figsize=figsize)
-    nx.draw_networkx_nodes(G, pos, node_size=30000, node_color='w')
-    nx.draw_networkx_labels(G, pos, nx.get_node_attributes(G, 'name'), font_size=30) # node labels
-    nx.draw_networkx_edges(G, pos, width=5)
+    nx.draw_networkx_nodes(G, pos, node_size=8000, node_color='w')
+    nx.draw_networkx_labels(G, pos, nx.get_node_attributes(G, 'name'), font_size=14) # node labels
+    nx.draw_networkx_edges(G, pos, width=0.7)
     edge_data = G.edges(data=True)
     if edge_data and 'score' in edge_data[0][2]:
-        nx.draw_networkx_edge_labels(G, pos, font_size=26,
+        nx.draw_networkx_edge_labels(G, pos, font_size=11,
             edge_labels={(f,t):'%.2f' % a['score'] for f,t,a in edge_data})
     plt.xticks([])
     plt.yticks([])
@@ -108,10 +108,14 @@ def draw_graph(G, path, figsize=None):
 def compare_graphs(G1, G2, f):
     E1, E2 = set(G1.edges()), set(G2.edges())
     diff = [('-', edge) for edge in E1 - E2] + [('+', edge) for edge in E2 - E1]
+    N1 = nx.get_node_attributes(G1, 'name')
+    N2 = nx.get_node_attributes(G2, 'name')
     for edge in sorted(diff, cmp=lambda x, y: cmp(x[1], y[1])):
         if edge[0] == '-':
-            line = '- [%d]--(%.2f)-->[%d]\n' % (edge[1][0], G1.get_edge_data(*edge[1])['score'], edge[1][1])
+            src, dst = N1[edge[1][0]], N1[edge[1][1]]
+            line = '- [%s]--(%.2f)-->[%s]\n' % (src, G1.get_edge_data(*edge[1])['score'], dst)
             f.write(colored(line, color='red'))
         else:
-            line = '+ [%d]--(%.2f)-->[%d]\n' % (edge[1][0], G2.get_edge_data(*edge[1])['score'], edge[1][1])
+            src, dst = N2[edge[1][0]], N2[edge[1][1]]
+            line = '+ [%s]--(%.2f)-->[%s]\n' % (src, G2.get_edge_data(*edge[1])['score'], dst)
             f.write(colored(line, color='green'))
