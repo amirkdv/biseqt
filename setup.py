@@ -20,5 +20,5 @@ setup(
     #license='MIT',
     #keywords='sequence alignment',
     packages=['align'],
-    install_requires=['biopython', 'termcolor', 'numpy', 'cffi', 'networkx'],
+    install_requires=['biopython', 'termcolor', 'numpy', 'cffi', 'networkx>=1.10'],
 )

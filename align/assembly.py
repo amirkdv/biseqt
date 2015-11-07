@@ -119,3 +119,9 @@ def compare_graphs(G1, G2, f):
             src, dst = N2[edge[1][0]], N2[edge[1][1]]
             line = '+ [%s]--(%.2f)-->[%s]\n' % (src, G2.get_edge_data(*edge[1])['score'], dst)
             f.write(colored(line, color='green'))
+
+def layout(G):
+    path = nx.algorithms.dag.dag_longest_path(G)
+    V = dict(G.nodes(data=True))
+    print len(V), len(path)
+    return [V[nid]['name'] for nid in path]
