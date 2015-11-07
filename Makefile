@@ -25,17 +25,21 @@ $(ASSEMBLED_GRAPH).gml:
 	python -c 'import align.tests.assembly as T; T.overlap_by_tuple_extension("$(DB)", "$@")'
 	$(MAKE) compare
 
-compare:
+$(ASSEMBLED_GRAPH).pdf:
+	python -c 'import align.assembly as A, networkx as nx; A.draw_graph(nx.read_gml("$(ASSEMBLED_GRAPH).gml"), "$@");'
 	python -c 'import align.tests.assembly as T; T.compare_results("$(TRUE_GRAPH).gml", "$(ASSEMBLED_GRAPH).gml")'
+
+$(ASSEMBLED_GRAPH).layout.pdf:
+	python -c 'import align.assembly as A, networkx as nx; A.draw_layout(nx.read_gml("$(ASSEMBLED_GRAPH).gml"), "$@");'
 
 $(TRUE_GRAPH).gml:
 	python -c 'import align.tests.assembly as T; T.overlap_by_known_order("$(DB)", "$@")'
 
-$(ASSEMBLED_GRAPH).pdf:
-	python -c 'import align.assembly as A, networkx as nx; A.draw_graph(nx.read_gml("$(ASSEMBLED_GRAPH).gml"), "$@");'
-
 $(TRUE_GRAPH).pdf:
 	python -c 'import align.assembly as A, networkx as nx; A.draw_graph(nx.read_gml("$(TRUE_GRAPH).gml"), "$@");'
+
+$(TRUE_GRAPH).layout.pdf:
+	python -c 'import align.assembly as A, networkx as nx; A.draw_layout(nx.read_gml("$(TRUE_GRAPH).gml"), "$@");'
 
 $(DB): align/libalign.so
 	python -c 'import align.tests.assembly as T; T.create_example("$@")'

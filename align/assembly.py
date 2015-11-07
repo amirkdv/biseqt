@@ -96,25 +96,34 @@ def overlap_graph_by_known_order(tuplesdb):
 
     return G
 
-def save_graph(G, path):
-    nx.write_gml(G, path)
+def save_graph(G, fname):
+    nx.write_gml(G, fname)
 
-def draw_graph(G, path, figsize=None):
-    pos = nx.circular_layout(G)
+# given path will be highlighted
+def draw_graph(G, fname, figsize=None, path=[]):
+    #pos = nx.circular_layout(G)
+    #pos = nx.spring_layout(G)
+    pos = nx.fruchterman_reingold_layout(G, k=10)
     if figsize is None:
         n = G.number_of_nodes()
-        figsize = (n*1.2,n*1.2)
+        figsize = (n*2,n*2)
     plt.figure(figsize=figsize)
-    nx.draw_networkx_nodes(G, pos, node_size=8000, node_color='w')
-    nx.draw_networkx_labels(G, pos, nx.get_node_attributes(G, 'name'), font_size=14) # node labels
-    nx.draw_networkx_edges(G, pos, width=0.7)
+    # Vertices and their labels
+    node_color = ['gray' if u in path else 'white' for u in G.nodes()]
+    nx.draw_networkx_nodes(G, pos, node_size=8000, node_color=node_color)
+    nx.draw_networkx_labels(G, pos, nx.get_node_attributes(G, 'name'), font_size=14)
+
     edge_data = G.edges(data=True)
+    edge_in_path = lambda u,v: u in path and v in path and path[path.index(u) +1] == v
+    edge_color = ['green' if edge_in_path(u,v) else 'black'  for u,v,_ in edge_data]
+    edge_width = [4 if edge_in_path(u,v) else 0.1 for u,v,_ in edge_data]
+    nx.draw_networkx_edges(G, pos, edge_color=edge_color, width=edge_width)
     if edge_data and 'weight' in edge_data[0][2]:
         nx.draw_networkx_edge_labels(G, pos, font_size=11,
             edge_labels={(f,t):'%.2f' % a['weight'] for f,t,a in edge_data})
     plt.xticks([])
     plt.yticks([])
-    plt.savefig(path, bbox_inches='tight')
+    plt.savefig(fname, bbox_inches='tight')
 
 def compare_graphs(G1, G2, f):
     E1, E2 = set(G1.edges()), set(G2.edges())
@@ -134,5 +143,7 @@ def compare_graphs(G1, G2, f):
 def layout(G):
     path = nx.algorithms.dag.dag_longest_path(G)
     V = dict(G.nodes(data=True))
-    print len(V), len(path)
     return [V[nid]['name'] for nid in path]
+
+def draw_layout(G, fname):
+    draw_graph(G, fname, path=nx.algorithms.dag.dag_longest_path(G))
