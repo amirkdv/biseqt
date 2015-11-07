@@ -297,13 +297,12 @@ class OverlapFinder(object):
     def _T_len(self, opseq):
         return sum([opseq.count(op) for op in 'IMS'])
 
-    def extend1d(self, segment, drop_threshold, max_succ_drops=3, backwards=False):
+    def extend1d(self, segment, drop_threshold, window=10, max_succ_drops=3, backwards=False):
         """Extends a given segment (presumably maximally-exactly-matching) in
         the given direction (fwd or bwd). Extension is done by repeatedly
         performing global alignments on a rolling window along the two sequences
         and stopping once a decrease in score is observed for a certain number
         of times"""
-        window = min(self._S_len(segment.tx.opseq), self._T_len(segment.tx.opseq)) * 2
         cur_seg = segment
         score_history = [segment.tx.score]
         while True:
@@ -337,14 +336,13 @@ class OverlapFinder(object):
 
         return None
 
-    def extend(self, segments, drop_threshold):
+    def extend(self, segments, window=None, drop_threshold=None):
         """Given a number of matching segments for the two sequences finds all
         extended matching gap containing segments by repeatedly aligning a
         rolling frame along the two sequences and dropping a segment once it
         is observed to not be a high-scoring overlap alignment"""
         res = []
         for segment in segments:
-            window = len(segment)
             fwd = self.extend1d(segment, drop_threshold)
             bwd = self.extend1d(segment, drop_threshold, backwards=True)
             if fwd and bwd and fwd.tx.score + bwd.tx.score > drop_threshold:

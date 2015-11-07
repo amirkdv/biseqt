@@ -17,6 +17,7 @@ params = {
     'subst_probs': [[0.97 if k==i else 0.01 for k in range(4)] for i in range(4)],
     'min_align_score': 120, # minimum overlap alignment score to constitue an edge
     'drop_threshold': 0,    # what constitutes a drop in score of a window
+    'window': 20,           # rolling window length for tuple extension
     'max_succ_drops': 3     # how many consecutive drops are allowed
 }
 subst_scores = align.AlignParams.subst_scores_from_probs(params['subst_probs'], A)
@@ -37,6 +38,7 @@ def show_params():
         (params['go_prob'], params['ge_prob'], go_score, ge_score)
 
 def create_example(db):
+    show_params()
     seq.make_sequencing_fixture('genome.fa', 'reads.fa',
         genome_length=params['genome_length'],
         coverage=params['coverage'],
