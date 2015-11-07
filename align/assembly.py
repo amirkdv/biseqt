@@ -109,9 +109,9 @@ def draw_graph(G, path, figsize=None):
     nx.draw_networkx_labels(G, pos, nx.get_node_attributes(G, 'name'), font_size=14) # node labels
     nx.draw_networkx_edges(G, pos, width=0.7)
     edge_data = G.edges(data=True)
-    if edge_data and 'score' in edge_data[0][2]:
+    if edge_data and 'weight' in edge_data[0][2]:
         nx.draw_networkx_edge_labels(G, pos, font_size=11,
-            edge_labels={(f,t):'%.2f' % a['score'] for f,t,a in edge_data})
+            edge_labels={(f,t):'%.2f' % a['weight'] for f,t,a in edge_data})
     plt.xticks([])
     plt.yticks([])
     plt.savefig(path, bbox_inches='tight')
@@ -124,11 +124,11 @@ def compare_graphs(G1, G2, f):
     for edge in sorted(diff, cmp=lambda x, y: cmp(x[1], y[1])):
         if edge[0] == '-':
             src, dst = N1[edge[1][0]], N1[edge[1][1]]
-            line = '- [%s]--(%.2f)-->[%s]\n' % (src, G1.get_edge_data(*edge[1])['score'], dst)
+            line = '- [%s]--(%.2f)-->[%s]\n' % (src, G1.get_edge_data(*edge[1])['weight'], dst)
             f.write(colored(line, color='red'))
         else:
             src, dst = N2[edge[1][0]], N2[edge[1][1]]
-            line = '+ [%s]--(%.2f)-->[%s]\n' % (src, G2.get_edge_data(*edge[1])['score'], dst)
+            line = '+ [%s]--(%.2f)-->[%s]\n' % (src, G2.get_edge_data(*edge[1])['weight'], dst)
             f.write(colored(line, color='green'))
 
 def layout(G):
