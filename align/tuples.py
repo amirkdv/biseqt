@@ -9,7 +9,7 @@ from . import align, seq
 
 # an aligned pair of substrings in two sequences, the alignments are represented
 # by a Transcript object (tx) which may contain substitutions or gaps.
-Segment = namedtuple('Segment', ['id_S', 'id_T', 'tx'])
+Segment = namedtuple('Segment', ['S_id', 'T_id', 'tx'])
 
 class MaxConcurrentQueries(RuntimeError):
     pass
@@ -204,7 +204,7 @@ class OverlapFinder(object):
         """.format(self.tuplesdb.wordlen, self.tuplesdb.wordlen)
         def row_factory(cursor, row):
             tx = align.Transcript(row[0], row[1], 0, 'M'*self.tuplesdb.wordlen)
-            return Segment(id_S=s1, id_T=s2, tx=tx)
+            return Segment(S_id=s1, T_id=s2, tx=tx)
 
         with sqlite3.connect(self.tuplesdb.db) as conn:
             conn.row_factory = row_factory
@@ -228,7 +228,7 @@ class OverlapFinder(object):
                         0, # score
                         exacts[cand].tx.opseq + 'M'*shift_S # transcript
                     )
-                    exacts[idx] = Segment(id_S=s1, id_T=s2, tx=tx)
+                    exacts[idx] = Segment(S_id=s1, T_id=s2, tx=tx)
                     exacts.pop(cand)
                 else:
                     cand += 1
@@ -267,7 +267,7 @@ class OverlapFinder(object):
             score=segment.tx.score + transcript.score,
             opseq=segment.tx.opseq + transcript.opseq
         )
-        return Segment(id_S=segment.id_S, id_T=segment.id_T, tx=tx)
+        return Segment(S_id=segment.S_id, T_id=segment.T_id, tx=tx)
 
     def extend_bwd_once(self, segment, window):
         kw = self.align_problem_kw
@@ -293,7 +293,7 @@ class OverlapFinder(object):
             score=transcript.score + segment.tx.score,
             opseq=transcript.opseq + segment.tx.opseq
         )
-        return Segment(id_S=segment.id_S, id_T=segment.id_T, tx=tx)
+        return Segment(S_id=segment.S_id, T_id=segment.T_id, tx=tx)
 
     def _S_len(self, opseq):
         return sum([opseq.count(op) for op in 'DMS'])
@@ -349,6 +349,10 @@ class OverlapFinder(object):
         is observed to not be a high-scoring overlap alignment"""
         res = []
         for segment in segments:
+            # TODO It seems like we never have two segments for the same pair of
+            # sequences where one gives an S->T edge and the other gives a T->S
+            # edge. Why not just return the first segment that goes all the way
+            # to the end?
             fwd = self.extend1d(segment, drop_threshold)
             bwd = self.extend1d(segment, drop_threshold, backwards=True)
             if fwd and bwd and fwd.tx.score > drop_threshold and bwd.tx.score:
@@ -365,5 +369,5 @@ class OverlapFinder(object):
                     score=score,
                     opseq=opseq
                 )
-                res += [Segment(id_S=segment.id_S, id_T=segment.id_T, tx=tx)]
+                res += [Segment(S_id=segment.S_id, T_id=segment.T_id, tx=tx)]
         return sorted(res, key=lambda s: s.tx.score, reverse=True)
