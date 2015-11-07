@@ -163,6 +163,8 @@ class Sequence():
         :param len_mean (float):  the mean of the normal distribution of read lengths.
         :param len_var (float):   the variance of the normal distribution or read lengths.
         """
+        # TODO make sure we have at least one read from the very beginning and
+        # the very end.
         N = self.length
         num = int(1.0 * N * coverage/len_mean)
         for i in range(num):

@@ -56,6 +56,8 @@ def overlap_graph_by_tuple_extension(tuplesdb, align_params=None, window=20,
             if not segments:
                 continue
             overlap = segments[0]
+            #print set(['S->T' if x.tx.idx_S < x.tx.idx_T else 'T->S' for x in segments])
+            #overlap.tx.pretty_print(tuplesdb.loadseq(S_id), tuplesdb.loadseq(T_id), sys.stdout)
             S_len, T_len = F._S_len(overlap.tx.opseq), F._T_len(overlap.tx.opseq)
             if overlap.tx.idx_S == 0 and overlap.tx.idx_T == 0:
                 if S_len < T_len:
