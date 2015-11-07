@@ -38,6 +38,9 @@ def show_params():
     print 'Pr(go) = %.2f, Pr(ge) = %.2f +----> Score(go)=%.2f, Score(ge)=%.2f' % \
         (params['go_prob'], params['ge_prob'], go_score, ge_score)
 
+    print 'drop_threshold = %.2f, max_succ_drops = %d, window = %d' % \
+        (params['drop_threshold'], params['max_succ_drops'], params['window'])
+
 def create_example(db):
     show_params()
     seq.make_sequencing_fixture('genome.fa', 'reads.fa',
@@ -57,7 +60,9 @@ def create_example(db):
 def overlap_by_tuple_extension(db, path):
     show_params()
     B = tuples.TuplesDB(db, wordlen=params['wordlen'], alphabet=A)
-    G = assembly.overlap_graph_by_tuple_extension(B, align_params=C, window=params['window'], drop_threshold=params['drop_threshold'])
+    G = assembly.overlap_graph_by_tuple_extension(B, align_params=C,
+        max_succ_drops=params['max_succ_drops'], window=params['window'],
+        drop_threshold=params['drop_threshold'])
     assembly.save_graph(G, path)
 
 def overlap_by_known_order(db, path):

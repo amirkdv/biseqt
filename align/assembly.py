@@ -28,7 +28,7 @@ def overlap_graph_by_alignment(tuplesdb, align_params=None, min_score=80):
     return G
 
 def overlap_graph_by_tuple_extension(tuplesdb, align_params=None, window=20,
-    drop_threshold=None):
+    drop_threshold=0, max_succ_drops=3):
     G = nx.DiGraph()
     seqinfo = tuplesdb.seqinfo()
     seqids = seqinfo.keys()
