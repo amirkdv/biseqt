@@ -54,10 +54,16 @@ def overlap_graph_by_tuple_extension(tuplesdb, align_params=None, window=20,
             if not segments:
                 continue
             overlap = segments[0]
-            if overlap.tx.idx_T == 0:
-                G.add_edge(S_id, T_id, score=overlap.tx.score)
-            if overlap.tx.idx_S == 0:
-                G.add_edge(T_id, S_id, score=overlap.tx.score)
+            S_len, T_len = F._S_len(overlap.tx.opseq), F._T_len(overlap.tx.opseq)
+            if overlap.tx.idx_S == 0 and overlap.tx.idx_T == 0:
+                if S_len < T_len:
+                    G.add_edge(S_id, T_id, weight=overlap.tx.score)
+                elif S_len > T_len:
+                    G.add_edge(T_id, S_id, weight=overlap.tx.score)
+            elif overlap.tx.idx_T == 0:
+                G.add_edge(S_id, T_id, weight=overlap.tx.score)
+            elif overlap.tx.idx_S == 0:
+                G.add_edge(T_id, S_id, weight=overlap.tx.score)
 
     sys.stdout.write('\n')
     return G
@@ -78,10 +84,15 @@ def overlap_graph_by_known_order(tuplesdb):
             intersect_max = min(S_info['start'] + S_info['length'], T_info['start'] + T_info['length'])
             if intersect_min < intersect_max:
                 overlap = intersect_max - intersect_min
-                if S_info['start'] <= T_info['start']:
-                    G.add_edge(S_id, T_id, score=overlap)
-                if S_info['start'] >= T_info['start']:
-                    G.add_edge(T_id, S_id, score=overlap)
+                if S_info['start'] < T_info['start']:
+                    G.add_edge(S_id, T_id, weight=overlap)
+                elif S_info['start'] > T_info['start']:
+                    G.add_edge(T_id, S_id, weight=overlap)
+                # if start is equal, edge goes from shorter read to longer read
+                elif S_info['start'] + S_info['length'] < T_info['start'] + T_info['length']:
+                    G.add_edge(S_id, T_id, weight=overlap)
+                elif S_info['start'] + S_info['length'] > T_info['start'] + T_info['length']:
+                    G.add_edge(T_id, S_id, weight=overlap)
 
     return G
 
