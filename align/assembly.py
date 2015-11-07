@@ -39,8 +39,10 @@ def overlap_graph_by_tuple_extension(tuplesdb, align_params=None, window=20,
         for tid_idx in range(sid_idx + 1, len(seqids)):
             S_id, T_id = seqids[sid_idx], seqids[tid_idx]
             S_info, T_info = seqinfo[S_id], seqinfo[T_id]
-            S_name = '%s_P%d' % (S_info['name'], S_info['start'])
-            T_name = '%s_P%d' % (T_info['name'], T_info['start'])
+            S_min_idx, S_max_idx = S_info['start'], S_info['start'] + S_info['length']
+            T_min_idx, T_max_idx = T_info['start'], T_info['start'] + T_info['length']
+            S_name = '%s %d-%d #%d' % (S_info['name'], S_min_idx, S_max_idx, S_id)
+            T_name = '%s %d-%d #%d' % (T_info['name'], T_min_idx, T_max_idx, T_id)
             G.add_node(S_id, name=S_name)
             G.add_node(T_id, name=T_name)
 
@@ -76,23 +78,24 @@ def overlap_graph_by_known_order(tuplesdb):
         for tid_idx in range(sid_idx + 1, len(seqids)):
             S_id, T_id = seqids[sid_idx], seqids[tid_idx]
             S_info, T_info = seqinfo[S_id], seqinfo[T_id]
-            S_name = '%s_P%d' % (S_info['name'], S_info['start'])
-            T_name = '%s_P%d' % (T_info['name'], T_info['start'])
+            S_min_idx, S_max_idx = S_info['start'], S_info['start'] + S_info['length']
+            T_min_idx, T_max_idx = T_info['start'], T_info['start'] + T_info['length']
+            S_name = '%s %d-%d #%d' % (S_info['name'], S_min_idx, S_max_idx, S_id)
+            T_name = '%s %d-%d #%d' % (T_info['name'], T_min_idx, T_max_idx, T_id)
             G.add_node(S_id, name=S_name)
             G.add_node(T_id, name=T_name)
-            intersect_min = max(S_info['start'], T_info['start'])
-            intersect_max = min(S_info['start'] + S_info['length'], T_info['start'] + T_info['length'])
-            if intersect_min < intersect_max:
-                overlap = intersect_max - intersect_min
-                if S_info['start'] < T_info['start']:
+            overlap = min(S_max_idx, T_max_idx) - max(S_min_idx, T_min_idx)
+            if overlap > 0:
+                if S_min_idx < T_min_idx:
                     G.add_edge(S_id, T_id, weight=overlap)
-                elif S_info['start'] > T_info['start']:
+                elif S_min_idx > T_min_idx:
                     G.add_edge(T_id, S_id, weight=overlap)
                 # if start is equal, edge goes from shorter read to longer read
-                elif S_info['start'] + S_info['length'] < T_info['start'] + T_info['length']:
+                elif S_max_idx < T_max_idx:
                     G.add_edge(S_id, T_id, weight=overlap)
-                elif S_info['start'] + S_info['length'] > T_info['start'] + T_info['length']:
+                elif S_max_idx > T_max_idx:
                     G.add_edge(T_id, S_id, weight=overlap)
+                # if start and end is equal, reads are identical, ignore.
 
     return G
 
@@ -111,12 +114,14 @@ def draw_graph(G, fname, figsize=None, path=[]):
     # Vertices and their labels
     node_color = ['gray' if u in path else 'white' for u in G.nodes()]
     nx.draw_networkx_nodes(G, pos, node_size=8000, node_color=node_color)
-    nx.draw_networkx_labels(G, pos, nx.get_node_attributes(G, 'name'), font_size=14)
+    node_labels = nx.get_node_attributes(G, 'name')
+    node_labels = {k: node_labels[k].replace(' ', '\n') for k in node_labels}
+    nx.draw_networkx_labels(G, pos, node_labels, font_size=14)
 
     edge_data = G.edges(data=True)
     edge_in_path = lambda u,v: u in path and v in path and path[path.index(u) +1] == v
     edge_color = ['green' if edge_in_path(u,v) else 'black'  for u,v,_ in edge_data]
-    edge_width = [4 if edge_in_path(u,v) else 0.1 for u,v,_ in edge_data]
+    edge_width = [2 if edge_in_path(u,v) else 0.7 for u,v,_ in edge_data]
     nx.draw_networkx_edges(G, pos, edge_color=edge_color, width=edge_width)
     if edge_data and 'weight' in edge_data[0][2]:
         nx.draw_networkx_edge_labels(G, pos, font_size=11,
