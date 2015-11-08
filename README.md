@@ -138,72 +138,75 @@ Usage:
 $ make clean genome.db                # creates genome.fa, reads.fa, genome.db
 $ make true_overlap.gml true_overlap.layout.pdf # find the true overlap and layout
 $ make overlap.gml overlap.layout.pdf # find the overlap and layout by seed extension
+$ make overlap.layout.diff.pdf        # diff against the true overlap graph
 ```
 
 ### Behavior
 
-Good:
-
-* When compared to the true graph, the assembled overlap graph typically has
-  some missing edges (e.g %15 of edges missing) but very few wrong edges are
-  added (often none).
-* Generated overlap graphs are acyclic (see below).
-
-Bad:
-
-* When two reads are both mostly overlapping the direction may come out wrong and
-  this can cause cycles in the overlap graph (not observed yet).
-* There are occassional insertions too which do not seem to be problematic since
-  they are weak (i.e low scoring alignments).
+* Good:
+  * When compared to the true graph, the assembled overlap graph typically has
+    some missing edges (e.g %15 of edges missing) but very few wrong edges are
+    added (often none).
+  * Generated overlap graphs are (close to) acyclic.
+* Bad:
+  * When two reads are both mostly overlapping the direction may come out wrong and
+    this can cause cycles in the overlap graph.
+  * There are occassional insertions too which do not seem to be problematic since
+    they are weak (i.e low scoring alignments).
 
 ## To Do
-* Missing features:
-  * [ ] Perform assembly on condensed sequences.
-  * [x] Figure out a way to draw the comparison of two layouts in colors.
-  * [ ] Deal with potential cycles: they don't seem to occur (but there's a
-    chance; see belowW). Removing weak edges until the overlap graph is acyclic
-    should work.
-* Improvements:
-  * [ ] Deal with the case where two sequences mostly overlap (with close start
-    and ends). This may lead to a correctly heavy edge but with the wrong
-    direction and thus a cycle that is not easy to fix. Either:
-    * ignore problematic pairs of sequences; the missing edge will most likely
-    not have a consequence on the longest path (since the two sequences have
-    mostly common neighbors).
-    * perform a full global suffix-prefix alignment if the ends are too close.
-  * [ ] For any two reads, do we need to pursue all segments that satisfy the
-    score criteria or should we drop out once we find one segment? Note that most
-    of the time for overlapping sequences many seeds come from the same correct
-    suffix-prefix alignment.
-  * [ ] Make `align.Transcript` a `namedtuple` as well.
-  * [ ] An overlap graph must satisfy two consistency criterions:
-    * it is a DAG,
-    * For any vertex *u* in it, any pair of outgoing (incoming) neighbors of
-      *u* are adjacent.
 
-    Assembly overlap graphs seem to always be a DAG but they rarely satisfy the
-    second. Can the second be used as hints to improve the layout path? (In
-    fact, most of the time vertices that are left out of the assembled layout
-    path are missing an edge that could have been reconstructed by the
-    consistency condition).
-  * [ ] Move seed expansion from Python to C.
-* [ ] *Real* data: test against Leishmania dataset.
-* simulations:
-  * [ ] Make sure random reads cover the entire genome.
-  * [ ] Test on larger data sets (requires speedup).
-  * [ ] Separate sanity tests from simulations; write sanity tests for
-        individual parts of assembly.
-  * [ ] Support hompolymeric-specific indel parameters in random generation
-        of genome sequencing reads.
-* [ ] Code docs: all of [`OverlapFinder`](/align/tuples.py) and [Assembler](/align/assembly.py).
-* Low priority:
-  * [ ] Add an ungapped seed expansion phase.
-  * [ ] Adapt Karlin-Altschul statistics (references:
-    [[1]](http://www.pnas.org/content/87/6/2264.full.pdf),
-    [[2]](https://publications.mpi-cbg.de/Altschul_1990_5424.pdf),
-    [[3]](http://www.jstor.org/stable/1427732?seq=1#page_scan_tab_contents), and
-    chap. 7-9 [[4]](https://books.google.ca/books?id=uZvlBwAAQBAJ)) to the
-    problem of finding overlaps.
-  * [ ] Support [Hirschberg](https://en.wikipedia.org/wiki/Hirschberg's_algorithm)-style
-    linear space optimization (cf. [`libalign::solve()` and `libalign::tracback()`](/align/libalign.c)).
-  * [ ] Make it work with Python 3.
+#### Missing features
+* Perform assembly on condensed sequences.
+* Deal with potential cycles. There are two issues:
+  * weak edges: easy to deal with (remove weak edges until the overlap graph is
+    acyclic).
+  * wrong direction strong edges: see below.
+
+#### Improvements
+* Code docs: all of [`OverlapFinder`](/align/tuples.py) and [Assembler](/align/assembly.py).
+* Deal with the case where two sequences mostly overlap (with close start
+  and ends). This may lead to a correctly heavy edge but with the wrong
+  direction and thus a cycle that is not easy to fix. Either:
+  * ignore problematic pairs of sequences; the missing edge will most likely
+  not have a consequence on the longest path (since the two sequences have
+  mostly common neighbors).
+  * perform a full global suffix-prefix alignment if the ends are too close.
+* For any two reads, do we need to pursue all segments that satisfy the
+  score criteria or should we drop out once we find one segment? Note that most
+  of the time for overlapping sequences many seeds come from the same correct
+  suffix-prefix alignment.
+* Make `align.Transcript` a `namedtuple` as well (unless it's becoming a
+  `CffiObject`).
+* An overlap graph must satisfy two consistency criterions:
+  * it is a DAG,
+  * For any vertex *u* in it, any pair of outgoing (incoming) neighbors of
+    *u* are adjacent.
+
+  Assembly overlap graphs are DAG (or close to it) but they rarely satisfy the
+  second. The second criteria can be used to find missing edges by brute force
+  overlap alignment (this matches the typical case of left-out-vertices in
+  simulations). The difficulty is to find a way to recover necessary edges
+  for a full layout path without trying to recover *all* missing edges.
+* Move seed expansion from Python to C.
+
+#### Simulations
+* Make sure random reads cover the entire genome.
+* Test on larger data sets (requires speedup).
+* Separate sanity tests from simulations; write sanity tests for individual
+  parts of assembly.
+* Support hompolymeric-specific indel parameters in random generation of genome
+  sequencing reads.
+* *Real* data: test against Leishmania dataset.
+
+#### Low priority
+* Add an ungapped seed expansion phase.
+* Adapt Karlin-Altschul statistics (references:
+  [[1]](http://www.pnas.org/content/87/6/2264.full.pdf),
+  [[2]](https://publications.mpi-cbg.de/Altschul_1990_5424.pdf),
+  [[3]](http://www.jstor.org/stable/1427732?seq=1#page_scan_tab_contents), and
+  chap. 7-9 [[4]](https://books.google.ca/books?id=uZvlBwAAQBAJ)) to the
+  problem of finding overlaps.
+* Support [Hirschberg](https://en.wikipedia.org/wiki/Hirschberg's_algorithm)-style
+  linear space optimization (cf. [`libalign::solve()` and `libalign::tracback()`](/align/libalign.c)).
+* Make it work with Python 3.
