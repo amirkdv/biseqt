@@ -146,24 +146,24 @@ $ make overlap.layout.diff.pdf        # diff against the true overlap graph
 ### Behavior
 
 * Good:
-  * When compared to the true graph, the assembled overlap graph typically has
+  1. When compared to the true graph, the assembled overlap graph typically has
     some missing edges (e.g %15 of edges missing) but very few wrong edges are
     added (often none).
-  * Generated overlap graphs are (close to) acyclic.
+  1. Generated overlap graphs are (close to) acyclic.
+  1. As a consequence of the (i), the assembled layout path is consistent
+    with the true layout in the sense that its sequence of reads is a
+    subsequence (i.e in correct order) of the correct layout path.
+
 * Bad:
-  * When two reads are both mostly overlapping the direction may come out wrong and
+  1. When two reads are both mostly overlapping the direction may come out wrong and
     this can cause cycles in the overlap graph.
-  * There are occassional insertions too which do not seem to be problematic since
+  1. There are occassional insertions too which do not seem to be problematic since
     they are weak (i.e low scoring alignments).
 
 ## To Do
 
 #### Missing features
 * Perform assembly on condensed sequences.
-* Deal with potential cycles. There are two issues:
-  * weak edges: easy to deal with (remove weak edges until the overlap graph is
-    acyclic).
-  * wrong direction strong edges: see below.
 
 #### Improvements
 * Code docs: all of [`OverlapFinder`](/align/tuples.py) and [Assembler](/align/assembly.py).
