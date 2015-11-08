@@ -54,4 +54,10 @@ $(DB): align/libalign.so
 
 loc:
 	find . -type f -regex '.*\(\.py\|\.c\|\.h\)' | xargs wc -l
-.PHONY: clean tests *.gml *.pdf loc
+
+docs:
+	sphinx-apidoc -F -o $@ align/
+	cd $@ && sphinx-build -b html . _build
+	@echo "Find the docs at file://`readlink -f $@/_build/index.html`"
+
+.PHONY: clean tests *.gml *.pdf loc docs
