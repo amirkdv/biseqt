@@ -167,6 +167,8 @@ $ make overlap.layout.diff.pdf        # diff against the true overlap graph
 
 #### Improvements
 * Code docs: all of [`OverlapFinder`](/align/tuples.py) and [Assembler](/align/assembly.py).
+* Separate cycle breaking from finding the overlap graph (for convenience in
+  debugging large simulations).
 * For any two reads, do we need to pursue all segments that satisfy the
   score criteria or should we drop out once we find one segment? Note that most
   of the time for overlapping sequences many seeds come from the same correct

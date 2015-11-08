@@ -80,21 +80,26 @@ def overlap_graph_by_tuple_extension(tuplesdb, align_params=None, window=20,
     if not nx.algorithms.dag.is_directed_acyclic_graph(G):
         sys.stdout.write('Graph is not acyclic, breaking cycles: ')
         cycles = nx.algorithms.cycles.simple_cycles(G)
-        candidates = fn_cycle_es(cycles.next())
-        fn_weakest = lambda cands: sorted(candidates, key=lambda x: E[x]['weight'])[0]
+        cands = set()
+        fn_weakest = lambda C: sorted(C, key=lambda x: E[x]['weight'])[0]
+        rm = set()
         for c in cycles:
-            new_cands = candidates.intersection(fn_cycle_es(c))
-            if not new_cands:
-                e = fn_weakest(candidates)
-                sys.stdout.write('%d --x--> %d ' % e)
-                G.remove_edge(*e)
-            candidates = new_cands
-        if candidates:
-            e = fn_weakest(candidates)
-            sys.stdout.write('%d --x--> %d ' % e)
+            es = fn_cycle_es(c)
+            if es.intersection(rm):
+                continue
+            new_cands = cands.intersection(es) if cands else es
+            if not new_cands and cands:
+                rm.update([fn_weakest(cands)])
+            cands = new_cands
+        if cands:
+            rm.update([fn_weakest(cands)])
+
+        for e in rm:
+            sys.stdout.write('%d --x[%.2f]x--> %d ' % (e[0], E[e]['weight'], e[1]))
             G.remove_edge(*e)
         sys.stdout.write('\n')
-    assert(nx.algorithms.dag.is_directed_acyclic_graph(G))
+        if not nx.algorithms.dag.is_directed_acyclic_graph(G):
+            sys.stdout.write('Err: failed to resolve all cycles of overlap graph.\n')
     return G
 
 def overlap_graph_by_known_order(tuplesdb):
@@ -142,9 +147,9 @@ def draw_digraph(G, fname, figsize=None, longest_path=False, pos=None,
             path = nx.algorithms.dag.dag_longest_path(G)
             edge_highlight = 'green'
         else:
-            sys.stdout.write('Graph is not acyclic, longest cycle is highlighted instead of the longest path\n')
+            sys.stdout.write('Graph is not acyclic, shortest cycle is highlighted instead of the longest path\n')
             cycles = nx.algorithms.cycles.simple_cycles(G)
-            path = sorted(cycles, key=lambda x: len(x), reverse=True)[0]
+            path = sorted(cycles, key=lambda x: len(x))[0]
             path += [path[0]]
             edge_highlight = 'red'
     else:
@@ -167,7 +172,7 @@ def draw_digraph(G, fname, figsize=None, longest_path=False, pos=None,
     # Edges and their labels:
     edge_data = G.edges(data=True)
     mod = len(path) - 1
-    in_path = lambda u,v: u in path and v in path and path.index(v) == (path.index(u) + 1) % mod
+    in_path = lambda u,v: u in path and v in path and path.index(v) % mod == (path.index(u) + 1) % mod
     if edge_width is None:
         edge_width = [2 if in_path(u,v) else 0.7 for u,v,_ in edge_data]
     if edge_colors is None:
