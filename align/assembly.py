@@ -134,7 +134,8 @@ def _dict_VE_from_graph(G):
     E = dict([((u,v), attrs) for u, v, attrs in G.edges(data=True)])
     return V, E
 
-def draw_digraph(G, fname, figsize=None, longest_path=False, edge_colors=None):
+def draw_digraph(G, fname, figsize=None, longest_path=False, pos=None,
+    edge_colors=None, edge_width=None):
     V, E = _dict_VE_from_graph(G)
     if longest_path:
         if nx.algorithms.is_directed_acyclic_graph(G):
@@ -149,8 +150,8 @@ def draw_digraph(G, fname, figsize=None, longest_path=False, edge_colors=None):
     else:
         path = []
 
-    pos = nx.circular_layout(G)
-    #pos = nx.fruchterman_reingold_layout(G, k=10)
+    if pos is None:
+        pos = nx.circular_layout(G)
     if figsize is None:
         n = G.number_of_nodes()
         figsize = (n*2,n*2)
@@ -167,7 +168,8 @@ def draw_digraph(G, fname, figsize=None, longest_path=False, edge_colors=None):
     edge_data = G.edges(data=True)
     mod = len(path) - 1
     in_path = lambda u,v: u in path and v in path and path.index(v) == (path.index(u) + 1) % mod
-    edge_width = [2 if in_path(u,v) else 0.7 for u,v,_ in edge_data]
+    if edge_width is None:
+        edge_width = [2 if in_path(u,v) else 0.7 for u,v,_ in edge_data]
     if edge_colors is None:
         edge_colors = [edge_highlight if in_path(u,v) else 'black'  for u,v,_ in edge_data]
     nx.draw_networkx_edges(G, pos, edge_color=edge_colors, width=edge_width)
@@ -214,7 +216,8 @@ def diff_graph(G1, G2, fname, figsize=None):
         elif edge in added:
             edge_colors += ['green']
 
-    draw_digraph(G, fname, edge_colors=edge_colors)
+    pos = nx.fruchterman_reingold_layout(G, k=2.5)
+    draw_digraph(G, fname, pos=pos, edge_colors=edge_colors, edge_width=2)
 
 def compare_graphs(G1, G2, f):
     E1, E2 = set(G1.edges()), set(G2.edges())

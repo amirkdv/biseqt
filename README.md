@@ -120,6 +120,8 @@ of sequences and the longest path is reported as the layout.
 
 ### Simulations
 
+For the simulated case where the true genome is known a difference graph can be
+generated between the true overlap path and the assembled overlap path.
 The key paramters for overlap discovery are:
 
 1. Window size for successive alignment frames,
