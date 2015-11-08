@@ -39,8 +39,8 @@ class HpCondensor(object):
         self.letlen = int(floor(log10(maxlen))) + 2
         self.maxlen = int(maxlen)
 
-    def translate_alphabet(self, source='ACGT'):
-        for char in source:
+    def translate_alphabet(self, source):
+        for char in source.letters:
             for num in range(1, self.maxlen + 1):
                 letter = char + str(min(num, self.maxlen)).rjust(self.letlen - 1, '0')
                 yield char, num, letter
@@ -125,7 +125,7 @@ class HpCondensor(object):
 
         return orig
 
-    def translate_subst_scores(self, subst_scores, alphabet='ACGT',
+    def translate_subst_scores(self, subst_scores, alphabet=None,
         hp_go_score=0, hp_ge_score=-0.5, go_score=-3, ge_score=-2):
         alphabet_d = [x for x in self.translate_alphabet(alphabet)]
         L = len(alphabet_d)
@@ -134,7 +134,7 @@ class HpCondensor(object):
             ci, ni, _ = alphabet_d[i]
             for j in range(L):
                 cj, nj, _ = alphabet_d[j]
-                ki, kj = alphabet.index(ci), alphabet.index(cj)
+                ki, kj = alphabet.letters.index(ci), alphabet.letters.index(cj)
                 if ci == cj:
                     scores[i][j] = min(ni, nj) * subst_scores[ki][kj] + hp_go_score + hp_ge_score * abs(ni-nj)
                 else:

@@ -26,10 +26,10 @@ with open('data/dna.mtrtv.matrix') as f:
     subst_scores = eval(f.read().strip(), params)
 
 A = seq.Alphabet('ACGT')
-scores = Tr.translate_subst_scores(subst_scores, go_score=params['go_score'],
-    ge_score=params['ge_score'], hp_go_score=params['hp_go_score'],
-    hp_ge_score=params['hp_ge_score'])
-alphabet = [x for _,_,x in Tr.translate_alphabet('ACGT')]
+scores = Tr.translate_subst_scores(subst_scores, alphabet=A,
+    go_score=params['go_score'], ge_score=params['ge_score'],
+    hp_go_score=params['hp_go_score'], hp_ge_score=params['hp_ge_score'])
+alphabet = [x for _,_,x in Tr.translate_alphabet(A)]
 A_d = seq.Alphabet(alphabet)
 
 s = 'AACCCCGGGGGGGGGGGGT'
