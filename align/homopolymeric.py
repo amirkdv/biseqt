@@ -1,23 +1,5 @@
 from math import log10, floor
-from .seq import Alphabet
-
-def hp_tokenize(string):
-    """Generator for homopolymeric substrings in a given sequences. Each value
-    is a (char, num) tuple.
-    """
-    counter = 0
-    cur = string[0]
-    while counter < len(string):
-        if string[counter] == cur:
-            counter += 1
-        else:
-            yield string[0], counter
-            string = string[counter:]
-            counter = 0
-            cur = string[0]
-    # left overs:
-    if counter and len(string):
-        yield string[0], counter
+from . import seq, align, hp_tokenize
 
 class HpCondensor(object):
     """Transforms a sequence back and forth to an alternative alphabet by
@@ -34,25 +16,29 @@ class HpCondensor(object):
             maxlen is used to decide the length of letters in the new
             alphabet (they have to be constant for all letters).
     """
-    def __init__(self, maxlen=9):
+    def __init__(self, alphabet, maxlen=9):
         assert maxlen > 0
         self.letlen = int(floor(log10(maxlen))) + 2
         self.maxlen = int(maxlen)
+        self.src_alphabet = alphabet
+        self.dst_alphabet = self.translate_alphabet(alphabet)
 
     def translate_alphabet(self, source):
+        letters = []
         for char in source.letters:
             for num in range(1, self.maxlen + 1):
                 letter = char + str(min(num, self.maxlen)).rjust(self.letlen - 1, '0')
-                yield char, num, letter
+                letters += [letter]
+        return seq.Alphabet(letters)
 
-    def condense(self, string):
+    def condense(self, sequence):
         condensed = ''
-        for char, num in hp_tokenize(string):
+        for char, num in hp_tokenize(str(sequence)):
             num = str(min(num, self.maxlen)).rjust(self.letlen - 1, '0')
             condensed += char + num
-        return condensed
+        return seq.Sequence(condensed, self.dst_alphabet)
 
-    def expand(self, string):
+    def expand(self, sequence):
         """The inverse of condense(). For exmaple:
 
             condense("A2C4G2") #=> AACCCCGGT
@@ -63,13 +49,14 @@ class HpCondensor(object):
         :param string(str): condensed sequence
         :return str: original sequence
         """
+        string = str(sequence)
         assert len(string) % self.letlen == 0
         orig = ''
         for i in range(len(string)/self.letlen):
             letter = string[self.letlen*i: self.letlen*i+self.letlen]
             char, num = letter[0], int(letter[1:])
             orig +=  char * num
-        return orig
+        return seq.Sequence(orig, self.src_alphabet)
 
     # TODO allow translating Transcript objects (requires translatin scores)
     def expand_opseq(self, S, T, opseq):
@@ -126,17 +113,36 @@ class HpCondensor(object):
         return orig
 
     def translate_subst_scores(self, subst_scores, alphabet=None,
-        hp_go_score=0, hp_ge_score=-0.5, go_score=-3, ge_score=-2):
-        alphabet_d = [x for x in self.translate_alphabet(alphabet)]
-        L = len(alphabet_d)
+        hp_go_score=None, hp_ge_score=None, go_score=None, ge_score=None):
+        L = len(self.dst_alphabet)
         scores = [[None for _ in range(L)] for _ in range(L)]
         for i in range(L):
-            ci, ni, _ = alphabet_d[i]
+            let = self.dst_alphabet.letters[i]
+            ci, ni = let[0], int(let[1:])
             for j in range(L):
-                cj, nj, _ = alphabet_d[j]
+                let = self.dst_alphabet.letters[j]
+                cj, nj = let[0], int(let[1:])
                 ki, kj = alphabet.letters.index(ci), alphabet.letters.index(cj)
                 if ci == cj:
                     scores[i][j] = min(ni, nj) * subst_scores[ki][kj] + hp_go_score + hp_ge_score * abs(ni-nj)
                 else:
                     scores[i][j] = min(ni, nj) * subst_scores[ki][kj] + go_score + ge_score* abs(ni - nj)
         return scores
+
+    def translate_align_params(self, align_params, hp_go_score=None, hp_ge_score=None):
+        # TODO check that align_params is over the same alphabet as ours
+        subst_scores_d = self.translate_subst_scores(
+            align_params.subst_scores,
+            alphabet=align_params.alphabet,
+            hp_go_score=hp_go_score,
+            hp_ge_score=hp_ge_score,
+            go_score=align_params.gap_open_score,
+            ge_score=align_params.gap_extend_score
+        )
+        return align.AlignParams(
+            alphabet=self.dst_alphabet,
+            subst_scores=subst_scores_d,
+            go_score=align_params.gap_open_score,
+            ge_score=align_params.gap_extend_score,
+            max_diversion=align_params.max_diversion
+        )

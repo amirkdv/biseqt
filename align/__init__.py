@@ -22,3 +22,22 @@ class CffiObject(object):
     def __getattr__(self, name):
         return getattr(self.c_obj, name)
 
+
+def hp_tokenize(string):
+    """Generator for homopolymeric substrings in a given sequences. Each value
+    is a (char, num) tuple.
+    """
+    counter = 0
+    cur = string[0]
+    while counter < len(string):
+        if string[counter] == cur:
+            counter += 1
+        else:
+            yield string[0], counter
+            string = string[counter:]
+            counter = 0
+            cur = string[0]
+    # left overs:
+    if counter and len(string):
+        yield string[0], counter
+

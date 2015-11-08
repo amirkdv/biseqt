@@ -14,19 +14,22 @@ class Alphabet(CffiObject):
         _c_alph_ka (cffi.cdata): has ownership of (keeps alive) the C
             pointer to the full substitution matrix.
     """
-    def __init__(self, alphabet):
-        if isinstance(alphabet, str):
-            alphabet = [c for c in alphabet]
-        assert(len(set([len(s) for s in alphabet])) == 1)
+    def __init__(self, letters):
+        if isinstance(letters, str):
+            letters = [c for c in letters]
+        assert(len(set([len(s) for s in letters])) == 1)
         # each letter string in the alphabet must be "owned" by an object
         # that's kept alive.
-        self._c_letters_ka = [ffi.new('char[]', alphabet[i]) for i in range(len(alphabet))]
+        self._c_letters_ka = [ffi.new('char[]', letters[i]) for i in range(len(letters))]
         self._c_alph_ka = ffi.new('char *[]', self._c_letters_ka)
         self.c_obj = ffi.new('sequence_alphabet*', {
-            'length': len(alphabet),
-            'letter_length': len(alphabet[0]),
+            'length': len(letters),
+            'letter_length': len(letters[0]),
             'letters': self._c_alph_ka
         })
+
+    def __len__(self):
+        return len(self.letters)
 
     def __getattr__(self, name):
         if name == 'letters':

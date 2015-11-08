@@ -4,7 +4,7 @@ from termcolor import colored
 from contextlib import contextmanager
 
 from . import ffi, lib, seq, CffiObject
-from .homopolymeric import hp_tokenize
+from . import hp_tokenize
 
 global lib
 """Values for enum `align_type`.

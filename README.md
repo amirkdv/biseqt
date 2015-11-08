@@ -166,6 +166,7 @@ $ make overlap.layout.diff.pdf        # diff against the true overlap graph
 * Perform assembly on condensed sequences.
 
 #### Improvements
+* Switch to `igraph` for cycle processing; `networkx` gets slow quickly.
 * Code docs: all of [`OverlapFinder`](/align/tuples.py) and [Assembler](/align/assembly.py).
 * Separate cycle breaking from finding the overlap graph (for convenience in
   debugging large simulations).
