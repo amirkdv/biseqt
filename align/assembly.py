@@ -73,33 +73,41 @@ def overlap_graph_by_tuple_extension(tuplesdb, align_params=None, window=20,
                 G.add_edge(T_id, S_id, weight=overlap.tx.score)
 
     sys.stdout.write('\n')
+    # FIXME just write the graph here so we can see what is the matter with it.
 
     # break cycles
     V, E = _dict_VE_from_graph(G)
     fn_cycle_es = lambda x: set([(x[i-1], x[i]) for i in range(1, len(x))] + [(x[-1], x[0])])
-    if not nx.algorithms.dag.is_directed_acyclic_graph(G):
-        sys.stdout.write('Graph is not acyclic, breaking cycles: ')
-        cycles = nx.algorithms.cycles.simple_cycles(G)
-        cands = set()
-        fn_weakest = lambda C: sorted(C, key=lambda x: E[x]['weight'])[0]
-        rm = set()
-        for c in cycles:
-            es = fn_cycle_es(c)
-            if es.intersection(rm):
-                continue
-            new_cands = cands.intersection(es) if cands else es
-            if not new_cands and cands:
-                rm.update([fn_weakest(cands)])
-            cands = new_cands
-        if cands:
-            rm.update([fn_weakest(cands)])
+    cycles = nx.algorithms.cycles.simple_cycles(G)
+    try:
+        cycle = next(cycles)
+    except StopIteration:
+        return G
 
-        for e in rm:
+    sys.stdout.write('Graph is not acyclic, breaking cycles: ')
+    cands = fn_cycle_es(cycle)
+    fn_weakest = lambda C: sorted(C, key=lambda x: E[x]['weight'])[0]
+    rm = set()
+    for cycle in cycles:
+        es = fn_cycle_es(cycle)
+        if es.intersection(rm):
+            continue
+        new_cands = cands.intersection(es) if cands else es
+        if not new_cands and cands:
+            e = fn_weakest(cands)
             sys.stdout.write('%d --x[%.2f]x--> %d ' % (e[0], E[e]['weight'], e[1]))
-            G.remove_edge(*e)
-        sys.stdout.write('\n')
-        if not nx.algorithms.dag.is_directed_acyclic_graph(G):
-            sys.stdout.write('Err: failed to resolve all cycles of overlap graph.\n')
+            rm.update([e])
+        cands = new_cands
+    if cands:
+        e = fn_weakest(cands)
+        sys.stdout.write('%d --x[%.2f]x--> %d ' % (e[0], E[e]['weight'], e[1]))
+        rm.update([fn_weakest(cands)])
+
+    for e in rm:
+        G.remove_edge(*e)
+    sys.stdout.write('\n')
+    if not nx.algorithms.dag.is_directed_acyclic_graph(G):
+        sys.stdout.write('Err: failed to resolve all cycles of overlap graph.\n')
     return G
 
 def overlap_graph_by_known_order(tuplesdb):

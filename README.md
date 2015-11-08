@@ -62,7 +62,7 @@ Do](#to-do)).
 
 ## Tuples
 
-Some tuple methods (aka *l*-mer analysis) are provided by `tuples.TupleDB`
+Some tuple methods (aka *k*-mer analysis) are provided by `tuples.TupleDB`
 which is backed by [SQLite](https://docs.python.org/2/library/sqlite3.html) to
 store, index, and query tuples and by
 [`Bio.SeqIO`](http://biopython.org/wiki/SeqIO) to read FASTA files.
@@ -117,6 +117,21 @@ sequence).
 Overlap and layout graphs (i.e OLC minus consensus) can be calculated by methods
 provided in `assembly`. A weighted, DAG is built by seed expansion on all pairs
 of sequences and the longest path is reported as the layout.
+
+### Cycle breaking
+
+The resulting overlap graph may not be a DAG due to two main reasons:
+* wrong weak edges that should not exist.
+* strong edges with the wrong direction.
+
+The first case is dealt with by finding a (hopefully light) subset of the edges
+whose removal breaks all the cycles in the graph. The algorithm does not try to
+be optimal but quick and relies on the fact that the *true* overlap graph is
+necessarily a DAG and thus correct edges are unlikely to be part of many cycles.
+
+The second case is typically caused by highly overlapping sequences (i.e the
+start or end index of end points are too close). Currently such edges are
+ignored altogether.
 
 ### Simulations
 
@@ -174,14 +189,6 @@ $ make overlap.layout.diff.pdf        # diff against the true overlap graph
   score criteria or should we drop out once we find one segment? Note that most
   of the time for overlapping sequences many seeds come from the same correct
   suffix-prefix alignment.
-* Deal with the case where two sequences mostly overlap (with close start
-  and ends). In such cases a small error in alignment (which would have a small
-  score cost) can reverse the direction of the edge. This is problematic because
-  such edges are typically really heavy (due to the strong overlap). Currently,
-  if the starting or ending indices of an alignment are too close (less than 5)
-  the alignment is ignored. Alternatively, we could perform a full global
-  suffix-prefix alignment to keep the edge but typically such edges are not
-  really informative.
 * Make `align.Transcript` a `namedtuple` as well (unless it's becoming a
   `CffiObject`).
 * An overlap graph must satisfy two consistency criterions:
@@ -194,6 +201,12 @@ $ make overlap.layout.diff.pdf        # diff against the true overlap graph
   overlap alignment (this matches the typical case of left-out-vertices in
   simulations). The difficulty is to find a way to recover necessary edges
   for a full layout path without trying to recover *all* missing edges.
+* Cycle breaking:
+  * Investigate whether a smarter cycle breaking algorithm is needed.
+  * Investigate whether we should stop ignoring sequence pairs that are mostly
+    overlapping. These are currently ignored since we may get the direction
+    wrong on a heavy edge. The idea is that such edges are not typically
+    informative about the longest path.
 * Move seed expansion from Python to C.
 
 #### Simulations
