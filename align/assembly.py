@@ -105,10 +105,19 @@ def save_graph(G, fname):
     nx.write_gml(G, fname)
 
 # given path will be highlighted
-def draw_graph(G, fname, figsize=None, path=[]):
-    #pos = nx.circular_layout(G)
-    #pos = nx.spring_layout(G)
-    pos = nx.fruchterman_reingold_layout(G, k=10)
+def draw_digraph(G, fname, figsize=None, longest_path=False):
+    if longest_path:
+        if nx.algorithms.is_directed_acyclic_graph(G):
+            path = nx.algorithms.dag.dag_longest_path(G)
+            edge_highlight = 'green'
+        else:
+            cycles = nx.algorithms.simple_cycles(G)
+            path = sorted(cycles, key=lambda x: len(x), reverse=True)[0]
+            edge_highlight = 'red'
+    else:
+        path = []
+    pos = nx.circular_layout(G)
+    #pos = nx.fruchterman_reingold_layout(G, k=10)
     if figsize is None:
         n = G.number_of_nodes()
         figsize = (n*2,n*2)
@@ -121,8 +130,8 @@ def draw_graph(G, fname, figsize=None, path=[]):
     nx.draw_networkx_labels(G, pos, node_labels, font_size=14)
 
     edge_data = G.edges(data=True)
-    edge_in_path = lambda u,v: u in path and v in path and path[path.index(u) +1] == v
-    edge_color = ['green' if edge_in_path(u,v) else 'black'  for u,v,_ in edge_data]
+    edge_in_path = lambda u,v: u in path and v in path and path.index(v) == path.index(u) + 1
+    edge_color = [edge_highlight if edge_in_path(u,v) else 'black'  for u,v,_ in edge_data]
     edge_width = [2 if edge_in_path(u,v) else 0.7 for u,v,_ in edge_data]
     nx.draw_networkx_edges(G, pos, edge_color=edge_color, width=edge_width)
     if edge_data and 'weight' in edge_data[0][2]:
@@ -132,28 +141,78 @@ def draw_graph(G, fname, figsize=None, path=[]):
     plt.yticks([])
     plt.savefig(fname, bbox_inches='tight')
 
+def layout_graph(G):
+    assert(nx.algorithms.is_directed_acyclic_graph(G))
+    path = nx.algorithms.dag.dag_longest_path(G)
+    V = dict(G.nodes(data=True))
+    E = dict([((u,v), attr) for u,v,attr in G.edges(data=True)])
+    G = nx.DiGraph()
+    for nid in V:
+        G.add_node(nid, **V[nid])
+    for nid_idx in range(1, len(path)):
+        attrs = E[(path[nid_idx-1], path[nid_idx])]
+        G.add_edge(path[nid_idx-1], path[nid_idx], attrs)
+    return G
+
+def diff_graph(G1, G2, fname, figsize=None):
+    G = nx.DiGraph()
+    V1, V2 = dict(G1.nodes(data=True)), dict(G2.nodes(data=True))
+    E1 = dict([((u,v), attr) for u,v,attr in G1.edges(data=True)])
+    E2 = dict([((u,v), attr) for u,v,attr in G2.edges(data=True)])
+    for edge in set(G1.edges()).union(set(G2.edges())):
+        G.add_node(edge[0], **V1[edge[0]])
+        G.add_node(edge[1], **V1[edge[1]])
+        kw = E1[edge] if edge in E1 else E2[edge]
+        G.add_edge(edge[0], edge[1], **kw)
+
+    E = dict([((u,v), attr) for u,v,attr in G.edges(data=True)])
+    E1, E2 = set(G1.edges()), set(G2.edges())
+    both, missing, added = E1.intersection(E2), E1 - E2, E2 - E1
+    edge_color = []
+    for edge in G.edges():
+        if edge in both:
+            edge_color += ['black']
+        elif edge in missing:
+            edge_color += ['red']
+        elif edge in added:
+            edge_color += ['green']
+
+    pos = nx.circular_layout(G)
+    #pos = nx.fruchterman_reingold_layout(G, k=10)
+    if figsize is None:
+        n = G.number_of_nodes()
+        figsize = (n*2,n*2)
+    plt.figure(figsize=figsize)
+    # Vertices and their labels
+    nx.draw_networkx_nodes(G, pos, node_size=8000, node_color='w')
+    node_labels = nx.get_node_attributes(G, 'name')
+    node_labels = {k: node_labels[k].replace(' ', '\n') for k in node_labels}
+    nx.draw_networkx_labels(G, pos, node_labels, font_size=14)
+
+    nx.draw_networkx_edges(G, pos, edge_color=edge_color)
+    nx.draw_networkx_edge_labels(G, pos, font_size=11,
+        edge_labels={k:'%.2f' % E[k]['weight'] for k in E})
+    plt.xticks([])
+    plt.yticks([])
+    plt.savefig(fname, bbox_inches='tight')
+
 def compare_graphs(G1, G2, f):
     E1, E2 = set(G1.edges()), set(G2.edges())
     missing, added = E1 - E2, E2 - E1
     f.write('G1 (%d edges) --> G2 (%d edges): %%%.2f lost, %%%.2f added\n' %
-        (len(E1), len(E2), len(missing)*100.0/len(E1), len(added)*100.0/len(E1)))
+        (len(E1), len(E2), len(missing)*100.0/len(E1),
+         len(added)*100.0/len(E1)))
     diff = [('-', edge) for edge in missing] + [('+', edge) for edge in added]
     N1 = nx.get_node_attributes(G1, 'name')
     N2 = nx.get_node_attributes(G2, 'name')
     for edge in sorted(diff, cmp=lambda x, y: cmp(x[1], y[1])):
         if edge[0] == '-':
             src, dst = N1[edge[1][0]], N1[edge[1][1]]
-            line = '- [%s]--(%.2f)-->[%s]\n' % (src, G1.get_edge_data(*edge[1])['weight'], dst)
+            line = '- [%s]--(%.2f)-->[%s]\n' % (src,
+             G1.get_edge_data(*edge[1])['weight'], dst)
             f.write(colored(line, color='red'))
         else:
             src, dst = N2[edge[1][0]], N2[edge[1][1]]
-            line = '+ [%s]--(%.2f)-->[%s]\n' % (src, G2.get_edge_data(*edge[1])['weight'], dst)
+            line = '+ [%s]--(%.2f)-->[%s]\n' % (src,
+             G2.get_edge_data(*edge[1])['weight'], dst)
             f.write(colored(line, color='green'))
-
-def layout(G):
-    path = nx.algorithms.dag.dag_longest_path(G)
-    V = dict(G.nodes(data=True))
-    return [V[nid]['name'] for nid in path]
-
-def draw_layout(G, fname):
-    draw_graph(G, fname, path=nx.algorithms.dag.dag_longest_path(G))

@@ -159,11 +159,14 @@ Bad:
 ## To Do
 * Missing features:
   * [ ] Perform assembly on condensed sequences.
-  * [ ] Figure out a way to draw the comparison of two layouts in colors.
+  * [x] Figure out a way to draw the comparison of two layouts in colors.
+  * [ ] Deal with potential cycles: they don't seem to occur (but there's a
+    chance; see belowW). Removing weak edges until the overlap graph is acyclic
+    should work.
 * Improvements:
   * [ ] Deal with the case where two sequences mostly overlap (with close start
     and ends). This may lead to a correctly heavy edge but with the wrong
-    direction. Either:
+    direction and thus a cycle that is not easy to fix. Either:
     * ignore problematic pairs of sequences; the missing edge will most likely
     not have a consequence on the longest path (since the two sequences have
     mostly common neighbors).
@@ -183,9 +186,6 @@ Bad:
     fact, most of the time vertices that are left out of the assembled layout
     path are missing an edge that could have been reconstructed by the
     consistency condition).
-  * [ ] Deal with potential cycles: they don't seem to occur (but there's a
-    chance due to high risk of getting the direction wrong in some corner
-    cases). Removing weak edges until the overlap graph is acyclic should work.
   * [ ] Move seed expansion from Python to C.
 * [ ] *Real* data: test against Leishmania dataset.
 * simulations:
