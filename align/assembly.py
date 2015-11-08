@@ -59,6 +59,9 @@ def overlap_graph_by_tuple_extension(tuplesdb, align_params=None, window=20,
             #print set(['S->T' if x.tx.idx_S < x.tx.idx_T else 'T->S' for x in segments])
             #overlap.tx.pretty_print(tuplesdb.loadseq(S_id), tuplesdb.loadseq(T_id), sys.stdout)
             S_len, T_len = F._S_len(overlap.tx.opseq), F._T_len(overlap.tx.opseq)
+            if abs(overlap.tx.idx_S - overlap.tx.idx_T) < window or \
+                abs(overlap.tx.idx_S + S_len - (overlap.tx.idx_T + T_len)) < window:
+                continue
             if overlap.tx.idx_S == 0 and overlap.tx.idx_T == 0:
                 if S_len < T_len:
                     G.add_edge(S_id, T_id, weight=overlap.tx.score)
@@ -70,6 +73,28 @@ def overlap_graph_by_tuple_extension(tuplesdb, align_params=None, window=20,
                 G.add_edge(T_id, S_id, weight=overlap.tx.score)
 
     sys.stdout.write('\n')
+
+    # break cycles
+    V, E = _dict_VE_from_graph(G)
+    fn_cycle_es = lambda x: set([(x[i-1], x[i]) for i in range(1, len(x))] + [(x[-1], x[0])])
+    if not nx.algorithms.dag.is_directed_acyclic_graph(G):
+        sys.stdout.write('Graph is not acyclic, breaking cycles: ')
+        cycles = nx.algorithms.cycles.simple_cycles(G)
+        candidates = fn_cycle_es(cycles.next())
+        fn_weakest = lambda cands: sorted(candidates, key=lambda x: E[x]['weight'])[0]
+        for c in cycles:
+            new_cands = candidates.intersection(fn_cycle_es(c))
+            if not new_cands:
+                e = fn_weakest(candidates)
+                sys.stdout.write('%d --x--> %d ' % e)
+                G.remove_edge(*e)
+            candidates = new_cands
+        if candidates:
+            e = fn_weakest(candidates)
+            sys.stdout.write('%d --x--> %d ' % e)
+            G.remove_edge(*e)
+        sys.stdout.write('\n')
+    assert(nx.algorithms.dag.is_directed_acyclic_graph(G))
     return G
 
 def overlap_graph_by_known_order(tuplesdb):
@@ -104,97 +129,92 @@ def overlap_graph_by_known_order(tuplesdb):
 def save_graph(G, fname):
     nx.write_gml(G, fname)
 
-# given path will be highlighted
-def draw_digraph(G, fname, figsize=None, longest_path=False):
+def _dict_VE_from_graph(G):
+    V = dict(G.nodes(data=True))
+    E = dict([((u,v), attrs) for u, v, attrs in G.edges(data=True)])
+    return V, E
+
+def draw_digraph(G, fname, figsize=None, longest_path=False, edge_colors=None):
+    V, E = _dict_VE_from_graph(G)
     if longest_path:
         if nx.algorithms.is_directed_acyclic_graph(G):
             path = nx.algorithms.dag.dag_longest_path(G)
             edge_highlight = 'green'
         else:
-            cycles = nx.algorithms.simple_cycles(G)
+            sys.stdout.write('Graph is not acyclic, longest cycle is highlighted instead of the longest path\n')
+            cycles = nx.algorithms.cycles.simple_cycles(G)
             path = sorted(cycles, key=lambda x: len(x), reverse=True)[0]
+            path += [path[0]]
             edge_highlight = 'red'
     else:
         path = []
+
     pos = nx.circular_layout(G)
     #pos = nx.fruchterman_reingold_layout(G, k=10)
     if figsize is None:
         n = G.number_of_nodes()
         figsize = (n*2,n*2)
     plt.figure(figsize=figsize)
+
     # Vertices and their labels
-    node_color = ['gray' if u in path else 'white' for u in G.nodes()]
+    node_color = ['gray' if u in path else 'white' for u in V]
     nx.draw_networkx_nodes(G, pos, node_size=8000, node_color=node_color)
     node_labels = nx.get_node_attributes(G, 'name')
     node_labels = {k: node_labels[k].replace(' ', '\n') for k in node_labels}
     nx.draw_networkx_labels(G, pos, node_labels, font_size=14)
 
+    # Edges and their labels:
     edge_data = G.edges(data=True)
-    edge_in_path = lambda u,v: u in path and v in path and path.index(v) == path.index(u) + 1
-    edge_color = [edge_highlight if edge_in_path(u,v) else 'black'  for u,v,_ in edge_data]
-    edge_width = [2 if edge_in_path(u,v) else 0.7 for u,v,_ in edge_data]
-    nx.draw_networkx_edges(G, pos, edge_color=edge_color, width=edge_width)
+    mod = len(path) - 1
+    in_path = lambda u,v: u in path and v in path and path.index(v) == (path.index(u) + 1) % mod
+    edge_width = [2 if in_path(u,v) else 0.7 for u,v,_ in edge_data]
+    if edge_colors is None:
+        edge_colors = [edge_highlight if in_path(u,v) else 'black'  for u,v,_ in edge_data]
+    nx.draw_networkx_edges(G, pos, edge_color=edge_colors, width=edge_width)
     if edge_data and 'weight' in edge_data[0][2]:
         nx.draw_networkx_edge_labels(G, pos, font_size=11,
             edge_labels={(f,t):'%.2f' % a['weight'] for f,t,a in edge_data})
+
     plt.xticks([])
     plt.yticks([])
     plt.savefig(fname, bbox_inches='tight')
 
 def layout_graph(G):
     assert(nx.algorithms.is_directed_acyclic_graph(G))
+    V, E = _dict_VE_from_graph(G)
     path = nx.algorithms.dag.dag_longest_path(G)
-    V = dict(G.nodes(data=True))
-    E = dict([((u,v), attr) for u,v,attr in G.edges(data=True)])
-    G = nx.DiGraph()
+    L = nx.DiGraph()
     for nid in V:
-        G.add_node(nid, **V[nid])
+        L.add_node(nid, **V[nid])
     for nid_idx in range(1, len(path)):
         attrs = E[(path[nid_idx-1], path[nid_idx])]
-        G.add_edge(path[nid_idx-1], path[nid_idx], attrs)
-    return G
+        L.add_edge(path[nid_idx-1], path[nid_idx], attrs)
+
+    return L
 
 def diff_graph(G1, G2, fname, figsize=None):
     G = nx.DiGraph()
-    V1, V2 = dict(G1.nodes(data=True)), dict(G2.nodes(data=True))
-    E1 = dict([((u,v), attr) for u,v,attr in G1.edges(data=True)])
-    E2 = dict([((u,v), attr) for u,v,attr in G2.edges(data=True)])
+    V1, E1 = _dict_VE_from_graph(G1)
+    V2, E2 = _dict_VE_from_graph(G2)
     for edge in set(G1.edges()).union(set(G2.edges())):
         G.add_node(edge[0], **V1[edge[0]])
         G.add_node(edge[1], **V1[edge[1]])
         kw = E1[edge] if edge in E1 else E2[edge]
         G.add_edge(edge[0], edge[1], **kw)
 
-    E = dict([((u,v), attr) for u,v,attr in G.edges(data=True)])
-    E1, E2 = set(G1.edges()), set(G2.edges())
-    both, missing, added = E1.intersection(E2), E1 - E2, E2 - E1
-    edge_color = []
+    V, E = _dict_VE_from_graph(G)
+    sE1, sE2 = set(G1.edges()), set(G2.edges())
+    both, missing, added = sE1.intersection(sE2), sE1 - sE2, sE2 - sE1
+    edge_colors = []
     for edge in G.edges():
         if edge in both:
-            edge_color += ['black']
+            edge_colors += ['black']
         elif edge in missing:
-            edge_color += ['red']
+            edge_colors += ['red']
         elif edge in added:
-            edge_color += ['green']
+            edge_colors += ['green']
 
-    pos = nx.circular_layout(G)
-    #pos = nx.fruchterman_reingold_layout(G, k=10)
-    if figsize is None:
-        n = G.number_of_nodes()
-        figsize = (n*2,n*2)
-    plt.figure(figsize=figsize)
-    # Vertices and their labels
-    nx.draw_networkx_nodes(G, pos, node_size=8000, node_color='w')
-    node_labels = nx.get_node_attributes(G, 'name')
-    node_labels = {k: node_labels[k].replace(' ', '\n') for k in node_labels}
-    nx.draw_networkx_labels(G, pos, node_labels, font_size=14)
-
-    nx.draw_networkx_edges(G, pos, edge_color=edge_color)
-    nx.draw_networkx_edge_labels(G, pos, font_size=11,
-        edge_labels={k:'%.2f' % E[k]['weight'] for k in E})
-    plt.xticks([])
-    plt.yticks([])
-    plt.savefig(fname, bbox_inches='tight')
+    draw_digraph(G, fname, edge_colors=edge_colors)
 
 def compare_graphs(G1, G2, f):
     E1, E2 = set(G1.edges()), set(G2.edges())

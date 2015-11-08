@@ -165,17 +165,18 @@ $ make overlap.layout.diff.pdf        # diff against the true overlap graph
 
 #### Improvements
 * Code docs: all of [`OverlapFinder`](/align/tuples.py) and [Assembler](/align/assembly.py).
-* Deal with the case where two sequences mostly overlap (with close start
-  and ends). This may lead to a correctly heavy edge but with the wrong
-  direction and thus a cycle that is not easy to fix. Either:
-  * ignore problematic pairs of sequences; the missing edge will most likely
-  not have a consequence on the longest path (since the two sequences have
-  mostly common neighbors).
-  * perform a full global suffix-prefix alignment if the ends are too close.
 * For any two reads, do we need to pursue all segments that satisfy the
   score criteria or should we drop out once we find one segment? Note that most
   of the time for overlapping sequences many seeds come from the same correct
   suffix-prefix alignment.
+* Deal with the case where two sequences mostly overlap (with close start
+  and ends). In such cases a small error in alignment (which would have a small
+  score cost) can reverse the direction of the edge. This is problematic because
+  such edges are typically really heavy (due to the strong overlap). Currently,
+  if the starting or ending indices of an alignment are too close (less than 5)
+  the alignment is ignored. Alternatively, we could perform a full global
+  suffix-prefix alignment to keep the edge but typically such edges are not
+  really informative.
 * Make `align.Transcript` a `namedtuple` as well (unless it's becoming a
   `CffiObject`).
 * An overlap graph must satisfy two consistency criterions:
