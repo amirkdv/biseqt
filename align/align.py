@@ -304,6 +304,7 @@ class Transcript(object):
             tline += T[idx_T-i] if i <= idx_T else ' '
             counter += letlen
 
+        gap = '-' * S.alphabet.letter_length
         # The alignment itself:
         for op in self.opseq:
             if counter >= width:
@@ -313,10 +314,10 @@ class Transcript(object):
                 idx_S += 1
                 idx_T += 1
             elif op == 'I':
-                s, t = '-', T[idx_T]
+                s, t = gap, T[idx_T]
                 idx_T += 1
             elif op == 'D':
-                s, t = S[idx_S], '-'
+                s, t = S[idx_S], gap
                 idx_S += 1
             else:
                 raise ValueError('Invalid edit operation: %c' % op)
