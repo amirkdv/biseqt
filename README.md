@@ -110,7 +110,8 @@ This is needed to ensure constant letter length across the condensed alphabet
 Due to this, if source alphabet sequences contain homopolymeric substrings that
 are longer than the specified `maxlen`, the condensing process is lossy
 (expanding a condensed sequence does not necessarily give its original
-sequence).
+sequence). However, if the original sequence is available, expanding an
+alignment transcript can be done losslessly to match the original sequence.
 
 ## Genome assembly
 

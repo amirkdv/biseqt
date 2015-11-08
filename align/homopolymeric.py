@@ -38,7 +38,7 @@ class HpCondensor(object):
             condensed += char + num
         return seq.Sequence(condensed, self.dst_alphabet)
 
-    def expand(self, sequence):
+    def expand_sequence(self, sequence):
         """The inverse of condense(). For exmaple:
 
             condense("A2C4G2") #=> AACCCCGGT
@@ -58,59 +58,60 @@ class HpCondensor(object):
             orig +=  char * num
         return seq.Sequence(orig, self.src_alphabet)
 
-    # TODO allow translating Transcript objects (requires translatin scores)
-    def expand_opseq(self, S, T, opseq):
+    def expand_transcript(self, S, T, transcript):
         S, T = str(S), str(T)
-        """Expands a given sequence of edit ops (string of B/M/S/I/D) generated
-        for the condensed versions of S and T to the equivalent op sequence for
-        S and T.
+        """Expands a given transcript for condensed versions of S and T to the
+        equivalent op sequence for S and T.
         """
-        assert all([s in 'BMISD' for s in opseq])
-        orig = ''
-        tokens_S = hp_tokenize(S)
-        tokens_T = hp_tokenize(T)
+        opseq = ''
+        idx_S = transcript.idx_S * self.dst_alphabet.letter_length
+        idx_T = transcript.idx_T * self.dst_alphabet.letter_length
+
+        tokens_S = hp_tokenize(S[idx_S:])
+        tokens_T = hp_tokenize(T[idx_T:])
 
         char_S, num_S = tokens_S.next()
         char_T, num_T = tokens_T.next()
-        for op in opseq:
+        for op in transcript.opseq:
             if (None,None) in [char_S, char_T, num_S, num_T]:
                 raise ValueError('The transcript does not match the sequences')
             if op == 'B':
-                orig += 'B'
+                opseq += 'B'
             if op == 'M':
-                orig += 'M' * min(num_S, self.maxlen)
+                opseq += 'M' * min(num_S, self.maxlen)
                 if num_S > self.maxlen and num_T > self.maxlen:
-                    orig += 'M' * (min(num_S, num_T) - self.maxlen)
+                    opseq += 'M' * (min(num_S, num_T) - self.maxlen)
                     if num_S > num_T:
-                        orig += 'D' * (num_S - num_T)
+                        opseq += 'D' * (num_S - num_T)
                     elif num_T > num_S:
-                        orig += 'I' * (num_S - num_T)
+                        opseq += 'I' * (num_S - num_T)
                 elif num_S > self.maxlen and num_T == self.maxlen:
-                    orig += 'D' * (num_S - self.maxlen)
+                    opseq += 'D' * (num_S - self.maxlen)
                 elif num_T > self.maxlen and num_S == self.maxlen:
-                    orig += 'I' * (num_T - self.maxlen)
+                    opseq += 'I' * (num_T - self.maxlen)
                 char_S, num_S = next(tokens_S, (None,None))
                 char_T, num_T = next(tokens_T, (None,None))
             if op == 'S':
                 if char_S == char_T:
-                    orig += 'M' * min(num_T, num_S)
+                    opseq += 'M' * min(num_T, num_S)
                 else:
-                    orig += 'S' * min(num_T, num_S)
+                    opseq += 'S' * min(num_T, num_S)
 
                 if num_T > num_S:
-                    orig += 'I' * (num_T - num_S)
+                    opseq += 'I' * (num_T - num_S)
                 elif num_S > num_T:
-                    orig += 'D' * (num_S - num_T)
+                    opseq += 'D' * (num_S - num_T)
                 char_S, num_S = next(tokens_S, (None,None))
                 char_T, num_T = next(tokens_T, (None,None))
             if op == 'I':
-                orig += 'I' * num_T
+                opseq += 'I' * num_T
                 char_T, num_T = next(tokens_T, (None,None))
             if op == 'D':
-                orig += 'D' * num_S
+                opseq += 'D' * num_S
                 char_S, num_S = next(tokens_S, (None,None))
 
-        return orig
+        return align.Transcript(idx_S=idx_S, idx_T=idx_T,
+            score=transcript.score, opseq=opseq)
 
     def translate_subst_scores(self, subst_scores, alphabet=None,
         hp_go_score=None, hp_ge_score=None, go_score=None, ge_score=None):
@@ -130,7 +131,7 @@ class HpCondensor(object):
         return scores
 
     def translate_align_params(self, align_params, hp_go_score=None, hp_ge_score=None):
-        # TODO check that align_params is over the same alphabet as ours
+        assert(align_params.alphabet.letters == self.src_alphabet.letters)
         subst_scores_d = self.translate_subst_scores(
             align_params.subst_scores,
             alphabet=align_params.alphabet,

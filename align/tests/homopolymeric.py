@@ -29,29 +29,27 @@ C = align.AlignParams(alphabet=A,subst_scores=subst_scores,
     max_diversion=params['band'])
 Tr = HpCondensor(A, maxlen=5)
 
-S = seq.Sequence('AACCCCGGGGGGGGGGGGT', A)
-T = seq.Sequence('AATGGGGGGGGGTTT', A)
-print S
-print T
+S = seq.Sequence('AACCCCCCCCGGGT', A)
+T = seq.Sequence('AATCCGGGTTT', A)
 S_d = Tr.condense(S)
 T_d = Tr.condense(T)
-opseq_d = 'MSSS'
-opseq = Tr.expand_opseq(S, T, opseq_d)
-print opseq_d
-print opseq
-align.Transcript(raw_transcript='(0,0),0:%s' % opseq).pretty_print(S, T, sys.stdout)
+print S, S_d
+print T, T_d
+transcript_d = align.Transcript(raw_transcript='(0,0),0:MISMS')
+transcript = Tr.expand_transcript(S, T, transcript_d)
+print 'Condensed transcript: ' , transcript_d
+transcript_d.pretty_print(S_d, T_d, sys.stdout)
+print 'Expanded  transcript: ', transcript
+transcript.pretty_print(S, T, sys.stdout)
 
 C_d = Tr.translate_align_params(C, hp_go_score=params['hp_go_score'],
     hp_ge_score=params['hp_ge_score'])
 with align.AlignProblem(S=S_d, T=T_d, params=C_d, align_type=params['type']) as P:
     P.solve(print_dp_table=params['show_dp'])
-    transcript_d = P.traceback()
-    print "opseq score: %.2f" % P.score(opseq_d)
+    correct_transcript_d = P.traceback()
 
 if transcript_d:
-    print '\n' + str(transcript_d) + '\n'
-    opseq = Tr.expand_opseq(S, T, transcript_d.opseq)
-    transcript = align.Transcript(
-        idx_S=transcript_d.idx_S * Tr.dst_alphabet.letter_length,
-        idx_T=transcript_d.idx_T * Tr.dst_alphabet.letter_length, score=0, opseq=opseq_d)
+    print 'Condensed alignment transcript: ', transcript_d
+    transcript = Tr.expand_transcript(S, T, transcript_d)
+    print 'Expanded correct alignment: '
     transcript.pretty_print(S, T, sys.stdout, margin=10)
