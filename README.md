@@ -194,7 +194,6 @@ $ make overlap.layout.diff.pdf        # diff against the true overlap graph
 * Move seed expansion from Python to C.
 
 #### Simulations
-* Make sure random reads cover the entire genome.
 * Test on larger data sets (requires speedup).
 * Separate sanity tests from simulations; write sanity tests for individual
   parts of assembly.

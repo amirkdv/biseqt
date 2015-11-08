@@ -166,6 +166,11 @@ class Sequence():
         # TODO make sure we have at least one read from the very beginning and
         # the very end.
         N = self.length
+
+        # include two reads that reach the boundaries:
+        yield Sequence(self[:len_mean], self.alphabet), 0
+        yield Sequence(self[-len_mean:], self.alphabet), N - len_mean
+
         num = int(1.0 * N * coverage/len_mean)
         for i in range(num):
             # minimum read leangth is 10, and max is N-1
