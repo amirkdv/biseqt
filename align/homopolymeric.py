@@ -112,7 +112,7 @@ class HpCondenser(object):
         char_S, num_S = tokens_S.next()
         char_T, num_T = tokens_T.next()
         for op in transcript.opseq:
-            if (None,None) in [char_S, char_T, num_S, num_T]:
+            if (None, None) in [(char_S, char_T), (num_S, num_T)]:
                 raise ValueError('The transcript does not match the sequences')
             if op == 'B':
                 opseq += 'B'
