@@ -183,57 +183,59 @@ $ make overlap.layout.diff.pdf        # diff against the true overlap graph
 * Perform assembly on condensed sequences.
 * Move seed expansion from Python to C.
 * Switch to `igraph` for cycle processing; `networkx` gets slow quickly.
-
-### Simulations
-
-* Test on larger data sets (requires speedup).
-* Separate sanity tests from simulations; write sanity tests for individual
-  parts of assembly.
-* Support hompolymeric-specific indel parameters in random generation of genome
-  sequencing reads.
-* *Real* data: test against Leishmania dataset.
-
-### Code
-
-* Make `align.Transcript` a `namedtuple` as well (unless it's becoming a
-  `CffiObject`).
-* Documentation:
-
-  i. Neither `OverlapFinder` nor `assembly` have any docs.
-  i. Other docs are inconsistent in style, make them work with sphinx.
-
-### Improvements
-
 * Separate cycle breaking from finding the overlap graph (for convenience in
   debugging large simulations).
-* For any two reads, do we need to pursue all segments that satisfy the
-  score criteria or should we drop out once we find one segment? Note that most
-  of the time for overlapping sequences many seeds come from the same correct
-  suffix-prefix alignment.
-* An overlap graph must satisfy two consistency criterions: it is a DAG,
-  and for any vertex *u* in it, any pair of outgoing (incoming) neighbors of *u*
-  are adjacent.  Assembly overlap graphs are DAG (or close to it) but they
-  rarely satisfy the second. The second criteria can be used to find missing
-  edges by brute force overlap alignment (this matches the typical case of
-  left-out-vertices in simulations). The difficulty is to find a way to recover
-  necessary edges for a full layout path without trying to recover *all* missing
-  edges.
-* Cycle breaking:
+* Simulations:
 
-    i. Investigate whether a smarter cycle breaking algorithm is needed.
-    i. Investigate whether we should stop ignoring sequence pairs that are mostly
-      overlapping. These are currently ignored since we may get the direction
-      wrong on a heavy edge. The idea is that such edges are not typically
-      informative about the longest path.
+    * Test on larger data sets (requires speedup).
+    * Separate sanity tests from simulations; write sanity tests for individual
+      parts of assembly.
+    * Support hompolymeric-specific indel parameters in random generation of genome
+      sequencing reads.
+    * *Real* data: test against Leishmania dataset.
 
-### Low priority
-* Add an ungapped seed expansion phase.
-* Adapt Karlin-Altschul statistics (references:
-  [[1]](http://www.pnas.org/content/87/6/2264.full.pdf),
-  [[2]](https://publications.mpi-cbg.de/Altschul_1990_5424.pdf),
-  [[3]](http://www.jstor.org/stable/1427732?seq=1#page_scan_tab_contents), and
-  chap. 7-9 [[4]](https://books.google.ca/books?id=uZvlBwAAQBAJ)) to the
-  problem of finding overlaps.
-* Support [Hirschberg](https://en.wikipedia.org/wiki/Hirschberg\'s_algorithm) -style
-  linear space optimization in `libalign`.
-* Make it work with Python 3.
+* Code:
+
+    * Make `align.Transcript` a `namedtuple` as well (unless it's becoming a
+      `CffiObject`).
+    * Separate layout and overlap algorithms that are all in `assembly`.
+    * Documentation:
+
+        * Neither `OverlapFinder` nor `assembly` have any docs.
+        * Other docs are inconsistent in style, make them work with sphinx.
+        * Figure out how to pull in docstrings from C code into sphinx (e.g look
+          at [Breathe](https://github.com/michaeljones/breathe)).
+
+* Improvements:
+
+    * For any two reads, do we need to pursue all segments that satisfy the
+      score criteria or should we drop out once we find one segment? Note that
+      most of the time for overlapping sequences many seeds come from the same
+      correct suffix-prefix alignment.
+    * An overlap graph must satisfy two consistency criterions: it is a DAG,
+      and for any vertex *u* in it, any pair of outgoing (incoming) neighbors of
+      *u* are adjacent.  Assembly overlap graphs are DAG (or close to it) but
+      they rarely satisfy the second. The second criteria can be used to find
+      missing edges by brute force overlap alignment (this matches the typical
+      case of left-out-vertices in simulations). The difficulty is to find a way
+      to recover necessary edges for a full layout path without trying to
+      recover *all* missing edges.
+    * Cycle breaking:
+
+          * Investigate whether a smarter cycle breaking algorithm is needed.
+          * Investigate whether we should stop ignoring sequence pairs that are mostly
+            overlapping. These are currently ignored since we may get the direction
+            wrong on a heavy edge. The idea is that such edges are not typically
+            informative about the longest path.
+
+* Low priority:
+    * Add an ungapped seed expansion phase.
+    * Adapt Karlin-Altschul statistics (references:
+      [[1]](http://www.pnas.org/content/87/6/2264.full.pdf),
+      [[2]](https://publications.mpi-cbg.de/Altschul_1990_5424.pdf),
+      [[3]](http://www.jstor.org/stable/1427732?seq=1#page_scan_tab_contents), and
+      chap. 7-9 [[4]](https://books.google.ca/books?id=uZvlBwAAQBAJ)) to the
+      problem of finding overlaps.
+    * Support [Hirschberg](https://en.wikipedia.org/wiki/Hirschberg\'s_algorithm) -style
+      linear space optimization in `libalign`.
+    * Make it work with Python 3.
