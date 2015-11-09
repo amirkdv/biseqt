@@ -443,7 +443,7 @@ class OverlapFinder(object):
         for segment in segments:
             fwd = self._extend1d(segment, **kw)
             bwd = self._extend1d(segment, backwards=True, **kw)
-            if fwd and bwd and fwd.tx.score > kw['drop_threshold'] and bwd.tx.score:
+            if fwd and bwd and min(fwd.tx.score, bwd.tx.score) > kw['drop_threshold']:
                 assert(bwd.tx.idx_S == 0 or bwd.tx.idx_T == 0)
                 opseq = bwd.tx.opseq[:-len(segment.tx.opseq)] + fwd.tx.opseq
                 score = self.align_params.score(
