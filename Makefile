@@ -16,6 +16,7 @@ clean:
 	rm -f align/libalign.so core
 	rm -f genome.fa reads.fa $(DB)
 	rm -f *.gml *.pdf
+	rm -rf docs/$(DOCS_OUT)
 
 tests: align/libalign.so $(DB) $(TRUE_GRAPH).gml $(ASSEMBLED_GRAPH).gml $(ASSEMBLED_GRAPH).layout.diff.pdf
 	python -m align.tests.homopolymeric
@@ -55,9 +56,14 @@ $(DB): align/libalign.so
 loc:
 	find . -type f -regex '.*\(\.py\|\.c\|\.h\)' | xargs wc -l
 
-docs:
-	sphinx-apidoc -F -o $@ align/
-	cd $@ && sphinx-build -b html . _build
-	@echo "Find the docs at file://`readlink -f $@/_build/index.html`"
+DOCS_EXCLUDE = $(shell find align/tests -type f -regex .*py)
+DOCS_OUT = _build
+docs: align/libalign.so docs/README.rst
+	sphinx-apidoc -H align.py -F -o $@ align/ $(DOCS_EXCLUDE)
+	cd $@ && sphinx-build -b html . $(DOCS_OUT)
+	@echo "Find the docs at file://`readlink -f $@/$(DOCS_OUT)/index.html`"
 
-.PHONY: clean tests *.gml *.pdf loc docs
+docs/README.rst:
+	pandoc -f markdown -t rst -o $@ -i README.md
+
+.PHONY: clean tests *.gml *.pdf loc docs docs/README.rst

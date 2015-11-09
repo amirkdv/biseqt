@@ -1,10 +1,9 @@
-# align.py
-This is a library of some sequence alignment algorithms in python and C. To get
+`align.py` is a library of sequence alignment algorithms in python and C. To get
 started:
 
 ```sh
-python setup.py develop
-make clean tests
+$ python setup.py develop
+$ make clean tests
 ```
 
 ## Random processes
@@ -18,10 +17,9 @@ The following can be generated randomly by the `seq` module:
 
 ## Pairwise alignments
 
-The core dynamic programming algorithm is implemented [in C](/align/libalign.c)
-and interfaced (via `align.align`) using
-[`cffi`](https://cffi.readthedocs.org/en/latest/). The following are supported
-by `libalign`:
+The core dynamic programming algorithm is implemented [in C](https://github.com/amirkdv/align.py/blob/master/align/libalign.c)
+and interfaced using [cffi](https://cffi.readthedocs.org/en/latest/). The
+following are supported by `libalign`:
 
 * *Global* alignments, i.e Needleman-Wunsch.
 * *Local* alignments, i.e Smith-Waterman.
@@ -65,12 +63,13 @@ Do](#to-do)).
 Some tuple methods (aka *k*-mer analysis) are provided by `tuples.TupleDB`
 which is backed by [SQLite](https://docs.python.org/2/library/sqlite3.html) to
 store, index, and query tuples and by
-[`Bio.SeqIO`](http://biopython.org/wiki/SeqIO) to read FASTA files.
+[Bio.SeqIO](http://biopython.org/wiki/SeqIO) to read FASTA files.
 
 ### Alignment
 
 For any two given sequences (both already indexed) `tuples.OverlapFinder` can be
 used to:
+
 * Find maximal exactly matching "seeds".
 * Find out if a seed can be extended to a suffix-prefix alignment by repeated
   short global alignments of a fixed window size.
@@ -122,6 +121,7 @@ of sequences and the longest path is reported as the layout.
 ### Cycle breaking
 
 The resulting overlap graph may not be a DAG due to two main reasons:
+
 * wrong weak edges that should not exist.
 * strong edges with the wrong direction.
 
@@ -152,7 +152,7 @@ Input generation parameters are:
 
 
 Usage:
-```
+```sh
 $ make clean genome.db                # creates genome.fa, reads.fa, genome.db
 $ make true_overlap.gml true_overlap.layout.pdf # find the true overlap and layout
 $ make overlap.gml overlap.layout.pdf # find the overlap and layout by seed extension
@@ -161,56 +161,31 @@ $ make overlap.layout.diff.pdf        # diff against the true overlap graph
 
 ### Behavior
 
-* Good:
-  1. When compared to the true graph, the assembled overlap graph typically has
-    some missing edges (e.g %15 of edges missing) but very few wrong edges are
-    added (often none).
-  1. Generated overlap graphs are (close to) acyclic.
-  1. As a consequence of the (i), the assembled layout path is consistent
-    with the true layout in the sense that its sequence of reads is a
-    subsequence (i.e in correct order) of the correct layout path.
+#### Good
 
-* Bad:
-  1. When two reads are both mostly overlapping the direction may come out wrong and
-    this can cause cycles in the overlap graph.
-  1. There are occassional insertions too which do not seem to be problematic since
-    they are weak (i.e low scoring alignments).
+1. When compared to the true graph, the assembled overlap graph typically has
+  some missing edges (e.g %15 of edges missing) but very few wrong edges are
+  added (often none).
+1. Generated overlap graphs are (close to) acyclic.
+1. As a consequence of the (i), the assembled layout path is consistent
+  with the true layout in the sense that its sequence of reads is a
+  subsequence (i.e in correct order) of the correct layout path.
+
+#### Bad
+
+1. When two reads are both mostly overlapping the direction may come out wrong and
+  this can cause cycles in the overlap graph.
+1. There are occassional insertions too which do not seem to be problematic since
+  they are weak (i.e low scoring alignments).
 
 ## To Do
 
-#### Missing features
 * Perform assembly on condensed sequences.
-
-#### Improvements
-* Switch to `igraph` for cycle processing; `networkx` gets slow quickly.
-* Code docs: all of [`OverlapFinder`](/align/tuples.py) and [Assembler](/align/assembly.py).
-* Separate cycle breaking from finding the overlap graph (for convenience in
-  debugging large simulations).
-* For any two reads, do we need to pursue all segments that satisfy the
-  score criteria or should we drop out once we find one segment? Note that most
-  of the time for overlapping sequences many seeds come from the same correct
-  suffix-prefix alignment.
-* Make `align.Transcript` a `namedtuple` as well (unless it's becoming a
-  `CffiObject`).
-* An overlap graph must satisfy two consistency criterions:
-  * it is a DAG,
-  * For any vertex *u* in it, any pair of outgoing (incoming) neighbors of
-    *u* are adjacent.
-
-  Assembly overlap graphs are DAG (or close to it) but they rarely satisfy the
-  second. The second criteria can be used to find missing edges by brute force
-  overlap alignment (this matches the typical case of left-out-vertices in
-  simulations). The difficulty is to find a way to recover necessary edges
-  for a full layout path without trying to recover *all* missing edges.
-* Cycle breaking:
-  * Investigate whether a smarter cycle breaking algorithm is needed.
-  * Investigate whether we should stop ignoring sequence pairs that are mostly
-    overlapping. These are currently ignored since we may get the direction
-    wrong on a heavy edge. The idea is that such edges are not typically
-    informative about the longest path.
 * Move seed expansion from Python to C.
+* Switch to `igraph` for cycle processing; `networkx` gets slow quickly.
 
-#### Simulations
+### Simulations
+
 * Test on larger data sets (requires speedup).
 * Separate sanity tests from simulations; write sanity tests for individual
   parts of assembly.
@@ -218,7 +193,40 @@ $ make overlap.layout.diff.pdf        # diff against the true overlap graph
   sequencing reads.
 * *Real* data: test against Leishmania dataset.
 
-#### Low priority
+### Code
+
+* Make `align.Transcript` a `namedtuple` as well (unless it's becoming a
+  `CffiObject`).
+* Documentation:
+
+  i. Neither `OverlapFinder` nor `assembly` have any docs.
+  i. Other docs are inconsistent in style, make them work with sphinx.
+
+### Improvements
+
+* Separate cycle breaking from finding the overlap graph (for convenience in
+  debugging large simulations).
+* For any two reads, do we need to pursue all segments that satisfy the
+  score criteria or should we drop out once we find one segment? Note that most
+  of the time for overlapping sequences many seeds come from the same correct
+  suffix-prefix alignment.
+* An overlap graph must satisfy two consistency criterions: it is a DAG,
+  and for any vertex *u* in it, any pair of outgoing (incoming) neighbors of *u*
+  are adjacent.  Assembly overlap graphs are DAG (or close to it) but they
+  rarely satisfy the second. The second criteria can be used to find missing
+  edges by brute force overlap alignment (this matches the typical case of
+  left-out-vertices in simulations). The difficulty is to find a way to recover
+  necessary edges for a full layout path without trying to recover *all* missing
+  edges.
+* Cycle breaking:
+
+    i. Investigate whether a smarter cycle breaking algorithm is needed.
+    i. Investigate whether we should stop ignoring sequence pairs that are mostly
+      overlapping. These are currently ignored since we may get the direction
+      wrong on a heavy edge. The idea is that such edges are not typically
+      informative about the longest path.
+
+### Low priority
 * Add an ungapped seed expansion phase.
 * Adapt Karlin-Altschul statistics (references:
   [[1]](http://www.pnas.org/content/87/6/2264.full.pdf),
@@ -226,6 +234,6 @@ $ make overlap.layout.diff.pdf        # diff against the true overlap graph
   [[3]](http://www.jstor.org/stable/1427732?seq=1#page_scan_tab_contents), and
   chap. 7-9 [[4]](https://books.google.ca/books?id=uZvlBwAAQBAJ)) to the
   problem of finding overlaps.
-* Support [Hirschberg](https://en.wikipedia.org/wiki/Hirschberg's_algorithm)-style
-  linear space optimization (cf. [`libalign::solve()` and `libalign::tracback()`](/align/libalign.c)).
+* Support [Hirschberg](https://en.wikipedia.org/wiki/Hirschberg\'s_algorithm) -style
+  linear space optimization in `libalign`.
 * Make it work with Python 3.
