@@ -151,27 +151,6 @@ class HpCondenser(object):
         return pw.Transcript(idx_S=idx_S, idx_T=idx_T,
             score=transcript.score, opseq=opseq)
 
-    def _condense_subst_scores(self, subst_scores, **kw):
-        """Helper method for condense_align_params."""
-        alphabet = kw['alphabet']
-        go_score, ge_score = kw['go_score'], kw['ge_score']
-        hp_go_score, hp_ge_score = kw['hp_go_score'], kw['hp_ge_score']
-
-        L = len(self.dst_alphabet)
-        scores = [[None for _ in range(L)] for _ in range(L)]
-        for i in range(L):
-            let = self.dst_alphabet.letters[i]
-            ci, ni = let[0], int(let[1:])
-            for j in range(L):
-                let = self.dst_alphabet.letters[j]
-                cj, nj = let[0], int(let[1:])
-                ki, kj = alphabet.letters.index(ci), alphabet.letters.index(cj)
-                if ci == cj:
-                    scores[i][j] = min(ni, nj) * subst_scores[ki][kj] + hp_go_score + hp_ge_score * abs(ni-nj)
-                else:
-                    scores[i][j] = min(ni, nj) * subst_scores[ki][kj] + go_score + ge_score* abs(ni - nj)
-        return scores
-
     def condense_align_params(self, align_params, hp_go_score=0, hp_ge_score=0):
         """Translates alignment parameters to one that applies to the condensed
         alphabet. Translation is done based on homopolymeric indel scores which
@@ -191,14 +170,26 @@ class HpCondenser(object):
                 alphabet.
         """
         assert(align_params.alphabet.letters == self.src_alphabet.letters)
-        subst_scores_d = self._condense_subst_scores(
-            align_params.subst_scores,
-            alphabet=align_params.alphabet,
-            hp_go_score=hp_go_score,
-            hp_ge_score=hp_ge_score,
-            go_score=align_params.gap_open_score,
-            ge_score=align_params.gap_extend_score
-        )
+
+        # subst_scores gets rebuilt everytime it's accessed, fetch it once:
+        subst_scores = align_params.subst_scores
+        L = len(self.dst_alphabet)
+        subst_scores_d = [[None for _ in range(L)] for _ in range(L)]
+        for i in range(L):
+            let = self.dst_alphabet.letters[i]
+            ci, ni = let[0], int(let[1:])
+            for j in range(L):
+                let = self.dst_alphabet.letters[j]
+                cj, nj = let[0], int(let[1:])
+                ki = align_params.alphabet.letters.index(ci)
+                kj = align_params.alphabet.letters.index(cj)
+                if ci == cj:
+                    subst_scores_d[i][j] = min(ni, nj) * subst_scores[ki][kj] + \
+                        hp_go_score + hp_ge_score * abs(ni-nj)
+                else:
+                    subst_scores_d[i][j] = min(ni, nj) * subst_scores[ki][kj] + \
+                        align_params.go_score + align_params.ge_score* abs(ni - nj)
+        
         return pw.AlignParams(
             alphabet=self.dst_alphabet,
             subst_scores=subst_scores_d,
