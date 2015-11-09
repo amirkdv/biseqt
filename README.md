@@ -199,12 +199,6 @@ $ make overlap.layout.diff.pdf        # diff against the true overlap graph
     * Make `align.Transcript` a `namedtuple` as well (unless it's becoming a
       `CffiObject`).
     * Separate layout and overlap algorithms that are all in `assembly`.
-    * Documentation:
-
-        * Neither `OverlapFinder` nor `assembly` have any docs.
-        * Other docs are inconsistent in style, make them work with sphinx.
-        * Figure out how to pull in docstrings from C code into sphinx (e.g look
-          at [Breathe](https://github.com/michaeljones/breathe)).
 
 * Improvements:
 
@@ -229,6 +223,9 @@ $ make overlap.layout.diff.pdf        # diff against the true overlap graph
             informative about the longest path.
 
 * Low priority:
+
+    * Figure out how to pull in docstrings from C code into sphinx (e.g look
+      at [Breathe](https://github.com/michaeljones/breathe)).
     * Add an ungapped seed expansion phase.
     * Adapt Karlin-Altschul statistics (references:
       [[1]](http://www.pnas.org/content/87/6/2264.full.pdf),

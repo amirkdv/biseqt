@@ -3,15 +3,15 @@ import sys
 import os
 import networkx as nx
 
-from .. import align, tuples, seq, assembly
+from .. import pw, tuples, seq, assembly
 
 A = seq.Alphabet('ACGT')
 
 params = {
     'wordlen': 5,           # tuple word lengths
     'genome_length': 1500,  # length of randomly generated genome
-    'coverage': 6,          # coverage of random sequencing reads
-    'read_len_mean': 500,   # average length of sequencing read
+    'coverage': 4,          # coverage of random sequencing reads
+    'read_len_mean': 300,   # average length of sequencing read
     'read_len_var': 10,     # variance of sequencing read length
     'go_prob': 0.05,        # gap open score
     'ge_prob': 0.3,         # gap extend score
@@ -21,9 +21,9 @@ params = {
     'drop_threshold': 10,   # what constitutes a drop in score of a window
     'max_succ_drops': 3     # how many consecutive drops are allowed
 }
-subst_scores = align.AlignParams.subst_scores_from_probs(params['subst_probs'], A)
-go_score, ge_score = align.AlignParams.gap_scores_from_probs(params['go_prob'], params['ge_prob'])
-C = align.AlignParams(
+subst_scores = pw.AlignParams.subst_scores_from_probs(params['subst_probs'], A)
+go_score, ge_score = pw.AlignParams.gap_scores_from_probs(params['go_prob'], params['ge_prob'])
+C = pw.AlignParams(
     alphabet=A, subst_scores=subst_scores,
     go_score=go_score, ge_score=ge_score
 )
@@ -57,10 +57,10 @@ def create_example(db):
     B.populate('reads.fa');
     B.index()
 
-def overlap_by_tuple_extension(db, path):
+def overlap_by_seed_extension(db, path):
     show_params()
     B = tuples.TuplesDB(db, wordlen=params['wordlen'], alphabet=A)
-    G = assembly.overlap_graph_by_tuple_extension(B, align_params=C,
+    G = assembly.overlap_graph_by_seed_extension(B, C,
         max_succ_drops=params['max_succ_drops'], window=params['window'],
         drop_threshold=params['drop_threshold'])
     assembly.save_graph(G, path)

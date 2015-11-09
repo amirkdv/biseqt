@@ -5,9 +5,24 @@ import matplotlib.pyplot as plt
 from termcolor import colored
 
 from . import tuples
-from . import align
+from . import pw
 
-def overlap_graph_by_alignment(tuplesdb, align_params=None, min_score=80):
+def overlap_graph_by_alignment(tuplesdb, align_params, min_score=80):
+    """Builds a weighted, directed graph by brute force overlap alignment
+    of all reads.
+
+    Args:
+        tuplesdb (tuples.TuplesDB): The tuples database.
+        align_params (pw.AlignParams): Alignment parameters for overlap
+            alignments.
+
+    Keyword Args:
+        min_score (Optional): The minimum score required for an overlap
+            alignment to count as an edge.
+
+    Returns:
+        networkx.DiGraph
+    """
     G = nx.DiGraph()
     seqids = tuplesdb.seqids()
     for idx_of_S in range(len(seqids)):
@@ -16,8 +31,7 @@ def overlap_graph_by_alignment(tuplesdb, align_params=None, min_score=80):
             G.add_node(seqids[idx_of_T])
             S = tuplesdb.loadseq(seqids[idx_of_S])
             T = tuplesdb.loadseq(seqids[idx_of_T])
-            with align.AlignProblem(S=S, T=T, params=align_params,
-                align_type=align.ALIGN_OVERLAP) as P:
+            with pw.AlignProblem(S, T, align_params, align_type=pw.OVERLAP) as P:
                 score = P.solve()
                 if score >= min_score:
                     transcript = P.traceback()
@@ -27,8 +41,31 @@ def overlap_graph_by_alignment(tuplesdb, align_params=None, min_score=80):
                         G.add_edge(seqids[idx_of_T], seqids[idx_of_S], score=score)
     return G
 
-def overlap_graph_by_tuple_extension(tuplesdb, align_params=None, window=20,
+def overlap_graph_by_seed_extension(tuplesdb, align_params, window=20,
     drop_threshold=0, max_succ_drops=3):
+    """Builds a weighted, directed graph by using tuple methods. The process
+    has 3 steps:
+
+    * Find all seeds,
+    * Extend all seeds to suffix-prefix segments,
+    * break cycles.
+
+    Args:
+        tuplesdb (tuples.TuplesDB): The tuples database.
+        align_params (pw.AlignParams): Alignment parameters for overlap
+            alignments.
+
+    Keyword Args:
+        drop_threshold: as in ``tuples.OverlapFinder.extend()``.
+        window: as in ``tuples.OverlapFinder.extend()``.
+        max_succ_drops: as in ``tuples.OverlapFinder.extend()``.
+
+    Returns:
+        networkx.DiGraph
+
+    ToDo:
+        This should be moved into a class.
+    """
     G = nx.DiGraph()
     seqinfo = tuplesdb.seqinfo()
     seqids = seqinfo.keys()
@@ -111,6 +148,15 @@ def overlap_graph_by_tuple_extension(tuplesdb, align_params=None, window=20,
     return G
 
 def overlap_graph_by_known_order(tuplesdb):
+    """Builds the *correct* weighted, directed graph by using hints left in
+    reads databse by ``seq.make_sequencing_fixture()``.
+
+    Args:
+        tuplesdb (tuples.TuplesDB): The tuples database.
+
+    Returns:
+        networkx.DiGraph
+    """
     G = nx.DiGraph()
     seqinfo = tuplesdb.seqinfo()
     seqids = seqinfo.keys()
@@ -140,6 +186,7 @@ def overlap_graph_by_known_order(tuplesdb):
     return G
 
 def save_graph(G, fname):
+    """Saves a given graph in GML format"""
     nx.write_gml(G, fname)
 
 def _dict_VE_from_graph(G):
@@ -149,6 +196,10 @@ def _dict_VE_from_graph(G):
 
 def draw_digraph(G, fname, figsize=None, longest_path=False, pos=None,
     edge_colors=None, edge_width=None):
+    """Draws a directed graph to PDF file. If ``longest_path`` is truthy, an
+    effort is made to find the longest path in the graph and highlight it. If,
+    however, the graph contains cycles the shortes cycle is highlighted in
+    red."""
     V, E = _dict_VE_from_graph(G)
     if longest_path:
         if nx.algorithms.is_directed_acyclic_graph(G):
@@ -195,6 +246,15 @@ def draw_digraph(G, fname, figsize=None, longest_path=False, pos=None,
     plt.savefig(fname, bbox_inches='tight')
 
 def layout_graph(G):
+    """Given an overlap graph finds the assembly layout by finding the longest
+    (heaviest) path.
+
+    Args:
+        networkx.DiGraph: The acyclic overlap graph,
+
+    Returns:
+        networkx.DiGraph: A linear subgraph (the heaviest path).
+    """
     assert(nx.algorithms.is_directed_acyclic_graph(G))
     V, E = _dict_VE_from_graph(G)
     path = nx.algorithms.dag.dag_longest_path(G)
@@ -208,6 +268,10 @@ def layout_graph(G):
     return L
 
 def diff_graph(G1, G2, fname, figsize=None):
+    """Draws the difference between two graphs (mainly designed for sparse
+    graphs, e.g. layout graphs). Shared edges are in black, missing edges (from
+    ``G1`` to ``G2``) are in red and added edges are in green.
+    """
     G = nx.DiGraph()
     V1, E1 = _dict_VE_from_graph(G1)
     V2, E2 = _dict_VE_from_graph(G2)
@@ -233,6 +297,10 @@ def diff_graph(G1, G2, fname, figsize=None):
     draw_digraph(G, fname, pos=pos, edge_colors=edge_colors, edge_width=2)
 
 def compare_graphs(G1, G2, f):
+    """Prints a diff-style comparison of two graphs to given file handle. Each
+    missing edge is printed in red with a leading '-' and each added
+    edge is printed in green with a leading '+'.
+    """
     E1, E2 = set(G1.edges()), set(G2.edges())
     missing, added = E1 - E2, E2 - E1
     f.write('G1 (%d edges) --> G2 (%d edges): %%%.2f lost, %%%.2f added\n' %

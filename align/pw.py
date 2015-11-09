@@ -265,7 +265,6 @@ class AlignProblem(CffiObject):
         else:
             return super(AlignProblem, self).__getattr__(name)
 
-# TODO make this a namedtuple as well
 class Transcript(object):
     """A wrapper for alignment transcripts. Solutions to the alignment problem are
     represented by transcript strings with the following format::

@@ -1,49 +1,59 @@
-#!/usr/bin/env python
+"""Provides tools for *k*-mer analysis."""
+
 import sys
 import re
 import sqlite3
 from Bio import SeqIO
 from collections import namedtuple
 
-from . import align, seq
+from . import pw, seq
+class Segment(namedtuple('Segment', ['S_id', 'T_id', 'tx'])):
+    """Represents an aligned pair of substrings in two sequences. The alignment may
+    potentially contain indels. Maximal, exactly-matching segments are refered to as
+    "seeds".
 
-# an aligned pair of substrings in two sequences, the alignments are represented
-# by a Transcript object (tx) which may contain substitutions or gaps.
-Segment = namedtuple('Segment', ['S_id', 'T_id', 'tx'])
-
-class MaxConcurrentQueries(RuntimeError):
-    pass
+    Attributes:
+        S_id (int): The id of the "from" sequence as found in the ``seq`` table.
+        T_id (int): The id of the "to" sequence as found in the ``seq`` table.
+        tx (pw.Transcript):  object representing the alignment.
+    """
 
 def tup_scan(string, wordlen):
-    """A generator for (string, idx) tuples to scan through any given string.
+    """A generator for ``(string, idx)`` tuples to scan through any given string.
+
+    Args:
+        string (str): The string to scan.
+        wordlen(int): Length of the words.
+
+    Yields:
+        tuple: A ``string`` of length ``wordlen`` and a starting position
+            (``int``).
     """
     for idx in range(len(string) - wordlen + 1):
         yield (string[idx:idx + wordlen], idx)
 
 class TuplesDB(object):
-    """Wraps an Sqlite database containing tuple indices for sequences. For now,
+    """Wraps an SQLite database containing tuple indices for sequences. For now,
     only one word length is allowed. The tables are:
-        * a `seq` table containing all the provided sequences (the "database"),
-          each sequence and its name are mapped to an internal integer used
-          for calculations (see populate()).
-        * a `tuples_N` table for each word length N. This table has two
-          purposes:
-          1. avoid repeating full tuple strings in records representing hits.
-          2. delegate some of the hit-search calculation to SQLite (see Query).
-        * a `tuples_N_hits` table for each word length N. This table contains
-          tuple hit information about sequences in the "database" (see index()).
+
+        * ``seq (id, name, description, seq)`` contains all the provided
+          sequences (the "database"), each sequence and its name are mapped to
+          an internal integer used for calculations (see ``populate()``).
+        * ``tuples_N (id, tuple)`` contains all observed words of length ``N``
+          where ``N`` is ``self.wordlen``.
+        * ``tuples_N_hits (tuple, seq, idx)`` contains all the "hits" (see
+          ``index()``).
 
     Attributes:
-        db(string):             path to the SQLite datbase
-        wordlen(int):           length of tuples
-        tup_insert_q(string):   an SQL query template that emulates an UPSERT
+        db (string): Path to the SQLite datbase.
+        wordlen (int): Length of tuples
+        tup_insert_q (str): An SQL query template that emulates an ``UPSERT``
             operation in the SQL dialect of SQLite; use it to bulk-write tuples
-            into `tuples_N` tables.
-        hit_insert_q(string):   an SQL query template that records a tuple-hit;
-            use it to bulk-write tuple-hits to `tuples_N_hits` tables.
-
+            into ``tuples_N`` tables.
+        hit_insert_q (str): An SQL query template that records a tuple-hit;
+            use it to bulk-write tuple-hits to ``tuples_N_hits`` tables.
     """
-    def __init__(self, db=None, wordlen=10, alphabet=None):
+    def __init__(self, db, wordlen=10, alphabet=None):
         assert isinstance(alphabet, seq.Alphabet)
         self.alphabet = alphabet
         self.db, self.wordlen = db, wordlen
@@ -61,7 +71,7 @@ class TuplesDB(object):
 
     def initdb(self):
         """Initializes the database: creates the required tables and
-        fails if any of them already exist"""
+        fails if any of them already exists."""
         with sqlite3.connect(self.db) as conn:
             c = conn.cursor()
             q = """
@@ -93,10 +103,18 @@ class TuplesDB(object):
             c.execute(q)
         sys.stderr.write('initialized tuples DB at: %s\n' % self.db)
 
-    # TODO allow specifying a homopolymeric.HpCondenser
-    def populate(self, fasta_src=None, lim=-1):
-        """Given a FASTA source file, loads all the sequences (up to a limit,
-        if specified) into the `seq` table. No indexing is done; see index().
+    def populate(self, fasta_src, lim=-1):
+        """Given a FASTA source file, loads all the sequences (up to a limit, if
+        specified) into the `seq` table. No indexing is done; see ``index()``.
+
+        Args:
+
+            fasta_src(str): Path to FASTA source.
+            lim (Optional[int]): If positive, will be the number of sequences
+                loaded from FASTA source, default is -1.
+
+        ToDo:
+            Allow specifying a ``homopolymeric.HpCondenser``
         """
         def give_seq():
             for idx, seq in enumerate(SeqIO.parse(fasta_src, "fasta")):
@@ -111,12 +129,13 @@ class TuplesDB(object):
             c.executemany(q, give_seq())
 
     def index(self):
-        """Scans all sequences in the `seq` table and records all observed
-        tuples in `tuples_N` tables and all hits in `tuples_N_hits` tables.
+        """Scans all sequences in the ``seq`` table and records all observed
+        tuples in ``tuples_N`` tables and all hits in ``tuples_N_hits`` tables.
 
-        NOTE takes ~3 minutes to index 10-mers of 500 sequences with average
-        length 11Kbp into a DB of ~250MB. With 20-mers takes ~4 minutes and DB
-        size is ~600MB!!
+        Note:
+            It takes ~3 minutes to index 10-mers of 500 sequences with average
+            length 11Kbp into a DB of ~250MB. With 20-mers takes ~4 minutes and
+            DB size is ~600MB!
         """
         sys.stderr.write('indexing sequences:')
         def give_hit(seqid, string):
@@ -145,6 +164,12 @@ class TuplesDB(object):
 
     def loadseq(self, seqid):
         """Loads a sequence given its internal numeric seqid.
+
+        Args:
+            seqid (int): Sequence ID as found in the ``seq`` table.
+
+        Returns:
+            seq.Sequence
         """
         with sqlite3.connect(self.db) as conn:
             c = conn.cursor()
@@ -153,7 +178,16 @@ class TuplesDB(object):
                 return seq.Sequence(str(row[0]), self.alphabet)
 
     def seqinfo(self):
-        """TODO
+        """Return a dict of metadata about all sequences keyed by sequence ids
+        as found in the ``seq`` table. The output looks like this::
+
+            A = seq.Alphabet('ACGT')
+            T = tuples.TuplesDB('genome.db', alphabet=A, wordlen=5)
+            info = T.seqinfo()
+            info[12] #=> {'start': 17, 'length': 479, 'name': u'R12'}
+
+        Returns:
+            dict
         """
         with sqlite3.connect(self.db) as conn:
             c = conn.cursor()
@@ -168,7 +202,10 @@ class TuplesDB(object):
             return seqs
 
     def seqids(self):
-        """Returns a list of all seqids.
+        """Returns a list of all seqids found in the ``seq`` table.
+
+        Returns:
+            List[int]
         """
         with sqlite3.connect(self.db) as conn:
             c = conn.cursor()
@@ -176,6 +213,22 @@ class TuplesDB(object):
             return [row[0] for row in c]
 
 class OverlapFinder(object):
+    """Provided two sequences and a ``tuples.TuplesDB`` provides tools to find
+    and extend exactly matching "seeds" into overlap alignments. Both sequences
+    must have already been indexed in the tuples database.
+
+    Seeds are *maximal, exactly matching* instances of ``Segment``. They are
+    expanded by repeated global alignments on small windows moving forward and
+    backward from the boundaries of the seed.
+
+    Args:
+        S (seq.Sequence): The "from" sequence.
+        T (seq.Sequence): The "to" sequence.
+        align_params (pw.AlignParams): The alignment parameters.
+
+    Keyword Args:
+        tuplesdb (tuples.TuplesDB)
+    """
     def __init__(self, S, T, align_params, tuplesdb=None):
         self.tuplesdb = tuplesdb
         self.S, self.T, self.align_params = S, T, align_params
@@ -183,17 +236,19 @@ class OverlapFinder(object):
             'S': self.S,
             'T': self.T,
             'params': self.align_params,
-            'align_type': align.ALIGN_GLOBAL,
+            'align_type': pw.GLOBAL,
         }
 
     def exactly_matching_segments(self, s1, s2):
-        """Given two seqids, finds all maximal exactly matching segments between
-        the two self.seqid) and another given sequence. A segment is in its
-        maximal form if there are no other exactly-matching segments whose span
-        is a unit shift in both the query and target sequences.
+        """Given two sequence ids, finds all maximal exactly matching segments
+        between the two self.seqid) and another given sequence. A segment is in
+        its maximal form if there are no other exactly-matching segments whose
+        span is a unit shift in both the query and target sequences.
 
-        Note: Scores of transcripts for exact matches are left as 0 to avoid
-        unnecessary cycles, we populate the score first thing in extend()
+        Note:
+            Scores of transcripts for exact matches are left as 0 to avoid
+            unnecessary cycles, we populate the score first thing in
+            ``extend()``.
         """
         segments = []
         q = """
@@ -203,7 +258,7 @@ class OverlapFinder(object):
             WHERE H1.seq = ? AND H2.seq = ?
         """.format(self.tuplesdb.wordlen, self.tuplesdb.wordlen)
         def row_factory(cursor, row):
-            tx = align.Transcript(row[0], row[1], 0, 'M'*self.tuplesdb.wordlen)
+            tx = pw.Transcript(row[0], row[1], 0, 'M'*self.tuplesdb.wordlen)
             return Segment(S_id=s1, T_id=s2, tx=tx)
 
         with sqlite3.connect(self.tuplesdb.db) as conn:
@@ -223,7 +278,7 @@ class OverlapFinder(object):
                 # we know the transcripts are all M's.
                 if shift_S == shift_T and shift_S > 0 and \
                    shift_S < len(exacts[idx].tx.opseq):
-                    tx = align.Transcript(
+                    tx = pw.Transcript(
                         exacts[idx].tx.idx_S, exacts[idx].tx.idx_T,
                         0, # score
                         exacts[cand].tx.opseq + 'M'*shift_S # transcript
@@ -236,13 +291,8 @@ class OverlapFinder(object):
         exacts.sort(key=lambda s: len(s.tx.opseq), reverse=True)
         return exacts
 
-
-    def score_gap(self, L):
-        if not L:
-            return 0
-        return self.align_params.gap_open_score + L*self.align_params.gap_extend_score
-
-    def extend_fwd_once(self, segment, window):
+    def _extend_fwd_once(self, segment, window):
+        """Helper method for ``extend1d``."""
         S_len, T_len = self._S_len(segment.tx.opseq), self._T_len(segment.tx.opseq)
         kw = self.align_problem_kw
         kw.update({
@@ -254,14 +304,14 @@ class OverlapFinder(object):
             'T_max_idx': kw['T_min_idx'] + window
         })
 
-        with align.AlignProblem(**kw) as P:
+        with pw.AlignProblem(**kw) as P:
             score = P.solve()
             assert(score is not None)
             transcript = P.traceback()
             if transcript is None:
                 return None
 
-        tx = align.Transcript(
+        tx = pw.Transcript(
             idx_S=segment.tx.idx_S,
             idx_T=segment.tx.idx_T,
             score=segment.tx.score + transcript.score,
@@ -269,7 +319,8 @@ class OverlapFinder(object):
         )
         return Segment(S_id=segment.S_id, T_id=segment.T_id, tx=tx)
 
-    def extend_bwd_once(self, segment, window):
+    def _extend_bwd_once(self, segment, window):
+        """Helper method for ``extend1d``."""
         kw = self.align_problem_kw
         kw.update({
             'S_max_idx': segment.tx.idx_S,
@@ -280,14 +331,14 @@ class OverlapFinder(object):
             'T_min_idx': kw['T_max_idx'] - window
         })
 
-        with align.AlignProblem(**kw) as P:
+        with pw.AlignProblem(**kw) as P:
             score = P.solve()
             assert(score is not None)
             transcript = P.traceback()
             if transcript is None:
                 return None
 
-        tx = align.Transcript(
+        tx = pw.Transcript(
             idx_S=transcript.idx_S,
             idx_T=transcript.idx_T,
             score=transcript.score + segment.tx.score,
@@ -301,12 +352,11 @@ class OverlapFinder(object):
     def _T_len(self, opseq):
         return sum([opseq.count(op) for op in 'IMS'])
 
-    def extend1d(self, segment, drop_threshold, window=10, max_succ_drops=3, backwards=False):
-        """Extends a given segment (presumably maximally-exactly-matching) in
-        the given direction (fwd or bwd). Extension is done by repeatedly
-        performing global alignments on a rolling window along the two sequences
-        and stopping once a decrease in score is observed for a certain number
-        of times"""
+    def _extend1d(self, segment, backwards=False, **kw):
+        """Helper method for ``extend()``"""
+        drop_threshold = kw['drop_threshold']
+        window = kw['window']
+        max_succ_drops = kw['max_succ_drops']
         cur_seg = segment
         score_history = [segment.tx.score]
         while True:
@@ -322,9 +372,9 @@ class OverlapFinder(object):
                 return cur_seg
 
             if backwards:
-                seg = self.extend_bwd_once(cur_seg, w)
+                seg = self._extend_bwd_once(cur_seg, w)
             else:
-                seg = self.extend_fwd_once(cur_seg, w)
+                seg = self._extend_fwd_once(cur_seg, w)
 
             if seg is None:
                 # no non-empty alignment found.
@@ -342,20 +392,35 @@ class OverlapFinder(object):
 
         return None
 
-    def extend(self, segments, window=None, drop_threshold=None):
+    def extend(self, segments, **kw):
         """Given a number of matching segments for the two sequences finds all
         extended matching gap containing segments by repeatedly aligning a
         rolling frame along the two sequences and dropping a segment once it
-        is observed to not be a high-scoring overlap alignment"""
+        is observed to not be a high-scoring overlap alignment.
+
+        Args:
+            segment (tuples.Segment)
+
+        Keyword Args:
+            drop_threshold (Optional[float]): What constitutes a drop in the
+                score from one window to the next, default is 0.
+            window (Optional[int]): The size of the rolling window.
+            max_succ_drops (Optional[int]): Maximum number of "drops" until the
+                segment is dropped (i.e ``None`` is returned).
+        Note:
+            It seems like we never have two segments for the same pair of
+            sequences where one gives an ``S -> T`` edge and the other gives a
+            ``T -> S`` edge. Why not just return the first segment that goes all
+            the way to the end?
+        """
+        defaults = {'max_succ_drops': 3, 'drop_threshold': 0, 'window': 10}
+        defaults.update(kw)
+        kw = defaults
         res = []
         for segment in segments:
-            # TODO It seems like we never have two segments for the same pair of
-            # sequences where one gives an S->T edge and the other gives a T->S
-            # edge. Why not just return the first segment that goes all the way
-            # to the end?
-            fwd = self.extend1d(segment, drop_threshold)
-            bwd = self.extend1d(segment, drop_threshold, backwards=True)
-            if fwd and bwd and fwd.tx.score > drop_threshold and bwd.tx.score:
+            fwd = self._extend1d(segment, **kw)
+            bwd = self._extend1d(segment, backwards=True, **kw)
+            if fwd and bwd and fwd.tx.score > kw['drop_threshold'] and bwd.tx.score:
                 assert(bwd.tx.idx_S == 0 or bwd.tx.idx_T == 0)
                 opseq = bwd.tx.opseq[:-len(segment.tx.opseq)] + fwd.tx.opseq
                 score = self.align_params.score(
@@ -363,7 +428,7 @@ class OverlapFinder(object):
                     S_min_idx=bwd.tx.idx_S,
                     T_min_idx=bwd.tx.idx_T
                 )
-                tx = align.Transcript(
+                tx = pw.Transcript(
                     idx_S=bwd.tx.idx_S,
                     idx_T=bwd.tx.idx_T,
                     score=score,

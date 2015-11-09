@@ -23,7 +23,7 @@ tests: align/libalign.so $(DB) $(TRUE_GRAPH).gml $(ASSEMBLED_GRAPH).gml $(ASSEMB
 	python -m align.tests.align
 
 $(ASSEMBLED_GRAPH).gml:
-	python -c 'import align.tests.assembly as T; T.overlap_by_tuple_extension("$(DB)", "$@")'
+	python -c 'import align.tests.assembly as T; T.overlap_by_seed_extension("$(DB)", "$@")'
 	python -c 'import align.tests.assembly as T; T.compare_results("$(TRUE_GRAPH).gml", "$(ASSEMBLED_GRAPH).gml")'
 
 $(ASSEMBLED_GRAPH).pdf:
