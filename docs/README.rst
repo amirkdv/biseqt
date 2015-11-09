@@ -1,7 +1,7 @@
 |Documentation Status|
 
-``align.py`` is a library of sequence alignment algorithms in python and
-C. To get started:
+``align.py`` is a library of sequence alignment and gragment assembly
+algorithms in python and C. To get started:
 
 .. code:: sh
 

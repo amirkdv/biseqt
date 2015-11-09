@@ -56,7 +56,7 @@ $(DB): align/libalign.so
 loc:
 	find . -type f -regex '.*\(\.py\|\.c\|\.h\)' | xargs wc -l
 
-DOCS_EXCLUDE = $(shell find align/tests -type f -regex .*py)
+DOCS_EXCLUDE = align/tests
 DOCS_OUT = _build
 docs: align/libalign.so docs/README.rst
 	sphinx-apidoc -f -e -o $@ align/ $(DOCS_EXCLUDE)

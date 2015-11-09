@@ -21,13 +21,22 @@ from mock import Mock as MagicMock
 # Since Python 3.3 this can be done via:
 # from unittest.mock import MagicMock
 
-class Mock(MagicMock):
-    @classmethod
-    def __getattr__(cls, name):
-        return Mock()
+on_rtd = os.environ.get('READTHEDOCS', None) == 'True'
+print
+print("Building on ReadTheDocs: {}".format(on_rtd))
+print
+print("Current working directory: {}".format(os.path.abspath(os.curdir)))
+print("Python: {}".format(sys.executable))
 
-MOCK_MODULES = ['cffi']
-sys.modules.update((mod_name, Mock()) for mod_name in MOCK_MODULES)
+if on_rtd:
+    class Mock(MagicMock):
+        @classmethod
+        def __getattr__(cls, name):
+            return Mock()
+
+    MOCK_MODULES = ['cffi', 'networkx', 'networkx.algorithms', 'numpy',
+        'matplotlib', 'matplotlib.pyplot', 'termcolor', 'Bio', 'Bio.SeqIO']
+    sys.modules.update((mod_name, Mock()) for mod_name in MOCK_MODULES)
 
 # If extensions (or modules to document with autodoc) are in another directory,
 # add these directories to sys.path here. If the directory is relative to the

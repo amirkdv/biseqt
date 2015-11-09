@@ -19,15 +19,15 @@ class Segment(namedtuple('Segment', ['S_id', 'T_id', 'tx'])):
     """
 
 def tup_scan(string, wordlen):
-    """A generator for ``(string, idx)`` tuples to scan through any given string.
+    """A generator for ``(string, idx)`` tuples to scan through any given
+    string.
 
     Args:
         string (str): The string to scan.
         wordlen(int): Length of the words.
 
     Yields:
-        tuple: A ``string`` of length ``wordlen`` and a starting position
-            (``int``).
+        tuple: A ``string`` of length ``wordlen`` and a starting position (``int``).
     """
     for idx in range(len(string) - wordlen + 1):
         yield (string[idx:idx + wordlen], idx)
@@ -407,6 +407,7 @@ class OverlapFinder(object):
             window (Optional[int]): The size of the rolling window.
             max_succ_drops (Optional[int]): Maximum number of "drops" until the
                 segment is dropped (i.e ``None`` is returned).
+
         Note:
             It seems like we never have two segments for the same pair of
             sequences where one gives an ``S -> T`` edge and the other gives a

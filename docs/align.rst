@@ -1,13 +1,6 @@
 align package
 =============
 
-Subpackages
------------
-
-.. toctree::
-
-    align.tests
-
 Submodules
 ----------
 
