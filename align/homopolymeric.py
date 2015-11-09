@@ -114,8 +114,7 @@ class HpCondenser(object):
         for op in transcript.opseq:
             if (None, None) in [(char_S, char_T), (num_S, num_T)]:
                 raise ValueError('The transcript does not match the sequences')
-            if op == 'B':
-                opseq += 'B'
+
             if op == 'M':
                 opseq += 'M' * min(num_S, self.maxlen)
                 if num_S > self.maxlen and num_T > self.maxlen:
