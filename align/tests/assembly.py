@@ -9,16 +9,16 @@ A = seq.Alphabet('ACGT')
 
 params = {
     'wordlen': 5,           # tuple word lengths
-    'genome_length': 1000,  # length of randomly generated genome
-    'coverage': 5,          # coverage of random sequencing reads
-    'read_len_mean': 200,   # average length of sequencing read
+    'genome_length': 1500,  # length of randomly generated genome
+    'coverage': 6,          # coverage of random sequencing reads
+    'read_len_mean': 500,   # average length of sequencing read
     'read_len_var': 10,     # variance of sequencing read length
     'go_prob': 0.05,        # gap open score
     'ge_prob': 0.3,         # gap extend score
     'subst_probs': [[0.97 if k==i else 0.01 for k in range(4)] for i in range(4)],
     'min_align_score': 120, # minimum overlap alignment score to constitue an edge
     'window': 20,           # rolling window length for tuple extension
-    'drop_threshold': 10,    # what constitutes a drop in score of a window
+    'drop_threshold': 10,   # what constitutes a drop in score of a window
     'max_succ_drops': 3     # how many consecutive drops are allowed
 }
 subst_scores = align.AlignParams.subst_scores_from_probs(params['subst_probs'], A)
