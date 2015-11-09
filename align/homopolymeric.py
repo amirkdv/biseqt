@@ -3,35 +3,54 @@ from . import seq, align, hp_tokenize
 
 class HpCondensor(object):
     """Transforms a sequence back and forth to an alternative alphabet by
-    collapsing all homopolymeric substrings into single "letters". For example:
+    collapsing all homopolymeric substrings into single "letters".
 
-        T = HpCondensor()
-        T.condense("AACCCCGGT") #=> A2C4G2T1
-        T.expand("A2C4G2T1")   #=> AACCCCGGT
+    Args:
+        alphabet (seq.Alphabet): The source alphabet.
+        maxlen   (int): Maximum length of homopolymeric substrings. Longer
+            hompolymeric substrings are considered to have this length.
 
     Attributes:
+        src_alphabet (seq.Alphabet): The source alphabet.
+        dst_alphabet (seq.Alphabet): The destination (condensed) alphabet.
         maxlen (int): if max len is truthy, all homopolymeric sequences
             longer than maxlen are treated as if their length was maxlen.
         letlen (int):
             maxlen is used to decide the length of letters in the new
             alphabet (they have to be constant for all letters).
+
+    Note:
+        All operations are prefixed by ``condense_`` or ``expand_`` where
+        the former means translating *to* the condensed alphabet world and the
+        latter means translating *from* the condensed alphabet world.
     """
     def __init__(self, alphabet, maxlen=9):
         assert maxlen > 0
         self.letlen = int(floor(log10(maxlen))) + 2
         self.maxlen = int(maxlen)
         self.src_alphabet = alphabet
-        self.dst_alphabet = self.translate_alphabet(alphabet)
-
-    def translate_alphabet(self, source):
+        # build the destination alphabet
         letters = []
-        for char in source.letters:
+        for char in alphabet.letters:
             for num in range(1, self.maxlen + 1):
                 letter = char + str(min(num, self.maxlen)).rjust(self.letlen - 1, '0')
                 letters += [letter]
-        return seq.Alphabet(letters)
+        self.dst_alphabet = seq.Alphabet(letters)
 
-    def condense(self, sequence):
+    def condense_sequence(self, sequence):
+        """Translates a given sequence into the condensed alphabet. For
+        example::
+
+            Tr = HpCondensor(seq.Alphabet('ACGT'))
+            Tr.condense_sequence('AACCCCGGT') #=> 'A2C4G2'
+
+        Args:
+            sequence (seq.Sequence): The sequence to translate.
+
+        Returns:
+            seq.Sequence: The translated sequence in condensed alphabet.
+        """
+        assert(sequence.alphabet.letters == self.src_alphabet.letters)
         condensed = ''
         for char, num in hp_tokenize(str(sequence)):
             num = str(min(num, self.maxlen)).rjust(self.letlen - 1, '0')
@@ -39,15 +58,20 @@ class HpCondensor(object):
         return seq.Sequence(condensed, self.dst_alphabet)
 
     def expand_sequence(self, sequence):
-        """The inverse of condense(). For exmaple:
+        """The inverse of condense_sequence(). For exmaple::
 
-            condense("A2C4G2") #=> AACCCCGGT
+            Tr = HpCondensor(seq.Alphabet('ACGT'))
+            Tr.expand_sequence('A2C4G2') #=> 'AACCCCGGT'
 
-        Note: if the original sequence contains homopolymeric substrings longer
-        than the maxlen provided to condense() the expad(condense()) is not identity.
+        Note:
+            If the original sequence contains homopolymeric substrings longer
+            than self.maxlen then ``expand(condense(.))`` is not identity.
 
-        :param string(str): condensed sequence
-        :return str: original sequence
+        Args:
+            string (str): The condensed sequence.
+
+        Returns:
+            str: The original sequence in source alphabet.
         """
         string = str(sequence)
         assert len(string) % self.letlen == 0
@@ -59,10 +83,25 @@ class HpCondensor(object):
         return seq.Sequence(orig, self.src_alphabet)
 
     def expand_transcript(self, S, T, transcript):
-        S, T = str(S), str(T)
         """Expands a given transcript for condensed versions of S and T to the
-        equivalent op sequence for S and T.
+        equivalent transcript for S and T.
+
+        Args:
+            S (seq.Sequence): "From" sequence of the transcript.
+            T (seq.Sequence): "To" sequence of the transcript.
+            transcript (align.Transcript): The transcript for condensed
+                sequences.
+
+        Returns:
+            align.Transcript: The equivalent transcript for original sequences.
+
+        Note:
+            Although ``expand(condense())`` can be lossy for homopolymeric
+            substrings longer than ``maxlen``, ``expand_transcript()`` does not
+            have an issue with them since the original sequences (i.e ``S`` and
+            ``T``) are available.
         """
+        S, T = str(S), str(T)
         opseq = ''
         idx_S = transcript.idx_S * self.dst_alphabet.letter_length
         idx_T = transcript.idx_T * self.dst_alphabet.letter_length
@@ -113,8 +152,12 @@ class HpCondensor(object):
         return align.Transcript(idx_S=idx_S, idx_T=idx_T,
             score=transcript.score, opseq=opseq)
 
-    def translate_subst_scores(self, subst_scores, alphabet=None,
-        hp_go_score=None, hp_ge_score=None, go_score=None, ge_score=None):
+    def _condense_subst_scores(self, subst_scores, **kw):
+        """Helper method for condense_align_params."""
+        alphabet = kw['alphabet']
+        go_score, ge_score = kw['go_score'], kw['ge_score']
+        hp_go_score, hp_ge_score = kw['hp_go_score'], kw['hp_ge_score']
+
         L = len(self.dst_alphabet)
         scores = [[None for _ in range(L)] for _ in range(L)]
         for i in range(L):
@@ -130,9 +173,26 @@ class HpCondensor(object):
                     scores[i][j] = min(ni, nj) * subst_scores[ki][kj] + go_score + ge_score* abs(ni - nj)
         return scores
 
-    def translate_align_params(self, align_params, hp_go_score=None, hp_ge_score=None):
+    def condense_align_params(self, align_params, hp_go_score=0, hp_ge_score=0):
+        """Translates alignment parameters to one that applies to the condensed
+        alphabet. Translation is done based on homopolymeric indel scores which
+        are treated separately from ordinary indels.
+
+        Args:
+            align_params (align.AlignParams): Alignment parameters for the
+                source alphabet.
+            hp_go_score (float): Alignment score (in source alphabet) for
+                homopolymeric gap open. Use 0 for linear gap penalty for
+                homopolymeric indels.
+            hp_ge_score (float): Alignment score (in source alphabet) for
+                hompolymeric gap extension.
+
+        Returns:
+            align.AlignParams: Alignment parameters for the destination
+                alphabet.
+        """
         assert(align_params.alphabet.letters == self.src_alphabet.letters)
-        subst_scores_d = self.translate_subst_scores(
+        subst_scores_d = self._condense_subst_scores(
             align_params.subst_scores,
             alphabet=align_params.alphabet,
             hp_go_score=hp_go_score,

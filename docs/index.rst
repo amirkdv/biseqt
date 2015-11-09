@@ -1,6 +1,10 @@
 .. align.py documentation master file.
 
+================
+ Documentation for ``align.py``
+================
+
 .. include:: README.rst
 .. toctree::
-  align
+  API Reference <modules>
   README

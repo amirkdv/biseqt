@@ -31,8 +31,8 @@ Tr = HpCondensor(A, maxlen=5)
 
 S = seq.Sequence('AACCCCCCCCGGGT', A)
 T = seq.Sequence('AATCCGGGTTT', A)
-S_d = Tr.condense(S)
-T_d = Tr.condense(T)
+S_d = Tr.condense_sequence(S)
+T_d = Tr.condense_sequence(T)
 print S, S_d
 print T, T_d
 transcript_d = align.Transcript(raw_transcript='(0,0),0:MISMS')
@@ -42,7 +42,7 @@ transcript_d.pretty_print(S_d, T_d, sys.stdout)
 print 'Expanded  transcript: ', transcript
 transcript.pretty_print(S, T, sys.stdout)
 
-C_d = Tr.translate_align_params(C, hp_go_score=params['hp_go_score'],
+C_d = Tr.condense_align_params(C, hp_go_score=params['hp_go_score'],
     hp_ge_score=params['hp_ge_score'])
 with align.AlignProblem(S=S_d, T=T_d, params=C_d, align_type=params['type']) as P:
     P.solve(print_dp_table=params['show_dp'])
