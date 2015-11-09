@@ -5,6 +5,7 @@
 *.db
 *.fa
 *.svg
+docs/*
 !docs/conf.py
 !docs/index.rst
-docs/*
+!docs/README.rst

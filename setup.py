@@ -28,6 +28,6 @@ setup(
         'networkx>=1.10',
     ],
     extras_require = {
-        'DOCS': ['sphinx', 'sphinxcontrib-napoleon', 'sphinx_rdt_theme'],
+        'DOCS': ['sphinx', 'sphinx.ext.napoleon', 'sphinx.rdt.theme'],
     }
 )
