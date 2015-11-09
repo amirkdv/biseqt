@@ -57,7 +57,7 @@ class AlignParams(CffiObject):
         natural logs of odds ratios.
 
         Args:
-            subst_probs(List[List[float]]): as in ``seq.Sequence.mutate()``.
+            subst_probs(List[List[float]]): as in :func:`align.seq.Sequence.mutate`.
             alphabet(seq.Alphabet): the underlying alphabet, needed since
                 probabilities are in order of letter index in alphabet.
             letter_dist(Optional[List[float]]): probability distributions of
@@ -65,7 +65,7 @@ class AlignParams(CffiObject):
                 default is uniform.
 
         Returns:
-            List[List[float]]: As expected by ``pw.AlignParams.__init__()``.
+            List[List[float]]: As expected by :func:`AlignParams`.
         """
         L = alphabet.length
         if letter_dist is None:
@@ -156,7 +156,7 @@ class AlignProblem(CffiObject):
     Args:
         S (seq.Sequence): The "from" sequence.
         T (seq.Sequence): The "to" sequence.
-        params (align.AlignParams): Alignment parameters.
+        params (pw.AlignParams): Alignment parameters.
 
     Keyword Args:
         S_min_idx (int): Starting position of the frame for ``S``, default is 0.

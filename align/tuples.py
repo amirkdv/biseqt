@@ -36,13 +36,35 @@ class TuplesDB(object):
     """Wraps an SQLite database containing tuple indices for sequences. For now,
     only one word length is allowed. The tables are:
 
-        * ``seq (id, name, description, seq)`` contains all the provided
+        * ``seq`` contains all the provided
           sequences (the "database"), each sequence and its name are mapped to
-          an internal integer used for calculations (see ``populate()``).
-        * ``tuples_N (id, tuple)`` contains all observed words of length ``N``
-          where ``N`` is ``self.wordlen``.
-        * ``tuples_N_hits (tuple, seq, idx)`` contains all the "hits" (see
-          ``index()``).
+          an internal integer used for calculations (see :func:`populate`).
+        * ``tuples_N`` contains all observed words of length ``N``
+          where ``N`` is :attr:`wordlen`.
+        * ``tuples_N_hits`` contains all the "hits" (see :func:`index`).
+
+    SQL schemas are as follows (replace `N` with word length):
+
+    .. code-block:: sql
+
+        CREATE TABLE seq (
+          'id' integer PRIMARY KEY ASC,
+          'name' text,
+          'description' text,
+          'seq' text
+        );
+        CREATE TABLE tuples_N (
+          'id' integer PRIMARY KEY ASC,
+          'tuple' char(N),
+          'query' integer DEFAULT -1,
+          UNIQUE(tuple)
+        );
+        CREATE TABLE tuples_N_hits (
+          'tuple' integer REFERENCES tuples_N(id),
+          'seq'   integer REFERENCES seq(id),
+          'idx'   integer,
+          UNIQUE(seq, idx)
+        )
 
     Attributes:
         db (string): Path to the SQLite datbase.
@@ -114,7 +136,7 @@ class TuplesDB(object):
                 loaded from FASTA source, default is -1.
 
         ToDo:
-            Allow specifying a ``homopolymeric.HpCondenser``
+            Allow specifying an :class:`align.homopolymeric.HpCondenser`.
         """
         def give_seq():
             for idx, seq in enumerate(SeqIO.parse(fasta_src, "fasta")):
@@ -187,7 +209,7 @@ class TuplesDB(object):
             info[12] #=> {'start': 17, 'length': 479, 'name': u'R12'}
 
         Returns:
-            dict
+            dict: Metadata dicts in a dict keyed by sequence ID.
         """
         with sqlite3.connect(self.db) as conn:
             c = conn.cursor()
@@ -213,13 +235,13 @@ class TuplesDB(object):
             return [row[0] for row in c]
 
 class OverlapFinder(object):
-    """Provided two sequences and a ``tuples.TuplesDB`` provides tools to find
+    """Provided two sequences and a :class:`TuplesDB` provides tools to find
     and extend exactly matching "seeds" into overlap alignments. Both sequences
     must have already been indexed in the tuples database.
 
-    Seeds are *maximal, exactly matching* instances of ``Segment``. They are
-    expanded by repeated global alignments on small windows moving forward and
-    backward from the boundaries of the seed.
+    Seeds are *maximal, exactly matching* instances of :class:`Segment`. They
+    are expanded by repeated global alignments on small windows moving forward
+    and backward from the boundaries of the seed.
 
     Args:
         S (seq.Sequence): The "from" sequence.
@@ -241,14 +263,14 @@ class OverlapFinder(object):
 
     def exactly_matching_segments(self, s1, s2):
         """Given two sequence ids, finds all maximal exactly matching segments
-        between the two self.seqid) and another given sequence. A segment is in
-        its maximal form if there are no other exactly-matching segments whose
-        span is a unit shift in both the query and target sequences.
+        between the two. A segment is in its maximal form if there are no other
+        exactly-matching segments whose span is a unit shift in both the query
+        and target sequences.
 
         Note:
             Scores of transcripts for exact matches are left as 0 to avoid
             unnecessary cycles, we populate the score first thing in
-            ``extend()``.
+            :func:`extend`.
         """
         segments = []
         q = """

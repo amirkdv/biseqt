@@ -9,7 +9,8 @@ class Alphabet(CffiObject):
 
     Attributes:
 
-        c_obj (cffi.cdata): points to a sequence_alphabet struct.
+        c_obj (cffi.cdata): points to a ``sequence_alphabet`` struct.
+
     Args:
         letters (str|List[str]): The letters of the alphabet.
 
@@ -52,7 +53,7 @@ class Alphabet(CffiObject):
 
             letters_dist(Optional[dict]): The probability distribution of
                 letters as a list of probabilities in order of letters in
-                self.c_obj.letters. Default is uniform.
+                :attr:`c_obj.letters`. Default is uniform.
 
         Returns:
             str: A random string.
@@ -69,8 +70,8 @@ class Alphabet(CffiObject):
 
 
     def randseq(self, length, letters_dist=None):
-        """Generates a random ``seq.Sequence`` of the specified length from this
-        alphabet. Optionally a probability distribution of letters may be
+        """Generates a random :class:`Sequence` of the specified length from
+        this alphabet. Optionally a probability distribution of letters may be
         specified.
 
         Args:
@@ -79,7 +80,7 @@ class Alphabet(CffiObject):
 
             letters_dist(Optional[dict]): The probability distribution of
                 letters as a list of probabilities in order of letters in
-                self.c_obj.letters. Default is uniform.
+                :attr:`c_obj.letters`. Default is uniform.
 
         Returns:
             seq.Sequence: A random sequence.
@@ -88,7 +89,7 @@ class Alphabet(CffiObject):
 
 class Sequence():
     """Wraps a C ``char[]`` and its corresponding ``int*`` of letter indices.
-    Note that this is *not* a ``CffiObject`` subclass since there's no
+    Note that this is *not* a :class:`CffiObject` subclass since there's no
     underlying C struct. String indexing and slicing are supported::
 
         x = seq.Sequence('A2C3A2', seq.Alphabet(['A2', 'C3']))
@@ -149,16 +150,16 @@ class Sequence():
                 extension distribution, default 0.
              subst_probs(List[List[float]]): the probability distribution for
                 each pair of possible substitutions such that
-                ``subst_probs[i][j]`` is the probability of letter *i* (integer
-                index) of the alphabet being substituted by letter *j* (integer
-                index).
+                :attr:`c_obj.subst_probs[i][j]` is the probability of letter *i*
+                (integer index) of the alphabet being substituted by letter *j*
+                (integer index).
              insert_dist(List[float]): the distribution passed to
-                 ``Alphabet.randstr()`` when inserting arbitrary strings;
+                 :func:`Alphabet.randstr` when inserting arbitrary strings;
                  default is uniform.
 
         Returns:
-            tuple: The mutant (a ``seq.Sequence``)and corresponding transcript
-                (a ``align.Transcript``).
+            tuple: The mutant (a :class:`Sequence`)and corresponding transcript
+                (an :class:`align.pw.Transcript`).
         """
         assert(go_prob < 1)
         assert(ge_prob < 1)
@@ -202,9 +203,9 @@ class Sequence():
             reads = genome.randread(subst_probs=subst_probs, coverage=40)
 
         Args:
-            subst_probs(List[List[float]]): As in ``mutate()``.
-            go_prob(Optional[float]): As in ``mutate()``.
-            ge_prob(Optional[float]): As in ``mutate()``.
+            subst_probs(List[List[float]]): As in :func:`~mutate`.
+            go_prob(Optional[float]): As in :func:`~mutate`.
+            ge_prob(Optional[float]): As in :func:`~mutate`.
             coverage (Optional[float]): The expected number of times each
                 letter in the sequence appears in the entire read collection.
                 Default is 5.
@@ -214,13 +215,11 @@ class Sequence():
                 distribution or read lengths.
 
         Yields:
-            tuple: the read (a ``seq.Sequence``) and its starting position (``int``).
+            tuple: the read (a :class:`Sequence`) and its starting position (``int``).
         """
-        # TODO make sure we have at least one read from the very beginning and
-        # the very end.
         N = self.length
 
-        # include two reads that reach the boundaries:
+        # include a read that reaches the begenning:
         yield Sequence(self[:len_mean], self.alphabet), 0
 
         num = int(1.0 * N * coverage/len_mean)
@@ -232,18 +231,18 @@ class Sequence():
             read, _ = x.mutate(go_prob=go_prob, ge_prob=ge_prob, subst_probs=subst_probs)
             yield read, start
 
+        # include a read that reaches the end:
         yield Sequence(self[-len_mean:], self.alphabet), N - len_mean
 
 def make_sequencing_fixture(genome_file, reads_file, genome_length=1000, **kw):
     """Helper method for tests. Generates a random genome and a random sequence
-    of reads from it.
+    of reads from it. All keyword arguments are passed as is to
+    :func:`Sequence.randread`.
 
     Args:
          genome_file(str): Path to FASTA file to write genome to.
          reads_file(str): Path to FASTA file to write sequencing reads to.
          genome_length(int): Length of random genome.
-         kw: All other keyword parameters are passed as-is to
-             ``Sequence.randread()``.
     """
     A = Alphabet('ACGT')
     if 'go_prob' not in kw:

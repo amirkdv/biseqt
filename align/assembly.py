@@ -56,9 +56,9 @@ def overlap_graph_by_seed_extension(tuplesdb, align_params, window=20,
             alignments.
 
     Keyword Args:
-        drop_threshold: as in ``tuples.OverlapFinder.extend()``.
-        window: as in ``tuples.OverlapFinder.extend()``.
-        max_succ_drops: as in ``tuples.OverlapFinder.extend()``.
+        drop_threshold: as in :func:`align.tuples.OverlapFinder.extend`.
+        window: as in :func:`tuples.OverlapFinder.extend`.
+        max_succ_drops: as in :func:`align.tuples.OverlapFinder.extend`.
 
     Returns:
         networkx.DiGraph

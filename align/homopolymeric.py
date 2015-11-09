@@ -1,7 +1,7 @@
 from math import log10, floor
 from . import seq, pw, hp_tokenize
 
-class HpCondensor(object):
+class HpCondenser(object):
     """Transforms a sequence back and forth to an alternative alphabet by
     collapsing all homopolymeric substrings into single "letters".
 
@@ -97,7 +97,7 @@ class HpCondensor(object):
 
         Note:
             Although ``expand(condense())`` can be lossy for homopolymeric
-            substrings longer than ``maxlen``, ``expand_transcript()`` does not
+            substrings longer than :attr:`maxlen`, ``expand_transcript()`` does not
             have an issue with them since the original sequences (i.e ``S`` and
             ``T``) are available.
         """

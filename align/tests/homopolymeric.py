@@ -3,7 +3,7 @@ import sys
 from math import erf, sqrt, log
 
 from .. import pw, seq
-from ..homopolymeric import HpCondensor
+from ..homopolymeric import HpCondenser
 
 maxlen = 5
 
@@ -27,7 +27,7 @@ A = seq.Alphabet('ACGT')
 C = pw.AlignParams(alphabet=A,subst_scores=subst_scores,
     go_score=params['go_score'], ge_score=params['ge_score'],
     max_diversion=params['band'])
-Tr = HpCondensor(A, maxlen=5)
+Tr = HpCondenser(A, maxlen=5)
 
 S = seq.Sequence('AACCCCCCCCGGGT', A)
 T = seq.Sequence('AATCCGGGTTT', A)

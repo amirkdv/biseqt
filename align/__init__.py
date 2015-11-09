@@ -10,7 +10,7 @@ with open(os.path.join(os.path.dirname(__file__), 'libalign.h')) as f:
 
 class CffiObject(object):
     """Generic cffi wrapper for C structs, delegates all unknown attributes to
-    the underlying C pointer. Subclasses must populate self.c_obj in their
+    the underlying C pointer. Subclasses must populate :attr:`c_obj` in their
     constructors with a pointer to their underlying C struct.
 
     Attributes:
