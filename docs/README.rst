@@ -1,3 +1,5 @@
+|Documentation Status|
+
 ``align.py`` is a library of sequence alignment algorithms in python and
 C. To get started:
 
@@ -273,4 +275,5 @@ To Do
       -style linear space optimization in ``libalign``.
    -  Make it work with Python 3.
 
-
+.. |Documentation Status| image:: https://readthedocs.org/projects/alignpy/badge/?version=latest
+   :target: http://alignpy.readthedocs.org/en/latest/?badge=latest

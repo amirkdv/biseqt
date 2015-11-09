@@ -29,5 +29,7 @@ setup(
     ],
     extras_require = {
         'DOCS': ['sphinx', 'sphinx.ext.napoleon', 'sphinx.rdt.theme'],
+        # in Python 3.3 this is shipped via unittest.
+        'RTD': ['mock']
     }
 )
