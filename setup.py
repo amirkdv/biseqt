@@ -20,5 +20,14 @@ setup(
     #license='MIT',
     #keywords='sequence alignment',
     packages=['align'],
-    install_requires=['biopython', 'termcolor', 'numpy', 'cffi', 'networkx>=1.10'],
+    install_requires= [
+        'biopython',
+        'termcolor',
+        'numpy',
+        'cffi',
+        'networkx>=1.10',
+    ],
+    extras_require = {
+        'DOCS': ['sphinx', 'sphinxcontrib-napoleon', 'sphinx_rdt_theme'],
+    }
 )
