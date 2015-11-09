@@ -1,5 +1,5 @@
 from math import log10, floor
-from . import seq, align, hp_tokenize
+from . import seq, pw, hp_tokenize
 
 class HpCondensor(object):
     """Transforms a sequence back and forth to an alternative alphabet by
@@ -13,8 +13,8 @@ class HpCondensor(object):
     Attributes:
         src_alphabet (seq.Alphabet): The source alphabet.
         dst_alphabet (seq.Alphabet): The destination (condensed) alphabet.
-        maxlen (int): if max len is truthy, all homopolymeric sequences
-            longer than maxlen are treated as if their length was maxlen.
+        maxlen (int): All homopolymeric sequences longer than this are
+            treated as if their length was maxlen.
         letlen (int):
             maxlen is used to decide the length of letters in the new
             alphabet (they have to be constant for all letters).
@@ -89,11 +89,11 @@ class HpCondensor(object):
         Args:
             S (seq.Sequence): "From" sequence of the transcript.
             T (seq.Sequence): "To" sequence of the transcript.
-            transcript (align.Transcript): The transcript for condensed
+            transcript (pw.Transcript): The transcript for condensed
                 sequences.
 
         Returns:
-            align.Transcript: The equivalent transcript for original sequences.
+            pw.Transcript: The equivalent transcript for original sequences.
 
         Note:
             Although ``expand(condense())`` can be lossy for homopolymeric
@@ -149,7 +149,7 @@ class HpCondensor(object):
                 opseq += 'D' * num_S
                 char_S, num_S = next(tokens_S, (None,None))
 
-        return align.Transcript(idx_S=idx_S, idx_T=idx_T,
+        return pw.Transcript(idx_S=idx_S, idx_T=idx_T,
             score=transcript.score, opseq=opseq)
 
     def _condense_subst_scores(self, subst_scores, **kw):
@@ -179,7 +179,7 @@ class HpCondensor(object):
         are treated separately from ordinary indels.
 
         Args:
-            align_params (align.AlignParams): Alignment parameters for the
+            align_params (pw.AlignParams): Alignment parameters for the
                 source alphabet.
             hp_go_score (float): Alignment score (in source alphabet) for
                 homopolymeric gap open. Use 0 for linear gap penalty for
@@ -188,7 +188,7 @@ class HpCondensor(object):
                 hompolymeric gap extension.
 
         Returns:
-            align.AlignParams: Alignment parameters for the destination
+            pw.AlignParams: Alignment parameters for the destination
                 alphabet.
         """
         assert(align_params.alphabet.letters == self.src_alphabet.letters)
@@ -200,7 +200,7 @@ class HpCondensor(object):
             go_score=align_params.gap_open_score,
             ge_score=align_params.gap_extend_score
         )
-        return align.AlignParams(
+        return pw.AlignParams(
             alphabet=self.dst_alphabet,
             subst_scores=subst_scores_d,
             go_score=align_params.gap_open_score,

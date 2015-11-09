@@ -1,3 +1,16 @@
+"""Provides various pairwise sequence alignment algorithms. The following class
+constants are inherited from ``libalign`` and are used to indicate the type of
+alignment problem:
+
+- ``GLOBAL``: Global alignment problem, i.e Needeman-Wunsch.
+- ``LOCAL``: Local alignment problem, i.e Smith-Waterman.
+- ``OVERLAP``: Find a prefix-suffix alignment in any direction, typically used
+  for assembly.
+- ``START_ANCHORED``: Find a local alignment demanding that it begins at the
+  starting position of both sequences.
+- ``END_ANCHORED``: Find a local alignment demanding that it ends at the ending
+  position of both sequences.
+"""
 from math import log
 import re
 from termcolor import colored
@@ -6,25 +19,21 @@ from contextlib import contextmanager
 from . import ffi, lib, seq, CffiObject
 from . import hp_tokenize
 
-global lib
-"""Values for enum `align_type`.
-"""
-ALIGN_GLOBAL = lib.GLOBAL
-ALIGN_LOCAL = lib.LOCAL
-ALIGN_START_ANCHORED = lib.START_ANCHORED
-ALIGN_END_ANCHORED = lib.END_ANCHORED
-ALIGN_OVERLAP = lib.OVERLAP
+GLOBAL = lib.GLOBAL
+LOCAL = lib.LOCAL
+START_ANCHORED = lib.START_ANCHORED
+END_ANCHORED = lib.END_ANCHORED
+OVERLAP = lib.OVERLAP
 
 class AlignParams(CffiObject):
-    """Wraps the C struct align_params, see `libalign.h`
+    """Wraps the C struct ``align_params``, see ``libalign.h``.
 
     Attributes:
         alphabet (Alphabet): alphabet used to represent the sequences.
-        _c_subst_rows_ka (list[cffi.cdata]): has ownership of (keeps alive) C pointers
-            to rows in the substitution matrix.
-        _c_subst_full_ka (cffi.cdata): has ownership of (keeps alive) the C
-            pointer to the full substitution matrix.
         c_obj (cffi.cdata): points to the underlying `align_params` struct.
+
+    Additionally all struct members of ``align_params`` can be read (and not
+    written) as usual attributes.
     """
     def __init__(self, alphabet=None, subst_scores=[],
         go_score=0, ge_score=0, max_diversion=-1):
@@ -47,13 +56,16 @@ class AlignParams(CffiObject):
         matrix using a null-hypothesis letters distribution. The scores are
         natural logs of odds ratios.
 
-        :param subst_probs(list[list]): as in seq.Sequence.mutate()
-        :param alphabet(Alphabet): the underlying alphabet, needed since
-            probabilities are in order of letter index in alphabet.
-        :param letter_dist(list[float]): probability distributions of each
-            letter of the alphabet in the null (random) hypothesis.
+        Args:
+            subst_probs(List[List[float]]): as in ``seq.Sequence.mutate()``.
+            alphabet(seq.Alphabet): the underlying alphabet, needed since
+                probabilities are in order of letter index in alphabet.
+            letter_dist(Optional[List[float]]): probability distributions of
+                each letter of the alphabet in the null (random) hypothesis,
+                default is uniform.
 
-        :return subst_scores(list[list]): as expected in AlignParams.__init__().
+        Returns:
+            List[List[float]]: As expected by ``pw.AlignParams.__init__()``.
         """
         L = alphabet.length
         if letter_dist is None:
@@ -78,8 +90,8 @@ class AlignParams(CffiObject):
         return log(go_prob), log(ge_prob)
 
     def __getattr__(self, name):
-        """Allow attributes to access members of the underlying `align_params`
-        struct. Additionally provides a `subst_scores` attribute which builds
+        """Allow attributes to access members of the underlying ``align_params``
+        struct. Additionally provides a ``subst_scores`` attribute which builds
         a python list of lists from the corresponding C data structure.
         """
         if name == 'subst_scores':
@@ -91,14 +103,21 @@ class AlignParams(CffiObject):
     def score(self, S, T, opseq, S_min_idx=0, T_min_idx=0):
         """Calculates the score for an arbitray opseq over given sequences.
         Opseqs are allowed to be partial alignments (i.e finishing before
-        reaching the end of frame).
+        reaching the end of frame)::
 
             C = AlignParams(...)
-            C.score('ACC', 'AGC', 'MSM')
+            C.score('ACCTT', 'AGCTTA', 'MSMMMD')
 
-        :param S(seq.Sequence)
-        :param T(seq.Sequence)
-        :param opseq(str)
+        Args:
+            S (seq.Sequence): The "from" sequence of alignment.
+            T (seq.Sequence): The "to" sequence of alignment.
+            opseq  (str): The edit transcript of the form ``(M|S|I|D)+``.
+
+        Keyword Args:
+            S_min_idx(Optional[int]): The starting position of the opseq in
+                ``S``, default is 0.
+            T_min_idx(Optiona[int]): The starting position of the opseq in
+                ``T``, default is 0.
         """
         score = 0.0
         i, j = S_min_idx, T_min_idx
@@ -118,22 +137,44 @@ class AlignParams(CffiObject):
         return score
 
 class AlignProblem(CffiObject):
-    """Wraps the C struct `align_problem', see `libalign.h`
+    """Wraps the C struct ``align_problem`` and provides a context manager to
+    solve and potentially traceback an alignment problem. Example::
+
+        A = seq.Alphabet('ACGT')
+        S, T = A.randseq(100), A.randseq(100)
+        C = align.AlignParams(
+            ... # snip
+        )
+        with align.AlignProblem(S, T, C, align_type=align.GLOBAL) as P:
+            score = P.solve()
+            transcript = P.traceback()
+
+        transcript.pretty_print(S, T, sys.stdout)
+
+    All arguments (keyword and not) become attributes with identical names.
+
+    Args:
+        S (seq.Sequence): The "from" sequence.
+        T (seq.Sequence): The "to" sequence.
+        params (align.AlignParams): Alignment parameters.
+
+    Keyword Args:
+        S_min_idx (int): Starting position of the frame for ``S``, default is 0.
+        T_min_idx (int): Starting position of the frame for ``T``, default is 0.
+        S_max_idx (int): Ending position (non-inclusive) of the frame for ``S``,
+            default is the length of ``S``.
+        T_max_idx (int): Ending position (non-inclusive) of the frame for ``T``,
+            default is the length of ``T``.
 
     Attributes:
-        S (Sequence): "from" sequence.
-        T (Sequence): "to" sequence.
-        params (AlignParams): parameters for the alignment problem.
-        align_type (int): any of the ALIGN_* constants defined here (pointing to
-            values of C enum `align_type`).
-        c_obj (cffi.cdata): points to the underlying `align_problem` struct.
-        c_dp_table (cffi.cdata): points to the underlying `double **` DP table.
+        c_obj (cffi.cdata): points to the underlying ``align_problem`` struct.
+        c_dp_table (cffi.cdata): points to the underlying ``double **`` DP table.
     """
-    def __init__(self, S=None, T=None, params=None, align_type=ALIGN_GLOBAL,
-        S_min_idx=0, T_min_idx=0, S_max_idx=None, T_max_idx=None):
-
-        S_max_idx = S.length if S_max_idx is None else S_max_idx
-        T_max_idx = T.length if T_max_idx is None else T_max_idx
+    def __init__(self, S, T, params, **kw):
+        align_type = kw.pop('align_type', GLOBAL)
+        S_min_idx, T_min_idx = kw.pop('S_min_idx', 0), kw.pop('T_min_idx', 0)
+        S_max_idx = kw.pop('S_max_idx', S.length)
+        T_max_idx = kw.pop('T_max_idx', T.length)
         assert(S_max_idx <= S.length)
         assert(T_max_idx <= T.length)
 
@@ -150,8 +191,6 @@ class AlignProblem(CffiObject):
         })
 
     def __enter__(self):
-        """TODO"""
-        global lib
         self.c_dp_table = lib.init_dp_table(self.c_obj)
         if self.c_dp_table == -1:
             raise('Got -1 from align.define().')
@@ -165,20 +204,22 @@ class AlignProblem(CffiObject):
 
     def score(self, opseq):
         """Calculates the score for an arbitray opseq. Opseqs are allowed to be
-        partial alignments (i.e finishing before reaching the end of frame).
+        partial alignments (i.e finishing before reaching the end of frame).::
 
             P = AlignProblem(...)
             P.score('MMMSSISSD') #=> 23.50
         """
         return self.params.score(self.S, self.T, opseq, self.S_min_idx, self.T_min_idx)
 
-
     def solve(self, print_dp_table=False):
-        """Populates the DP table and traces back an (any) optimal alignment.
+        """Populates the DP table and returns the optimal score.
 
-        :param print_dp_table(optional): whether or not (truthy) to print the
-            fully calculated DP table.
-        :returns: a transcript string with the specified format.
+        Args:
+            print_dp_table(Optional[bool]): whether or not to print the
+                fully calculated DP table, default is ``False``.
+        Returns:
+            float|NoneType: Optimal alignment score or ``None`` if no alignment
+                found.
         """
         self.opt = lib.solve(self.c_dp_table, self.c_obj)
         if print_dp_table:
@@ -192,6 +233,11 @@ class AlignProblem(CffiObject):
         return score
 
     def traceback(self):
+        """Traces back any optimal alignment found via ``solve()``.
+
+        Returns:
+            align.Transcript
+        """
         if self.opt is None:
             return None
 
@@ -222,27 +268,28 @@ class AlignProblem(CffiObject):
 # TODO make this a namedtuple as well
 class Transcript(object):
     """A wrapper for alignment transcripts. Solutions to the alignment problem are
-    represented by transcript strings with the following format:
+    represented by transcript strings with the following format::
 
-        (<Si,Tj>),<score>:...
+        (<Si,Tj>),<score>:<opseq>
 
-    Si and Tj are integers specifying the positiong along each string where
-    the alignment begins. Score is the score of the transcript to 2 decimal
-    places. What follows the ':' is a sequence of "ops" defined as follows:
+    ``Si`` and ``Tj`` are integers specifying the positiong along each string
+    where the alignment begins (relative to the corresponding frames). ``score``
+    is the score of the transcript to 2 decimal places. And ``opseq`` is a
+    sequence of edit "ops" defined as follows where insertion/deletions are
+    meant to mean "from S to T"::
+
         M match
         S substitution
         I insert
         D delete
-    All op sequences begin with a B and insertion/deletions are meant to
-    mean "from S to T".
+
+
+    Args:
+        raw_transcript (Optional[str]): If provided all other arguments are
+            ignored and instead this string is parsed to populate the
+            attributes.
     """
     def __init__(self, idx_S=0, idx_T=0, score=0.0, opseq='', raw_transcript=None):
-        """FIXME Parses a raw transcript as given by `libalign.so` and populates
-        class attributes. Raw transcripts are expected to have the following
-        format:
-
-            (<idx_S,idx_T>),<score>:<opseq>
-        """
         if raw_transcript is None:
             self.idx_S, self.idx_T = idx_S, idx_T
             self.score, self.opseq = score, opseq
@@ -258,21 +305,20 @@ class Transcript(object):
     def __repr__(self):
         return '(%d,%d),%.2f:%s' % (self.idx_S, self.idx_T, self.score, self.opseq)
 
-    # TODO allow appending another transcript to the front or back
-
     def pretty_print(self, S, T, f, width=120, margin=20, colors=True):
         """Pretty prints a transcript to f.
 
-        :param S(Sequence): "from" sequence.
-        :param T(Sequence): "to" sequence.
-        :param f: file handle to write the output to; for standard output use
-            `sys.stdout`.
-        :param width(optional): terminal width (int) used for wrapping; default
-            is 120.
-        :param margin(optional): length (int) of leading and trailing sequences
-            in S and T before and after the alignment; default 20.
-        :param colors(optional): whether or not (truthy) to use colors in
-            output; default True.
+        Args:
+            S (seq.Sequence): The "from" sequence.
+            T (seq.Sequence): The "to" sequence.
+            f (file): Open file handle to write the output to; for standard
+                output use ``sys.stdout``.
+            width (Optional[int]): Terminal width used for wrapping;
+                default is 120.
+            margin (Optional[length]): Length of leading and trailing sequences
+                in S and T before and after the alignment; default is 20.
+            colors (Optional[bool]): Whether or not to use colors in output;
+                default is ``True``.
         """
         assert(S.alphabet.letter_length == T.alphabet.letter_length)
         assert(S.alphabet.letters == T.alphabet.letters)
