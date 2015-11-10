@@ -18,16 +18,17 @@ setup(
     author='Amir Kadivar',
     author_email='amir@amirkdv.ca',
     #license='MIT',
-    #keywords='sequence alignment',
+    #keywords='sequence DNA alignment fragment assembly k-mer homopoylmeric',
     packages=['align'],
-    install_requires= [
+    setup_requires=['numpy', 'cffi', 'biopython'], # see https://github.com/numpy/numpy/issues/2434
+    install_requires=[
         'biopython',
         'termcolor',
         'numpy',
         'cffi',
         'networkx>=1.10',
     ],
-    extras_require = {
+    extras_require={
         'DOCS': ['sphinx', 'sphinx.ext.napoleon', 'sphinx.rdt.theme'],
         # in Python 3.3 this is shipped via unittest.
         'RTD': ['mock']

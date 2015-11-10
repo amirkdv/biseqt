@@ -5,6 +5,7 @@
 *.db
 *.fa
 *.svg
+env/
 docs/_build
 docs/_templates
 docs/_static
