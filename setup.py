@@ -27,6 +27,7 @@ setup(
         'numpy',
         'cffi',
         'networkx>=1.10',
+        'matplotlib',
     ],
     extras_require={
         'DOCS': ['sphinx', 'sphinx.ext.napoleon', 'sphinx.rdt.theme'],
