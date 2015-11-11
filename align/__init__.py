@@ -25,7 +25,7 @@ class CffiObject(object):
 
 def hp_tokenize(string):
     """Generator for homopolymeric substrings in a given sequences. Each value
-    is a (char, num) tuple.
+    is a (char, num) tuple, e.g. ``("A", 3)`` means ``AAA``.
     """
     counter = 0
     cur = string[0]

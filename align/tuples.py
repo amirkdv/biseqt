@@ -56,7 +56,6 @@ class TuplesDB(object):
         CREATE TABLE tuples_N (
           'id' integer PRIMARY KEY ASC,
           'tuple' char(N),
-          'query' integer DEFAULT -1,
           UNIQUE(tuple)
         );
         CREATE TABLE tuples_N_hits (
@@ -83,8 +82,8 @@ class TuplesDB(object):
         # we want an Upsert to avoid changing tuple
         # IDs see http://stackoverflow.com/a/4330694 .
         self.tup_insert_q = """
-            INSERT OR REPLACE INTO tuples_{} (id, tuple, query)
-            VALUES ((SELECT id FROM tuples_{} WHERE tuple = ?), ?, ?)
+            INSERT OR REPLACE INTO tuples_{} (id, tuple)
+            VALUES ((SELECT id FROM tuples_{} WHERE tuple = ?), ?)
         """.format(self.wordlen, self.wordlen)
         self.hit_insert_q = """
             INSERT INTO tuples_{}_hits (tuple, seq, idx)
@@ -109,7 +108,6 @@ class TuplesDB(object):
                 CREATE TABLE tuples_{} (
                   'id' integer PRIMARY KEY ASC,
                   'tuple' char({}),
-                  'query' integer DEFAULT -1,
                   UNIQUE(tuple)
                 );
             """.format(self.wordlen, self.wordlen)
@@ -161,12 +159,12 @@ class TuplesDB(object):
         """
         sys.stderr.write('indexing sequences:')
         def give_hit(seqid, string):
-            for s,idx in tup_scan(string, self.wordlen):
+            for s, idx in tup_scan(string, self.wordlen):
                 yield (seqid, idx, s)
 
         def give_tup(string):
-            for s,idx in tup_scan(string, self.wordlen):
-                yield (s, s, -1)
+            for s, _ in tup_scan(string, self.wordlen):
+                yield (s, s)
 
         with sqlite3.connect(self.db) as conn:
             c = conn.cursor()
