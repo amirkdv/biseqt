@@ -20,7 +20,10 @@ class Segment(namedtuple('Segment', ['S_id', 'T_id', 'tx'])):
 
 def tup_scan(string, wordlen):
     """A generator for ``(string, idx)`` tuples to scan through any given
-    string.
+    string. For example::
+
+            string = 'ACGTGT'
+            tup_scan(string, 5) # => ('ACGTG', 0), ('CGTGT', 1)
 
     Args:
         string (str): The string to scan.

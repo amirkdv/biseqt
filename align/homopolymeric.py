@@ -6,7 +6,7 @@ class HpCondenser(object):
     collapsing all homopolymeric substrings into single "letters".
 
     Args:
-        alphabet (seq.Alphabet): The source alphabet.
+        src_alphabet (seq.Alphabet): The source alphabet.
         maxlen   (int): Maximum length of homopolymeric substrings. Longer
             hompolymeric substrings are considered to have this length.
 
@@ -24,14 +24,14 @@ class HpCondenser(object):
         the former means translating *to* the condensed alphabet world and the
         latter means translating *from* the condensed alphabet world.
     """
-    def __init__(self, alphabet, maxlen=9):
+    def __init__(self, src_alphabet, maxlen=9):
         assert maxlen > 0
         self.letlen = int(floor(log10(maxlen))) + 2
         self.maxlen = int(maxlen)
-        self.src_alphabet = alphabet
+        self.src_alphabet = src_alphabet
         # build the destination alphabet
         letters = []
-        for char in alphabet.letters:
+        for char in src_alphabet.letters:
             for num in range(1, self.maxlen + 1):
                 letter = char + str(min(num, self.maxlen)).rjust(self.letlen - 1, '0')
                 letters += [letter]
@@ -51,11 +51,33 @@ class HpCondenser(object):
             seq.Sequence: The translated sequence in condensed alphabet.
         """
         assert(sequence.alphabet.letters == self.src_alphabet.letters)
-        condensed = ''
-        for char, num in hp_tokenize(str(sequence)):
-            num = str(min(num, self.maxlen)).rjust(self.letlen - 1, '0')
-            condensed += char + num
+        condensed = ''.join([self._condense(*x) for x in hp_tokenize(str(sequence))])
         return seq.Sequence(condensed, self.dst_alphabet)
+
+    def _condense(self, char, num):
+        return char + str(min(num, self.maxlen)).rjust(self.letlen - 1, '0')
+
+    def tup_scan(self, string, wordlen):
+        """Similar to :func:`align.tuples.tup_scan` except a tuple of length N is
+        taken to mean N letters in the condensed alphabet. The yielded indices,
+        however, refer to positions in the original sequence. For example::
+
+            Tr = HpCondenser(seq.Alphabet('ACGT'), maxlen=3)
+            string = 'AAACCCCGGTGGT'
+            Tr.tup_scan(string, 5) # => ('A3C3G2T1G2', 0), ('C3G2T1G2T1', 3)
+        """
+        tup = []
+        idx = [0]
+        for char, num in hp_tokenize(string):
+            if len(tup) == wordlen:
+                yield ''.join(tup), idx[0]
+                tup.pop(0)
+                idx.pop(0)
+            tup += [self._condense(char, num)]
+            idx += [(idx[-1] if idx else 0) + num]
+        if tup:
+            yield ''.join(tup), idx[0]
+
 
     def expand_sequence(self, sequence):
         """The inverse of condense_sequence(). For exmaple::
@@ -189,7 +211,7 @@ class HpCondenser(object):
                 else:
                     subst_scores_d[i][j] = min(ni, nj) * subst_scores[ki][kj] + \
                         align_params.go_score + align_params.ge_score* abs(ni - nj)
-        
+
         return pw.AlignParams(
             alphabet=self.dst_alphabet,
             subst_scores=subst_scores_d,
