@@ -133,9 +133,15 @@ class TuplesDB(object):
             q = "INSERT INTO seq (name, description, seq) VALUES (?,?,?)"
             c.executemany(q, give_seq())
 
-    def index(self):
+    def index(self, hp_condenser=None):
         """Scans all sequences in the ``seq`` table and records all observed
         tuples in ``tuples_N`` tables and all hits in ``tuples_N_hits`` tables.
+
+        Args:
+            hp_condenser (homopolymeic.HpCondenser): If specified, its
+                :func:`tup_scan <align.homopolymeric.HpCondenser.tup_scan>` is
+                used instead of :func:`this module <tup_scan>`'s generic
+                version.
 
         Note:
             It takes ~3 minutes to index 10-mers of 500 sequences with average
@@ -152,6 +158,7 @@ class TuplesDB(object):
             INSERT INTO tuples_{}_hits (tuple, seq, idx)
                 SELECT id, ?, ?  FROM tuples_{} WHERE tuple = ?
         """.format(self.wordlen, self.wordlen)
+        ts = hp_condenser.tup_scan if hp_condenser else tup_scan
         sys.stderr.write('indexing sequences:')
         with sqlite3.connect(self.db) as conn:
             c = conn.cursor()
@@ -166,11 +173,11 @@ class TuplesDB(object):
                     break
                 c.executemany(
                     tup_insert_q,
-                    [(s,s) for s, _ in tup_scan(string, self.wordlen)]
+                    [(s,s) for s, _ in ts(string, self.wordlen)]
                 )
                 c.executemany(
                     hit_insert_q,
-                    [(seqid, idx, s) for s, idx in tup_scan(string, self.wordlen)]
+                    [(seqid, idx, s) for s, idx in ts(string, self.wordlen)]
                 )
                 sys.stderr.write(' ' + str(seqid))
             sys.stderr.write('\n')
