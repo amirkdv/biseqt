@@ -71,27 +71,12 @@ class TuplesDB(object):
     Attributes:
         db (string): Path to the SQLite datbase.
         wordlen (int): Length of tuples
-        tup_insert_q (str): An SQL query template that emulates an ``UPSERT``
-            operation in the SQL dialect of SQLite; use it to bulk-write tuples
-            into ``tuples_N`` tables.
-        hit_insert_q (str): An SQL query template that records a tuple-hit;
-            use it to bulk-write tuple-hits to ``tuples_N_hits`` tables.
     """
     def __init__(self, db, wordlen=10, alphabet=None):
         assert isinstance(alphabet, seq.Alphabet)
         self.alphabet = alphabet
         self.db, self.wordlen = db, wordlen
         assert isinstance(self.wordlen, int)
-        # we want an Upsert to avoid changing tuple
-        # IDs see http://stackoverflow.com/a/4330694 .
-        self.tup_insert_q = """
-            INSERT OR REPLACE INTO tuples_{} (id, tuple)
-            VALUES ((SELECT id FROM tuples_{} WHERE tuple = ?), ?)
-        """.format(self.wordlen, self.wordlen)
-        self.hit_insert_q = """
-            INSERT INTO tuples_{}_hits (tuple, seq, idx)
-                SELECT id, ?, ?  FROM tuples_{} WHERE tuple = ?
-        """.format(self.wordlen, self.wordlen)
 
     def initdb(self):
         """Initializes the database: creates the required tables and
@@ -135,9 +120,6 @@ class TuplesDB(object):
             fasta_src(str): Path to FASTA source.
             lim (Optional[int]): If positive, will be the number of sequences
                 loaded from FASTA source, default is -1.
-
-        ToDo:
-            Allow specifying an :class:`align.homopolymeric.HpCondenser`.
         """
         def give_seq():
             for idx, seq in enumerate(SeqIO.parse(fasta_src, "fasta")):
@@ -160,15 +142,17 @@ class TuplesDB(object):
             length 11Kbp into a DB of ~250MB. With 20-mers takes ~4 minutes and
             DB size is ~600MB!
         """
+        # We want an Upsert to avoid changing tuple
+        # IDs see http://stackoverflow.com/a/4330694 .
+        tup_insert_q = """
+            INSERT OR REPLACE INTO tuples_{} (id, tuple)
+            VALUES ((SELECT id FROM tuples_{} WHERE tuple = ?), ?)
+        """.format(self.wordlen, self.wordlen)
+        hit_insert_q = """
+            INSERT INTO tuples_{}_hits (tuple, seq, idx)
+                SELECT id, ?, ?  FROM tuples_{} WHERE tuple = ?
+        """.format(self.wordlen, self.wordlen)
         sys.stderr.write('indexing sequences:')
-        def give_hit(seqid, string):
-            for s, idx in tup_scan(string, self.wordlen):
-                yield (seqid, idx, s)
-
-        def give_tup(string):
-            for s, _ in tup_scan(string, self.wordlen):
-                yield (s, s)
-
         with sqlite3.connect(self.db) as conn:
             c = conn.cursor()
             # can't nest sqlite queries, pick out IDs first and load each
@@ -180,8 +164,14 @@ class TuplesDB(object):
                 for row in c:
                     string = row[0]
                     break
-                c.executemany(self.tup_insert_q, give_tup(string))
-                c.executemany(self.hit_insert_q, give_hit(seqid, string))
+                c.executemany(
+                    tup_insert_q,
+                    [(s,s) for s, _ in tup_scan(string, self.wordlen)]
+                )
+                c.executemany(
+                    hit_insert_q,
+                    [(seqid, idx, s) for s, idx in tup_scan(string, self.wordlen)]
+                )
                 sys.stderr.write(' ' + str(seqid))
             sys.stderr.write('\n')
 
