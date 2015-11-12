@@ -18,13 +18,16 @@ clean:
 	rm -f *.gml *.pdf
 	rm -rf docs/$(DOCS_OUT)
 
-tests: align/libalign.so $(DB) $(TRUE_GRAPH).gml $(ASSEMBLED_GRAPH).gml $(ASSEMBLED_GRAPH).layout.diff.pdf
+tests: align/libalign.so $(DB) $(TRUE_GRAPH).gml $(ASSEMBLED_GRAPH).gml layout_diff.pdf
 	python -m align.tests.homopolymeric
 	python -m align.tests.align
 
 $(ASSEMBLED_GRAPH).gml: $(TRUE_GRAPH).gml
 	python -c 'import align.tests.assembly as T; T.overlap_by_seed_extension("$(DB)", "$@")'
 	python -c 'import align.assembly as A, networkx as nx, sys; A.OverlapGraph(nx.read_gml("$(TRUE_GRAPH).gml")).diff_text(A.OverlapGraph(nx.read_gml("$(ASSEMBLED_GRAPH).gml")), sys.stdout)'
+
+$(ASSEMBLED_GRAPH).dag.gml: $(ASSEMBLED_GRAPH).gml
+	python -c 'import align.assembly as A, networkx as nx; G = A.OverlapGraph(nx.read_gml("$(ASSEMBLED_GRAPH).gml")); G.break_cycles(); G.save("$@")'
 
 $(TRUE_GRAPH).gml:
 	python -c 'import align.assembly as A, align.seq as S, align.tuples as T; A.overlap_graph_by_known_order(T.TuplesDB("$(DB)", alphabet=S.Alphabet("ACGT"))).save("$@")'
@@ -39,15 +42,15 @@ $(TRUE_GRAPH).pdf: $(TRUE_GRAPH).gml
 $(TRUE_GRAPH).layout.gml: $(TRUE_GRAPH).gml
 	python -c 'import align.assembly as A, networkx as nx; A.OverlapGraph(nx.read_gml("$(TRUE_GRAPH).gml")).layout().save("$@")'
 
-$(ASSEMBLED_GRAPH).layout.gml: $(ASSEMBLED_GRAPH).gml
-	python -c 'import align.assembly as A, networkx as nx; A.OverlapGraph(nx.read_gml("$(ASSEMBLED_GRAPH).gml")).layout().save("$@")'
+$(ASSEMBLED_GRAPH).layout.gml: $(ASSEMBLED_GRAPH).dag.gml
+	python -c 'import align.assembly as A, networkx as nx; A.OverlapGraph(nx.read_gml("$(ASSEMBLED_GRAPH).dag.gml")).layout().save("$@")'
 
 
 $(TRUE_GRAPH).layout.pdf: $(TRUE_GRAPH).gml
 	python -c 'import align.assembly as A, networkx as nx; A.OverlapGraph(nx.read_gml("$(TRUE_GRAPH).gml")).draw("$@", longest_path=True);'
 
 $(ASSEMBLED_GRAPH).layout.pdf: $(ASSEMBLED_GRAPH).layout.gml
-	python -c 'import align.assembly as A, networkx as nx; A.OverlapGraph(nx.read_gml("$(ASSEMBLED_GRAPH).gml")).draw("$@", longest_path=True);'
+	python -c 'import align.assembly as A, networkx as nx; A.OverlapGraph(nx.read_gml("$(ASSEMBLED_GRAPH).dag.gml")).draw("$@", longest_path=True);'
 
 
 layout_diff.pdf: $(ASSEMBLED_GRAPH).layout.gml $(TRUE_GRAPH).layout.gml

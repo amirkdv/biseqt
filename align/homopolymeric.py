@@ -210,7 +210,7 @@ class HpCondenser(object):
                         hp_go_score + hp_ge_score * abs(ni-nj)
                 else:
                     subst_scores_d[i][j] = min(ni, nj) * subst_scores[ki][kj] + \
-                        align_params.go_score + align_params.ge_score* abs(ni - nj)
+                        align_params.gap_open_score + align_params.gap_extend_score * abs(ni - nj)
 
         return pw.AlignParams(
             alphabet=self.dst_alphabet,
