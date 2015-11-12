@@ -29,10 +29,10 @@ $(ASSEMBLED_GRAPH).gml:
 $(ASSEMBLED_GRAPH).pdf:
 	python -c 'import align.assembly as A, networkx as nx; A.draw_digraph(nx.read_gml("$(ASSEMBLED_GRAPH).gml"), "$@");'
 
-$(ASSEMBLED_GRAPH).layout.gml:
+$(ASSEMBLED_GRAPH).layout.gml: $(ASSEMBLED_GRAPH).gml
 	python -c 'import align.assembly as A, networkx as nx; A.save_graph(A.layout_graph(nx.read_gml("$(ASSEMBLED_GRAPH).gml")), "$@")'
 
-$(ASSEMBLED_GRAPH).layout.pdf:
+$(ASSEMBLED_GRAPH).layout.pdf: $(ASSEMBLED_GRAPH).layout.gml
 	python -c 'import align.assembly as A, networkx as nx; A.draw_digraph(nx.read_gml("$(ASSEMBLED_GRAPH).gml"), "$@", longest_path=True);'
 
 $(ASSEMBLED_GRAPH).layout.diff.pdf: $(ASSEMBLED_GRAPH).layout.gml $(TRUE_GRAPH).layout.gml
@@ -41,13 +41,13 @@ $(ASSEMBLED_GRAPH).layout.diff.pdf: $(ASSEMBLED_GRAPH).layout.gml $(TRUE_GRAPH).
 $(TRUE_GRAPH).gml:
 	python -c 'import align.tests.assembly as T; T.overlap_by_known_order("$(DB)", "$@")'
 
-$(TRUE_GRAPH).pdf:
+$(TRUE_GRAPH).pdf: $(TRUE_GRAPH).gml
 	python -c 'import align.assembly as A, networkx as nx; A.draw_digraph(nx.read_gml("$(TRUE_GRAPH).gml"), "$@");'
 
-$(TRUE_GRAPH).layout.gml:
+$(TRUE_GRAPH).layout.gml: $(TRUE_GRAPH).gml
 	python -c 'import align.assembly as A, networkx as nx; A.save_graph(A.layout_graph(nx.read_gml("$(TRUE_GRAPH).gml")), "$@")'
 
-$(TRUE_GRAPH).layout.pdf:
+$(TRUE_GRAPH).layout.pdf: $(TRUE_GRAPH).gml
 	python -c 'import align.assembly as A, networkx as nx; A.draw_digraph(nx.read_gml("$(TRUE_GRAPH).gml"), "$@", longest_path=True);'
 
 $(DB): align/libalign.so
