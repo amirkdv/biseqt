@@ -52,21 +52,24 @@ def create_example(db):
         ge_prob=params['ge_prob'],
         go_prob=params['go_prob']
     )
-    B = tuples.TuplesDB(db, wordlen=params['wordlen'], alphabet=A)
+    B = tuples.TuplesDB(db, alphabet=A)
     B.initdb()
     B.populate('reads.fa');
-    B.index()
+    I = tuples.Index(B, wordlen=params['wordlen'])
+    I.initdb()
+    I.index()
 
 def overlap_by_seed_extension(db, path):
     show_params()
-    B = tuples.TuplesDB(db, wordlen=params['wordlen'], alphabet=A)
-    G = assembly.overlap_graph_by_seed_extension(B, C,
+    B = tuples.TuplesDB(db, alphabet=A)
+    I = tuples.Index(B, wordlen=params['wordlen'])
+    G = assembly.overlap_graph_by_seed_extension(I, C,
         max_succ_drops=params['max_succ_drops'], window=params['window'],
         drop_threshold=params['drop_threshold'])
     assembly.save_graph(G, path)
 
 def overlap_by_known_order(db, path):
-    B = tuples.TuplesDB(db, wordlen=params['wordlen'], alphabet=A)
+    B = tuples.TuplesDB(db, alphabet=A)
     G = assembly.overlap_graph_by_known_order(B)
     assembly.save_graph(G, path)
 

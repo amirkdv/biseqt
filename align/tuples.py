@@ -18,23 +18,6 @@ class Segment(namedtuple('Segment', ['S_id', 'T_id', 'tx'])):
         tx (pw.Transcript):  object representing the alignment.
     """
 
-def tup_scan(string, wordlen):
-    """A generator for ``(string, idx)`` tuples to scan through any given
-    string. For example::
-
-            string = 'ACGTGT'
-            tup_scan(string, 5) # => ('ACGTG', 0), ('CGTGT', 1)
-
-    Args:
-        string (str): The string to scan.
-        wordlen(int): Length of the words.
-
-    Yields:
-        tuple: A ``string`` of length ``wordlen`` and a starting position (``int``).
-    """
-    for idx in range(len(string) - wordlen + 1):
-        yield (string[idx:idx + wordlen], idx)
-
 class TuplesDB(object):
     """Wraps an SQLite database containing tuple indices for sequences. For now,
     only one word length is allowed. The tables are:
@@ -72,11 +55,9 @@ class TuplesDB(object):
         db (string): Path to the SQLite datbase.
         wordlen (int): Length of tuples
     """
-    def __init__(self, db, wordlen=10, alphabet=None):
+    def __init__(self, db, alphabet=None):
         assert isinstance(alphabet, seq.Alphabet)
-        self.alphabet = alphabet
-        self.db, self.wordlen = db, wordlen
-        assert isinstance(self.wordlen, int)
+        self.alphabet, self.db = alphabet, db
 
     def initdb(self):
         """Initializes the database: creates the required tables and
@@ -92,24 +73,7 @@ class TuplesDB(object):
                 );
             """
             c.execute(q)
-            q = """
-                CREATE TABLE tuples_{} (
-                  'id' integer PRIMARY KEY ASC,
-                  'tuple' char({}),
-                  UNIQUE(tuple)
-                );
-            """.format(self.wordlen, self.wordlen)
-            c.execute(q)
-            q = """
-                CREATE TABLE tuples_{}_hits (
-                  'tuple' integer REFERENCES tuples_{}(id),
-                  'seq'   integer REFERENCES seq(id),
-                  'idx'   integer,
-                  UNIQUE(seq, idx)
-                );
-            """.format(self.wordlen, self.wordlen)
-            c.execute(q)
-        sys.stderr.write('initialized tuples DB at: %s\n' % self.db)
+        sys.stderr.write('Initialized tuples DB at: %s\n' % self.db)
 
     def populate(self, fasta_src, lim=-1):
         """Given a FASTA source file, loads all the sequences (up to a limit, if
@@ -133,55 +97,6 @@ class TuplesDB(object):
             q = "INSERT INTO seq (name, description, seq) VALUES (?,?,?)"
             c.executemany(q, give_seq())
 
-    def index(self, hp_condenser=None):
-        """Scans all sequences in the ``seq`` table and records all observed
-        tuples in ``tuples_N`` tables and all hits in ``tuples_N_hits`` tables.
-
-        Args:
-            hp_condenser (homopolymeic.HpCondenser): If specified, its
-                :func:`tup_scan <align.homopolymeric.HpCondenser.tup_scan>` is
-                used instead of :func:`this module <tup_scan>`'s generic
-                version.
-
-        Note:
-            It takes ~3 minutes to index 10-mers of 500 sequences with average
-            length 11Kbp into a DB of ~250MB. With 20-mers takes ~4 minutes and
-            DB size is ~600MB!
-        """
-        # We want an Upsert to avoid changing tuple
-        # IDs see http://stackoverflow.com/a/4330694 .
-        tup_insert_q = """
-            INSERT OR REPLACE INTO tuples_{} (id, tuple)
-            VALUES ((SELECT id FROM tuples_{} WHERE tuple = ?), ?)
-        """.format(self.wordlen, self.wordlen)
-        hit_insert_q = """
-            INSERT INTO tuples_{}_hits (tuple, seq, idx)
-                SELECT id, ?, ?  FROM tuples_{} WHERE tuple = ?
-        """.format(self.wordlen, self.wordlen)
-        ts = hp_condenser.tup_scan if hp_condenser else tup_scan
-        sys.stderr.write('indexing sequences:')
-        with sqlite3.connect(self.db) as conn:
-            c = conn.cursor()
-            # can't nest sqlite queries, pick out IDs first and load each
-            # sequence separately:
-            c.execute('SELECT id FROM seq')
-            ids = [row[0] for row in c]
-            for seqid in ids:
-                c.execute('SELECT seq FROM seq WHERE id = ?', (seqid,))
-                for row in c:
-                    string = row[0]
-                    break
-                c.executemany(
-                    tup_insert_q,
-                    [(s,s) for s, _ in ts(string, self.wordlen)]
-                )
-                c.executemany(
-                    hit_insert_q,
-                    [(seqid, idx, s) for s, idx in ts(string, self.wordlen)]
-                )
-                sys.stderr.write(' ' + str(seqid))
-            sys.stderr.write('\n')
-
     def loadseq(self, seqid):
         """Loads a sequence given its internal numeric seqid.
 
@@ -202,7 +117,7 @@ class TuplesDB(object):
         as found in the ``seq`` table. The output looks like this::
 
             A = seq.Alphabet('ACGT')
-            T = tuples.TuplesDB('genome.db', alphabet=A, wordlen=5)
+            T = tuples.TuplesDB('genome.db', alphabet=A)
             info = T.seqinfo()
             info[12] #=> {'start': 17, 'length': 479, 'name': u'R12'}
 
@@ -232,32 +147,103 @@ class TuplesDB(object):
             c.execute('SELECT id FROM seq')
             return [row[0] for row in c]
 
-class OverlapFinder(object):
-    """Provided two sequences and a :class:`TuplesDB` provides tools to find
-    and extend exactly matching "seeds" into overlap alignments. Both sequences
-    must have already been indexed in the tuples database.
 
-    Seeds are *maximal, exactly matching* instances of :class:`Segment`. They
-    are expanded by repeated global alignments on small windows moving forward
-    and backward from the boundaries of the seed.
-
-    Args:
-        S (seq.Sequence): The "from" sequence.
-        T (seq.Sequence): The "to" sequence.
-        align_params (pw.AlignParams): The alignment parameters.
-
-    Keyword Args:
-        tuplesdb (tuples.TuplesDB)
-    """
-    def __init__(self, S, T, align_params, tuplesdb=None):
+class Index(object):
+    def __init__(self, tuplesdb, wordlen):
         self.tuplesdb = tuplesdb
-        self.S, self.T, self.align_params = S, T, align_params
-        self.align_problem_kw = {
-            'S': self.S,
-            'T': self.T,
-            'params': self.align_params,
-            'align_type': pw.GLOBAL,
-        }
+        self.wordlen = wordlen
+        self.tuples_table = 'tuples_%d' % self.wordlen
+        self.hits_table = 'hits_%d' % self.wordlen
+
+    def tup_scan(self, string):
+        """A generator for ``(string, idx)`` tuples to scan through any given
+        string. For example::
+
+                string = 'ACGTGT'
+                tup_scan(string, 5) # => ('ACGTG', 0), ('CGTGT', 1)
+
+        Args:
+            string (str): The string to scan.
+            wordlen(int): Length of the words.
+
+        Yields:
+            tuple: A ``string`` of length ``wordlen`` and a starting position (``int``).
+        """
+        for idx in range(len(string) - self.wordlen + 1):
+            yield (string[idx:idx + self.wordlen], idx)
+
+    def initdb(self):
+        """Initializes the database: creates the required tables and
+        fails if any of them already exists."""
+        with sqlite3.connect(self.tuplesdb.db) as conn:
+            c = conn.cursor()
+            q = """
+                CREATE TABLE %s (
+                  'id' integer PRIMARY KEY ASC,
+                  'tuple' char(%d),
+                  UNIQUE(tuple)
+                );
+            """ % (self.tuples_table, self.wordlen)
+            c.execute(q)
+            q = """
+                CREATE TABLE %s (
+                  'tuple' integer REFERENCES %s(id),
+                  'seq'   integer REFERENCES seq(id),
+                  'idx'   integer,
+                  UNIQUE(seq, idx)
+                );
+            """ % (self.hits_table, self.tuples_table)
+            c.execute(q)
+        sys.stderr.write('Initialized index tables %s, %s at: %s\n' %
+            (self.tuples_table, self.hits_table, self.tuplesdb.db))
+
+    def index(self):
+        """Scans all sequences in the ``seq`` table and records all observed
+        tuples in ``tuples_N`` tables and all hits in ``tuples_N_hits`` tables.
+
+        Args:
+            hp_condenser (homopolymeic.HpCondenser): If specified, its
+                :func:`tup_scan <align.homopolymeric.HpCondenser.tup_scan>` is
+                used instead of :func:`this module <tup_scan>`'s generic
+                version.
+
+        Note:
+            It takes ~3 minutes to index 10-mers of 500 sequences with average
+            length 11Kbp into a DB of ~250MB. With 20-mers takes ~4 minutes and
+            DB size is ~600MB!
+        """
+        # We want an Upsert to avoid changing tuple
+        # IDs see http://stackoverflow.com/a/4330694 .
+        tup_insert_q = """
+            INSERT OR REPLACE INTO %s (id, tuple)
+            VALUES ((SELECT id FROM %s WHERE tuple = ?), ?)
+        """ % (self.tuples_table, self.tuples_table)
+        hit_insert_q = """
+            INSERT INTO %s (tuple, seq, idx)
+                SELECT id, ?, ?  FROM %s WHERE tuple = ?
+        """ % (self.hits_table, self.tuples_table)
+        sys.stderr.write('indexing sequences:')
+        with sqlite3.connect(self.tuplesdb.db) as conn:
+            c = conn.cursor()
+            # can't nest sqlite queries, pick out IDs first and load each
+            # sequence separately:
+            c.execute('SELECT id FROM seq')
+            ids = [row[0] for row in c]
+            for seqid in ids:
+                c.execute('SELECT seq FROM seq WHERE id = ?', (seqid,))
+                for row in c:
+                    string = row[0]
+                    break
+                c.executemany(
+                    tup_insert_q,
+                    [(s,s) for s, _ in self.tup_scan(string)]
+                )
+                c.executemany(
+                    hit_insert_q,
+                    [(seqid, idx, s) for s, idx in self.tup_scan(string)]
+                )
+                sys.stderr.write(' ' + str(seqid))
+            sys.stderr.write('\n')
 
     def exactly_matching_segments(self, s1, s2):
         """Given two sequence ids, finds all maximal exactly matching segments
@@ -272,13 +258,13 @@ class OverlapFinder(object):
         """
         segments = []
         q = """
-            SELECT H1.idx, H2.idx FROM tuples_{}_hits H1 -- H1 is s1, H2 is s2
-            INNER JOIN tuples_{}_hits H2
+            SELECT H1.idx, H2.idx FROM %s H1 -- H1 is s1, H2 is s2
+            INNER JOIN %s H2
             ON H1.tuple = H2.tuple
             WHERE H1.seq = ? AND H2.seq = ?
-        """.format(self.tuplesdb.wordlen, self.tuplesdb.wordlen)
+        """ % (self.hits_table, self.hits_table)
         def row_factory(cursor, row):
-            tx = pw.Transcript(row[0], row[1], 0, 'M'*self.tuplesdb.wordlen)
+            tx = pw.Transcript(row[0], row[1], 0, 'M'*self.wordlen)
             return Segment(S_id=s1, T_id=s2, tx=tx)
 
         with sqlite3.connect(self.tuplesdb.db) as conn:
@@ -310,6 +296,32 @@ class OverlapFinder(object):
             idx += 1
         exacts.sort(key=lambda s: len(s.tx.opseq), reverse=True)
         return exacts
+
+class OverlapFinder(object):
+    """Provided two sequences and a :class:`TuplesDB` provides tools to find
+    and extend exactly matching "seeds" into overlap alignments. Both sequences
+    must have already been indexed in the tuples database.
+
+    Seeds are *maximal, exactly matching* instances of :class:`Segment`. They
+    are expanded by repeated global alignments on small windows moving forward
+    and backward from the boundaries of the seed.
+
+    Args:
+        S (seq.Sequence): The "from" sequence.
+        T (seq.Sequence): The "to" sequence.
+        align_params (pw.AlignParams): The alignment parameters.
+
+    Keyword Args:
+        tuplesdb (tuples.TuplesDB)
+    """
+    def __init__(self, S, T, align_params):
+        self.S, self.T, self.align_params = S, T, align_params
+        self.align_problem_kw = {
+            'S': self.S,
+            'T': self.T,
+            'params': self.align_params,
+            'align_type': pw.GLOBAL,
+        }
 
     def _extend_fwd_once(self, segment, window):
         """Helper method for ``extend1d``."""

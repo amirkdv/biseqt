@@ -66,4 +66,4 @@ docs: align/libalign.so docs/README.rst
 docs/README.rst:
 	pandoc -f markdown -t rst -o $@ -i README.md
 
-.PHONY: clean tests *.gml *.pdf loc docs docs/README.rst
+.PHONY: clean tests *.pdf loc docs docs/README.rst

@@ -41,7 +41,7 @@ def overlap_graph_by_alignment(tuplesdb, align_params, min_score=80):
                         G.add_edge(seqids[idx_of_T], seqids[idx_of_S], score=score)
     return G
 
-def overlap_graph_by_seed_extension(tuplesdb, align_params, window=20,
+def overlap_graph_by_seed_extension(index, align_params, window=20,
     drop_threshold=0, max_succ_drops=3):
     """Builds a weighted, directed graph by using tuple methods. The process
     has 3 steps:
@@ -67,7 +67,7 @@ def overlap_graph_by_seed_extension(tuplesdb, align_params, window=20,
         This should be moved into a class.
     """
     G = nx.DiGraph()
-    seqinfo = tuplesdb.seqinfo()
+    seqinfo = index.tuplesdb.seqinfo()
     seqids = seqinfo.keys()
     sys.stdout.write('finding adjacent reads for sequence: ')
     for sid_idx in range(len(seqids)):
@@ -84,9 +84,9 @@ def overlap_graph_by_seed_extension(tuplesdb, align_params, window=20,
             G.add_node(T_id, name=T_name)
 
             # do they overlap?
-            S, T = tuplesdb.loadseq(S_id), tuplesdb.loadseq(T_id)
-            F = tuples.OverlapFinder(S, T, align_params, tuplesdb=tuplesdb)
-            exacts = F.exactly_matching_segments(S_id, T_id)
+            S, T = index.tuplesdb.loadseq(S_id), index.tuplesdb.loadseq(T_id)
+            exacts = index.exactly_matching_segments(S_id, T_id)
+            F = tuples.OverlapFinder(S, T, align_params)
             if not exacts:
                 continue
             segments = F.extend(exacts, window=window, drop_threshold=drop_threshold)
