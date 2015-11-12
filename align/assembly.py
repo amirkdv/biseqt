@@ -7,6 +7,149 @@ from termcolor import colored
 from . import tuples
 from . import pw
 
+# FIXME docs
+class OverlapGraph(object):
+    def __init__(self, G=None):
+        self.nxG = G if G else nx.DiGraph()
+        assert(isinstance(self.nxG, nx.DiGraph))
+
+    def V(self):
+        return dict(self.nxG.nodes(data=True))
+
+    def E(self):
+        return dict([((u,v), attrs) for u, v, attrs in self.nxG.edges(data=True)])
+
+    def layout(self):
+        """FIXME Given an overlap graph finds the assembly layout by finding the longest
+        (heaviest) path.
+
+        Args:
+            networkx.DiGraph: The acyclic overlap graph,
+
+        Returns:
+            networkx.DiGraph: A linear subgraph (the heaviest path).
+        """
+        assert(nx.algorithms.is_directed_acyclic_graph(self.nxG))
+        V, E = self.V(), self.E()
+        path = nx.algorithms.dag.dag_longest_path(self.nxG)
+        L = OverlapGraph()
+        for nid in V:
+            L.nxG.add_node(nid, **V[nid])
+        for nid_idx in range(1, len(path)):
+            attrs = E[(path[nid_idx-1], path[nid_idx])]
+            L.nxG.add_edge(path[nid_idx-1], path[nid_idx], attrs)
+
+        return L
+
+    def draw(self, fname, figsize=None, longest_path=False, pos=None,
+        edge_colors=None, edge_width=None):
+        """Draws the graph to a PDF file. If ``longest_path`` is truthy, an
+        effort is made to find the longest path in the graph and highlight it. If,
+        however, the graph contains cycles the shortes cycle is highlighted in
+        red."""
+        V, E = self.V(), self.E()
+        if longest_path:
+            if nx.algorithms.is_directed_acyclic_graph(self.nxG):
+                path = nx.algorithms.dag.dag_longest_path(self.nxG)
+                edge_highlight = 'green'
+            else:
+                sys.stdout.write('Graph is not acyclic, shortest cycle is highlighted instead of the longest path\n')
+                cycles = nx.algorithms.cycles.simple_cycles(self.nxG)
+                path = sorted(cycles, key=lambda x: len(x))[0]
+                path += [path[0]]
+                edge_highlight = 'red'
+        else:
+            path = []
+
+        if pos is None:
+            pos = nx.circular_layout(self.nxG)
+        if figsize is None:
+            n = self.nxG.number_of_nodes()
+            figsize = (n*2,n*2)
+        plt.figure(figsize=figsize)
+
+        # Vertices and their labels
+        node_color = ['#b5ffb5' if u in path else '#ff9a9a' if path else 'w' for u in V]
+        nx.draw_networkx_nodes(self.nxG, pos, node_size=8000, node_color=node_color)
+        node_labels = nx.get_node_attributes(self.nxG, 'name')
+        node_labels = {k: node_labels[k].replace(' ', '\n') for k in node_labels}
+        nx.draw_networkx_labels(self.nxG, pos, node_labels, font_size=14)
+
+        # Edges and their labels:
+        edge_data = self.nxG.edges(data=True) # FIXME use self.E()
+        mod = len(path) - 1
+        in_path = lambda u,v: u in path and v in path and path.index(v) % mod == (path.index(u) + 1) % mod
+        if edge_width is None:
+            edge_width = [2 if in_path(u,v) else 0.7 for u,v,_ in edge_data]
+        if edge_colors is None:
+            edge_colors = [edge_highlight if in_path(u,v) else 'black'  for u,v,_ in edge_data]
+        nx.draw_networkx_edges(self.nxG, pos, edge_color=edge_colors, width=edge_width)
+        if edge_data and 'weight' in edge_data[0][2]:
+            nx.draw_networkx_edge_labels(self.nxG, pos, font_size=11,
+                edge_labels={(f,t):'%.2f' % a['weight'] for f,t,a in edge_data})
+
+        plt.xticks([])
+        plt.yticks([])
+        plt.savefig(fname, bbox_inches='tight')
+
+    def diff_text(self, OG, f):
+        """FIXME Prints a diff-style comparison of two graphs to given file handle. Each
+        missing edge is printed in red with a leading '-' and each added
+        edge is printed in green with a leading '+'.
+        """
+        E1, E2 = set(self.nxG.edges()), set(OG.nxG.edges())
+        missing, added = E1 - E2, E2 - E1
+        f.write('G1 (%d edges) --> G2 (%d edges): %%%.2f lost, %%%.2f added\n' %
+            (len(E1), len(E2), len(missing)*100.0/len(E1),
+             len(added)*100.0/len(E1)))
+        diff = [('-', edge) for edge in missing] + [('+', edge) for edge in added]
+        N1 = nx.get_node_attributes(self.nxG, 'name')
+        N2 = nx.get_node_attributes(OG.nxG, 'name')
+        for edge in sorted(diff, cmp=lambda x, y: cmp(x[1], y[1])):
+            if edge[0] == '-':
+                src, dst = N1[edge[1][0]], N1[edge[1][1]]
+                line = '- [%s]--(%.2f)-->[%s]\n' % (src,
+                 self.nxG.get_edge_data(*edge[1])['weight'], dst)
+                f.write(colored(line, color='red'))
+            else:
+                src, dst = N2[edge[1][0]], N2[edge[1][1]]
+                line = '+ [%s]--(%.2f)-->[%s]\n' % \
+                    (src, OG.nxG.get_edge_data(*edge[1])['weight'], dst)
+                f.write(colored(line, color='green'))
+
+    def diff_draw(self, OG, fname, figsize=None):
+        """ FIXME Draws the difference between two graphs (mainly designed for sparse
+        graphs, e.g. layout graphs). Shared edges are in black, missing edges (from
+        ``G1`` to ``G2``) are in red and added edges are in green.
+        """
+        G = OverlapGraph()
+        V1, E1 = self.V(), self.E()
+        V2, E2 = OG.V(), OG.E()
+        sE1, sE2 = set(self.nxG.edges()), set(OG.nxG.edges())
+        for edge in sE1.union(sE2):
+            G.nxG.add_node(edge[0], **V1[edge[0]])
+            G.nxG.add_node(edge[1], **V1[edge[1]])
+            kw = E1[edge] if edge in E1 else E2[edge]
+            G.nxG.add_edge(edge[0], edge[1], **kw)
+
+        V, E = G.V(), G.E()
+        both, missing, added = sE1.intersection(sE2), sE1 - sE2, sE2 - sE1
+        edge_colors = []
+        for edge in G.nxG.edges():
+            if edge in both:
+                edge_colors += ['black']
+            elif edge in missing:
+                edge_colors += ['red']
+            elif edge in added:
+                edge_colors += ['green']
+
+        pos = nx.fruchterman_reingold_layout(G.nxG, k=2.5)
+        G.draw(fname, pos=pos, edge_colors=edge_colors, edge_width=2)
+
+    def save(self, fname):
+        """Saves the graph in GML format"""
+        nx.write_gml(self.nxG, fname)
+
 def overlap_graph_by_alignment(tuplesdb, align_params, min_score=80):
     """Builds a weighted, directed graph by brute force overlap alignment
     of all reads.
@@ -23,12 +166,12 @@ def overlap_graph_by_alignment(tuplesdb, align_params, min_score=80):
     Returns:
         networkx.DiGraph
     """
-    G = nx.DiGraph()
+    G = OverlapGraph()
     seqids = tuplesdb.seqids()
     for idx_of_S in range(len(seqids)):
         for idx_of_T in range(idx_of_S + 1, len(seqids)):
-            G.add_node(seqids[idx_of_S])
-            G.add_node(seqids[idx_of_T])
+            G.nxG.add_node(seqids[idx_of_S])
+            G.nxG.add_node(seqids[idx_of_T])
             S = tuplesdb.loadseq(seqids[idx_of_S])
             T = tuplesdb.loadseq(seqids[idx_of_T])
             with pw.AlignProblem(S, T, align_params, align_type=pw.OVERLAP) as P:
@@ -36,9 +179,9 @@ def overlap_graph_by_alignment(tuplesdb, align_params, min_score=80):
                 if score >= min_score:
                     transcript = P.traceback()
                     if transcript.idx_T == 0:
-                        G.add_edge(seqids[idx_of_S], seqids[idx_of_T], score=score)
+                        G.nxG.add_edge(seqids[idx_of_S], seqids[idx_of_T], score=score)
                     if transcript.idx_S == 0:
-                        G.add_edge(seqids[idx_of_T], seqids[idx_of_S], score=score)
+                        G.nxG.add_edge(seqids[idx_of_T], seqids[idx_of_S], score=score)
     return G
 
 def overlap_graph_by_seed_extension(index, align_params, window=20,
@@ -66,7 +209,7 @@ def overlap_graph_by_seed_extension(index, align_params, window=20,
     ToDo:
         This should be moved into a class.
     """
-    G = nx.DiGraph()
+    G = OverlapGraph()
     seqinfo = index.tuplesdb.seqinfo()
     seqids = seqinfo.keys()
     sys.stdout.write('finding adjacent reads for sequence: ')
@@ -80,8 +223,8 @@ def overlap_graph_by_seed_extension(index, align_params, window=20,
             T_min_idx, T_max_idx = T_info['start'], T_info['start'] + T_info['length']
             S_name = '%s %d-%d #%d' % (S_info['name'], S_min_idx, S_max_idx, S_id)
             T_name = '%s %d-%d #%d' % (T_info['name'], T_min_idx, T_max_idx, T_id)
-            G.add_node(S_id, name=S_name)
-            G.add_node(T_id, name=T_name)
+            G.nxG.add_node(S_id, name=S_name)
+            G.nxG.add_node(T_id, name=T_name)
 
             # do they overlap?
             S, T = index.tuplesdb.loadseq(S_id), index.tuplesdb.loadseq(T_id)
@@ -101,21 +244,21 @@ def overlap_graph_by_seed_extension(index, align_params, window=20,
                 continue
             if overlap.tx.idx_S == 0 and overlap.tx.idx_T == 0:
                 if S_len < T_len:
-                    G.add_edge(S_id, T_id, weight=overlap.tx.score)
+                    G.nxG.add_edge(S_id, T_id, weight=overlap.tx.score)
                 elif S_len > T_len:
-                    G.add_edge(T_id, S_id, weight=overlap.tx.score)
+                    G.nxG.add_edge(T_id, S_id, weight=overlap.tx.score)
             elif overlap.tx.idx_T == 0:
-                G.add_edge(S_id, T_id, weight=overlap.tx.score)
+                G.nxG.add_edge(S_id, T_id, weight=overlap.tx.score)
             elif overlap.tx.idx_S == 0:
-                G.add_edge(T_id, S_id, weight=overlap.tx.score)
+                G.nxG.add_edge(T_id, S_id, weight=overlap.tx.score)
 
     sys.stdout.write('\n')
     # FIXME just write the graph here so we can see what is the matter with it.
 
     # break cycles
-    V, E = _dict_VE_from_graph(G)
+    V, E = G.V(), G.E()
     fn_cycle_es = lambda x: set([(x[i-1], x[i]) for i in range(1, len(x))] + [(x[-1], x[0])])
-    cycles = nx.algorithms.cycles.simple_cycles(G)
+    cycles = nx.algorithms.cycles.simple_cycles(G.nxG)
     try:
         cycle = next(cycles)
     except StopIteration:
@@ -141,9 +284,9 @@ def overlap_graph_by_seed_extension(index, align_params, window=20,
         rm.update([fn_weakest(cands)])
 
     for e in rm:
-        G.remove_edge(*e)
+        G.nxG.remove_edge(*e)
     sys.stdout.write('\n')
-    if not nx.algorithms.dag.is_directed_acyclic_graph(G):
+    if not nx.algorithms.dag.is_directed_acyclic_graph(G.nxG):
         sys.stdout.write('Err: failed to resolve all cycles of overlap graph.\n')
     return G
 
@@ -157,7 +300,7 @@ def overlap_graph_by_known_order(tuplesdb):
     Returns:
         networkx.DiGraph
     """
-    G = nx.DiGraph()
+    G = OverlapGraph()
     seqinfo = tuplesdb.seqinfo()
     seqids = seqinfo.keys()
     for sid_idx in range(len(seqids)):
@@ -168,155 +311,19 @@ def overlap_graph_by_known_order(tuplesdb):
             T_min_idx, T_max_idx = T_info['start'], T_info['start'] + T_info['length']
             S_name = '%s %d-%d #%d' % (S_info['name'], S_min_idx, S_max_idx, S_id)
             T_name = '%s %d-%d #%d' % (T_info['name'], T_min_idx, T_max_idx, T_id)
-            G.add_node(S_id, name=S_name)
-            G.add_node(T_id, name=T_name)
+            G.nxG.add_node(S_id, name=S_name)
+            G.nxG.add_node(T_id, name=T_name)
             overlap = min(S_max_idx, T_max_idx) - max(S_min_idx, T_min_idx)
             if overlap > 0:
                 if S_min_idx < T_min_idx:
-                    G.add_edge(S_id, T_id, weight=overlap)
+                    G.nxG.add_edge(S_id, T_id, weight=overlap)
                 elif S_min_idx > T_min_idx:
-                    G.add_edge(T_id, S_id, weight=overlap)
+                    G.nxG.add_edge(T_id, S_id, weight=overlap)
                 # if start is equal, edge goes from shorter read to longer read
                 elif S_max_idx < T_max_idx:
-                    G.add_edge(S_id, T_id, weight=overlap)
+                    G.nxG.add_edge(S_id, T_id, weight=overlap)
                 elif S_max_idx > T_max_idx:
-                    G.add_edge(T_id, S_id, weight=overlap)
+                    G.nxG.add_edge(T_id, S_id, weight=overlap)
                 # if start and end is equal, reads are identical, ignore.
 
     return G
-
-def save_graph(G, fname):
-    """Saves a given graph in GML format"""
-    nx.write_gml(G, fname)
-
-def _dict_VE_from_graph(G):
-    V = dict(G.nodes(data=True))
-    E = dict([((u,v), attrs) for u, v, attrs in G.edges(data=True)])
-    return V, E
-
-def draw_digraph(G, fname, figsize=None, longest_path=False, pos=None,
-    edge_colors=None, edge_width=None):
-    """Draws a directed graph to PDF file. If ``longest_path`` is truthy, an
-    effort is made to find the longest path in the graph and highlight it. If,
-    however, the graph contains cycles the shortes cycle is highlighted in
-    red."""
-    V, E = _dict_VE_from_graph(G)
-    if longest_path:
-        if nx.algorithms.is_directed_acyclic_graph(G):
-            path = nx.algorithms.dag.dag_longest_path(G)
-            edge_highlight = 'green'
-        else:
-            sys.stdout.write('Graph is not acyclic, shortest cycle is highlighted instead of the longest path\n')
-            cycles = nx.algorithms.cycles.simple_cycles(G)
-            path = sorted(cycles, key=lambda x: len(x))[0]
-            path += [path[0]]
-            edge_highlight = 'red'
-    else:
-        path = []
-
-    if pos is None:
-        pos = nx.circular_layout(G)
-    if figsize is None:
-        n = G.number_of_nodes()
-        figsize = (n*2,n*2)
-    plt.figure(figsize=figsize)
-
-    # Vertices and their labels
-    node_color = ['gray' if u in path else 'white' for u in V]
-    nx.draw_networkx_nodes(G, pos, node_size=8000, node_color=node_color)
-    node_labels = nx.get_node_attributes(G, 'name')
-    node_labels = {k: node_labels[k].replace(' ', '\n') for k in node_labels}
-    nx.draw_networkx_labels(G, pos, node_labels, font_size=14)
-
-    # Edges and their labels:
-    edge_data = G.edges(data=True)
-    mod = len(path) - 1
-    in_path = lambda u,v: u in path and v in path and path.index(v) % mod == (path.index(u) + 1) % mod
-    if edge_width is None:
-        edge_width = [2 if in_path(u,v) else 0.7 for u,v,_ in edge_data]
-    if edge_colors is None:
-        edge_colors = [edge_highlight if in_path(u,v) else 'black'  for u,v,_ in edge_data]
-    nx.draw_networkx_edges(G, pos, edge_color=edge_colors, width=edge_width)
-    if edge_data and 'weight' in edge_data[0][2]:
-        nx.draw_networkx_edge_labels(G, pos, font_size=11,
-            edge_labels={(f,t):'%.2f' % a['weight'] for f,t,a in edge_data})
-
-    plt.xticks([])
-    plt.yticks([])
-    plt.savefig(fname, bbox_inches='tight')
-
-def layout_graph(G):
-    """Given an overlap graph finds the assembly layout by finding the longest
-    (heaviest) path.
-
-    Args:
-        networkx.DiGraph: The acyclic overlap graph,
-
-    Returns:
-        networkx.DiGraph: A linear subgraph (the heaviest path).
-    """
-    assert(nx.algorithms.is_directed_acyclic_graph(G))
-    V, E = _dict_VE_from_graph(G)
-    path = nx.algorithms.dag.dag_longest_path(G)
-    L = nx.DiGraph()
-    for nid in V:
-        L.add_node(nid, **V[nid])
-    for nid_idx in range(1, len(path)):
-        attrs = E[(path[nid_idx-1], path[nid_idx])]
-        L.add_edge(path[nid_idx-1], path[nid_idx], attrs)
-
-    return L
-
-def diff_graph(G1, G2, fname, figsize=None):
-    """Draws the difference between two graphs (mainly designed for sparse
-    graphs, e.g. layout graphs). Shared edges are in black, missing edges (from
-    ``G1`` to ``G2``) are in red and added edges are in green.
-    """
-    G = nx.DiGraph()
-    V1, E1 = _dict_VE_from_graph(G1)
-    V2, E2 = _dict_VE_from_graph(G2)
-    for edge in set(G1.edges()).union(set(G2.edges())):
-        G.add_node(edge[0], **V1[edge[0]])
-        G.add_node(edge[1], **V1[edge[1]])
-        kw = E1[edge] if edge in E1 else E2[edge]
-        G.add_edge(edge[0], edge[1], **kw)
-
-    V, E = _dict_VE_from_graph(G)
-    sE1, sE2 = set(G1.edges()), set(G2.edges())
-    both, missing, added = sE1.intersection(sE2), sE1 - sE2, sE2 - sE1
-    edge_colors = []
-    for edge in G.edges():
-        if edge in both:
-            edge_colors += ['black']
-        elif edge in missing:
-            edge_colors += ['red']
-        elif edge in added:
-            edge_colors += ['green']
-
-    pos = nx.fruchterman_reingold_layout(G, k=2.5)
-    draw_digraph(G, fname, pos=pos, edge_colors=edge_colors, edge_width=2)
-
-def compare_graphs(G1, G2, f):
-    """Prints a diff-style comparison of two graphs to given file handle. Each
-    missing edge is printed in red with a leading '-' and each added
-    edge is printed in green with a leading '+'.
-    """
-    E1, E2 = set(G1.edges()), set(G2.edges())
-    missing, added = E1 - E2, E2 - E1
-    f.write('G1 (%d edges) --> G2 (%d edges): %%%.2f lost, %%%.2f added\n' %
-        (len(E1), len(E2), len(missing)*100.0/len(E1),
-         len(added)*100.0/len(E1)))
-    diff = [('-', edge) for edge in missing] + [('+', edge) for edge in added]
-    N1 = nx.get_node_attributes(G1, 'name')
-    N2 = nx.get_node_attributes(G2, 'name')
-    for edge in sorted(diff, cmp=lambda x, y: cmp(x[1], y[1])):
-        if edge[0] == '-':
-            src, dst = N1[edge[1][0]], N1[edge[1][1]]
-            line = '- [%s]--(%.2f)-->[%s]\n' % (src,
-             G1.get_edge_data(*edge[1])['weight'], dst)
-            f.write(colored(line, color='red'))
-        else:
-            src, dst = N2[edge[1][0]], N2[edge[1][1]]
-            line = '+ [%s]--(%.2f)-->[%s]\n' % (src,
-             G2.get_edge_data(*edge[1])['weight'], dst)
-            f.write(colored(line, color='green'))

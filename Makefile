@@ -22,39 +22,42 @@ tests: align/libalign.so $(DB) $(TRUE_GRAPH).gml $(ASSEMBLED_GRAPH).gml $(ASSEMB
 	python -m align.tests.homopolymeric
 	python -m align.tests.align
 
-$(ASSEMBLED_GRAPH).gml:
+$(ASSEMBLED_GRAPH).gml: $(TRUE_GRAPH).gml
 	python -c 'import align.tests.assembly as T; T.overlap_by_seed_extension("$(DB)", "$@")'
-	python -c 'import align.tests.assembly as T; T.compare_results("$(TRUE_GRAPH).gml", "$(ASSEMBLED_GRAPH).gml")'
-
-$(ASSEMBLED_GRAPH).pdf:
-	python -c 'import align.assembly as A, networkx as nx; A.draw_digraph(nx.read_gml("$(ASSEMBLED_GRAPH).gml"), "$@");'
-
-$(ASSEMBLED_GRAPH).layout.gml: $(ASSEMBLED_GRAPH).gml
-	python -c 'import align.assembly as A, networkx as nx; A.save_graph(A.layout_graph(nx.read_gml("$(ASSEMBLED_GRAPH).gml")), "$@")'
-
-$(ASSEMBLED_GRAPH).layout.pdf: $(ASSEMBLED_GRAPH).layout.gml
-	python -c 'import align.assembly as A, networkx as nx; A.draw_digraph(nx.read_gml("$(ASSEMBLED_GRAPH).gml"), "$@", longest_path=True);'
-
-$(ASSEMBLED_GRAPH).layout.diff.pdf: $(ASSEMBLED_GRAPH).layout.gml $(TRUE_GRAPH).layout.gml
-	python -c 'import align.assembly as A, networkx as nx; A.diff_graph(nx.read_gml("$(TRUE_GRAPH).layout.gml"), nx.read_gml("$(ASSEMBLED_GRAPH).layout.gml"), "$@")'
+	python -c 'import align.assembly as A, networkx as nx, sys; A.OverlapGraph(nx.read_gml("$(TRUE_GRAPH).gml")).diff_text(A.OverlapGraph(nx.read_gml("$(ASSEMBLED_GRAPH).gml")), sys.stdout)'
 
 $(TRUE_GRAPH).gml:
-	python -c 'import align.tests.assembly as T; T.overlap_by_known_order("$(DB)", "$@")'
+	python -c 'import align.assembly as A, align.seq as S, align.tuples as T; A.overlap_graph_by_known_order(T.TuplesDB("$(DB)", alphabet=S.Alphabet("ACGT"))).save("$@")'
+
+$(ASSEMBLED_GRAPH).pdf:
+	python -c 'import align.assembly as A, networkx as nx; A.OverlapGraph(nx.read_gml("$(ASSEMBLED_GRAPH).gml")).draw("$@");'
 
 $(TRUE_GRAPH).pdf: $(TRUE_GRAPH).gml
-	python -c 'import align.assembly as A, networkx as nx; A.draw_digraph(nx.read_gml("$(TRUE_GRAPH).gml"), "$@");'
+	python -c 'import align.assembly as A, networkx as nx; A.OverlapGraph(nx.read_gml("$(TRUE_GRAPH).gml")).draw("$@");'
+
 
 $(TRUE_GRAPH).layout.gml: $(TRUE_GRAPH).gml
-	python -c 'import align.assembly as A, networkx as nx; A.save_graph(A.layout_graph(nx.read_gml("$(TRUE_GRAPH).gml")), "$@")'
+	python -c 'import align.assembly as A, networkx as nx; A.OverlapGraph(nx.read_gml("$(TRUE_GRAPH).gml")).layout().save("$@")'
+
+$(ASSEMBLED_GRAPH).layout.gml: $(ASSEMBLED_GRAPH).gml
+	python -c 'import align.assembly as A, networkx as nx; A.OverlapGraph(nx.read_gml("$(ASSEMBLED_GRAPH).gml")).layout().save("$@")'
+
 
 $(TRUE_GRAPH).layout.pdf: $(TRUE_GRAPH).gml
-	python -c 'import align.assembly as A, networkx as nx; A.draw_digraph(nx.read_gml("$(TRUE_GRAPH).gml"), "$@", longest_path=True);'
+	python -c 'import align.assembly as A, networkx as nx; A.OverlapGraph(nx.read_gml("$(TRUE_GRAPH).gml")).draw("$@", longest_path=True);'
+
+$(ASSEMBLED_GRAPH).layout.pdf: $(ASSEMBLED_GRAPH).layout.gml
+	python -c 'import align.assembly as A, networkx as nx; A.OverlapGraph(nx.read_gml("$(ASSEMBLED_GRAPH).gml")).draw("$@", longest_path=True);'
+
+
+layout_diff.pdf: $(ASSEMBLED_GRAPH).layout.gml $(TRUE_GRAPH).layout.gml
+	python -c 'import align.assembly as A, networkx as nx; A.OverlapGraph(nx.read_gml("$(TRUE_GRAPH).layout.gml")).diff_draw(A.OverlapGraph(nx.read_gml("$(ASSEMBLED_GRAPH).layout.gml")), "$@")'
 
 $(DB): align/libalign.so
 	python -c 'import align.tests.assembly as T; T.create_example("$@")'
 
 loc:
-	find . -type f -regex '.*\(\.py\|\.c\|\.h\)' | xargs wc -l
+	find align -type f -regex '.*\(\.py\|\.c\|\.h\)' | xargs wc -l
 
 DOCS_EXCLUDE = align/tests
 DOCS_OUT = _build

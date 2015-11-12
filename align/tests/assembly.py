@@ -66,14 +66,4 @@ def overlap_by_seed_extension(db, path):
     G = assembly.overlap_graph_by_seed_extension(I, C,
         max_succ_drops=params['max_succ_drops'], window=params['window'],
         drop_threshold=params['drop_threshold'])
-    assembly.save_graph(G, path)
-
-def overlap_by_known_order(db, path):
-    B = tuples.TuplesDB(db, alphabet=A)
-    G = assembly.overlap_graph_by_known_order(B)
-    assembly.save_graph(G, path)
-
-def compare_results(true_overlap, overlap):
-    G1 = nx.read_gml(true_overlap)
-    G2 = nx.read_gml(overlap)
-    assembly.compare_graphs(G1, G2, sys.stdout)
+    G.save(path)
