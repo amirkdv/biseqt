@@ -121,7 +121,7 @@ def overlap_graph_by_seed_extension(tuplesdb, align_params, window=20,
     except StopIteration:
         return G
 
-    sys.stdout.write('Graph is not acyclic, breaking cycles: ')
+    sys.stdout.write('Graph is not acyclic, breaking cycles: \n')
     cands = fn_cycle_es(cycle)
     fn_weakest = lambda C: sorted(C, key=lambda x: E[x]['weight'])[0]
     rm = set()
@@ -132,12 +132,12 @@ def overlap_graph_by_seed_extension(tuplesdb, align_params, window=20,
         new_cands = cands.intersection(es) if cands else es
         if not new_cands and cands:
             e = fn_weakest(cands)
-            sys.stdout.write('%d --x[%.2f]x--> %d ' % (e[0], E[e]['weight'], e[1]))
+            sys.stdout.write('removed edge: %d --[%.2f]--> %d\n' % (e[0], E[e]['weight'], e[1]))
             rm.update([e])
         cands = new_cands
     if cands:
         e = fn_weakest(cands)
-        sys.stdout.write('%d --x[%.2f]x--> %d ' % (e[0], E[e]['weight'], e[1]))
+        sys.stdout.write('removed edge: %d --x[%.2f]x--> %d ' % (e[0], E[e]['weight'], e[1]))
         rm.update([fn_weakest(cands)])
 
     for e in rm:
