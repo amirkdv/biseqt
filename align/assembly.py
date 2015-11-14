@@ -250,7 +250,10 @@ class OverlapBuilder(object):
             new window is not positive) we drop the seed.
         window (Optional[int]): The size of the rolling window.
         max_succ_drops (Optional[int]): Maximum number of "drops" until the
-            segment is dropped.
+            segment is dropped, default is 3.
+        min_correct_seeds (Optional[int]): Minimum number of seeds extending
+            successfully to a proper overlap alignment required to decide
+            on an overlap edge. Default is 3.
     """
 
     def __init__(self, index, align_params, **kwargs):
@@ -258,6 +261,7 @@ class OverlapBuilder(object):
         self.window = kwargs.get('window', 20)
         self.drop_threshold = kwargs.get('drop_threshold', 0)
         self.max_succ_drops = kwargs.get('max_succ_drops', 3)
+        self.min_correct_seeds = kwargs.get('min_correct_seeds')
 
     def build(self):
         """Builds a weighted, directed graph by using tuple methods. The process
@@ -301,10 +305,9 @@ class OverlapBuilder(object):
                 seeds = self.index.seeds(S_id, T_id)
                 if not seeds:
                     continue
-                segments = self.extend(S, T, seeds)
-                if not segments:
+                overlap = self.extend(S, T, seeds)
+                if not overlap:
                     continue
-                overlap = segments[0]
                 #print set(['S->T' if x.tx.idx_S < x.tx.idx_T else 'T->S' for x in segments])
                 #overlap.tx.pretty_print(tuplesdb.loadseq(S_id), tuplesdb.loadseq(T_id), sys.stdout)
                 S_len = self._S_len(overlap.tx.opseq)
@@ -441,12 +444,6 @@ class OverlapBuilder(object):
             T (seq.Sequence): The "to" sequence.
             segments (List[tuples.Segment]): The starting segments. If called
                 from :func:`build`, these are seeds but no assumption is made.
-
-        Note:
-            It seems like we never have two segments for the same pair of
-            sequences where one gives an ``S -> T`` edge and the other gives a
-            ``T -> S`` edge. Why not just return the first segment that goes all
-            the way to the end?
         """
         res = []
         for segment in segments:
@@ -467,4 +464,8 @@ class OverlapBuilder(object):
                     opseq=opseq
                 )
                 res += [tuples.Segment(S_id=segment.S_id, T_id=segment.T_id, tx=tx)]
-        return sorted(res, key=lambda s: s.tx.score, reverse=True)
+                if len(res) >= self.min_correct_seeds:
+                    break
+        if not res:
+            return None
+        return sorted(res, key=lambda s: s.tx.score, reverse=True)[0]

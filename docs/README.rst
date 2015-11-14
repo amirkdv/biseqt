@@ -222,11 +222,7 @@ To Do
 
 -  Improvements:
 
-   -  For any two reads, do we need to pursue all segments that satisfy
-      the score criteria or should we drop out once we find one segment?
-      Note that most of the time for overlapping sequences many seeds
-      come from the same correct suffix-prefix alignment.
-   -  An overlap graph must satisfy two consistency criterions: it is a
+   -  An overlap graph must satisfy two consistency criteria: it is a
       DAG, and for any vertex *u* in it, any pair of outgoing (incoming)
       neighbors of *u* are adjacent. Assembly overlap graphs are DAG (or
       close to it) but they rarely satisfy the second. The second
