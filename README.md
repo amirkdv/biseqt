@@ -66,19 +66,8 @@ Some tuple methods (aka *k*-mer analysis) are provided by `tuples.TupleDB`
 which is backed by [SQLite](https://docs.python.org/2/library/sqlite3.html) to
 store, index, and query tuples and by
 [Bio.SeqIO](http://biopython.org/wiki/SeqIO) to read FASTA files.
-
-### Alignment
-
-For any two given sequences (both already indexed) `tuples.OverlapFinder` can be
-used to:
-
-* Find maximal exactly matching "seeds".
-* Find out if a seed can be extended to a suffix-prefix alignment by repeated
-  short global alignments of a fixed window size.
-
-Note that seed extension is specifically geared towards the genome assembly
-problem and, unlike BLAST, it does not try to find *all* significant local
-alignments, but only those that would correspond to a suffix-prefix alignment.
+The index provided by `tuples.Index` can be used to index all *k*-mers of a set
+of sequences (for given *k*) and to find maximal exactly-matching "seeds".
 
 ## Alphabet translation
 
@@ -117,8 +106,12 @@ alignment transcript can be done losslessly to match the original sequence.
 ## Genome assembly
 
 Overlap and layout graphs (i.e OLC minus consensus) can be calculated by methods
-provided in `assembly`. A weighted, DAG is built by seed expansion on all pairs
-of sequences and the longest path is reported as the layout.
+provided in `assembly`. A weighted, DAG is built by seed expansion (see
+[Tuples Methods](#tuples)) on all pairs of sequences and the longest
+path is reported as the layout. Expansion is done by `assembly.OverlapBuilder`
+which uses a rolling window of small global alignments (see tuning parameters
+in [Simulations](#simulations)) to find *overlap* alignments of sequences in the
+database.
 
 ### Cycle breaking
 
@@ -185,8 +178,6 @@ $ make overlap.layout.diff.pdf        # diff against the true overlap graph
 * Perform assembly on condensed sequences.
 * Move seed expansion from Python to C.
 * Switch to `igraph` for cycle processing; `networkx` gets slow quickly.
-* Separate cycle breaking from finding the overlap graph (for convenience in
-  debugging large simulations).
 * Simulations:
 
     * Test on larger data sets (requires speedup).
@@ -200,7 +191,6 @@ $ make overlap.layout.diff.pdf        # diff against the true overlap graph
 
     * Make `align.Transcript` a `namedtuple` as well (unless it's becoming a
       `CffiObject`).
-    * Separate layout and overlap algorithms that are all in `assembly`.
 
 * Improvements:
 
@@ -219,10 +209,10 @@ $ make overlap.layout.diff.pdf        # diff against the true overlap graph
     * Cycle breaking:
 
           * Investigate whether a smarter cycle breaking algorithm is needed.
-          * Investigate whether we should stop ignoring sequence pairs that are mostly
-            overlapping. These are currently ignored since we may get the direction
-            wrong on a heavy edge. The idea is that such edges are not typically
-            informative about the longest path.
+          * Investigate whether we should stop ignoring sequence pairs that are
+            mostly overlapping. These are currently ignored since we may get the
+            direction wrong on a heavy edge. The idea is that such edges are not
+            typically informative about the longest path.
 
 * Low priority:
 

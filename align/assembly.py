@@ -7,27 +7,40 @@ from termcolor import colored
 from . import tuples
 from . import pw
 
-# FIXME docs
 class OverlapGraph(object):
+    """Wraps a networkx directed graph object with additional methods to build
+    and process an overlap graph.
+
+    Attributes:
+        nxG (networkx.DiGraph): The graph object.
+
+    Args:
+        G (Optional[networkx.DiGraph]): The graph object to initialize with, no
+        processing is done and if the object is ``None`` a new directed graph is
+        instantiated.
+    """
     def __init__(self, G=None):
         self.nxG = G if G else nx.DiGraph()
         assert(isinstance(self.nxG, nx.DiGraph))
 
     def V(self):
+        """Returns a ``dict`` of vertex metadata keyed by vertex id."""
         return dict(self.nxG.nodes(data=True))
 
     def E(self):
+        """Returns a ``dict`` of edge metadata keyed by the tuple of endpoint
+        vertex ids."""
         return dict([((u,v), attrs) for u, v, attrs in self.nxG.edges(data=True)])
 
     def layout(self):
-        """FIXME Given an overlap graph finds the assembly layout by finding the longest
-        (heaviest) path.
-
-        Args:
-            networkx.DiGraph: The acyclic overlap graph,
+        """Finds the heaviest path of the directed graph and creates a new
+        :class:`OverlapGraph` containing only this layout path.
 
         Returns:
             networkx.DiGraph: A linear subgraph (the heaviest path).
+
+        Riases:
+            AssertionError: if :attr:`nxG` is not acyclic.
         """
         assert(nx.algorithms.is_directed_acyclic_graph(self.nxG))
         V, E = self.V(), self.E()
@@ -43,8 +56,8 @@ class OverlapGraph(object):
 
     def draw(self, fname, figsize=None, longest_path=False, pos=None,
         edge_colors=None, edge_width=None):
-        """Draws the graph to a PDF file. If ``longest_path`` is truthy, an
-        effort is made to find the longest path in the graph and highlight it. If,
+        """Draws the graph to a PDF file. If ``longest_path`` is truthy,
+        the longest path in the graphs is found and and highlighted. If,
         however, the graph contains cycles the shortes cycle is highlighted in
         red."""
         V, E = self.V(), self.E()
@@ -76,7 +89,7 @@ class OverlapGraph(object):
         nx.draw_networkx_labels(self.nxG, pos, node_labels, font_size=14)
 
         # Edges and their labels:
-        edge_data = self.nxG.edges(data=True) # FIXME use self.E()
+        edge_data = self.nxG.edges(data=True)
         mod = len(path) - 1
         in_path = lambda u,v: u in path and v in path and path.index(v) % mod == (path.index(u) + 1) % mod
         if edge_width is None:
@@ -93,9 +106,14 @@ class OverlapGraph(object):
         plt.savefig(fname, bbox_inches='tight')
 
     def diff_text(self, OG, f):
-        """FIXME Prints a diff-style comparison of two graphs to given file handle. Each
-        missing edge is printed in red with a leading '-' and each added
-        edge is printed in green with a leading '+'.
+        """Prints a diff-style comparison of our :attr:`nxG` against another
+        given :class:`OverlapGraph` and writes the output to the given file
+        handle. Missing edges are printed in red with a leading '-' and added
+        edges are printed in green with a leading '+'.
+
+        Args:
+            OG (OverlapGraph): The "to" directed graph ("from" is us).
+            f (file): File handle to write output to.
         """
         E1, E2 = set(self.nxG.edges()), set(OG.nxG.edges())
         missing, added = E1 - E2, E2 - E1
@@ -118,9 +136,14 @@ class OverlapGraph(object):
                 f.write(colored(line, color='green'))
 
     def diff_draw(self, OG, fname, figsize=None):
-        """ FIXME Draws the difference between two graphs (mainly designed for sparse
-        graphs, e.g. layout graphs). Shared edges are in black, missing edges (from
-        ``G1`` to ``G2``) are in red and added edges are in green.
+        """Draws the difference between our :attr:`nxG` against another
+        given :class:`OverlapGraph`. Shared edges are in black, missing edges
+        (from ours to ``OG``) are in red and added edges are in green.
+
+        Args:
+            OG (OverlapGraph): The "to" directed graph ("from" is us).
+            fname (string): Path to which plot is saved, passed as is to
+                :func:`draw`.
         """
         G = OverlapGraph()
         V1, E1 = self.V(), self.E()
@@ -147,184 +170,301 @@ class OverlapGraph(object):
         G.draw(fname, pos=pos, edge_colors=edge_colors, edge_width=2)
 
     def save(self, fname):
-        """Saves the graph in GML format"""
+        """Saves the graph in GML format
+
+        Args:
+            fname (str): path to GML file.
+        """
         nx.write_gml(self.nxG, fname)
 
     def break_cycles(self):
-        """FIXME"""
-        # break cycles
+        """Breaks all directed cycles in the graph. No optimality guarantee
+        is made, it seems to work in practice and time complexity is
+        :math:`O(n\lg n)` where n is the number of cycles in the graph.
+        """
         V, E = self.V(), self.E()
+        # returns the edges of a cycle given the vertex list:
         fn_cycle_es = lambda x: set([(x[i-1], x[i]) for i in range(1, len(x))] + [(x[-1], x[0])])
-        cycles = nx.algorithms.cycles.simple_cycles(self.nxG)
-        try:
-            cycle = next(cycles)
-        except StopIteration:
+        # returns the lightest edge in a list of edges
+        fn_weakest = lambda C: sorted(C, key=lambda x: E[x]['weight'])[0]
+        cycles = [c for c in nx.algorithms.cycles.simple_cycles(self.nxG)]
+        if not cycles:
             return
 
+        # process cycles in increasing order of weight:
+        cycles = sorted(cycles, key=lambda c: sum([E[(c[i-1], c[i])]['weight'] for i in range(1, len(c))]))
+
         sys.stdout.write('Graph is not acyclic, breaking cycles: \n')
-        cands = fn_cycle_es(cycle)
-        fn_weakest = lambda C: sorted(C, key=lambda x: E[x]['weight'])[0]
+        # the intersection of all cycle edges seen so far:
+        cands = fn_cycle_es(cycles[0])
+        # the set of all edges to be eventually deleted:
         rm = set()
         for cycle in cycles:
             es = fn_cycle_es(cycle)
             if es.intersection(rm):
+                # contains an edge that we have already decided to delete:
                 continue
+            # everytime the rolling intersection is about to become empty,
+            # remove the lightest edge from the current set of candidates.
             new_cands = cands.intersection(es) if cands else es
             if not new_cands and cands:
                 e = fn_weakest(cands)
-                sys.stdout.write('removed edge: %d --[%.2f]--> %d\n' % (e[0], E[e]['weight'], e[1]))
                 rm.update([e])
+                sys.stdout.write('removed edge: %d --[%.2f]--> %d\n' % (e[0], E[e]['weight'], e[1]))
             cands = new_cands
         if cands:
             e = fn_weakest(cands)
+            rm.update([e])
             sys.stdout.write('removed edge: %d --x[%.2f]x--> %d ' % (e[0], E[e]['weight'], e[1]))
-            rm.update([fn_weakest(cands)])
 
+        # actually remove the set of cycle-breaking edges:
         for e in rm:
             self.nxG.remove_edge(*e)
         sys.stdout.write('\n')
         if not nx.algorithms.dag.is_directed_acyclic_graph(self.nxG):
             sys.stdout.write('Err: failed to resolve all cycles of overlap graph.\n')
 
-def overlap_graph_by_alignment(tuplesdb, align_params, min_score=80):
-    """Builds a weighted, directed graph by brute force overlap alignment
-    of all reads.
+class OverlapBuilder(object):
+    """Provided a :class:`align.tuples.Index` builds an overlap graph of all the
+    sequences. All sequences must have already been indexed in the
+    tuples database. For example::
+
+        B = tuples.TuplesDB('path/to/file.db', alphabet=seq.Alphabet("ACGT"))
+        I = tuples.Index(B, wordlen=10)
+        C = align.AlignParams(
+            ... # snip
+        )
+        G = assembly.OverlapBuilder(I, C).build()
+        G.save(path)
 
     Args:
-        tuplesdb (tuples.TuplesDB): The tuples database.
-        align_params (pw.AlignParams): Alignment parameters for overlap
-            alignments.
+        index (tuples.Index): A tuples index that responds to
+            :func:`align.tuples.Index.seeds`.
+        align_params (pw.AlignParams): The alignment parameters for the
+            rolling alignment.
 
     Keyword Args:
-        min_score (Optional): The minimum score required for an overlap
-            alignment to count as an edge.
-
-    Returns:
-        networkx.DiGraph
+        drop_threshold (Optional[float]): What constitutes a drop in the
+            score from one window to the next, default is 0. This means that
+            if the overall score does not strictly increase (or the score of the
+            new window is not positive) we drop the seed.
+        window (Optional[int]): The size of the rolling window.
+        max_succ_drops (Optional[int]): Maximum number of "drops" until the
+            segment is dropped.
     """
-    G = OverlapGraph()
-    seqids = tuplesdb.seqids()
-    for idx_of_S in range(len(seqids)):
-        for idx_of_T in range(idx_of_S + 1, len(seqids)):
-            G.nxG.add_node(seqids[idx_of_S])
-            G.nxG.add_node(seqids[idx_of_T])
-            S = tuplesdb.loadseq(seqids[idx_of_S])
-            T = tuplesdb.loadseq(seqids[idx_of_T])
-            with pw.AlignProblem(S, T, align_params, align_type=pw.OVERLAP) as P:
-                score = P.solve()
-                if score >= min_score:
-                    transcript = P.traceback()
-                    if transcript.idx_T == 0:
-                        G.nxG.add_edge(seqids[idx_of_S], seqids[idx_of_T], score=score)
-                    if transcript.idx_S == 0:
-                        G.nxG.add_edge(seqids[idx_of_T], seqids[idx_of_S], score=score)
-    return G
 
-def overlap_graph_by_seed_extension(index, align_params, window=20,
-    drop_threshold=0, max_succ_drops=3):
-    """Builds a weighted, directed graph by using tuple methods. The process
-    has 3 steps:
+    def __init__(self, index, align_params, **kwargs):
+        self.index, self.align_params = index, align_params
+        self.window = kwargs.get('window', 20)
+        self.drop_threshold = kwargs.get('drop_threshold', 0)
+        self.max_succ_drops = kwargs.get('max_succ_drops', 3)
 
-    * Find all seeds,
-    * Extend all seeds to suffix-prefix segments,
-    * break cycles.
+    def build(self):
+        """Builds a weighted, directed graph by using tuple methods. The process
+        has 2 steps:
 
-    Args:
-        tuplesdb (tuples.TuplesDB): The tuples database.
-        align_params (pw.AlignParams): Alignment parameters for overlap
-            alignments.
+        * Find all seeds using :func:`align.tuples.Index.seeds`,
+        * Extend all seeds to suffix-prefix segments using :func:`extend`.
 
-    Keyword Args:
-        drop_threshold: as in :func:`align.tuples.OverlapFinder.extend`.
-        window: as in :func:`tuples.OverlapFinder.extend`.
-        max_succ_drops: as in :func:`align.tuples.OverlapFinder.extend`.
+        The resulting graph may not necessarily be acyclic. For further
+        processing (e.g to find the layout) we need to ensure the overlap
+        graph is acyclic. For this, see :func:`OverlapGraph.break_cycles`.
 
-    Returns:
-        networkx.DiGraph
+        Args:
+            tuplesdb (tuples.TuplesDB): The tuples database.
+            align_params (pw.AlignParams): Alignment parameters for overlap
+                alignments.
 
-    ToDo:
-        This should be moved into a class.
-    """
-    G = OverlapGraph()
-    seqinfo = index.tuplesdb.seqinfo()
-    seqids = seqinfo.keys()
-    sys.stdout.write('finding adjacent reads for sequence: ')
-    for sid_idx in range(len(seqids)):
-        sys.stdout.write('%d ' % seqids[sid_idx])
-        sys.stdout.flush()
-        for tid_idx in range(sid_idx + 1, len(seqids)):
-            S_id, T_id = seqids[sid_idx], seqids[tid_idx]
-            S_info, T_info = seqinfo[S_id], seqinfo[T_id]
-            S_min_idx, S_max_idx = S_info['start'], S_info['start'] + S_info['length']
-            T_min_idx, T_max_idx = T_info['start'], T_info['start'] + T_info['length']
-            S_name = '%s %d-%d #%d' % (S_info['name'], S_min_idx, S_max_idx, S_id)
-            T_name = '%s %d-%d #%d' % (T_info['name'], T_min_idx, T_max_idx, T_id)
-            G.nxG.add_node(S_id, name=S_name)
-            G.nxG.add_node(T_id, name=T_name)
+        Returns:
+            networkx.DiGraph
+        """
+        G = OverlapGraph()
+        seqinfo = self.index.tuplesdb.seqinfo()
+        seqids = seqinfo.keys()
+        sys.stdout.write('finding adjacent reads for sequence: ')
+        for sid_idx in range(len(seqids)):
+            sys.stdout.write('%d ' % seqids[sid_idx])
+            sys.stdout.flush()
+            for tid_idx in range(sid_idx + 1, len(seqids)):
+                S_id, T_id = seqids[sid_idx], seqids[tid_idx]
+                S_info, T_info = seqinfo[S_id], seqinfo[T_id]
+                S_min_idx, S_max_idx = S_info['start'], S_info['start'] + S_info['length']
+                T_min_idx, T_max_idx = T_info['start'], T_info['start'] + T_info['length']
+                S_name = '%s %d-%d #%d' % (S_info['name'], S_min_idx, S_max_idx, S_id)
+                T_name = '%s %d-%d #%d' % (T_info['name'], T_min_idx, T_max_idx, T_id)
+                G.nxG.add_node(S_id, name=S_name)
+                G.nxG.add_node(T_id, name=T_name)
 
-            # do they overlap?
-            S, T = index.tuplesdb.loadseq(S_id), index.tuplesdb.loadseq(T_id)
-            exacts = index.exactly_matching_segments(S_id, T_id)
-            F = tuples.OverlapFinder(S, T, align_params)
-            if not exacts:
-                continue
-            segments = F.extend(exacts, window=window, drop_threshold=drop_threshold)
-            if not segments:
-                continue
-            overlap = segments[0]
-            #print set(['S->T' if x.tx.idx_S < x.tx.idx_T else 'T->S' for x in segments])
-            #overlap.tx.pretty_print(tuplesdb.loadseq(S_id), tuplesdb.loadseq(T_id), sys.stdout)
-            S_len, T_len = F._S_len(overlap.tx.opseq), F._T_len(overlap.tx.opseq)
-            if abs(overlap.tx.idx_S - overlap.tx.idx_T) < window or \
-                abs(overlap.tx.idx_S + S_len - (overlap.tx.idx_T + T_len)) < window:
-                continue
-            if overlap.tx.idx_S == 0 and overlap.tx.idx_T == 0:
-                if S_len < T_len:
+                # do they overlap?
+                S = self.index.tuplesdb.loadseq(S_id)
+                T = self.index.tuplesdb.loadseq(T_id)
+                seeds = self.index.seeds(S_id, T_id)
+                if not seeds:
+                    continue
+                segments = self.extend(S, T, seeds)
+                if not segments:
+                    continue
+                overlap = segments[0]
+                #print set(['S->T' if x.tx.idx_S < x.tx.idx_T else 'T->S' for x in segments])
+                #overlap.tx.pretty_print(tuplesdb.loadseq(S_id), tuplesdb.loadseq(T_id), sys.stdout)
+                S_len = self._S_len(overlap.tx.opseq)
+                T_len = self._T_len(overlap.tx.opseq)
+                if abs(overlap.tx.idx_S - overlap.tx.idx_T) < self.window or \
+                    abs(overlap.tx.idx_S + S_len - (overlap.tx.idx_T + T_len)) < self.window:
+                    # end points are too close, ignore
+                    continue
+                if overlap.tx.idx_S == 0 and overlap.tx.idx_T == 0:
+                    if S_len < T_len:
+                        G.nxG.add_edge(S_id, T_id, weight=overlap.tx.score)
+                    elif S_len > T_len:
+                        G.nxG.add_edge(T_id, S_id, weight=overlap.tx.score)
+                elif overlap.tx.idx_T == 0:
                     G.nxG.add_edge(S_id, T_id, weight=overlap.tx.score)
-                elif S_len > T_len:
+                elif overlap.tx.idx_S == 0:
                     G.nxG.add_edge(T_id, S_id, weight=overlap.tx.score)
-            elif overlap.tx.idx_T == 0:
-                G.nxG.add_edge(S_id, T_id, weight=overlap.tx.score)
-            elif overlap.tx.idx_S == 0:
-                G.nxG.add_edge(T_id, S_id, weight=overlap.tx.score)
 
-    sys.stdout.write('\n')
-    return G
+        sys.stdout.write('\n')
+        return G
 
-def overlap_graph_by_known_order(tuplesdb):
-    """Builds the *correct* weighted, directed graph by using hints left in
-    reads databse by ``seq.make_sequencing_fixture()``.
+    def _extend_fwd_once(self, S, T, segment, window):
+        """Helper method for ``extend1d``."""
+        S_len, T_len = self._S_len(segment.tx.opseq), self._T_len(segment.tx.opseq)
+        align_problem_kw = {
+            'S': S, 'T': T, 'params': self.align_params,
+            'align_type': pw.GLOBAL,
+        }
+        align_problem_kw.update({
+            'S_min_idx': segment.tx.idx_S + S_len,
+            'T_min_idx': segment.tx.idx_T + T_len,
+        })
+        align_problem_kw.update({
+            'S_max_idx': align_problem_kw['S_min_idx'] + window,
+            'T_max_idx': align_problem_kw['T_min_idx'] + window
+        })
 
-    Args:
-        tuplesdb (tuples.TuplesDB): The tuples database.
+        with pw.AlignProblem(**align_problem_kw) as P:
+            score = P.solve()
+            assert(score is not None)
+            transcript = P.traceback()
+            if transcript is None:
+                return None
 
-    Returns:
-        networkx.DiGraph
-    """
-    G = OverlapGraph()
-    seqinfo = tuplesdb.seqinfo()
-    seqids = seqinfo.keys()
-    for sid_idx in range(len(seqids)):
-        for tid_idx in range(sid_idx + 1, len(seqids)):
-            S_id, T_id = seqids[sid_idx], seqids[tid_idx]
-            S_info, T_info = seqinfo[S_id], seqinfo[T_id]
-            S_min_idx, S_max_idx = S_info['start'], S_info['start'] + S_info['length']
-            T_min_idx, T_max_idx = T_info['start'], T_info['start'] + T_info['length']
-            S_name = '%s %d-%d #%d' % (S_info['name'], S_min_idx, S_max_idx, S_id)
-            T_name = '%s %d-%d #%d' % (T_info['name'], T_min_idx, T_max_idx, T_id)
-            G.nxG.add_node(S_id, name=S_name)
-            G.nxG.add_node(T_id, name=T_name)
-            overlap = min(S_max_idx, T_max_idx) - max(S_min_idx, T_min_idx)
-            if overlap > 0:
-                if S_min_idx < T_min_idx:
-                    G.nxG.add_edge(S_id, T_id, weight=overlap)
-                elif S_min_idx > T_min_idx:
-                    G.nxG.add_edge(T_id, S_id, weight=overlap)
-                # if start is equal, edge goes from shorter read to longer read
-                elif S_max_idx < T_max_idx:
-                    G.nxG.add_edge(S_id, T_id, weight=overlap)
-                elif S_max_idx > T_max_idx:
-                    G.nxG.add_edge(T_id, S_id, weight=overlap)
-                # if start and end is equal, reads are identical, ignore.
+        tx = pw.Transcript(
+            idx_S=segment.tx.idx_S,
+            idx_T=segment.tx.idx_T,
+            score=segment.tx.score + transcript.score,
+            opseq=segment.tx.opseq + transcript.opseq
+        )
+        return tuples.Segment(S_id=segment.S_id, T_id=segment.T_id, tx=tx)
 
-    return G
+    def _extend_bwd_once(self, S, T, segment, window):
+        """Helper method for ``extend1d``."""
+        align_problem_kw = {
+            'S': S, 'T': T, 'params': self.align_params,
+            'align_type': pw.GLOBAL,
+        }
+        align_problem_kw.update({
+            'S_max_idx': segment.tx.idx_S,
+            'T_max_idx': segment.tx.idx_T,
+        })
+        align_problem_kw.update({
+            'S_min_idx': align_problem_kw['S_max_idx'] - window,
+            'T_min_idx': align_problem_kw['T_max_idx'] - window
+        })
+
+        with pw.AlignProblem(**align_problem_kw) as P:
+            score = P.solve()
+            assert(score is not None)
+            transcript = P.traceback()
+            if transcript is None:
+                return None
+
+        tx = pw.Transcript(
+            idx_S=transcript.idx_S,
+            idx_T=transcript.idx_T,
+            score=transcript.score + segment.tx.score,
+            opseq=transcript.opseq + segment.tx.opseq
+        )
+        return tuples.Segment(S_id=segment.S_id, T_id=segment.T_id, tx=tx)
+
+    def _S_len(self, opseq):
+        return sum([opseq.count(op) for op in 'DMS'])
+
+    def _T_len(self, opseq):
+        return sum([opseq.count(op) for op in 'IMS'])
+
+    def _extend1d(self, S, T, segment, backwards=False):
+        """Helper method for ``extend()``"""
+        cur_seg = segment
+        score_history = [segment.tx.score]
+        while True:
+            if backwards:
+                w = min(self.window, min(cur_seg.tx.idx_S, cur_seg.tx.idx_T))
+            else:
+                S_wiggle = S.length - (cur_seg.tx.idx_S + self._S_len(cur_seg.tx.opseq))
+                T_wiggle = T.length - (cur_seg.tx.idx_T + self._T_len(cur_seg.tx.opseq))
+                w = min(self.window, min(S_wiggle, T_wiggle))
+
+            if w == 0:
+                # hit the end:
+                return cur_seg
+
+            if backwards:
+                seg = self._extend_bwd_once(S, T, cur_seg, w)
+            else:
+                seg = self._extend_fwd_once(S, T, cur_seg, w)
+
+            if seg is None:
+                # no non-empty alignment found.
+                break
+
+            score_history += [seg.tx.score - segment.tx.score]
+            if len(score_history) > self.max_succ_drops:
+                score_history = score_history[-self.max_succ_drops:]
+
+            if len(score_history) == self.max_succ_drops and \
+                all([x <= self.drop_threshold for x in score_history]):
+                break
+
+            cur_seg = seg
+
+        return None
+
+    def extend(self, S, T, segments):
+        """Given two sequences and a number of matching segments finds all
+        extended, potentially gap-containing segments by repeatedly aligning a
+        rolling frame along the two sequences and dropping a segment once it
+        is observed to not be a high-scoring overlap alignment.
+
+        Args:
+            S (seq.Sequence): The "from" sequence.
+            T (seq.Sequence): The "to" sequence.
+            segments (List[tuples.Segment]): The starting segments. If called
+                from :func:`build`, these are seeds but no assumption is made.
+
+        Note:
+            It seems like we never have two segments for the same pair of
+            sequences where one gives an ``S -> T`` edge and the other gives a
+            ``T -> S`` edge. Why not just return the first segment that goes all
+            the way to the end?
+        """
+        res = []
+        for segment in segments:
+            fwd = self._extend1d(S, T, segment)
+            bwd = self._extend1d(S, T, segment, backwards=True)
+            if fwd and bwd and min(fwd.tx.score, bwd.tx.score) > self.drop_threshold:
+                assert(bwd.tx.idx_S == 0 or bwd.tx.idx_T == 0)
+                opseq = bwd.tx.opseq[:-len(segment.tx.opseq)] + fwd.tx.opseq
+                score = self.align_params.score(
+                    S, T, opseq,
+                    S_min_idx=bwd.tx.idx_S,
+                    T_min_idx=bwd.tx.idx_T
+                )
+                tx = pw.Transcript(
+                    idx_S=bwd.tx.idx_S,
+                    idx_T=bwd.tx.idx_T,
+                    score=score,
+                    opseq=opseq
+                )
+                res += [tuples.Segment(S_id=segment.S_id, T_id=segment.T_id, tx=tx)]
+        return sorted(res, key=lambda s: s.tx.score, reverse=True)

@@ -30,7 +30,7 @@ $(ASSEMBLED_GRAPH).dag.gml: $(ASSEMBLED_GRAPH).gml
 	python -c 'import align.assembly as A, networkx as nx; G = A.OverlapGraph(nx.read_gml("$(ASSEMBLED_GRAPH).gml")); G.break_cycles(); G.save("$@")'
 
 $(TRUE_GRAPH).gml:
-	python -c 'import align.assembly as A, align.seq as S, align.tuples as T; A.overlap_graph_by_known_order(T.TuplesDB("$(DB)", alphabet=S.Alphabet("ACGT"))).save("$@")'
+	python -c 'import align.tests.assembly as A, align.seq as S, align.tuples as T; A.overlap_graph_by_known_order("$(DB)").save("$@")'
 
 $(ASSEMBLED_GRAPH).pdf:
 	python -c 'import align.assembly as A, networkx as nx; A.OverlapGraph(nx.read_gml("$(ASSEMBLED_GRAPH).gml")).draw("$@");'

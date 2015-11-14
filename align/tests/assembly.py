@@ -63,7 +63,44 @@ def overlap_by_seed_extension(db, path):
     show_params()
     B = tuples.TuplesDB(db, alphabet=A)
     I = tuples.Index(B, wordlen=params['wordlen'])
-    G = assembly.overlap_graph_by_seed_extension(I, C,
-        max_succ_drops=params['max_succ_drops'], window=params['window'],
-        drop_threshold=params['drop_threshold'])
+    G = assembly.OverlapBuilder(I, C, **params).build()
     G.save(path)
+
+def overlap_graph_by_known_order(db):
+    """Builds the *correct* weighted, directed graph by using hints left in
+    reads databse by ``seq.make_sequencing_fixture()``.
+
+    Args:
+        tuplesdb (tuples.TuplesDB): The tuples database.
+
+    Returns:
+        networkx.DiGraph
+    """
+    B = tuples.TuplesDB(db, alphabet=A)
+    G = assembly.OverlapGraph()
+    seqinfo = B.seqinfo()
+    seqids = seqinfo.keys()
+    for sid_idx in range(len(seqids)):
+        for tid_idx in range(sid_idx + 1, len(seqids)):
+            S_id, T_id = seqids[sid_idx], seqids[tid_idx]
+            S_info, T_info = seqinfo[S_id], seqinfo[T_id]
+            S_min_idx, S_max_idx = S_info['start'], S_info['start'] + S_info['length']
+            T_min_idx, T_max_idx = T_info['start'], T_info['start'] + T_info['length']
+            S_name = '%s %d-%d #%d' % (S_info['name'], S_min_idx, S_max_idx, S_id)
+            T_name = '%s %d-%d #%d' % (T_info['name'], T_min_idx, T_max_idx, T_id)
+            G.nxG.add_node(S_id, name=S_name)
+            G.nxG.add_node(T_id, name=T_name)
+            overlap = min(S_max_idx, T_max_idx) - max(S_min_idx, T_min_idx)
+            if overlap > 0:
+                if S_min_idx < T_min_idx:
+                    G.nxG.add_edge(S_id, T_id, weight=overlap)
+                elif S_min_idx > T_min_idx:
+                    G.nxG.add_edge(T_id, S_id, weight=overlap)
+                # if start is equal, edge goes from shorter read to longer read
+                elif S_max_idx < T_max_idx:
+                    G.nxG.add_edge(S_id, T_id, weight=overlap)
+                elif S_max_idx > T_max_idx:
+                    G.nxG.add_edge(T_id, S_id, weight=overlap)
+                # if start and end is equal, reads are identical, ignore.
+
+    return G

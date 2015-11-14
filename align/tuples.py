@@ -8,9 +8,9 @@ from collections import namedtuple
 
 from . import pw, seq
 class Segment(namedtuple('Segment', ['S_id', 'T_id', 'tx'])):
-    """Represents an aligned pair of substrings in two sequences. The alignment may
-    potentially contain indels. Maximal, exactly-matching segments are refered to as
-    "seeds".
+    """Represents an aligned pair of substrings in two sequences. The alignment
+    may potentially contain indels. Maximal, exactly-matching segments are
+    refered to as "seeds".
 
     Attributes:
         S_id (int): The id of the "from" sequence as found in the ``seq`` table.
@@ -245,7 +245,7 @@ class Index(object):
                 sys.stderr.write(' ' + str(seqid))
             sys.stderr.write('\n')
 
-    def exactly_matching_segments(self, s1, s2):
+    def seeds(self, s1, s2):
         """Given two sequence ids, finds all maximal exactly matching segments
         between the two. A segment is in its maximal form if there are no other
         exactly-matching segments whose span is a unit shift in both the query
@@ -296,176 +296,3 @@ class Index(object):
             idx += 1
         exacts.sort(key=lambda s: len(s.tx.opseq), reverse=True)
         return exacts
-
-class OverlapFinder(object):
-    """Provided two sequences and a :class:`TuplesDB` provides tools to find
-    and extend exactly matching "seeds" into overlap alignments. Both sequences
-    must have already been indexed in the tuples database.
-
-    Seeds are *maximal, exactly matching* instances of :class:`Segment`. They
-    are expanded by repeated global alignments on small windows moving forward
-    and backward from the boundaries of the seed.
-
-    Args:
-        S (seq.Sequence): The "from" sequence.
-        T (seq.Sequence): The "to" sequence.
-        align_params (pw.AlignParams): The alignment parameters.
-
-    Keyword Args:
-        tuplesdb (tuples.TuplesDB)
-    """
-    def __init__(self, S, T, align_params):
-        self.S, self.T, self.align_params = S, T, align_params
-        self.align_problem_kw = {
-            'S': self.S,
-            'T': self.T,
-            'params': self.align_params,
-            'align_type': pw.GLOBAL,
-        }
-
-    def _extend_fwd_once(self, segment, window):
-        """Helper method for ``extend1d``."""
-        S_len, T_len = self._S_len(segment.tx.opseq), self._T_len(segment.tx.opseq)
-        kw = self.align_problem_kw
-        kw.update({
-            'S_min_idx': segment.tx.idx_S + S_len,
-            'T_min_idx': segment.tx.idx_T + T_len,
-        })
-        kw.update({
-            'S_max_idx': kw['S_min_idx'] + window,
-            'T_max_idx': kw['T_min_idx'] + window
-        })
-
-        with pw.AlignProblem(**kw) as P:
-            score = P.solve()
-            assert(score is not None)
-            transcript = P.traceback()
-            if transcript is None:
-                return None
-
-        tx = pw.Transcript(
-            idx_S=segment.tx.idx_S,
-            idx_T=segment.tx.idx_T,
-            score=segment.tx.score + transcript.score,
-            opseq=segment.tx.opseq + transcript.opseq
-        )
-        return Segment(S_id=segment.S_id, T_id=segment.T_id, tx=tx)
-
-    def _extend_bwd_once(self, segment, window):
-        """Helper method for ``extend1d``."""
-        kw = self.align_problem_kw
-        kw.update({
-            'S_max_idx': segment.tx.idx_S,
-            'T_max_idx': segment.tx.idx_T,
-        })
-        kw.update({
-            'S_min_idx': kw['S_max_idx'] - window,
-            'T_min_idx': kw['T_max_idx'] - window
-        })
-
-        with pw.AlignProblem(**kw) as P:
-            score = P.solve()
-            assert(score is not None)
-            transcript = P.traceback()
-            if transcript is None:
-                return None
-
-        tx = pw.Transcript(
-            idx_S=transcript.idx_S,
-            idx_T=transcript.idx_T,
-            score=transcript.score + segment.tx.score,
-            opseq=transcript.opseq + segment.tx.opseq
-        )
-        return Segment(S_id=segment.S_id, T_id=segment.T_id, tx=tx)
-
-    def _S_len(self, opseq):
-        return sum([opseq.count(op) for op in 'DMS'])
-
-    def _T_len(self, opseq):
-        return sum([opseq.count(op) for op in 'IMS'])
-
-    def _extend1d(self, segment, backwards=False, **kw):
-        """Helper method for ``extend()``"""
-        drop_threshold = kw['drop_threshold']
-        window = kw['window']
-        max_succ_drops = kw['max_succ_drops']
-        cur_seg = segment
-        score_history = [segment.tx.score]
-        while True:
-            if backwards:
-                w = min(window, min(cur_seg.tx.idx_S, cur_seg.tx.idx_T))
-            else:
-                S_wiggle = self.S.length - (cur_seg.tx.idx_S + self._S_len(cur_seg.tx.opseq))
-                T_wiggle = self.T.length - (cur_seg.tx.idx_T + self._T_len(cur_seg.tx.opseq))
-                w = min(window, min(S_wiggle, T_wiggle))
-
-            if w == 0:
-                # hit the end:
-                return cur_seg
-
-            if backwards:
-                seg = self._extend_bwd_once(cur_seg, w)
-            else:
-                seg = self._extend_fwd_once(cur_seg, w)
-
-            if seg is None:
-                # no non-empty alignment found.
-                break
-
-            score_history += [seg.tx.score - segment.tx.score]
-            if len(score_history) > max_succ_drops:
-                score_history = score_history[-max_succ_drops:]
-
-            if len(score_history) == max_succ_drops and \
-                all([x <= drop_threshold for x in score_history]):
-                break
-
-            cur_seg = seg
-
-        return None
-
-    def extend(self, segments, **kw):
-        """Given a number of matching segments for the two sequences finds all
-        extended matching gap containing segments by repeatedly aligning a
-        rolling frame along the two sequences and dropping a segment once it
-        is observed to not be a high-scoring overlap alignment.
-
-        Args:
-            segment (tuples.Segment)
-
-        Keyword Args:
-            drop_threshold (Optional[float]): What constitutes a drop in the
-                score from one window to the next, default is 0.
-            window (Optional[int]): The size of the rolling window.
-            max_succ_drops (Optional[int]): Maximum number of "drops" until the
-                segment is dropped (i.e ``None`` is returned).
-
-        Note:
-            It seems like we never have two segments for the same pair of
-            sequences where one gives an ``S -> T`` edge and the other gives a
-            ``T -> S`` edge. Why not just return the first segment that goes all
-            the way to the end?
-        """
-        defaults = {'max_succ_drops': 3, 'drop_threshold': 0, 'window': 10}
-        defaults.update(kw)
-        kw = defaults
-        res = []
-        for segment in segments:
-            fwd = self._extend1d(segment, **kw)
-            bwd = self._extend1d(segment, backwards=True, **kw)
-            if fwd and bwd and min(fwd.tx.score, bwd.tx.score) > kw['drop_threshold']:
-                assert(bwd.tx.idx_S == 0 or bwd.tx.idx_T == 0)
-                opseq = bwd.tx.opseq[:-len(segment.tx.opseq)] + fwd.tx.opseq
-                score = self.align_params.score(
-                    self.S, self.T, opseq,
-                    S_min_idx=bwd.tx.idx_S,
-                    T_min_idx=bwd.tx.idx_T
-                )
-                tx = pw.Transcript(
-                    idx_S=bwd.tx.idx_S,
-                    idx_T=bwd.tx.idx_T,
-                    score=score,
-                    opseq=opseq
-                )
-                res += [Segment(S_id=segment.S_id, T_id=segment.T_id, tx=tx)]
-        return sorted(res, key=lambda s: s.tx.score, reverse=True)

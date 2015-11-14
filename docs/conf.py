@@ -21,14 +21,8 @@ from mock import Mock as MagicMock
 # Since Python 3.3 this can be done via:
 # from unittest.mock import MagicMock
 
-on_rtd = os.environ.get('READTHEDOCS', None) == 'True'
-print
-print("Building on ReadTheDocs: {}".format(on_rtd))
-print
-print("Current working directory: {}".format(os.path.abspath(os.curdir)))
-print("Python: {}".format(sys.executable))
-
-if on_rtd:
+# Mock classes that require "arbitrary" binaries for building on rtfd.org
+if os.environ.get('READTHEDOCS', None) == 'True':
     class Mock(MagicMock):
         @classmethod
         def __getattr__(cls, name):
@@ -53,7 +47,9 @@ sys.path.insert(0, os.path.abspath('..'))
 # ones.
 extensions = [
     'sphinx.ext.autodoc',
-    'sphinx.ext.napoleon'
+    'sphinx.ext.napoleon',
+    'sphinx.ext.mathjax',
+    'sphinx.ext.viewcode'
 ]
 
 # Add any paths that contain templates here, relative to this directory.

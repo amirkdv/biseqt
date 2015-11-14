@@ -76,22 +76,10 @@ Some tuple methods (aka *k*-mer analysis) are provided by
 ``tuples.TupleDB`` which is backed by
 `SQLite <https://docs.python.org/2/library/sqlite3.html>`__ to store,
 index, and query tuples and by
-`Bio.SeqIO <http://biopython.org/wiki/SeqIO>`__ to read FASTA files.
-
-Alignment
-~~~~~~~~~
-
-For any two given sequences (both already indexed)
-``tuples.OverlapFinder`` can be used to:
-
--  Find maximal exactly matching "seeds".
--  Find out if a seed can be extended to a suffix-prefix alignment by
-   repeated short global alignments of a fixed window size.
-
-Note that seed extension is specifically geared towards the genome
-assembly problem and, unlike BLAST, it does not try to find *all*
-significant local alignments, but only those that would correspond to a
-suffix-prefix alignment.
+`Bio.SeqIO <http://biopython.org/wiki/SeqIO>`__ to read FASTA files. The
+index provided by ``tuples.Index`` can be used to index all *k*-mers of
+a set of sequences (for given *k*) and to find maximal exactly-matching
+"seeds".
 
 Alphabet translation
 --------------------
@@ -139,8 +127,11 @@ Genome assembly
 
 Overlap and layout graphs (i.e OLC minus consensus) can be calculated by
 methods provided in ``assembly``. A weighted, DAG is built by seed
-expansion on all pairs of sequences and the longest path is reported as
-the layout.
+expansion (see `Tuples Methods <#tuples>`__) on all pairs of sequences
+and the longest path is reported as the layout. Expansion is done by
+``assembly.OverlapBuilder`` which uses a rolling window of small global
+alignments (see tuning parameters in `Simulations <#simulations>`__) to
+find *overlap* alignments of sequences in the database.
 
 Cycle breaking
 ~~~~~~~~~~~~~~
@@ -215,8 +206,6 @@ To Do
 -  Move seed expansion from Python to C.
 -  Switch to ``igraph`` for cycle processing; ``networkx`` gets slow
    quickly.
--  Separate cycle breaking from finding the overlap graph (for
-   convenience in debugging large simulations).
 -  Simulations:
 
    -  Test on larger data sets (requires speedup).
@@ -230,8 +219,6 @@ To Do
 
    -  Make ``align.Transcript`` a ``namedtuple`` as well (unless it's
       becoming a ``CffiObject``).
-   -  Separate layout and overlap algorithms that are all in
-      ``assembly``.
 
 -  Improvements:
 

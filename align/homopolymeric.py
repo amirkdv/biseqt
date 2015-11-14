@@ -1,5 +1,5 @@
 from math import log10, floor
-from . import seq, pw, hp_tokenize
+from . import seq, pw, hp_tokenize, tuples
 
 class HpCondenser(object):
     """Transforms a sequence back and forth to an alternative alphabet by
@@ -56,28 +56,6 @@ class HpCondenser(object):
 
     def _condense(self, char, num):
         return char + str(min(num, self.maxlen)).rjust(self.letlen - 1, '0')
-
-    def tup_scan(self, string, wordlen):
-        """Similar to :func:`align.tuples.tup_scan` except a tuple of length N is
-        taken to mean N letters in the condensed alphabet. The yielded indices,
-        however, refer to positions in the original sequence. For example::
-
-            Tr = HpCondenser(seq.Alphabet('ACGT'), maxlen=3)
-            string = 'AAACCCCGGTGGT'
-            Tr.tup_scan(string, 5) # => ('A3C3G2T1G2', 0), ('C3G2T1G2T1', 3)
-        """
-        tup = []
-        idx = [0]
-        for char, num in hp_tokenize(string):
-            if len(tup) == wordlen:
-                yield ''.join(tup), idx[0]
-                tup.pop(0)
-                idx.pop(0)
-            tup += [self._condense(char, num)]
-            idx += [(idx[-1] if idx else 0) + num]
-        if tup:
-            yield ''.join(tup), idx[0]
-
 
     def expand_sequence(self, sequence):
         """The inverse of condense_sequence(). For exmaple::
@@ -219,3 +197,29 @@ class HpCondenser(object):
             ge_score=align_params.gap_extend_score,
             max_diversion=align_params.max_diversion
         )
+
+class HpCondensedIndex(tuples.Index):
+    def __init__(self, hp_condenser):
+        self.hp_condenser = hp_condenser
+
+    def tup_scan(self, string, wordlen):
+        """Similar to :func:`align.tuples.tup_scan` except a tuple of length N is
+        taken to mean N letters in the condensed alphabet. The yielded indices,
+        however, refer to positions in the original sequence. For example::
+
+            Tr = HpCondenser(seq.Alphabet('ACGT'), maxlen=3)
+            Idx = HpCondensedIndex(Tr)
+            string = 'AAACCCCGGTGGT'
+            Idx.tup_scan(string, 5) # => ('A3C3G2T1G2', 0), ('C3G2T1G2T1', 3)
+        """
+        tup = []
+        idx = [0]
+        for char, num in hp_tokenize(string):
+            if len(tup) == wordlen:
+                yield ''.join(tup), idx[0]
+                tup.pop(0)
+                idx.pop(0)
+            tup += [self.hp_condenser._condense(char, num)]
+            idx += [(idx[-1] if idx else 0) + num]
+        if tup:
+            yield ''.join(tup), idx[0]
