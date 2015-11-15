@@ -13,9 +13,9 @@ make clean tests
 The following can be generated randomly by the `seq` module:
 
 * Sequence of given length given a letter probabilities.
-* Mutants of given sequence given substition and gap probabilities.
+* Mutants of given sequence given substitution and gap probabilities.
 * Random reads from a given sequence given required coverage, read length
-  distribution, and substitution/gap probabilties.
+  distribution, and substitution/gap probabilities.
 
 ## Pairwise alignments
 
