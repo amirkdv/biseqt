@@ -3,10 +3,10 @@
 ``align.py`` is a library of sequence alignment and fragment assembly
 algorithms in python and C. To get started:
 
-.. code:: sh
+.. code:: shell
 
-    $ python setup.py develop
-    $ make clean tests
+    python setup.py develop
+    make clean tests
 
 Random processes
 ----------------
@@ -126,7 +126,8 @@ Genome assembly
 ---------------
 
 Overlap and layout graphs (i.e OLC minus consensus) can be calculated by
-methods provided in ``assembly``. A weighted, DAG is built by seed
+methods provided in ``assembly``. All graph processing is delegated to
+`igraph <http://igraph.org/python/>`__. A weighted, DAG is built by seed
 expansion (see `Tuples Methods <#tuples>`__) on all pairs of sequences
 and the longest path is reported as the layout. Expansion is done by
 ``assembly.OverlapBuilder`` which uses a rolling window of small global
@@ -141,22 +142,22 @@ The resulting overlap graph may not be a DAG due to two main reasons:
 -  wrong weak edges that should not exist.
 -  strong edges with the wrong direction.
 
-The first case is dealt with by finding a (hopefully light) subset of
-the edges whose removal breaks all the cycles in the graph. The
-algorithm does not try to be optimal but quick and relies on the fact
-that the *true* overlap graph is necessarily a DAG and thus correct
-edges are unlikely to be part of many cycles.
-
 The second case is typically caused by highly overlapping sequences (i.e
 the start or end index of end points are too close). Currently such
 edges are ignored altogether.
+
+Regardless, cycle breaking is delegated to
+``igraph.Graph.feedback_arc_set`` which supports an optimal, but slow,
+integer programming algorithm and a suboptimal, but fast,
+`heuristic <http://www.sciencedirect.com/science/article/pii/002001909390079O>`__
+algorithm.
 
 Simulations
 ~~~~~~~~~~~
 
 For the simulated case where the true genome is known a difference graph
 can be generated between the true overlap path and the assembled overlap
-path. The key paramters for overlap discovery are:
+path. The key parameters for overlap discovery are:
 
 1. Window size for successive alignment frames,
 2. What constitutes a bad score in a single window,
@@ -170,12 +171,16 @@ Input generation parameters are:
 
 Usage:
 
-.. code:: sh
+.. code:: shell
 
-    $ make clean genome.db                # creates genome.fa, reads.fa, genome.db
-    $ make true_overlap.gml true_overlap.layout.pdf # find the true overlap and layout
-    $ make overlap.gml overlap.layout.pdf # find the overlap and layout by seed extension
-    $ make overlap.layout.diff.pdf        # diff against the true overlap graph
+    # creates genome.fa, reads.fa, genome.db
+    make clean genome.db
+    # find the true overlap and layout
+    make true_overlap.gml true_overlap.layout.gml true_overlap.layout.pdf
+    # find the overlap and layout by seed extension
+    make overlap.gml overlap.layout.gml overlap.layout.pdf
+    # compare the two layouts
+    make layout_diff.pdf
 
 Behavior
 ~~~~~~~~
@@ -204,8 +209,6 @@ To Do
 
 -  Perform assembly on condensed sequences.
 -  Move seed expansion from Python to C.
--  Switch to ``igraph`` for cycle processing; ``networkx`` gets slow
-   quickly.
 -  Simulations:
 
    -  Test on larger data sets (requires speedup).
@@ -231,15 +234,9 @@ To Do
       simulations). The difficulty is to find a way to recover necessary
       edges for a full layout path without trying to recover *all*
       missing edges.
-   -  Cycle breaking:
-
-      -  Investigate whether a smarter cycle breaking algorithm is
-         needed.
-      -  Investigate whether we should stop ignoring sequence pairs that
-         are mostly overlapping. These are currently ignored since we
-         may get the direction wrong on a heavy edge. The idea is that
-         such edges are not typically informative about the longest
-         path.
+   -  Stop ignoring sequence pairs that are mostly overlapping. These
+      are currently ignored since we may get the direction wrong on a
+      heavy edge.
 
 -  Low priority:
 
