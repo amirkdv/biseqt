@@ -15,8 +15,8 @@ class OverlapGraph(object):
 
     Args:
         G (Optional[igraph.Graph]): The graph object to initialize with; no
-        processing is done and if the object is ``None`` a new directed graph is
-        instantiated.
+            processing is done and if the object is ``None`` a new directed
+            graph is instantiated.
     """
     def __init__(self, G=None):
         self.iG = G if G else igraph.Graph(directed=True)
