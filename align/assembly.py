@@ -226,7 +226,13 @@ class OverlapGraph(object):
         """
         sE1 = set([self._endpoint_names(e) for e in self.iG.es])
         sE2 = set([OG._endpoint_names(e) for e in OG.iG.es])
-        find_eid = lambda edge: self.iG.get_eid(*edge) if edge in sE1 else OG.iG.get_eid(*edge)
+        def _edge_str(endpoints):
+            if endpoints in sE1:
+                return self.eid_to_str(self.iG.get_eid(*endpoints))
+            elif endpoints in sE2:
+                return OG.eid_to_str(OG.iG.get_eid(*endpoints))
+            else:
+                raise ValueError("This should not have happened")
         missing, added, both = sE1 - sE2, sE2 - sE1, sE1.intersection(sE2)
         f.write('G1 (%d edges) --> G2 (%d edges): %%%.2f lost, %%%.2f added\n' %
             (len(sE1), len(sE2), len(missing)*100.0/len(sE1),
@@ -236,7 +242,7 @@ class OverlapGraph(object):
         for edge in sorted(diff, cmp=lambda x, y: cmp(x[1], y[1])):
             color = None
             prefix = ' ' if edge[0] is None else edge[0]
-            line = '%s %s' % (prefix, self.eid_to_str(find_eid(edge[1])))
+            line = '%s %s' % (prefix, _edge_str(edge[1]))
             if edge[0] == '-':
                 color = 'red'
             elif edge[0] == '+':

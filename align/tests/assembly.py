@@ -9,9 +9,9 @@ A = seq.Alphabet('ACGT')
 
 params = {
     'wordlen': 5,           # tuple word lengths
-    'genome_length': 1500,  # length of randomly generated genome
+    'genome_length': 5000,  # length of randomly generated genome
     'coverage': 5,          # coverage of random sequencing reads
-    'read_len_mean': 300,   # average length of sequencing read
+    'read_len_mean': 500,   # average length of sequencing read
     'read_len_var': 10,     # variance of sequencing read length
     'go_prob': 0.05,        # gap open score
     'ge_prob': 0.3,         # gap extend score
