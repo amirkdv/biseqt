@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 import sys
 import os
-import networkx as nx
+import igraph
 
 from .. import pw, tuples, seq, assembly
 
@@ -10,7 +10,7 @@ A = seq.Alphabet('ACGT')
 params = {
     'wordlen': 5,           # tuple word lengths
     'genome_length': 1500,  # length of randomly generated genome
-    'coverage': 4,          # coverage of random sequencing reads
+    'coverage': 5,          # coverage of random sequencing reads
     'read_len_mean': 300,   # average length of sequencing read
     'read_len_var': 10,     # variance of sequencing read length
     'go_prob': 0.05,        # gap open score
@@ -77,9 +77,10 @@ def overlap_graph_by_known_order(db):
         networkx.DiGraph
     """
     B = tuples.TuplesDB(db, alphabet=A)
-    G = assembly.OverlapGraph()
     seqinfo = B.seqinfo()
     seqids = seqinfo.keys()
+    vs = set()
+    es, ws = [], []
     for sid_idx in range(len(seqids)):
         for tid_idx in range(sid_idx + 1, len(seqids)):
             S_id, T_id = seqids[sid_idx], seqids[tid_idx]
@@ -88,19 +89,27 @@ def overlap_graph_by_known_order(db):
             T_min_idx, T_max_idx = T_info['start'], T_info['start'] + T_info['length']
             S_name = '%s %d-%d #%d' % (S_info['name'], S_min_idx, S_max_idx, S_id)
             T_name = '%s %d-%d #%d' % (T_info['name'], T_min_idx, T_max_idx, T_id)
-            G.nxG.add_node(S_id, name=S_name)
-            G.nxG.add_node(T_id, name=T_name)
+            vs = vs.union(set([S_name, T_name]))
             overlap = min(S_max_idx, T_max_idx) - max(S_min_idx, T_min_idx)
             if overlap > 0:
                 if S_min_idx < T_min_idx:
-                    G.nxG.add_edge(S_id, T_id, weight=overlap)
+                    es += [(S_name, T_name)]
+                    ws += [overlap]
                 elif S_min_idx > T_min_idx:
-                    G.nxG.add_edge(T_id, S_id, weight=overlap)
+                    es += [(T_name, S_name)]
+                    ws += [overlap]
                 # if start is equal, edge goes from shorter read to longer read
                 elif S_max_idx < T_max_idx:
-                    G.nxG.add_edge(S_id, T_id, weight=overlap)
+                    es += [(S_name, T_name)]
+                    ws += [overlap]
                 elif S_max_idx > T_max_idx:
-                    G.nxG.add_edge(T_id, S_id, weight=overlap)
+                    es += [(T_name, S_name)]
+                    ws += [overlap]
                 # if start and end is equal, reads are identical, ignore.
 
+    G = assembly.OverlapGraph()
+    G.iG.add_vertices(list(vs))
+    es = [(G.iG.vs.find(name=u), G.iG.vs.find(name=v)) for u,v in es]
+    G.iG.add_edges(es)
+    G.iG.es['weight'] = ws
     return G

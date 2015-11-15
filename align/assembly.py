@@ -1,112 +1,221 @@
 import re
 import sys
-import networkx as nx
-import matplotlib.pyplot as plt
+import igraph
 from termcolor import colored
 
 from . import tuples
 from . import pw
 
 class OverlapGraph(object):
-    """Wraps a networkx directed graph object with additional methods to build
+    """Wraps an :class:`igraph.Graph` object with additional methods to build
     and process an overlap graph.
 
     Attributes:
-        nxG (networkx.DiGraph): The graph object.
+        iG (igraph.Graph): The graph object.
 
     Args:
-        G (Optional[networkx.DiGraph]): The graph object to initialize with, no
+        G (Optional[igraph.Graph]): The graph object to initialize with; no
         processing is done and if the object is ``None`` a new directed graph is
         instantiated.
     """
     def __init__(self, G=None):
-        self.nxG = G if G else nx.DiGraph()
-        assert(isinstance(self.nxG, nx.DiGraph))
+        self.iG = G if G else igraph.Graph(directed=True)
+        assert(isinstance(self.iG, igraph.Graph))
+        self.v_highlight = '#b5ffb5'
+        self.e_highlight = '#00b400'
 
-    def V(self):
-        """Returns a ``dict`` of vertex metadata keyed by vertex id."""
-        return dict(self.nxG.nodes(data=True))
+    def _endpoint_names(self, eid):
+        """Internal helper: igraph is not too happy when we munge vertex IDs
+        since it keeps renumbering them according to its memory allocation
+        scheme. Instead convert everything to "name"s which are the original
+        sequence IDs.
 
-    def E(self):
-        """Returns a ``dict`` of edge metadata keyed by the tuple of endpoint
-        vertex ids."""
-        return dict([((u,v), attrs) for u, v, attrs in self.nxG.edges(data=True)])
+        See https://lists.nongnu.org/archive/html/igraph-help/2010-03/msg00078.html
+        """
+        if isinstance(eid, igraph.Edge):
+            eid = eid.index
+        uid, vid = self.iG.es[eid].tuple
+        return self.iG.vs[uid]['name'], self.iG.vs[vid]['name']
 
-    def layout(self):
+    def _vids_to_names(self, vids):
+        return [self.iG.vs[vid]['name'] for vid in vids]
+
+    def _edge_weight(self, u, v):
+        """Internal helper; given to vertex names returns the weight of the edge
+        connecting them.
+        """
+        return self.iG.es['weight'][self.iG.get_eid(u, v)]
+
+    def eid_to_str(self, eid, maxlen=20):
+        """Prepares an edge for pretty printing. Truncates and paths the end
+        point labels (``name`` is used as label) to ensure they both have
+        length ``maxlen``.
+        """
+        u, v = self._endpoint_names(eid)
+        u, v = u[:maxlen].ljust(maxlen), v[:maxlen].rjust(maxlen)
+        w = self.iG.es[eid]['weight']
+        w = ('+--[%.2f]-->' % w).ljust(20)
+        return '%s %s %s\n' % (u, w, v)
+
+    def break_cycles(self, method='ip'):
+        """Removes a `feedback arc set <https://en.wikipedia.org/wiki/Feedback_arc_set>`__
+        from the graph. Depending on the ``method`` the result may not be optimal.
+
+        Keyword Args:
+            method (str): The FAS discovery algorithm; passed to
+                :func:`igraph.Graph.feedback_arc_set`. Default uses an
+                integer programming formulation which is guaranteed to be
+                optimal but is slow on large graphs. The alternative is
+                ``eades`` which uses a suboptimal `heuristic
+                <http://www.sciencedirect.com/science/article/pii/002001909390079O>`__.
+        """
+        rm = self.iG.feedback_arc_set(weights=self.iG.es['weight'], method=method)
+        for e in rm:
+            sys.stderr.write('removed edge: %s' % self.eid_to_str(e))
+        self.iG.delete_edges(rm)
+
+    def longest_path(self, exclude=[]):
+        """Finds the longest path (i.e heaviest path) of the graph, excluding
+        vertices with names specified in ``exclude``. This, naturally requires
+        that the graph is acyclic. Since the graph is a DAG, we can find the
+        longest path in :math:`O(|V|)` time by first building a
+        topological ordering of the graph (i.e :math:`O(|V|+|E|)` in total).
+
+        Keyword Arguments:
+            exclude (Optional[List[str]]): A list of vertex names to be excluded
+                from the graph when finding the longest path. This is only of
+                use to :func:`all_longest_paths`.
+
+        Returns:
+            list[str]: A list of vertex names in order of appearance in the
+                longest path.
+        """
+        sorting = self._vids_to_names(self.iG.topological_sorting())
+        sorting = [v for v in sorting if v not in exclude]
+        # longest paths ending at each vertex keyed by vertex. Each entry is a
+        # tuple of (<weight, from>) where `from` is any of the predecessors
+        # giving the maximum weight.
+        longest_paths = {}
+        for v in sorting:
+            if v in exclude:
+                continue
+            incoming = self._vids_to_names(self.iG.predecessors(v))
+            incoming = [x for x in incoming if x not in exclude]
+            if not incoming:
+                longest_paths[v] = (0, None)
+            else:
+                w = lambda x: longest_paths[x][0] + self._edge_weight(x, v)
+                cands = [(w(u), u) for u in incoming]
+                longest_paths[v] = sorted(cands, key=lambda x: x[0], reverse=True)[0]
+
+        if not longest_paths:
+            return []
+
+        # Find the terminal vertex of the longest path:
+        end = sorted(longest_paths.items(), key=lambda x: x[1][0], reverse=True)[0][0]
+        path = []
+        # Trace back the entire path:
+        while end and longest_paths:
+            path = [end] + path
+            end = longest_paths.pop(end)[1]
+
+        # Don't report trivial paths:
+        return path if len(path) > 1 else []
+
+    def all_longest_paths(self):
+        """Repeatedly finds the longest path in the graph while excluding
+        vertices that are already included in a path.
+
+        Returns:
+            List[List[str]]: A list of paths, each a list of vertex names in
+                order of appearance in the path.
+        """
+        paths = []
+        exclude = []
+        while True:
+            path = self.longest_path(exclude=exclude)
+            if not path:
+                break
+            paths += [path]
+            exclude += path
+        return paths
+
+    def layout(self, full=False):
         """Finds the heaviest path of the directed graph and creates a new
         :class:`OverlapGraph` containing only this layout path.
 
+        Keyword Args:
+            full (bool): If truthy, an effort is made to add other paths to
+                cover all vertices of the graph.
+
         Returns:
-            networkx.DiGraph: A linear subgraph (the heaviest path).
+            OverlapGraph: A linear subgraph (the heaviest path).
 
-        Riases:
-            AssertionError: if :attr:`nxG` is not acyclic.
+        Raises:
+            AssertionError: If the graph is not acyclic.
         """
-        assert(nx.algorithms.is_directed_acyclic_graph(self.nxG))
-        V, E = self.V(), self.E()
-        path = nx.algorithms.dag.dag_longest_path(self.nxG)
-        L = OverlapGraph()
-        for nid in V:
-            L.nxG.add_node(nid, **V[nid])
-        for nid_idx in range(1, len(path)):
-            attrs = E[(path[nid_idx-1], path[nid_idx])]
-            L.nxG.add_edge(path[nid_idx-1], path[nid_idx], attrs)
-
-        return L
-
-    def draw(self, fname, figsize=None, longest_path=False, pos=None,
-        edge_colors=None, edge_width=None):
-        """Draws the graph to a PDF file. If ``longest_path`` is truthy,
-        the longest path in the graphs is found and and highlighted. If,
-        however, the graph contains cycles the shortes cycle is highlighted in
-        red."""
-        V, E = self.V(), self.E()
-        if longest_path:
-            if nx.algorithms.is_directed_acyclic_graph(self.nxG):
-                path = nx.algorithms.dag.dag_longest_path(self.nxG)
-                edge_highlight = 'green'
-            else:
-                sys.stdout.write('Graph is not acyclic, shortest cycle is highlighted instead of the longest path\n')
-                cycles = nx.algorithms.cycles.simple_cycles(self.nxG)
-                path = sorted(cycles, key=lambda x: len(x))[0]
-                path += [path[0]]
-                edge_highlight = 'red'
+        assert(self.iG.is_dag())
+        if full:
+            paths = self.all_longest_paths()
         else:
-            path = []
+            paths = [self.longest_path()]
+        eids = []
+        for path in paths:
+            eids += [self.iG.get_eid(path[idx-1], path[idx]) for idx in range(1, len(path))]
 
-        if pos is None:
-            pos = nx.circular_layout(self.nxG)
-        if figsize is None:
-            n = self.nxG.number_of_nodes()
-            figsize = (n*2,n*2)
-        plt.figure(figsize=figsize)
+        return OverlapGraph(self.iG.subgraph_edges(eids))
 
-        # Vertices and their labels
-        node_color = ['#b5ffb5' if u in path else '#ff9a9a' if path else 'w' for u in V]
-        nx.draw_networkx_nodes(self.nxG, pos, node_size=8000, node_color=node_color)
-        node_labels = nx.get_node_attributes(self.nxG, 'name')
-        node_labels = {k: node_labels[k].replace(' ', '\n') for k in node_labels}
-        nx.draw_networkx_labels(self.nxG, pos, node_labels, font_size=14)
+    # the paths are names not ids
+    def draw(self, fname, **kw):
+        """Draws the graph and potentially highlights provided paths.
 
-        # Edges and their labels:
-        edge_data = self.nxG.edges(data=True)
-        mod = len(path) - 1
-        in_path = lambda u,v: u in path and v in path and path.index(v) % mod == (path.index(u) + 1) % mod
-        if edge_width is None:
-            edge_width = [2 if in_path(u,v) else 0.7 for u,v,_ in edge_data]
-        if edge_colors is None:
-            edge_colors = [edge_highlight if in_path(u,v) else 'black'  for u,v,_ in edge_data]
-        nx.draw_networkx_edges(self.nxG, pos, edge_color=edge_colors, width=edge_width)
-        if edge_data and 'weight' in edge_data[0][2]:
-            nx.draw_networkx_edge_labels(self.nxG, pos, font_size=11,
-                edge_labels={(f,t):'%.2f' % a['weight'] for f,t,a in edge_data})
+        Keyword Arguments:
+            highlight_paths ([List[List[str]]]): A list of paths to be
+                highlighted. All edges of the path and the starting vertex
+                are highlighted green.
+            edge_color ([List|str]): Passed to :func:`igraph.Graph.plot`.
+                Default is all black unless paths to be highlighted are
+                specified. If provided, overrides path highlighting.
+            vertex_color ([List|str]): Passed to :func:`igraph.Graph.plot`.
+                Default is all white unless paths to be highlighted are
+                specified in which case starting vertices are green.
+            edge_width ([List|float]): Passed to :func:`igraph.Graph.plot`.
+                Default is 10 for edges in highlighted path and 1 otherwise.
+            edge_arrow_widge ([List|float]): Passed to :func:`igraph.Graph.plot`.
+                Default is 3 for highlighted edges and 1 otherwise.
+            edge_curvred (float): Passed to :func:`igraph.Graph.plot`. Default
+                is 0.1.
+        """
+        highlight_paths = kw.get('highlight_paths', [])
+        def e_in_path(eid):
+            u, v = self._endpoint_names(eid)
+            return any([u in p and v in p and p.index(u) == p.index(v) - 1 for p in highlight_paths])
 
-        plt.xticks([])
-        plt.yticks([])
-        plt.savefig(fname, bbox_inches='tight')
+        v_start_path = lambda v: any([p[0] == v for p in highlight_paths])
+
+        # Sugiyama works on non-DAG graphs as well
+        n = len(self.iG.vs)
+        layout_kw = {
+            'weights': 'weight' if 'weight' in self.iG.es.attributes() else None,
+            'maxiter': n * 20,
+        }
+        plot_kw = {
+            'layout': self.iG.layout_sugiyama(**layout_kw),
+            'bbox': (n*150, n*150),
+            'vertex_size': 100,
+            'vertex_label': [x.replace(' ', '\n') for x in self.iG.vs['name']],
+            'vertex_label_size': 18,
+            'vertex_color': kw.get('vertex_color', [self.v_highlight if v_start_path(v) else 'white' for v in self.iG.vs['name']]),
+            'edge_width': kw.get('edge_width', [10 if e_in_path(e) else 1 for e in self.iG.es]),
+            'edge_arrow_width': kw.get('edge_arrow_width', [3 if e_in_path(e) else 1 for e in self.iG.es]),
+            'edge_color': kw.get('edge_color', [self.e_highlight if e_in_path(e) else 'black' for e in self.iG.es]),
+            'edge_curved': kw.get('edge_curved', 0.1),
+            'margin': 200,
+        }
+        igraph.plot(self.iG, fname, **plot_kw)
 
     def diff_text(self, OG, f):
-        """Prints a diff-style comparison of our :attr:`nxG` against another
+        """Prints a diff-style comparison of our :attr:`iG` against another
         given :class:`OverlapGraph` and writes the output to the given file
         handle. Missing edges are printed in red with a leading '-' and added
         edges are printed in green with a leading '+'.
@@ -115,28 +224,31 @@ class OverlapGraph(object):
             OG (OverlapGraph): The "to" directed graph ("from" is us).
             f (file): File handle to write output to.
         """
-        E1, E2 = set(self.nxG.edges()), set(OG.nxG.edges())
-        missing, added = E1 - E2, E2 - E1
+        sE1 = set([self._endpoint_names(e) for e in self.iG.es])
+        sE2 = set([OG._endpoint_names(e) for e in OG.iG.es])
+        find_eid = lambda edge: self.iG.get_eid(*edge) if edge in sE1 else OG.iG.get_eid(*edge)
+        missing, added, both = sE1 - sE2, sE2 - sE1, sE1.intersection(sE2)
         f.write('G1 (%d edges) --> G2 (%d edges): %%%.2f lost, %%%.2f added\n' %
-            (len(E1), len(E2), len(missing)*100.0/len(E1),
-             len(added)*100.0/len(E1)))
-        diff = [('-', edge) for edge in missing] + [('+', edge) for edge in added]
-        N1 = nx.get_node_attributes(self.nxG, 'name')
-        N2 = nx.get_node_attributes(OG.nxG, 'name')
+            (len(sE1), len(sE2), len(missing)*100.0/len(sE1),
+             len(added)*100.0/len(sE1)))
+        diff = [('-', edge) for edge in missing] + \
+            [('+', edge) for edge in added] + [(None, edge) for edge in both]
         for edge in sorted(diff, cmp=lambda x, y: cmp(x[1], y[1])):
+            color = None
+            prefix = ' ' if edge[0] is None else edge[0]
+            line = '%s %s' % (prefix, self.eid_to_str(find_eid(edge[1])))
             if edge[0] == '-':
-                src, dst = N1[edge[1][0]], N1[edge[1][1]]
-                line = '- [%s]--(%.2f)-->[%s]\n' % (src,
-                 self.nxG.get_edge_data(*edge[1])['weight'], dst)
-                f.write(colored(line, color='red'))
+                color = 'red'
+            elif edge[0] == '+':
+                color = 'green'
+
+            if color:
+                f.write(colored(line, color=color))
             else:
-                src, dst = N2[edge[1][0]], N2[edge[1][1]]
-                line = '+ [%s]--(%.2f)-->[%s]\n' % \
-                    (src, OG.nxG.get_edge_data(*edge[1])['weight'], dst)
-                f.write(colored(line, color='green'))
+                f.write(line)
 
     def diff_draw(self, OG, fname, figsize=None):
-        """Draws the difference between our :attr:`nxG` against another
+        """Draws the difference between our :attr:`iG` against another
         given :class:`OverlapGraph`. Shared edges are in black, missing edges
         (from ours to ``OG``) are in red and added edges are in green.
 
@@ -145,29 +257,29 @@ class OverlapGraph(object):
             fname (string): Path to which plot is saved, passed as is to
                 :func:`draw`.
         """
+        e_to_names = lambda G, e: (G.vs[e[0]]['name'], G.vs[e[1]]['name'])
+        sE1 = set([self._endpoint_names(e) for e in self.iG.es])
+        sE2 = set([OG._endpoint_names(e) for e in OG.iG.es])
         G = OverlapGraph()
-        V1, E1 = self.V(), self.E()
-        V2, E2 = OG.V(), OG.E()
-        sE1, sE2 = set(self.nxG.edges()), set(OG.nxG.edges())
-        for edge in sE1.union(sE2):
-            G.nxG.add_node(edge[0], **V1[edge[0]])
-            G.nxG.add_node(edge[1], **V1[edge[1]])
-            kw = E1[edge] if edge in E1 else E2[edge]
-            G.nxG.add_edge(edge[0], edge[1], **kw)
-
-        V, E = G.V(), G.E()
+        G.iG.add_vertices(list(
+            set(self.iG.vs['name']).union(set(OG.iG.vs['name']))
+        ))
+        G.iG.add_edges(list(sE1.union(sE2)))
         both, missing, added = sE1.intersection(sE2), sE1 - sE2, sE2 - sE1
-        edge_colors = []
-        for edge in G.nxG.edges():
-            if edge in both:
-                edge_colors += ['black']
-            elif edge in missing:
-                edge_colors += ['red']
-            elif edge in added:
-                edge_colors += ['green']
+        edge_color = []
+        for e in G.iG.es:
+            e = G._endpoint_names(e)
+            if e in both:
+                edge_color += ['black']
+            elif e in missing:
+                edge_color += ['red']
+            elif e in added:
+                edge_color += ['green']
 
-        pos = nx.fruchterman_reingold_layout(G.nxG, k=2.5)
-        G.draw(fname, pos=pos, edge_colors=edge_colors, edge_width=2)
+        vertex_color = ['white' if v.degree(mode=igraph.IN) else self.v_highlight for v in G.iG.vs]
+
+        G.draw(fname, edge_color=edge_color, vertex_color=vertex_color,
+            edge_width=5, edge_arrow_width=3, edge_curved=0.3)
 
     def save(self, fname):
         """Saves the graph in GML format
@@ -175,54 +287,7 @@ class OverlapGraph(object):
         Args:
             fname (str): path to GML file.
         """
-        nx.write_gml(self.nxG, fname)
-
-    def break_cycles(self):
-        """Breaks all directed cycles in the graph. No optimality guarantee
-        is made, it seems to work in practice and time complexity is
-        :math:`O(n\lg n)` where n is the number of cycles in the graph.
-        """
-        V, E = self.V(), self.E()
-        # returns the edges of a cycle given the vertex list:
-        fn_cycle_es = lambda x: set([(x[i-1], x[i]) for i in range(1, len(x))] + [(x[-1], x[0])])
-        # returns the lightest edge in a list of edges
-        fn_weakest = lambda C: sorted(C, key=lambda x: E[x]['weight'])[0]
-        cycles = [c for c in nx.algorithms.cycles.simple_cycles(self.nxG)]
-        if not cycles:
-            return
-
-        # process cycles in increasing order of weight:
-        cycles = sorted(cycles, key=lambda c: sum([E[(c[i-1], c[i])]['weight'] for i in range(1, len(c))]))
-
-        sys.stdout.write('Graph is not acyclic, breaking cycles: \n')
-        # the intersection of all cycle edges seen so far:
-        cands = fn_cycle_es(cycles[0])
-        # the set of all edges to be eventually deleted:
-        rm = set()
-        for cycle in cycles:
-            es = fn_cycle_es(cycle)
-            if es.intersection(rm):
-                # contains an edge that we have already decided to delete:
-                continue
-            # everytime the rolling intersection is about to become empty,
-            # remove the lightest edge from the current set of candidates.
-            new_cands = cands.intersection(es) if cands else es
-            if not new_cands and cands:
-                e = fn_weakest(cands)
-                rm.update([e])
-                sys.stdout.write('removed edge: %d --[%.2f]--> %d\n' % (e[0], E[e]['weight'], e[1]))
-            cands = new_cands
-        if cands:
-            e = fn_weakest(cands)
-            rm.update([e])
-            sys.stdout.write('removed edge: %d --x[%.2f]x--> %d ' % (e[0], E[e]['weight'], e[1]))
-
-        # actually remove the set of cycle-breaking edges:
-        for e in rm:
-            self.nxG.remove_edge(*e)
-        sys.stdout.write('\n')
-        if not nx.algorithms.dag.is_directed_acyclic_graph(self.nxG):
-            sys.stdout.write('Err: failed to resolve all cycles of overlap graph.\n')
+        self.iG.write_gml(fname)
 
 class OverlapBuilder(object):
     """Provided a :class:`align.tuples.Index` builds an overlap graph of all the
@@ -251,9 +316,10 @@ class OverlapBuilder(object):
         window (Optional[int]): The size of the rolling window.
         max_succ_drops (Optional[int]): Maximum number of "drops" until the
             segment is dropped, default is 3.
-        min_correct_seeds (Optional[int]): Minimum number of seeds extending
-            successfully to a proper overlap alignment required to decide
-            on an overlap edge. Default is 3.
+        max_correct_seeds (Optional[int]): Maximum number of seeds extending
+            successfully to a proper overlap alignment before we stop
+            processing seeds and report an edge. Default is 3; use any
+            nonpositive number to block this feature (i.e extend all seeds).
     """
 
     def __init__(self, index, align_params, **kwargs):
@@ -261,7 +327,7 @@ class OverlapBuilder(object):
         self.window = kwargs.get('window', 20)
         self.drop_threshold = kwargs.get('drop_threshold', 0)
         self.max_succ_drops = kwargs.get('max_succ_drops', 3)
-        self.min_correct_seeds = kwargs.get('min_correct_seeds')
+        self.max_correct_seeds = kwargs.get('max_correct_seeds', 3)
 
     def build(self):
         """Builds a weighted, directed graph by using tuple methods. The process
@@ -280,9 +346,10 @@ class OverlapBuilder(object):
                 alignments.
 
         Returns:
-            networkx.DiGraph
+            OverlapGraph
         """
-        G = OverlapGraph()
+        vs = set()
+        es, ws = [], []
         seqinfo = self.index.tuplesdb.seqinfo()
         seqids = seqinfo.keys()
         sys.stdout.write('finding adjacent reads for sequence: ')
@@ -296,8 +363,7 @@ class OverlapBuilder(object):
                 T_min_idx, T_max_idx = T_info['start'], T_info['start'] + T_info['length']
                 S_name = '%s %d-%d #%d' % (S_info['name'], S_min_idx, S_max_idx, S_id)
                 T_name = '%s %d-%d #%d' % (T_info['name'], T_min_idx, T_max_idx, T_id)
-                G.nxG.add_node(S_id, name=S_name)
-                G.nxG.add_node(T_id, name=T_name)
+                vs = vs.union([S_name, T_name])
 
                 # do they overlap?
                 S = self.index.tuplesdb.loadseq(S_id)
@@ -318,15 +384,25 @@ class OverlapBuilder(object):
                     continue
                 if overlap.tx.idx_S == 0 and overlap.tx.idx_T == 0:
                     if S_len < T_len:
-                        G.nxG.add_edge(S_id, T_id, weight=overlap.tx.score)
+                        es += [(S_name, T_name)]
                     elif S_len > T_len:
-                        G.nxG.add_edge(T_id, S_id, weight=overlap.tx.score)
+                        es += [(T_name, S_name)]
                 elif overlap.tx.idx_T == 0:
-                    G.nxG.add_edge(S_id, T_id, weight=overlap.tx.score)
+                    es += [(S_name, T_name)]
                 elif overlap.tx.idx_S == 0:
-                    G.nxG.add_edge(T_id, S_id, weight=overlap.tx.score)
+                    es += [(T_name, S_name)]
+                else:
+                    # shouldn't happen
+                    raise ValueError("This should not have happened")
+
+                ws += [overlap.tx.score]
 
         sys.stdout.write('\n')
+        G = OverlapGraph()
+        G.iG.add_vertices(list(vs))
+        es = [(G.iG.vs.find(name=u), G.iG.vs.find(name=v)) for u,v in es]
+        G.iG.add_edges(es)
+        G.iG.es['weight'] = ws
         return G
 
     def _extend_fwd_once(self, S, T, segment, window):
@@ -464,7 +540,7 @@ class OverlapBuilder(object):
                     opseq=opseq
                 )
                 res += [tuples.Segment(S_id=segment.S_id, T_id=segment.T_id, tx=tx)]
-                if len(res) >= self.min_correct_seeds:
+                if self.max_correct_seeds > 0 and len(res) >= self.max_correct_seeds:
                     break
         if not res:
             return None

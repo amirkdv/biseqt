@@ -196,7 +196,7 @@ Bad
 
 1. When two reads are both mostly overlapping the direction may come out
    wrong and this can cause cycles in the overlap graph.
-2. There are occassional insertions too which do not seem to be
+2. There are occasional insertions too which do not seem to be
    problematic since they are weak (i.e low scoring alignments).
 
 To Do

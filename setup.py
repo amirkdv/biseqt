@@ -20,18 +20,26 @@ setup(
     #license='MIT',
     #keywords='sequence DNA alignment fragment assembly k-mer homopoylmeric',
     packages=['align'],
-    setup_requires=['numpy', 'cffi', 'biopython'], # see https://github.com/numpy/numpy/issues/2434
+    setup_requires=[
+        'numpy',
+        'cffi',
+        'biopython',
+    ],
     install_requires=[
         'biopython',
         'termcolor',
         'numpy',
         'cffi',
-        'networkx>=1.10',
-        'matplotlib',
+        'python-igraph',
+        # 'pycairo', can't be done yet; see https://bugs.freedesktop.org/show_bug.cgi?id=58772
     ],
     extras_require={
-        'DOCS': ['sphinx', 'sphinx.ext.napoleon', 'sphinx.rdt.theme'],
-        # in Python 3.3 this is shipped via unittest.
-        'RTD': ['mock']
+        'DOCS': [
+            'sphinx',
+            'sphinx.ext.napoleon',
+            'sphinx.rdt.theme',
+            'sphinx.ext.mathjax',
+            'mock' # only used on rtfd.org to mock packages with binary dependencies
+        ]
     }
 )
