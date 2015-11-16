@@ -47,6 +47,11 @@ class Alphabet(CffiObject):
         specified.
 
         Note:
+            This function and all its dependents (i.e :func:`randseq` and
+            :func:`Sequence.mutate`) should not be used in condensed alphabets
+            since they may generate invalid sequences like ``A1T3T5``.
+
+        Note:
             Arbitrary precision on probability distributions is not supported.
             The default precision is 0.001, modify this with :arg:`precision`.
 

@@ -89,7 +89,7 @@ class AlignParams(CffiObject):
         gap_prob = kw.get('gap_prob', 0)
         subst_scores = [[0 for _ in range(L)] for _ in range(L)]
         for i in range(L):
-            assert(abs(1-sum([subst_probs[i][j] for j in range(L)])) < 0.001)
+            assert(abs(1 - sum([subst_probs[i][j] for j in range(L)])) < 0.001)
             for j in range(L):
                 assert(subst_probs[i][j] > 0)
                 assert(letter_dist[i] * letter_dist[j] != 0)
@@ -128,7 +128,7 @@ class AlignParams(CffiObject):
     def __getattr__(self, name):
         """Allow attributes to access members of the underlying ``align_params``
         struct. Additionally provides a ``subst_scores`` attribute which builds
-        a python list of lists from the corresponding C data structure.
+        a python list of lists from the corresponding C ``double **``.
         """
         if name == 'subst_scores':
             idx = range(self.alphabet.length)

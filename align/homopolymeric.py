@@ -36,10 +36,21 @@ class HpCondenser(object):
                 letter = char + str(min(num, self.maxlen)).rjust(self.letlen - 1, '0')
                 letters += [letter]
         self.dst_alphabet = seq.Alphabet(letters)
+        # Calculate the number of parititons of integers up to self.maxlen,
+        # see condense_subst_probs
+        partitions = [set() for _ in range(self.maxlen + 1)]
+        partitions[1] = set([(1,)])
+        for n in range(1, self.maxlen + 1):
+            partitions[n].add((n,))
+            for x in range(1, n):
+                for part in partitions[n - x]:
+                    partitions[n].add(tuple(sorted((x, ) + part)))
+
+        self._num_partitions = [len(partitions[n]) for n in range(self.maxlen  + 1)]
 
     def condense_sequence(self, sequence):
-        """Translates a given sequence into the condensed alphabet. For
-        example::
+        """Translates a given sequence into the condensed alphabet.
+        For example::
 
             Tr = HpCondensor(seq.Alphabet('ACGT'))
             Tr.condense_sequence('AACCCCGGT') #=> 'A2C4G2'
@@ -112,7 +123,7 @@ class HpCondenser(object):
         char_S, num_S = tokens_S.next()
         char_T, num_T = tokens_T.next()
         for op in transcript.opseq:
-            if (None, None) in [(char_S, char_T), (num_S, num_T)]:
+            if (None, None) in [(char_S, num_S), (char_T, num_T)]:
                 raise ValueError('The transcript does not match the sequences')
 
             if op == 'M':
@@ -150,6 +161,54 @@ class HpCondenser(object):
 
         return pw.Transcript(idx_S=idx_S, idx_T=idx_T,
             score=transcript.score, opseq=opseq)
+
+    def condense_subst_probs(self, **kw):
+        """Translates the substitution probabilities in the source alphabet
+        to substitution probabilities in the destination (condensed) alphabet.
+        Letting :math:`x,y` denote original alphabet letters and :math:`x_i,y_j`
+        denote condensed alphabet letters, the translation formula is the
+        following:
+
+            :math:`\Pr(x_i \\rightarrow y_i) = \Pr(x \\rightarrow y)^i(1-g_h)^{i-1}`
+
+        where :math:`g_h` is the homopolymeric gap probability (only a linear
+        model is supported). When the length of letters differ:
+
+            :math:`\Pr(x_i \\rightarrow y_j) = \\pi(i)\Pr(x \\rightarrow y)^{\\min(i,j)}(1-g_h)^{\\min(i,j)-1}g_h^{|i-j|}`
+
+        where :math:`\\pi(\\cdot)` is the integer partition function.
+
+        Note:
+            The calculations here may have serious errors. In fact, the
+            calculated probabilites as described above don't necessarily add
+            up to 1! Returned probability matrix is normalized in each row
+            to make sure the output is not terribly wrong.
+        """
+        subst_probs = kw['subst_probs']
+        hp_gap_prob = kw['hp_gap_prob']
+        assert(hp_gap_prob > 0)
+        N, L = len(self.src_alphabet), len(self.dst_alphabet)
+        letters_dist = kw.get('letters_dist', [1.0/N for _ in range(N)])
+        subst_probs_d = [[None for _ in range(L)] for _ in range(L)]
+        num_partitions = lambda n: exp(pi * sqrt(2.0 * n / 3)) / (4 * sqrt(3) * n)
+        for i in range(L):
+            let = self.dst_alphabet.letters[i]
+            ci, ni = let[0], int(let[1:]) # e.g A31 gives ci = 'A' and ni = 31
+            for j in range(L):
+                let = self.dst_alphabet.letters[j]
+                cj, nj = let[0], int(let[1:])
+                ki = self.src_alphabet.letters.index(ci)
+                kj = self.src_alphabet.letters.index(cj)
+                subst_probs_d[i][j] = subst_probs[ki][kj] ** min(ni, nj) * \
+                    (1-hp_gap_prob) ** (min(ni, nj) - 1)
+                if ni != nj:
+                    subst_probs_d[i][j] *= self._num_partitions[ni] * \
+                        hp_gap_prob ** abs(ni - nj)
+        # FIXME probabilities don't add up to 1, normalize:
+        for idx, row in enumerate(subst_probs_d):
+            s = sum(row)
+            subst_probs_d[idx] = [x/s for x in row]
+        return subst_probs_d
 
     def condense_align_params(self, align_params, hp_go_score=0, hp_ge_score=0):
         """Translates alignment parameters to one that applies to the condensed
