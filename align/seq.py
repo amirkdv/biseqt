@@ -77,8 +77,7 @@ class Alphabet(CffiObject):
 
     def randseq(self, length, **kw):
         """Generates a random :class:`Sequence` of the specified length from
-        this alphabet. Optionally a probability distribution of letters may be
-        specified. All arguments are identical to :func:`randstr`.
+        this alphabet. All arguments are identical to :func:`randstr`.
 
         Returns:
             seq.Sequence: A random sequence.
@@ -98,13 +97,14 @@ class Sequence():
     Attributes:
         alphabet (seq.Alphabet): The alphabet this sequence belongs to.
         c_charseq (cffi.cdata): Points to the underlying C ``char[]``.
-        c_idxseq  (cffi.cdata): points to the actually used ``int*``.
+        c_idxseq  (cffi.cdata): The C ``int*`` which is actually used for all
+            operations involving alignments; this is an array containing the
+            indices of each letter in the sequence in the alphabet.
     """
     def __init__(self, string, alphabet):
         assert(len(string) % alphabet.letter_length == 0)
         self.alphabet = alphabet
         self.length = len(string)/alphabet.letter_length
-        global lib
         self.c_charseq = ffi.new('char[]', string)
         self.c_idxseq = lib.idxseq_from_charseq(alphabet.c_obj, self.c_charseq, self.length)
 
@@ -246,7 +246,8 @@ class Sequence():
         N = self.length
 
         # include a read that reaches the begenning:
-        yield Sequence(self[:len_mean], self.alphabet), 0
+        read, _ = Sequence(self[:len_mean], self.alphabet).mutate(**kw)
+        yield read, 0
 
         num = int(1.0 * N * coverage/len_mean)
         for i in range(num):
@@ -258,7 +259,8 @@ class Sequence():
             yield read, start
 
         # include a read that reaches the end:
-        yield Sequence(self[-len_mean:], self.alphabet), N - len_mean
+        read, _ = Sequence(self[-len_mean:], self.alphabet).mutate(**kw)
+        yield read, N - len_mean
 
 def make_sequencing_fixture(genome_file, reads_file, genome_length=1000, **kw):
     """Helper method for tests. Generates a random genome and a random sequence
