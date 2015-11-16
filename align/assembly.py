@@ -124,7 +124,7 @@ class OverlapGraph(object):
 
     def all_longest_paths(self):
         """Repeatedly finds the longest path in the graph while excluding
-        vertices that are already included in a path.
+        vertices that are already included in a path. See :func:`longest_path`.
 
         Returns:
             List[List[str]]: A list of paths, each a list of vertex names in
@@ -149,7 +149,7 @@ class OverlapGraph(object):
                 cover all vertices of the graph.
 
         Returns:
-            OverlapGraph: A linear subgraph (the heaviest path).
+            assembly.OverlapGraph: A linear subgraph (the heaviest path).
 
         Raises:
             AssertionError: If the graph is not acyclic.
@@ -352,7 +352,8 @@ class OverlapBuilder(object):
                 alignments.
 
         Returns:
-            OverlapGraph
+            assembly.OverlapGraph: The overlap graph, potentially containing
+                cycles.
         """
         vs = set()
         es, ws = [], []

@@ -12,7 +12,7 @@ params = {
     'subst_probs': [[0.91 if k==i else 0.03 for k in range(4)] for i in range(4)]
 }
 A = seq.Alphabet('ACGT')
-subst_scores = pw.AlignParams.subst_scores_from_probs(params['subst_probs'], A)
+subst_scores = pw.AlignParams.subst_scores_from_probs(A, gap_prob=params['go_prob'], **params)
 go_score, ge_score = pw.AlignParams.gap_scores_from_probs(params['go_prob'], params['ge_prob'])
 
 print 'Substitution probabilities:'
@@ -30,8 +30,7 @@ print 'Pr(go) = %.2f, Pr(ge) = %.2f +----> Score(go)=%.2f, Score(ge)=%.2f' % \
 #T = seq.Sequence('GTCGAGT', A)
 
 S = A.randseq(params['length'])
-T, m_opseq = S.mutate(go_prob=params['go_prob'], ge_prob=params['ge_prob'],
-    subst_probs=params['subst_probs'])
+T, m_opseq = S.mutate(**params)
 C = pw.AlignParams(subst_scores=subst_scores, alphabet=A,
     go_score=go_score, ge_score=ge_score, max_diversion=params['band'])
 with pw.AlignProblem(S, T, C, align_type=params['type']) as P:

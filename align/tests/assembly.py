@@ -21,7 +21,7 @@ params = {
     'drop_threshold': 10,   # what constitutes a drop in score of a window
     'max_succ_drops': 3     # how many consecutive drops are allowed
 }
-subst_scores = pw.AlignParams.subst_scores_from_probs(params['subst_probs'], A)
+subst_scores = pw.AlignParams.subst_scores_from_probs(A, **params)
 go_score, ge_score = pw.AlignParams.gap_scores_from_probs(params['go_prob'], params['ge_prob'])
 C = pw.AlignParams(
     alphabet=A, subst_scores=subst_scores,

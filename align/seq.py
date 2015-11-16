@@ -42,50 +42,49 @@ class Alphabet(CffiObject):
         else:
             return super(Alphabet, self).__getattr__(name)
 
-    def randstr(self, length, letters_dist=None):
+    def randstr(self, length, **kw):
         """Generates a random string of the specified length from this
         alphabet. Optionally a probability distribution of letters may be
         specified.
 
+        Note:
+            Arbitrary precision on probability distributions is not supported.
+            The default precision is 0.001, modify this with :arg:`precision`.
+
         Args:
             length(int): Length of generated string in number of letters (and
                 not necessarily number of characters)
 
+        Keyword Args:
             letters_dist(Optional[dict]): The probability distribution of
                 letters as a list of probabilities in order of letters in
                 :attr:`c_obj.letters`. Default is uniform.
 
+            precision(Optional[float]): The maximum precision of the probability
+                distribution. Default is 0.001.
         Returns:
             str: A random string.
         """
-        if letters_dist is None:
-            letters_dist = [1.0/self.length for _ in range(self.length)]
-
-        assert(abs(1-sum(letters_dist)) < 0.001)
+        letters_dist = kw.get('letters_dist', [1.0/self.length for _ in range(self.length)])
+        precision = kw.get('precision', 0.001)
+        assert(precision > 0)
+        assert(abs(1-sum(letters_dist)) < precision)
         space = []
         for i in range(self.length):
-            # NOTE this effectively sets the max precision of subst_probs to .01
-            space += [ffi.string(self._c_letters_ka[i])] * int(100 * length * letters_dist[i])
+            N = 1.0/precision
+            space += [ffi.string(self._c_letters_ka[i])] * int(N * length * letters_dist[i])
         return ''.join(random.sample(space, length))
 
 
-    def randseq(self, length, letters_dist=None):
+    def randseq(self, length, **kw):
         """Generates a random :class:`Sequence` of the specified length from
         this alphabet. Optionally a probability distribution of letters may be
-        specified.
-
-        Args:
-            length(int): Length of generated string in number of letters (and
-                not necessarily number of characters)
-
-            letters_dist(Optional[dict]): The probability distribution of
-                letters as a list of probabilities in order of letters in
-                :attr:`c_obj.letters`. Default is uniform.
+        specified. All arguments are identical to :func:`randstr`.
 
         Returns:
             seq.Sequence: A random sequence.
         """
-        return Sequence(self.randstr(length, letters_dist), self)
+        return Sequence(self.randstr(length, **kw), self)
 
 class Sequence():
     """Wraps a C ``char[]`` and its corresponding ``int*`` of letter indices.
@@ -142,6 +141,9 @@ class Sequence():
         Accordingly, a transcript is generated which corresponds to the
         performed edit sequence.
 
+        Note that there is a bound on the precision of the effective
+        proabiliites, see :arg:`precision`.
+
         Keyword Args:
             subst_probs(List[List[float]]): the probability distribution for
                 each pair of possible substitutions such that
@@ -155,6 +157,8 @@ class Sequence():
             insert_dist(Optional[List[float]]): the distribution passed to
                 :func:`Alphabet.randstr` when inserting arbitrary strings;
                 default is uniform.
+            precision(Optional[float]): As in :func:`Alphabet.randstr` and the
+                same applies to gap probabilities. Default is 0.001.
 
         Returns:
             tuple: The mutant (a :class:`Sequence`)and corresponding transcript
@@ -162,32 +166,49 @@ class Sequence():
         """
         subst_probs = kw['subst_probs']
         go_prob, ge_prob =  kw.get('go_prob', 0), kw.get('ge_prob', 0)
+        assert(go_prob <= ge_prob)
         insert_dist = kw.get('insert_dist', None)
+        precision = kw.get('precision', 0.001)
+        N = 1/precision
+        assert(precision > 0)
         assert(go_prob < 1)
         assert(ge_prob < 1)
-        T = ''
-        k = 0
-        opseq = ''
+        T, opseq, op, k = '', '', None, 0
         while k < self.length:
-            if go_prob:
-                # NOTE max precision for gap_open is .01
-                if random.randint(0, 100) < go_prob * 100:
-                    # deletion of length with geometric distribution, but not
-                    # more than we can actually delete:
-                    length = min(np.random.geometric(1 - ge_prob), self.length - k)
-                    opseq += 'D' * length
-                    k += length
-                    continue
-                if random.randint(0, 100) < go_prob * 100:
-                    length = np.random.geometric(1 - ge_prob)
-                    # insert of length with geometric distribution:
-                    opseq += 'I' * length
-                    T += self.alphabet.randstr(length, insert_dist)
-                    continue
-            # no gap, substitute:
-            T += self.alphabet.randstr(1, subst_probs[self.c_idxseq[k]])[0]
-            opseq += 'M' if T[-1] == self[k] else 'S'
-            k += 1
+            if op:
+                opseq += op
+            if op == 'D' and random.randint(0, N) < ge_prob * N:
+                # with probability ge_prob extend the deletion stretch:
+                op, k = 'D', k + 1
+                continue
+            elif op == 'I' and random.randint(0, N) < ge_prob * N:
+                # with probability ge_prob extend the insertion stretch:
+                op, k = 'I', k
+                T += self.alphabet.randstr(1,
+                    letter_dist=insert_dist,
+                    precision=precision
+                )
+                continue
+            else:
+                # with probability go_prob start a gap unless previous op was
+                # a gap itself.
+                if str(op) not in 'ID' and random.randint(0, N) < ge_prob * N / 2.0:
+                    op, k = 'D', k + 1
+                elif str(op) not in 'ID' and random.randint(0,N) < ge_prob * N / 2.0:
+                    op, k = 'I', k
+                    T += self.alphabet.randstr(1,
+                        letter_dist=insert_dist,
+                        precision=precision
+                    )
+                else:
+                    # math/sub with probability 1 - g_o
+                    T += self.alphabet.randstr(1,
+                        letters_dist=subst_probs[self.c_idxseq[k]],
+                        precision=precision
+                    )
+                    op, k = ('M' if T[-1] == self[k] else 'S'), k + 1
+
+        opseq += op
         return (Sequence(T, self.alphabet), opseq)
 
     def randread(self, **kw):
