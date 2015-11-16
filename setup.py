@@ -21,14 +21,12 @@ setup(
     #keywords='sequence DNA alignment fragment assembly k-mer homopoylmeric',
     packages=['align'],
     setup_requires=[
-        'numpy',
         'cffi',
         'biopython',
     ],
     install_requires=[
         'biopython',
         'termcolor',
-        'numpy',
         'cffi',
         'python-igraph',
         # 'pycairo', can't be done yet; see https://bugs.freedesktop.org/show_bug.cgi?id=58772

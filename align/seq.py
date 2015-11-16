@@ -1,4 +1,3 @@
-import numpy as np
 import random
 from Bio import SeqIO, Seq, SeqRecord
 
@@ -252,8 +251,8 @@ class Sequence():
         num = int(1.0 * N * coverage/len_mean)
         for i in range(num):
             # minimum read leangth is 10, and max is N-1
-            length = max(10, min(N-1, int(np.random.normal(len_mean, len_var))))
-            start = np.random.randint(0, N-length)
+            length = max(10, min(N-1, int(random.gauss(len_mean, len_var))))
+            start = random.randint(0, N-length)
             x = Sequence(''.join([self[k] for k in range(start, start + length)]), self.alphabet)
             read, _ = x.mutate(**kw)
             yield read, start
