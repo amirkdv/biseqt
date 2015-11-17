@@ -359,10 +359,10 @@ class OverlapBuilder(object):
         es, ws = [], []
         seqinfo = self.index.tuplesdb.seqinfo()
         seqids = seqinfo.keys()
-        sys.stdout.write('finding adjacent reads for sequence: ')
+        sys.stderr.write('finding adjacent reads for sequence: ')
         for sid_idx in range(len(seqids)):
-            sys.stdout.write('%d ' % seqids[sid_idx])
-            sys.stdout.flush()
+            sys.stderr.write('%d ' % seqids[sid_idx])
+            sys.stderr.flush()
             for tid_idx in range(sid_idx + 1, len(seqids)):
                 S_id, T_id = seqids[sid_idx], seqids[tid_idx]
                 S_info, T_info = seqinfo[S_id], seqinfo[T_id]
@@ -381,8 +381,9 @@ class OverlapBuilder(object):
                 overlap = self.extend(S, T, seeds)
                 if not overlap:
                     continue
+
                 #print set(['S->T' if x.tx.idx_S < x.tx.idx_T else 'T->S' for x in segments])
-                #overlap.tx.pretty_print(tuplesdb.loadseq(S_id), tuplesdb.loadseq(T_id), sys.stdout)
+                #overlap.tx.pretty_print(tuplesdb.loadseq(S_id), tuplesdb.loadseq(T_id), sys.stderr)
                 S_len = self._S_len(overlap.tx.opseq)
                 T_len = self._T_len(overlap.tx.opseq)
                 if abs(overlap.tx.idx_S - overlap.tx.idx_T) < self.window or \
@@ -404,7 +405,7 @@ class OverlapBuilder(object):
 
                 ws += [overlap.tx.score]
 
-        sys.stdout.write('\n')
+        sys.stderr.write('\n')
         G = OverlapGraph()
         G.iG.add_vertices(list(vs))
         es = [(G.iG.vs.find(name=u), G.iG.vs.find(name=v)) for u,v in es]
