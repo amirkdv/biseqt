@@ -271,27 +271,40 @@ class HpCondenser(object):
         )
 
 class HpCondensedIndex(tuples.Index):
-    def __init__(self, hp_condenser):
-        self.hp_condenser = hp_condenser
+    """Adds homopolymeric-condensed indexing support to tuples indices.
+    Example usage::
 
-    def tup_scan(self, string, wordlen):
-        """Similar to :func:`align.tuples.tup_scan` except a tuple of length N is
-        taken to mean N letters in the condensed alphabet. The yielded indices,
-        however, refer to positions in the original sequence. For example::
+        A = seq.Alphabet('ACGT')
+        Tr = homopolymeric.HpCondenser(A, maxlen=9)
+        B = tuples.TuplesDB('path/to/file', alphabet=Tr.dst_alphabet)
+        HpI = homopolymeric.HpCondensedIndex(B, 5, hp_condenser=Tr)
+    """
+    def __init__(self, *args, **kwargs):
+        self.hp_condenser = kwargs['hp_condenser']
+        super(HpCondensedIndex, self).__init__(*args)
+
+    def tup_scan(self, string):
+        """Similar to :func:`align.tuples.Index.tup_scan` except a tuple of
+        length N is taken to mean N letters in the condensed alphabet.
+        The yielded indices also refer to positions in the condensed
+        sequence. For example::
 
             Tr = HpCondenser(seq.Alphabet('ACGT'), maxlen=3)
             Idx = HpCondensedIndex(Tr)
             string = 'AAACCCCGGTGGT'
-            Idx.tup_scan(string, 5) # => ('A3C3G2T1G2', 0), ('C3G2T1G2T1', 3)
+            Idx.tup_scan(string, 5) # => ('A3C3G2T1G2', 0), ('C3G2T1G2T1', 1)
+
+        This modification alone is enough to make sure :func:`index` works as
+        expected.
         """
         tup = []
         idx = [0]
         for char, num in hp_tokenize(string):
-            if len(tup) == wordlen:
+            if len(tup) == self.wordlen:
                 yield ''.join(tup), idx[0]
                 tup.pop(0)
                 idx.pop(0)
             tup += [self.hp_condenser._condense(char, num)]
-            idx += [(idx[-1] if idx else 0) + num]
+            idx += [(idx[-1] if idx else 0) + 1]
         if tup:
             yield ''.join(tup), idx[0]
