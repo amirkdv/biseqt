@@ -26,11 +26,11 @@ tests: align/libalign.so $(DB) $(TRUE_GRAPH).gml $(ASSEMBLED_GRAPH).gml layout_d
 	python -m align.tests.align
 
 $(ASSEMBLED_GRAPH).gml: $(TRUE_GRAPH).gml
-	time python -c 'import align.tests.assembly as T; T.overlap_by_seed_extension("$(DB)", "$@")'
+	python -c 'import align.tests.assembly as T; T.overlap_by_seed_extension("$(DB)", "$@")'
 	python -c 'import align.assembly as A, igraph as ig, sys; A.OverlapGraph(ig.read("$(TRUE_GRAPH).gml")).diff_text(A.OverlapGraph(ig.read("$(ASSEMBLED_GRAPH).gml")), sys.stdout)'
 
 $(ASSEMBLED_GRAPH).dag.gml: $(ASSEMBLED_GRAPH).gml
-	time python -c 'import align.assembly as A, igraph as ig; G = A.OverlapGraph(ig.read("$(ASSEMBLED_GRAPH).gml")); G.break_cycles(); G.save("$@")'
+	python -c 'import align.assembly as A, igraph as ig; G = A.OverlapGraph(ig.read("$(ASSEMBLED_GRAPH).gml")); G.break_cycles(); G.save("$@")'
 
 $(TRUE_GRAPH).gml:
 	python -c 'import align.tests.assembly as A, align.seq as S, align.tuples as T; A.overlap_graph_by_known_order("$(DB)").save("$@")'
