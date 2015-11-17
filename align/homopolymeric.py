@@ -316,7 +316,6 @@ class HpCondensedIndex(tuples.Index):
         res = []
         S, T = self.tuplesdb.loadseq(S_id), self.tuplesdb.loadseq(T_id)
         for seed in condensed_seeds:
-            print seed
             tx = self.hp_condenser.expand_transcript(S, T, seed.tx)
             res += [tuples.Segment(S_id=S_id, T_id=T_id, tx=tx)]
         return res

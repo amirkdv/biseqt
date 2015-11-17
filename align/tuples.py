@@ -77,10 +77,9 @@ class TuplesDB(object):
 
     def populate(self, fasta_src, lim=-1):
         """Given a FASTA source file, loads all the sequences (up to a limit, if
-        specified) into the `seq` table. No indexing is done; see ``index()``.
+        specified) into the `seq` table.
 
         Args:
-
             fasta_src(str): Path to FASTA source.
             lim (Optional[int]): If positive, will be the number of sequences
                 loaded from FASTA source, default is -1.
@@ -91,7 +90,6 @@ class TuplesDB(object):
                     yield (str(seq.id), str(seq.description), str(seq.seq))
                 else:
                     break
-
         with sqlite3.connect(self.db) as conn:
             c = conn.cursor()
             q = "INSERT INTO seq (name, description, seq) VALUES (?,?,?)"
@@ -245,7 +243,7 @@ class Index(object):
                 sys.stderr.write(' ' + str(seqid))
             sys.stderr.write('\n')
 
-    def seeds(self, s1, s2):
+    def seeds(self, S_id, T_id):
         """Given two sequence ids, finds all maximal exactly matching segments
         between the two. A segment is in its maximal form if there are no other
         exactly-matching segments whose span is a unit shift in both the query
@@ -256,21 +254,20 @@ class Index(object):
             unnecessary cycles, we populate the score first thing in
             :func:`extend`.
         """
-        segments = []
         q = """
-            SELECT H1.idx, H2.idx FROM %s H1 -- H1 is s1, H2 is s2
+            SELECT H1.idx, H2.idx FROM %s H1 -- H1 is S, H2 is T
             INNER JOIN %s H2
             ON H1.tuple = H2.tuple
             WHERE H1.seq = ? AND H2.seq = ?
         """ % (self.hits_table, self.hits_table)
         def row_factory(cursor, row):
             tx = pw.Transcript(row[0], row[1], 0, 'M'*self.wordlen)
-            return Segment(S_id=s1, T_id=s2, tx=tx)
+            return Segment(S_id=S_id, T_id=T_id, tx=tx)
 
         with sqlite3.connect(self.tuplesdb.db) as conn:
             conn.row_factory = row_factory
             c = conn.cursor()
-            c.execute(q, (s1,s2))
+            c.execute(q, (S_id, T_id))
             exacts = [r for r in c]
 
         exacts.sort(key=lambda s: s.tx.idx_S)
@@ -289,7 +286,7 @@ class Index(object):
                         0, # score
                         exacts[cand].tx.opseq + 'M'*shift_S # transcript
                     )
-                    exacts[idx] = Segment(S_id=s1, T_id=s2, tx=tx)
+                    exacts[idx] = Segment(S_id=S_id, T_id=T_id, tx=tx)
                     exacts.pop(cand)
                 else:
                     cand += 1
