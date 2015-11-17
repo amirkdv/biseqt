@@ -2,6 +2,7 @@ GCC = gcc -shared -Wall -fPIC -std=c99 -g
 TRUE_GRAPH = true_overlap
 ASSEMBLED_GRAPH = overlap
 DB = genome.db
+ASSEMBLY_TEST = align.tests.assembly
 
 # To get coredumps:
 # 	$ ulimit -c unlimited
@@ -26,14 +27,14 @@ tests: align/libalign.so $(DB) $(TRUE_GRAPH).gml $(ASSEMBLED_GRAPH).gml layout_d
 	python -m align.tests.align
 
 $(ASSEMBLED_GRAPH).gml: $(TRUE_GRAPH).gml
-	python -c 'import align.tests.assembly as T; T.overlap_by_seed_extension("$(DB)", "$@")'
+	python -c 'import $(ASSEMBLY_TEST) as T; T.overlap_by_seed_extension("$(DB)", "$@")'
 	python -c 'import align.assembly as A, igraph as ig, sys; A.OverlapGraph(ig.read("$(TRUE_GRAPH).gml")).diff_text(A.OverlapGraph(ig.read("$(ASSEMBLED_GRAPH).gml")), sys.stdout)'
 
 $(ASSEMBLED_GRAPH).dag.gml: $(ASSEMBLED_GRAPH).gml
 	python -c 'import align.assembly as A, igraph as ig; G = A.OverlapGraph(ig.read("$(ASSEMBLED_GRAPH).gml")); G.break_cycles(); G.save("$@")'
 
 $(TRUE_GRAPH).gml:
-	python -c 'import align.tests.assembly as A, align.seq as S, align.tuples as T; A.overlap_graph_by_known_order("$(DB)").save("$@")'
+	python -c 'import $(ASSEMBLY_TEST) as A, align.seq as S, align.tuples as T; A.overlap_graph_by_known_order("$(DB)").save("$@")'
 
 $(ASSEMBLED_GRAPH).pdf:
 	python -c 'import align.assembly as A, igraph as ig; A.OverlapGraph(ig.read("$(ASSEMBLED_GRAPH).gml")).draw("$@");'
@@ -60,7 +61,7 @@ layout_diff.pdf: $(ASSEMBLED_GRAPH).layout.gml $(TRUE_GRAPH).layout.gml
 	python -c 'import align.assembly as A, igraph as ig; A.OverlapGraph(ig.read("$(TRUE_GRAPH).layout.gml")).diff_draw(A.OverlapGraph(ig.read("$(ASSEMBLED_GRAPH).layout.gml")), "$@")'
 
 $(DB): align/libalign.so
-	python -c 'import align.tests.assembly as T; T.create_example("$@")'
+	python -c 'import $(ASSEMBLY_TEST) as T; T.create_example("$@")'
 
 loc:
 	find align -type f -regex '.*\(\.py\|\.c\|\.h\)' | xargs wc -l

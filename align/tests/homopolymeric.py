@@ -38,7 +38,6 @@ with pw.AlignProblem(S=S, T=T, params=C, align_type=params['type']) as P:
     transcript = P.traceback()
     print transcript
     transcript.pretty_print(S, T, sys.stdout)
-
 print
 
 S_d, T_d = Tr.condense_sequence(S), Tr.condense_sequence(T)

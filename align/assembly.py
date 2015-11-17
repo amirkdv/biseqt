@@ -3,8 +3,7 @@ import sys
 import igraph
 from termcolor import colored
 
-from . import tuples
-from . import pw
+from . import tuples, pw, homopolymeric
 
 class OverlapGraph(object):
     """Wraps an :class:`igraph.Graph` object with additional methods to build
@@ -315,6 +314,10 @@ class OverlapBuilder(object):
             rolling alignment.
 
     Keyword Args:
+        hp_condenser (Optional[homopolymeric.HpCondenser]): If specified,
+            all alignments will be performed in condensed alphabet.
+            Consequently, all other arguments are interpretted in the condensed
+            alphabet.
         drop_threshold (Optional[float]): What constitutes a drop in the
             score from one window to the next, default is 0. This means that
             if the overall score does not strictly increase (or the score of the
@@ -329,6 +332,9 @@ class OverlapBuilder(object):
     """
 
     def __init__(self, index, align_params, **kwargs):
+        self.hp_condenser = kwargs.get('hp_condenser', None)
+        if self.hp_condenser:
+            assert(isinstance(self.hp_condenser, homopolymeric.HpCondenser))
         self.index, self.align_params = index, align_params
         self.window = kwargs.get('window', 20)
         self.drop_threshold = kwargs.get('drop_threshold', 0)
@@ -378,6 +384,9 @@ class OverlapBuilder(object):
                 seeds = self.index.seeds(S_id, T_id)
                 if not seeds:
                     continue
+
+                if self.hp_condenser:
+                    seeds = [self.hp_condenser.condense_seed(S, T, seed) for seed in seeds]
                 overlap = self.extend(S, T, seeds)
                 if not overlap:
                     continue
