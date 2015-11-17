@@ -95,11 +95,13 @@ class HpCondenser(object):
 
     def expand_transcript(self, S, T, transcript):
         """Expands a given transcript for condensed versions of S and T to the
-        equivalent transcript for S and T.
+        equivalent transcript for S and T. The score is left untouched.
 
         Args:
-            S (seq.Sequence): "From" sequence of the transcript.
-            T (seq.Sequence): "To" sequence of the transcript.
+            S (seq.Sequence): "From" sequence of the transcript in the source
+                alphabet.
+            T (seq.Sequence): "To" sequence of the transcript in the source
+                alphabet.
             transcript (pw.Transcript): The transcript for condensed
                 sequences.
 
@@ -114,14 +116,25 @@ class HpCondenser(object):
         """
         S, T = str(S), str(T)
         opseq = ''
-        idx_S = transcript.idx_S * self.dst_alphabet.letter_length
-        idx_T = transcript.idx_T * self.dst_alphabet.letter_length
-
-        tokens_S = hp_tokenize(S[idx_S:])
-        tokens_T = hp_tokenize(T[idx_T:])
+        tokens_S = hp_tokenize(S)
+        tokens_T = hp_tokenize(T)
 
         char_S, num_S = tokens_S.next()
         char_T, num_T = tokens_T.next()
+        # calculate the original idx_S and idx_T
+        idx_S, idx_T = 0, 0
+        cnt = 0
+        while cnt < transcript.idx_S:
+            idx_S += num_S
+            cnt += 1
+            char_S, num_S = tokens_S.next()
+        cnt = 0
+        while cnt < transcript.idx_T:
+            idx_T += num_T
+            cnt += 1
+            char_T, num_T = tokens_T.next()
+
+        # translate the opseq
         for op in transcript.opseq:
             if (None, None) in [(char_S, num_S), (char_T, num_T)]:
                 raise ValueError('The transcript does not match the sequences')
