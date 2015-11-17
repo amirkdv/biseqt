@@ -308,3 +308,15 @@ class HpCondensedIndex(tuples.Index):
             idx += [(idx[-1] if idx else 0) + 1]
         if tup:
             yield ''.join(tup), idx[0]
+
+    def seeds(self, S_id, T_id):
+        """Wraps :func:`align.tuples.Index.seeds` to translate their transcripts
+        back to original alphbet."""
+        condensed_seeds = super(HpCondensedIndex, self).seeds(S_id, T_id)
+        res = []
+        S, T = self.tuplesdb.loadseq(S_id), self.tuplesdb.loadseq(T_id)
+        for seed in condensed_seeds:
+            print seed
+            tx = self.hp_condenser.expand_transcript(S, T, seed.tx)
+            res += [tuples.Segment(S_id=S_id, T_id=T_id, tx=tx)]
+        return res
