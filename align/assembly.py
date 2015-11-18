@@ -379,20 +379,21 @@ class OverlapBuilder(object):
                 vs = vs.union([S_name, T_name])
 
                 # do they overlap?
-                S = self.index.tuplesdb.loadseq(S_id)
-                T = self.index.tuplesdb.loadseq(T_id)
                 seeds = self.index.seeds(S_id, T_id)
                 if not seeds:
                     continue
 
+                S = self.index.tuplesdb.loadseq(S_id)
+                T = self.index.tuplesdb.loadseq(T_id)
                 if self.hp_condenser:
                     seeds = [self.hp_condenser.condense_seed(S, T, seed) for seed in seeds]
+                    S = self.hp_condenser.condense_sequence(S)
+                    T = self.hp_condenser.condense_sequence(T)
+
                 overlap = self.extend(S, T, seeds)
                 if not overlap:
                     continue
 
-                #print set(['S->T' if x.tx.idx_S < x.tx.idx_T else 'T->S' for x in segments])
-                #overlap.tx.pretty_print(tuplesdb.loadseq(S_id), tuplesdb.loadseq(T_id), sys.stderr)
                 S_len = self._S_len(overlap.tx.opseq)
                 T_len = self._T_len(overlap.tx.opseq)
                 if abs(overlap.tx.idx_S - overlap.tx.idx_T) < self.window or \
@@ -538,6 +539,9 @@ class OverlapBuilder(object):
             segments (List[tuples.Segment]): The starting segments. If called
                 from :func:`build`, these are seeds but no assumption is made.
         """
+        assert(S.alphabet.letters == T.alphabet.letters)
+        if self.hp_condenser:
+            assert S.alphabet.letters == self.hp_condenser.dst_alphabet.letters
         res = []
         for segment in segments:
             fwd = self._extend1d(S, T, segment)
