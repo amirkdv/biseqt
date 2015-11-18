@@ -56,7 +56,7 @@ class AlignParams(CffiObject):
         matrix using a null-hypothesis letters distribution. The scores are
         natural logs of odds ratios:
 
-        :math:`S(i,j) = \log[\Pr(a_j|a_i)] - \log[\Pr(a_i)\Pr(a_j)]`
+        :math:`S(i,j) = \log[1-g] \log[\Pr(a_j|a_i)] - \log[\Pr(a_j)]`
 
         where :math:`S(i,j)` is the substitution score of letter :math:`a_i` to
         letter :math:`a_j` and :math:`g` is the gap probability.
@@ -85,8 +85,8 @@ class AlignParams(CffiObject):
             for j in range(L):
                 assert(subst_probs[i][j] > 0)
                 assert(letter_dist[i] * letter_dist[j] != 0)
-                subst_scores[i][j] = log(subst_probs[i][j]) - \
-                    log(letter_dist[j] * letter_dist[i])
+                subst_scores[i][j] = log(1-gap_prob) + log(subst_probs[i][j]) - \
+                    log(letter_dist[j])
         return subst_scores
 
     @classmethod
@@ -114,7 +114,7 @@ class AlignParams(CffiObject):
             extend probability.
 
         """
-        return log(go_prob), log(ge_prob)
+        return log(go_prob/ge_prob), log(ge_prob)
 
     def __getattr__(self, name):
         """Allow attributes to access members of the underlying ``align_params``
