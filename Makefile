@@ -14,9 +14,8 @@ clean:
 	find . -regex .\*.egg-info | while read f; do rm -rf $$f; done
 	rm -rf env build dist
 	rm -f align/libalign.so core
-	rm -f genome.fa reads.fa $(DB)
-	rm -f *.gml *.pdf
 	rm -rf docs/$(DOCS_OUT)
+	make -f assembly.mk clean
 
 tests: align/libalign.so
 	python -m align.tests.homopolymeric
