@@ -11,17 +11,20 @@ make clean tests
 
 For genome assembly simulations:
 ```shell
-# creates genome.fa, reads.fa, genome.db
-make -f assembly.mk genome.db
+# creates genome.assembly.fa, reads.assembly.fa, genome.assembly.db
+make -f assembly.mk clean genome.assembly.db
 
-# builds overlap.dag.gml, overlap.layout.gml, and compares against true versions
+# builds overlap.assembly.layout.gml, and compares against the true version.
 make -f assembly.mk layout.diff.assembly.pdf
 ```
 
 To simulate assembly in condensed alphabet:
 ```shell
-make clean
-make -f assembly.mk layout.diff.hp_assembly.pdf MODE=hp_assembly
+# creates genome.hp_assembly.fa, reads.hp_assembly.fa, genome.hp_assembly.db
+make -f assembly.mk clean genome.hp_assembly.db MODE=hp_assembly
+
+# builds overlap.hp_assembly.layout.gml, and compares against the true version.
+make -f assembly.mk clean layout.diff.hp_assembly.pdf MODE=hp_assembly
 ```
 
 ## To Do
