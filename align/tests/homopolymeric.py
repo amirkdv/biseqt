@@ -29,7 +29,7 @@ if params['show_condensed_probs']:
     for idx, row in enumerate(subst_probs_d):
         print A_d.letters[idx], round(sum(row),3), [round(f, 5) for f in row]
 
-S = A.randseq(300)
+S = A.randseq(300, hp_prob=0.1)
 T, _ = S.mutate(go_prob=params['gap_prob'], ge_prob=params['gap_prob'], subst_probs=params['subst_probs'])
 C = pw.AlignParams(alphabet=A, subst_scores=subst_scores, go_score=go_score, ge_score=ge_score)
 with pw.AlignProblem(S=S, T=T, params=C, align_type=params['type']) as P:

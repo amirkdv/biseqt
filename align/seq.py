@@ -63,7 +63,9 @@ class Alphabet(CffiObject):
             letters_dist(Optional[dict]): The probability distribution of
                 letters as a list of probabilities in order of letters in
                 :attr:`c_obj.letters`. Default is uniform.
-
+            hp_prob(Optional[float]): If specified each randomly generated
+                letter is stretched to a homopolymeric region with length
+                according to a geometric distribution with this parameter.
             precision(Optional[float]): The maximum precision of the probability
                 distribution. Default is 0.001.
         Returns:
@@ -77,7 +79,20 @@ class Alphabet(CffiObject):
         for i in range(self.length):
             N = 1.0/precision
             space += [ffi.string(self._c_letters_ka[i])] * int(N * length * letters_dist[i])
-        return ''.join(random.sample(space, length))
+        if 'hp_prob' in kw:
+            assert(kw['hp_prob'] > 0 and kw['hp_prob'] < 1)
+            cur_len = 0
+            ret = ''
+            while cur_len < length:
+                let = random.sample(space, 1)[0]
+                cur_len += 1
+                while random.randint(0, N) < kw['hp_prob'] * N and cur_len < length:
+                    let += let
+                    cur_len += 1
+                ret += let
+            return ret
+        else:
+            return ''.join(random.sample(space, length))
 
 
     def randseq(self, length, **kw):
