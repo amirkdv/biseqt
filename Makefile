@@ -20,8 +20,7 @@ clean:
 tests: align/libalign.so
 	python -m align.tests.homopolymeric
 	python -m align.tests.align
-	make -f assembly.mk layout_diff
-	rm -f *.gml *.pdf
+	make -f assembly.mk clean layout_diff
 	MODE=hp_assembly make -f assembly.mk genome.db layout_diff
 
 loc:

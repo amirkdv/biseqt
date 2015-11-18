@@ -365,7 +365,7 @@ class Transcript(object):
             return (max(len(sline), len(tline)), sline, tline)
 
         # The pre margin:
-        pre_margin = min(margin, max(idx_S, idx_T))
+        pre_margin = min(margin, max(idx_S, idx_T) * letlen)
         sline = 'S[%d]: ' % idx_S
         tline = 'T[%d]: ' % idx_T
         counter = max(len(sline), len(tline))
@@ -376,7 +376,7 @@ class Transcript(object):
             tline += T[idx_T-i] if i <= idx_T else ' '
             counter += letlen
 
-        gap = '-' * S.alphabet.letter_length
+        gap = '-' * letlen
         # The alignment itself:
         for op in self.opseq:
             if counter >= width:
@@ -406,13 +406,19 @@ class Transcript(object):
             counter += letlen
 
         # The post margin:
-        post_margin = min(margin, max(S.length - idx_S, T.length - idx_T))
+        post_margin = min(
+            margin,
+            max(
+                (S.length - idx_S) * letlen,
+                (T.length - idx_T) * letlen
+            )
+        )
         for i in range(post_margin):
             if counter >= width:
                 counter, sline, tline = new_line(
                     sline, tline, idx_S + i, idx_T + i, f)
-            sline += S[idx_S+i] if idx_S + i < S.length else ' '
-            tline += T[idx_T+i] if idx_T + i < T.length else ' '
+            sline += S[idx_S+i] if idx_S + i < S.length else ' ' * letlen
+            tline += T[idx_T+i] if idx_T + i < T.length else ' ' * letlen
             counter += letlen
 
         print_lines(sline, tline, f)
