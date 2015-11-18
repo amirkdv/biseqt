@@ -56,7 +56,7 @@ class AlignParams(CffiObject):
         matrix using a null-hypothesis letters distribution. The scores are
         natural logs of odds ratios:
 
-            :math:`S(a_i,a_j) = \log[1-g] \log[\Pr(a_j|a_i)] - \log[\Pr(a_j)]`
+            :math:`S(a_i,a_j) = \log[1-g] + \log[\Pr(a_j|a_i)] - \log[\Pr(a_j)]`
 
         where :math:`S(a_i,a_j)` is the substitution score of letter
         :math:`a_i` to letter :math:`a_j` and :math:`g` is the gap probability.

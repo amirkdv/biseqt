@@ -1,12 +1,5 @@
-|Documentation Status|
-
-``align.py`` is a library of sequence alignment and fragment assembly
-algorithms in python and C. To get started:
-
-.. code:: shell
-
-    python setup.py develop
-    make clean tests
+Documentation
+=============
 
 Random processes
 ----------------
@@ -36,16 +29,9 @@ The following are supported by ``libalign``:
 -  *Banded* alignments are supported.
 -  Alignment can be limited to a *frame* for each sequence.
 
-Scoring
-~~~~~~~
-
-Gap and substitution probabilities can be translated by
-``align.AlignParams`` to corresponding log likelihood scores. The random
-(null hypothesis) distribution of letters must be provided.
-
-Scoring an alignment is performed on the corresponding
-``align.Transcript`` object and the original ``seq.Sequence``'s. Each
-``align.Transcript`` looks like this:
+The result of an alignment performed by ``pw.AlignProblem`` is a score
+and potentially a traced-back ``pw.Transcript`` which is represented as
+a string of the form:
 
 ::
 
@@ -55,19 +41,53 @@ The first two integers are starting positions of the alignment, the
 following number is the score of the alignment and what follows is the
 ``opseq`` (edit transcript) for the alignment.
 
+Scoring
+~~~~~~~
+
+Gap and substitution probabilities can be translated by
+``pw.AlignParams`` to corresponding log likelihood scores given the
+following pieces of information:
+
+-  Substitution probabilities,
+-  Gap probabilities (only a linear gap model is supported for score
+   calculation).
+-  The random (null hypothesis) distribution of letters must be
+   provided.
+
+.. math:: S(a_i,a_j) = \log[1-g] + \log[\Pr(a_j|a_i)] - \log[\Pr(a_j)]
+
+Similarly, gap probabilities :math:`g_o` and :math:`g_e` are translated
+to gap scores where: \* The gap open probability :math:`g_o` is the
+probability of a single indel following a substitution/match or an indel
+of a different kind. \* The gap extend probability :math:`g_e` is the
+probability of a single indel following an indel of the same kind.
+
+Note that in the above sense the score (log likelihood) of a gap of
+length :math:`n \ge 1` is:
+
+.. math:: \log g_o + (n-1)\log g_e
+
+This differs by the 1 offset from textbook definitions of the affine gap
+penalty (and from what ``libalign`` expects). The two are equivalent
+since the above gap penalty function can be rewritten as:
+
+.. math:: \log {g_o \over g_e} + n \log g_e
+
 Complexity
 ~~~~~~~~~~
 
-**Time** complexity is quadratic in sequence lengths except for banded
-global alignment which is linear with a constant proportional to band
-width. As an example, finding the optimal local alignment for two
-related sequences (one is an artificial mutant of the other) with length
-5 Kbp takes on average 3 seconds on a 3.67 GHz quad-core Intel CPU.
+**Time** complexity is :math:`O(mn)` where :math:`m` and :math:`n` are
+the lengths of the sequences except for banded global alignment. In the
+banded global alignment time complexity is :math:`O(B\max(m,n))` where
+:math:`B` is the band width. As an example, finding the optimal local
+alignment for two related sequences (one is an artificial mutant of the
+other) with length 5 Kbp takes on average 3 seconds on a 3.67 GHz
+quad-core Intel CPU.
 
-**Space** complexity is quadratic too. Currently an average of roughly
-100 bytes is required per cell of the dynamic programming table. For
-example, it takes more than 6GB of space to align two sequences of
-length 8000 (See `To Do <#to-do>`__).
+**Space** complexity is quadratic too (linear space optimization not
+implemented) Currently an average of roughly 100 bytes is required per
+cell of the dynamic programming table. For example, it takes more than
+6GB of space to align two sequences of length 8000.
 
 Tuples
 ------
@@ -109,15 +129,34 @@ supported:
    `assembly <#genome-assembly>`__ below) into a seed in the condensed
    alphabet.
 
-Substitution score matrices for the original alphabet can be translated
-into a substitution score matrix for the (larger) condensed alphabet
-given the following pieces of information:
+Score translation
+^^^^^^^^^^^^^^^^^
 
-i.   Gap probability in homopolymeric stretches (only a linear gap model
-     is well specified),
-ii.  Gap probability in other regions (here an affine gap model is
-     fine),
-iii. Substitution probabilities of letters in original alphabet.
+To get a set of parameters for alignment in the condensed alphabet there
+are two options:
+
+-  Convert *scores* in the source alphabet directly into scores in the
+   condensed alphabet. Additionally scores for homopolymeric indels must
+   be provided.
+-  Convert *probability parameters* for substitution and indels into
+   corresponding probabilities in the condensed alphabet and converting
+   those into scores as usual. Additionally homopolymeric indel
+   probabilities must be provided. The translation formula is the
+   following when the length of letters are identical:
+
+   .. math:: \Pr(x_i \rightarrow y_i) = \Pr(x \rightarrow y)^i(1-g_h)^{i-1}
+
+   where :math:`g_h` is the homopolymeric gap probability (only a linear
+   model is supported). When the length of letters differ, say
+   :math:`i<j`, we have the following where :math:`\pi(\cdot)` is the
+   integer partition function:
+
+   .. math:: \Pr(x_i \rightarrow y_j) = \pi(i)\Pr(x \rightarrow y)^i(1-g_h)^{i-1}g_h^{|i-j|}
+
+*Note*: These calculations here may have serious errors. In fact, the
+calculated probabilities as described above don't necessarily add up to
+1! Returned probability matrix is normalized in each row to make sure
+the output is not terribly wrong.
 
 A Caveat
 ~~~~~~~~
@@ -175,12 +214,13 @@ Assembly in condensed alphabet
 Assembly can be modified in two places to use condensed alphabets:
 
 -  *Indexing*: The sequence of reads can be indexed in the condensed
-   alphabet. For example, if we are indexing all 5-mers the read
+   alphabet. For example, if we are indexing 5-mers the read
    ``AAACCGTG`` gives only one tuple ``A3C2G1T1G1`` (which is 5 letters
    in the condensed alphabet). Typically, we may want to set the
    ``maxlen`` of the translator used for indexing to a very low number
    such that we do not miss seeds due to indels in long homopolymeric
-   stretches.
+   stretches. For example, if ``maxlen`` is set to 1 then the above
+   example yields the tuple ``A1C1G1T1G1``.
 -  *Seed extension*: This phase too can be performed in the condensed
    alphabet (and the translator may be a different one than the one for
    indexing, i.e have a different ``maxlen``). This has the added
@@ -215,18 +255,21 @@ Usage:
 
 .. code:: shell
 
-    # creates genome.fa, reads.fa, genome.db
-    make -f assembly.mk genome.db
+    # creates genome.assembly.fa, reads.assembly.fa, genome.assembly.db
+    make -f assembly.mk clean genome.assembly.db
 
-    # builds overlap.dag.gml, overlap.layout.gml, and compares against true versions
+    # builds overlap.assembly.layout.gml, and compares against the true version.
     make -f assembly.mk layout.diff.assembly.pdf
 
 To perform assembly in condensed alphabet:
 
 .. code:: shell
 
-    make clean
-    make -f assembly.mk layout.diff.hp_assembly.pdf MODE=hp_assembly
+    # creates genome.hp_assembly.fa, reads.hp_assembly.fa, genome.hp_assembly.db
+    make -f assembly.mk clean genome.hp_assembly.db MODE=hp_assembly
+
+    # builds overlap.hp_assembly.layout.gml, and compares against the true version.
+    make -f assembly.mk clean layout.diff.hp_assembly.pdf MODE=hp_assembly
 
 Behavior
 ~~~~~~~~
@@ -249,55 +292,3 @@ i.  When two reads are both mostly overlapping the direction may come
 ii. There are occasional insertions too which do not seem to be
     problematic since they are weak (i.e low scoring alignments).
 
-To Do
------
-
--  Move seed expansion from Python to C.
--  Simulations:
-
-   -  Test on larger data sets (requires speedup).
-   -  Separate sanity tests from simulations; write sanity tests for
-      individual parts of assembly.
-   -  Support hompolymeric-specific indel parameters in random
-      generation of genome sequencing reads.
-   -  *Real* data: test against Leishmania dataset.
-
--  Code:
-
-   -  Make ``align.Transcript`` a ``namedtuple`` as well (unless it's
-      becoming a ``CffiObject``).
-
--  Improvements:
-
-   -  An overlap graph must satisfy two consistency criteria: it is a
-      DAG, and for any vertex *u* in it, any pair of outgoing (incoming)
-      neighbors of *u* are adjacent. Assembly overlap graphs are DAG (or
-      close to it) but they rarely satisfy the second. The second
-      criteria can be used to find missing edges by brute force overlap
-      alignment (this matches the typical case of left-out-vertices in
-      simulations). The difficulty is to find a way to recover necessary
-      edges for a full layout path without trying to recover *all*
-      missing edges.
-   -  Stop ignoring sequence pairs that are mostly overlapping. These
-      are currently ignored since we may get the direction wrong on a
-      heavy edge.
-
--  Low priority:
-
-   -  Figure out how to pull in docstrings from C code into sphinx (e.g
-      look at `Breathe <https://github.com/michaeljones/breathe>`__).
-   -  Add an ungapped seed expansion phase.
-   -  Adapt Karlin-Altschul statistics (references:
-      `[1] <http://www.pnas.org/content/87/6/2264.full.pdf>`__,
-      `[2] <https://publications.mpi-cbg.de/Altschul_1990_5424.pdf>`__,
-      `[3] <http://www.jstor.org/stable/1427732?seq=1#page_scan_tab_contents>`__,
-      and chap. 7-9
-      `[4] <https://books.google.ca/books?id=uZvlBwAAQBAJ>`__) to the
-      problem of finding overlaps.
-   -  Support
-      `Hirschberg <https://en.wikipedia.org/wiki/Hirschberg's_algorithm>`__
-      -style linear space optimization in ``libalign``.
-   -  Make it work with Python 3.
-
-.. |Documentation Status| image:: https://readthedocs.org/projects/alignpy/badge/?version=latest
-   :target: http://alignpy.readthedocs.org/en/latest/?badge=latest

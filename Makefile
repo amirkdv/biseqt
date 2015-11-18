@@ -34,12 +34,13 @@ env:
 
 DOCS_EXCLUDE = align/tests
 DOCS_OUT = _build
-docs: align/libalign.so docs/README.rst
+docs: align/libalign.so docs/docs.rst
 	sphinx-apidoc -f -e -o $@ align/ $(DOCS_EXCLUDE)
 	cd $@ && sphinx-build -b html . $(DOCS_OUT)
+	cd $@ && sphinx-build -b latex . $(DOCS_OUT)
 	@echo "Find the docs at file://`readlink -f $@/$(DOCS_OUT)/index.html`"
 
-docs/README.rst:
-	pandoc -f markdown -t rst -o $@ -i README.md
+docs/docs.rst:
+	pandoc -f markdown -t rst -o $@ -i docs.md
 
-.PHONY: clean tests *.pdf loc docs docs/README.rst
+.PHONY: clean tests *.pdf loc docs docs/docs.rst

@@ -161,7 +161,7 @@ class Sequence():
         performed edit sequence.
 
         Note that there is a bound on the precision of the effective
-        proabiliites, see ``precision``.
+        proabilities, see ``precision``.
 
         Keyword Args:
             subst_probs(List[List[float]]): the probability distribution for

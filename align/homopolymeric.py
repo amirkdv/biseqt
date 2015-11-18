@@ -180,7 +180,7 @@ class HpCondenser(object):
         to substitution probabilities in the destination (condensed) alphabet.
         Letting :math:`x,y` denote original alphabet letters and :math:`x_i,y_j`
         denote condensed alphabet letters, the translation formula is the
-        following:
+        following when the length of letters are identical:
 
             :math:`\Pr(x_i \\rightarrow y_i) = \Pr(x \\rightarrow y)^i(1-g_h)^{i-1}`
 
@@ -193,7 +193,7 @@ class HpCondenser(object):
 
         Note:
             The calculations here may have serious errors. In fact, the
-            calculated probabilites as described above don't necessarily add
+            calculated probabilities as described above don't necessarily add
             up to 1! Returned probability matrix is normalized in each row
             to make sure the output is not terribly wrong.
         """

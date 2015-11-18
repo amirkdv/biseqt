@@ -5,9 +5,10 @@
 ===============================
 
 .. toctree::
-   :hidden:
+  :hidden:
 
-   API Reference <modules>
-   README
+  docs
+  API Reference <modules>
 
-.. include:: README.rst
+``align.py`` is a library of sequence alignment and fragment assembly algorithms
+in python and C. Use the left pane to navigate the `docs <docs.html>`__.
