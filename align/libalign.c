@@ -392,7 +392,8 @@ char *traceback(align_dp_cell** P, align_problem* def, align_dp_cell* end) {
   }
   // add the space for the score, default 0.00
   infolen += 3;
-  if (end->choices[0].score != 0) {
+  // If the actual score is -0.0014 we will still be printing 0.00:
+  if (fabs(end->choices[0].score) > 0.01) {
     // if nonzero we need this many more digits for the integer part:
     infolen += (int)floor(log10(fabs(end->choices[0].score)));
     if (end->choices[0].score < 0) {
@@ -401,10 +402,18 @@ char *traceback(align_dp_cell** P, align_problem* def, align_dp_cell* end) {
     }
   }
   infostr = malloc(infolen);
+  if (infostr == NULL) {
+    printf("Failed to allocate memory.\n");
+    return NULL;
+  }
   sprintf(infostr, "(%d,%d),%.2f:", (idx_S + def->S_min_idx), (idx_T + def->T_min_idx), end->choices[0].score);
   // the backtraced transcript was written backwords to the end of rev_transcript
   len = len - pos - 1;
   transcript = malloc(len + 1);
+  if (transcript == NULL) {
+    printf("Failed to allocate memory.\n");
+    return NULL;
+  }
   strncpy(transcript, rev_transcript + pos, len);
   transcript[len] = '\0';
   ret = malloc(infolen + len + 1);
@@ -459,4 +468,3 @@ void _print_mem_usage() {
     tot[0]/1024.0, res[0]/1024.0);
   fclose(fp);
 }
-
