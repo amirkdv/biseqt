@@ -1,10 +1,11 @@
 [![Documentation Status](https://readthedocs.org/projects/alignpy/badge/?version=latest)](http://alignpy.readthedocs.org/en/latest/?badge=latest)
 
-[`align.py`](alignpy.readthedocs.org/) is a library of sequence alignment and
+[`align.py`](https://alignpy.readthedocs.org/) is a library of sequence alignment and
 fragment assembly algorithms in python and C. To get started:
 
 ```shell
-python setup.py develop
+make env
+source env/bin/activate
 make clean tests
 ```
 
@@ -35,13 +36,15 @@ make -f assembly.mk layout.diff.hp_assembly.pdf MODE=hp_assembly
       sequencing reads.
     * *Real* data: test against Leishmania dataset.
 
-* Code:
-
-    * Make `align.Transcript` a `namedtuple` as well (unless it's becoming a
-      `CffiObject`).
-
 * Improvements:
 
+    * When performing alignments in the condensed alphabet we currently have
+      no choice but to score indels (i.e non-homopolymeric indels) identically.
+      For example, a deletion of `A9T7` is scored exactly the same as a
+      deletion of `A1T1`. This can clearly lead to wrong alignments, but a
+      clear effect is not yet observed in simulations. Fixing this would require
+      that `libalign` accept content-dependent scores for indels which is
+      feasible but not trivial.
     * An overlap graph must satisfy two consistency criteria: it is a DAG,
       and for any vertex *u* in it, any pair of outgoing (incoming) neighbors of
       *u* are adjacent.  Assembly overlap graphs are DAG (or close to it) but

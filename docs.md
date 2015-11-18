@@ -13,7 +13,8 @@ The following can be generated randomly by the `seq` module:
 
 The core dynamic programming algorithm is implemented [in C](https://github.com/amirkdv/align.py/blob/master/align/libalign.c)
 and interfaced using [cffi](https://cffi.readthedocs.org/en/latest/). The
-following are supported by `libalign`:
+following are supported by `libalign` (the C implementaion) and exposed to
+Python by the `pw` module:
 
 * *Global* alignments, i.e Needleman-Wunsch.
 * *Local* alignments, i.e Smith-Waterman.
@@ -148,13 +149,15 @@ alignment transcript can be done losslessly to match the original sequence.
 ## Genome assembly
 
 Overlap and layout graphs (i.e OLC minus consensus) can be calculated by methods
-provided in `assembly` which delegates all graph algorithms to [igraph](http://igraph.org/python/).
-A weighted, DAG is built by seed expansion (see
+provided by `assembly.OverlapBuilder`. All graph algorithms are delegated to
+[igraph](http://igraph.org/python/).
+Overlap graphs are represented by `assembly.OverlapGraph` (which wraps an
+igraph directed graph).
+The weighted overlap DAG is built by seed expansion (see
 [Tuples Methods](#tuples)) on all pairs of sequences and the longest
-path is reported as the layout. Expansion is done by `assembly.OverlapBuilder`
-which uses a rolling window of small global alignments (see tuning parameters
-in [Simulations](#simulations)) to find *overlap* alignments of sequences in the
-database.
+path is reported as the layout. Expansion is done by a rolling window of small
+global alignments (see tuning parameters in [Simulations](#simulations)) to find
+*overlap* alignments of sequences in the database.
 
 ### Cycle breaking
 
