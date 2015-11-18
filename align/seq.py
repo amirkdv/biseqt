@@ -194,11 +194,13 @@ class Sequence():
                 )
                 continue
             else:
+                # FIXME use an hp specific go_prob if given, then we'd have
+                # to check also if S[k-1] == S[k]
                 # with probability go_prob start a gap unless previous op was
                 # a gap itself.
-                if str(op) not in 'ID' and random.randint(0, N) < ge_prob * N / 2.0:
+                if str(op) not in 'ID' and random.randint(0, N) < go_prob * N / 2.0:
                     op, k = 'D', k + 1
-                elif str(op) not in 'ID' and random.randint(0,N) < ge_prob * N / 2.0:
+                elif str(op) not in 'ID' and random.randint(0,N) < go_prob * N / 2.0:
                     op, k = 'I', k
                     T += self.alphabet.randstr(1,
                         letter_dist=insert_dist,
