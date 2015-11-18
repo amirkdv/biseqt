@@ -36,7 +36,6 @@ C = pw.AlignParams(subst_scores=subst_scores, alphabet=A,
 with pw.AlignProblem(S, T, C, align_type=params['type']) as P:
     score = P.solve(print_dp_table=params['show_dp'])
     transcript = P.traceback()
-    print 'optimal alignment has score %.2f' % score
 
 print '\n--> optimal alignment:\n%s\n' % str(transcript)
 if transcript:

@@ -53,7 +53,7 @@ class Alphabet(CffiObject):
 
         Note:
             Arbitrary precision on probability distributions is not supported.
-            The default precision is 0.001, modify this with :arg:`precision`.
+            The default precision is 0.001, modify this with ``precision``.
 
         Args:
             length(int): Length of generated string in number of letters (and
@@ -161,7 +161,7 @@ class Sequence():
         performed edit sequence.
 
         Note that there is a bound on the precision of the effective
-        proabiliites, see :arg:`precision`.
+        proabiliites, see ``precision``.
 
         Keyword Args:
             subst_probs(List[List[float]]): the probability distribution for

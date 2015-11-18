@@ -44,7 +44,7 @@ and the original `seq.Sequence`'s. Each `align.Transcript` looks like this:
 (100,12),12.50:MMMISSSMMMMDDD
 ```
 The first two integers are starting positions of the alignment, the following
-number is the score of the aligment and what follows is the `opseq` (edit
+number is the score of the alignment and what follows is the `opseq` (edit
 transcript) for the alignment.
 
 ### Complexity
@@ -81,14 +81,25 @@ a single letter(e.g `AACCC` becomes `A2C3`).
 The machinery in `libalign` is capable of aligning sequences in alphabets with
 letters longer than a single character. The only requirement is that all letters
 in an alphabet have the same length (to avoid a book-keeping mess). This leads
-to a caveat discussed below.
+to a [caveat](#a-caveat) discussed below. Aside from the caveat, the following operations
+are supported:
+
+* "Condensing" transcripts into transcripts for condensed sequences and
+  "expanding" transcripts for condensed sequences back into one for the original
+  sequences.
+* "Condensing" alignment parameters into corresponding parameters in the
+  condensed alphabet,
+* "Condensing" a seed (see the section on [assembly](#genome-assembly) below)
+  into a seed in the condensed alphabet.
 
 Substitution score matrices for the original alphabet can be translated into a
-substitution score matrix for the (larger) condensed alphabet provided gap
-parameters for homopolymeric indels are given.
+substitution score matrix for the (larger) condensed alphabet given the
+following pieces of information:
 
-Furthermore, an alignment `opseq` for condensed versions of two sequences can
-be translated back to an alignment for the original sequences.
+i. Gap probability in homopolymeric stretches (only a linear gap model is well
+  specified),
+i. Gap probability in other regions (here an affine gap model is fine),
+i. Substitution probabilities of letters in original alphabet.
 
 ### A Caveat
 
@@ -106,7 +117,7 @@ alignment transcript can be done losslessly to match the original sequence.
 ## Genome assembly
 
 Overlap and layout graphs (i.e OLC minus consensus) can be calculated by methods
-provided in `assembly`. All graph processing is delegated to [igraph](http://igraph.org/python/).
+provided in `assembly` which delegates all graph algorithms to [igraph](http://igraph.org/python/).
 A weighted, DAG is built by seed expansion (see
 [Tuples Methods](#tuples)) on all pairs of sequences and the longest
 path is reported as the layout. Expansion is done by `assembly.OverlapBuilder`
@@ -126,31 +137,54 @@ start or end index of end points are too close). Currently such edges are
 ignored altogether.
 
 Regardless, cycle breaking is delegated to `igraph.Graph.feedback_arc_set` which
-supports an optimal, but slow, integer programming algorithm and a suboptimal,
-but fast, [heuristic](http://www.sciencedirect.com/science/article/pii/002001909390079O)
-algorithm.
+finds a set of edges the removal of which gives an acyclic graph.
+It supports (see [docs](http://igraph.org/python/doc/igraph.GraphBase-class.html#feedback_arc_set))
+an optimal, but slow (exponential complexity), integer programming algorithm
+(presumably something similar to what is dicussed [here](http://citeseerx.ist.psu.edu/viewdoc/summary?doi=10.1.1.31.5137))
+and a suboptimal, but fast, algorithm relying on the [Eades heuristic](http://www.sciencedirect.com/science/article/pii/002001909390079O).
+
+### Assembly in condensed alphabet
+
+Assembly can be modified in two places to use condensed alphabets:
+
+* *Indexing*: The sequence of reads can be indexed in the condensed alphabet.
+  For example, if we are indexing all 5-mers the read ``AAACCGTG`` gives only
+  one tuple ``A3C2G1T1G1`` (which is 5 letters in the condensed alphabet).
+  Typically, we may want to set the ``maxlen`` of the translator used for
+  indexing to a very low number such that we do not miss seeds due to indels
+  in long homopolymeric stretches.
+* *Seed extension*: This phase too can be performed in the condensed alphabet
+  (and the translator may be a different one than the one for indexing, i.e
+  have a different `maxlen`). This has the added benefit of allowing us to lower
+  the penalty of homopolymeric indels.
 
 ### Simulations
 
-For the simulated case where the true genome is known a difference graph can be
-generated between the true overlap path and the assembled overlap path.
-The key parameters for overlap discovery are:
+For the simulated case where the true genome is known a *difference graph*
+(which looks like a `diff`, with matching edges in black, missing edges in red,
+and added edges in green) can be generated between the true layout path and
+the assembled layout path. The key parameters for overlap discovery are:
 
-1. Window size for successive alignment frames,
-2. What constitutes a bad score in a single window,
-3. How many consecutive bad scores disqualifies a seed.
+* Window size for successive alignment frames,
+* What constitutes a bad score in a single window,
+* Number of consecutive bad scores which disqualifies a seed.
+* Number of successful seeds (extending to boundaries) which is enough to call
+  two reads overlapping (this is mainly an performance-optimization trick and
+  does not seem to introduce errors).
 
 Input generation parameters are:
 
-1. Length of the original genome,
-2. Parameters for the normal distribution of read lengths,
-3. Expected coverage.
+* Length of the original genome,
+* Parameters for the normal distribution of read lengths,
+* Expected coverage.
+* Substitution and gap probabilities used to mutate reads from true genome.
 
 
 Usage:
 ```shell
 # creates genome.fa, reads.fa, genome.db
 make -f assembly.mk genome.db
+
 # builds overlap.dag.gml, overlap.layout.gml, and compares against true versions
 make -f assembly.mk layout.diff.assembly.pdf
 ```
@@ -163,26 +197,26 @@ make -f assembly.mk layout.diff.hp_assembly.pdf MODE=hp_assembly
 
 ### Behavior
 
-#### Good
+**Good**
 
-1. When compared to the true graph, the assembled overlap graph typically has
+i. When compared to the true graph, the assembled overlap graph typically has
   some missing edges (e.g %15 of edges missing) but very few wrong edges are
   added (often none).
-1. Generated overlap graphs are (close to) acyclic.
-1. As a consequence of the (i), the assembled layout path is consistent
-  with the true layout in the sense that its sequence of reads is a
-  subsequence (i.e in correct order) of the correct layout path.
+i. Generated overlap graphs are (close to) acyclic.
+i. As a consequence of the (1), the assembled layout path is consistent
+  with the true layout in the sense that the sequence of reads it announces
+  as layout (its heaviest path) is a subsequence (i.e in correct order) of the
+  correct layout path.
 
-#### Bad
+**Bad**
 
-1. When two reads are both mostly overlapping the direction may come out wrong
+i. When two reads are both mostly overlapping the direction may come out wrong
   and this can cause cycles in the overlap graph.
-1. There are occasional insertions too which do not seem to be problematic since
+i. There are occasional insertions too which do not seem to be problematic since
   they are weak (i.e low scoring alignments).
 
 ## To Do
 
-* Perform assembly on condensed sequences.
 * Move seed expansion from Python to C.
 * Simulations:
 

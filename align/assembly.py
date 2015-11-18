@@ -76,9 +76,11 @@ class OverlapGraph(object):
     def longest_path(self, exclude=[]):
         """Finds the longest path (i.e heaviest path) of the graph, excluding
         vertices with names specified in ``exclude``. This, naturally requires
-        that the graph is acyclic. Since the graph is a DAG, we can find the
-        longest path in :math:`O(|V|)` time by first building a
-        topological ordering of the graph (i.e :math:`O(|V|+|E|)` in total).
+        that the graph is acyclic. Assuming the graph is a DAG, we can find the
+        longest path in two steps:
+            - Find a topological ordering of the graph in :math:`O(|V|+|E|)`
+              time,
+            - Find a heaviest path using the sorting in :math:`O(|V|)` time.
 
         Keyword Arguments:
             exclude (Optional[List[str]]): A list of vertex names to be excluded
@@ -307,13 +309,13 @@ class OverlapBuilder(object):
         G = assembly.OverlapBuilder(I, C).build()
         G.save(path)
 
+    All arguments to the constructor become class attributes with the same name:
+
     Args:
         index (tuples.Index): A tuples index that responds to
             :func:`align.tuples.Index.seeds`.
         align_params (pw.AlignParams): The alignment parameters for the
             rolling alignment.
-
-    Keyword Args:
         hp_condenser (Optional[homopolymeric.HpCondenser]): If specified,
             all alignments will be performed in condensed alphabet.
             Consequently, all other arguments are interpretted in the condensed

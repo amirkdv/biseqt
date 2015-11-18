@@ -56,10 +56,10 @@ class AlignParams(CffiObject):
         matrix using a null-hypothesis letters distribution. The scores are
         natural logs of odds ratios:
 
-        :math:`S(i,j) = \log[1-g] \log[\Pr(a_j|a_i)] - \log[\Pr(a_j)]`
+            :math:`S(a_i,a_j) = \log[1-g] \log[\Pr(a_j|a_i)] - \log[\Pr(a_j)]`
 
-        where :math:`S(i,j)` is the substitution score of letter :math:`a_i` to
-        letter :math:`a_j` and :math:`g` is the gap probability.
+        where :math:`S(a_i,a_j)` is the substitution score of letter
+        :math:`a_i` to letter :math:`a_j` and :math:`g` is the gap probability.
 
         Args:
             alphabet(seq.Alphabet): the underlying alphabet, needed since
@@ -74,6 +74,14 @@ class AlignParams(CffiObject):
         Returns:
             List[List[float]]: Substitution score matrix for given alphabet,
                 as expected by :func:`AlignParams`.
+
+        Note:
+            Only a linear gap model is supported for translating probabilities
+            to scores. This is because under an affine model where the
+            probability of opening a gap differs from that of extending a gap,
+            the substitution probabilities also become context-dependent (see
+            where :math:`g` appears in the formula above) which is not supported
+            by ``libalign``.
         """
         L = alphabet.length
         subst_probs = kw['subst_probs']
@@ -96,7 +104,8 @@ class AlignParams(CffiObject):
         following:
 
             * The gap open probability :math:`g_o` is the probability of a
-              single indel following a substitution/match.
+              single indel following a substitution/match or an indel of a
+              different kind.
             * The gap extend probability :math:`g_e` is the probability of a
               single indel following an indel of the same kind.
 
@@ -112,6 +121,10 @@ class AlignParams(CffiObject):
             Consequently, to ensure that the gap open score is not positive,
             we require that the gap open probability be less than the gap
             extend probability.
+
+            To enforce a linear gap model, naturally, pass identical values for
+            ``go_prob`` and ``ge_prob``. This translates to a gap open
+            score of 0.
 
         """
         return log(go_prob/ge_prob), log(ge_prob)

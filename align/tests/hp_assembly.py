@@ -11,15 +11,16 @@ params = {
     'coverage': 5,          # coverage of random sequencing reads
     'read_len_mean': 300,   # average length of sequencing read
     'read_len_var': 10,     # variance of sequencing read length
-    'go_prob': 0.01,         # gap open score
-    'ge_prob': 0.03,         # gap extend score
+    'go_prob': 0.1,        # gap open score
+    'ge_prob': 0.3,        # gap extend score
     'hp_maxlen': 5,         # HpCondenser maxlen
     'hp_gap_prob': 0.4,     # HpCondenser Hp gap probability
+    'hp_prob': 0.15,        # Parameter for geometric distributions of hp stretches
     'subst_probs': [[0.97 if k==i else 0.01 for k in range(4)] for i in range(4)],
     'window': 20,           # rolling window length for tuple extension
     'drop_threshold': 10,   # what constitutes a drop in score of a window
     'max_succ_drops': 3,    # how many consecutive drops are allowed
-    'max_correct_seeds': 3  # how many seeds until we call it an edge
+    'max_correct_seeds': 3, # how many seeds until we call it an edge
 }
 
 A = seq.Alphabet('ACGT')
@@ -56,7 +57,8 @@ def create_example(db):
         len_var=params['read_len_var'],
         subst_probs=params['subst_probs'],
         ge_prob=params['ge_prob'],
-        go_prob=params['go_prob']
+        go_prob=params['go_prob'],
+        hp_prob=params['hp_prob']
     )
     B = tuples.TuplesDB(db, alphabet=A)
     HpI = homopolymeric.HpCondensedIndex(B, params['wordlen'], hp_condenser=Tr)
