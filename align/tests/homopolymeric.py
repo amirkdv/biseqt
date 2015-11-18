@@ -55,3 +55,4 @@ with pw.AlignProblem(S=S_d, T=T_d, params=C_d, align_type=params['type']) as P:
         print expanded_transcript_d
         print 'Expanded condensed alignment: '
         expanded_transcript_d.pretty_print(S, T, sys.stdout)
+        print 'Score of condensed alignment in original alphabet:', C.score(S,T,expanded_transcript_d.opseq)

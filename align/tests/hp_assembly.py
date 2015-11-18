@@ -9,30 +9,24 @@ params = {
     'wordlen': 5,           # tuple word lengths # FIXME separate idx_wordlen
     'genome_length': 1500,  # length of randomly generated genome
     'coverage': 5,          # coverage of random sequencing reads
-    'read_len_mean': 500,   # average length of sequencing read
+    'read_len_mean': 300,   # average length of sequencing read
     'read_len_var': 10,     # variance of sequencing read length
-    'go_prob': 0.1,         # gap open score
-    'ge_prob': 0.3,         # gap extend score
+    'go_prob': 0.01,         # gap open score
+    'ge_prob': 0.03,         # gap extend score
     'hp_maxlen': 5,         # HpCondenser maxlen
     'hp_gap_prob': 0.4,     # HpCondenser Hp gap probability
     'subst_probs': [[0.97 if k==i else 0.01 for k in range(4)] for i in range(4)],
     'window': 20,           # rolling window length for tuple extension
     'drop_threshold': 10,   # what constitutes a drop in score of a window
-    'max_succ_drops': 3     # how many consecutive drops are allowed
+    'max_succ_drops': 3,    # how many consecutive drops are allowed
+    'max_correct_seeds': 3  # how many seeds until we call it an edge
 }
 
 A = seq.Alphabet('ACGT')
 Tr = homopolymeric.HpCondenser(A, maxlen=params['hp_maxlen'])
-subst_scores = pw.AlignParams.subst_scores_from_probs(A, subst_probs=params['subst_probs'], gap_prob=params['go_prob'])
 subst_probs_d = Tr.condense_subst_probs(**params)
 subst_scores_d = pw.AlignParams.subst_scores_from_probs(Tr.dst_alphabet, subst_probs=subst_probs_d, gap_prob=params['go_prob'])
 go_score, ge_score = pw.AlignParams.gap_scores_from_probs(params['go_prob'], params['ge_prob'])
-C = pw.AlignParams(
-    alphabet=Tr.src_alphabet,
-    subst_scores=subst_scores,
-    go_score=go_score,
-    ge_score=ge_score
-)
 C_d = pw.AlignParams(
     alphabet=Tr.dst_alphabet,
     subst_scores=subst_scores_d,
@@ -42,16 +36,16 @@ C_d = pw.AlignParams(
 
 def show_params():
     print 'Substitution probabilities:'
-    for i in params['subst_probs']:
-        print i
+    for i in subst_probs_d:
+        print [round(f,4) for f in i]
     print 'Substitution scores:'
-    for i in subst_scores:
+    for i in subst_scores_d:
         print [round(f,2) for f in i]
     print 'Pr(go) = %.2f, Pr(ge) = %.2f +----> Score(go)=%.2f, Score(ge)=%.2f' % \
         (params['go_prob'], params['ge_prob'], go_score, ge_score)
 
-    print 'drop_threshold = %.2f, max_succ_drops = %d, window = %d' % \
-        (params['drop_threshold'], params['max_succ_drops'], params['window'])
+    print 'drop_threshold = %.2f, max_succ_drops = %d, window = %d, max_correct_seeds: %d' % \
+        (params['drop_threshold'], params['max_succ_drops'], params['window'], params['max_correct_seeds'])
 
 def create_example(db):
     show_params()
