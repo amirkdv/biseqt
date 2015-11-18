@@ -42,12 +42,15 @@ corresponding log likelihood scores given the following pieces of information:
 
 * Substitution probabilities,
 * Gap probabilities (only a linear gap model is supported for score calculation).
-* The random (null hypothesis) distribution of letters must be provided.
+* The random (null hypothesis) distribution of letters.
 
+The calculated score for substitution of letter $a_i$ by letter $a_j$ is given
+by:
 $$S(a_i,a_j) = \log[1-g] + \log[\Pr(a_j|a_i)] - \log[\Pr(a_j)]$$
 
 Similarly, gap probabilities $g_o$ and $g_e$ are translated to gap scores
 where:
+
 * The gap open probability $g_o$ is the probability of a
   single indel following a substitution/match or an indel of a
   different kind.

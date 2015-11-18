@@ -52,16 +52,20 @@ following pieces of information:
 -  Substitution probabilities,
 -  Gap probabilities (only a linear gap model is supported for score
    calculation).
--  The random (null hypothesis) distribution of letters must be
-   provided.
+-  The random (null hypothesis) distribution of letters.
+
+The calculated score for substitution of letter :math:`a_i` by letter
+:math:`a_j` is given by:
 
 .. math:: S(a_i,a_j) = \log[1-g] + \log[\Pr(a_j|a_i)] - \log[\Pr(a_j)]
 
 Similarly, gap probabilities :math:`g_o` and :math:`g_e` are translated
-to gap scores where: \* The gap open probability :math:`g_o` is the
-probability of a single indel following a substitution/match or an indel
-of a different kind. \* The gap extend probability :math:`g_e` is the
-probability of a single indel following an indel of the same kind.
+to gap scores where:
+
+-  The gap open probability :math:`g_o` is the probability of a single
+   indel following a substitution/match or an indel of a different kind.
+-  The gap extend probability :math:`g_e` is the probability of a single
+   indel following an indel of the same kind.
 
 Note that in the above sense the score (log likelihood) of a gap of
 length :math:`n \ge 1` is:
