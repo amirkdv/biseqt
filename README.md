@@ -150,13 +150,15 @@ Input generation parameters are:
 Usage:
 ```shell
 # creates genome.fa, reads.fa, genome.db
-make clean genome.db
-# find the true overlap and layout
-make true_overlap.gml true_overlap.layout.gml true_overlap.layout.pdf
-# find the overlap and layout by seed extension
-make overlap.gml overlap.layout.gml overlap.layout.pdf
-# compare the two layouts
-make layout_diff.pdf
+make -f assembly.mk genome.db
+# builds overlap.dag.gml, overlap.layout.gml, and compares against true versions
+make -f assembly.mk layout.diff.assembly.pdf
+```
+
+To perform assembly in condensed alphabet:
+```shell
+make clean
+make -f assembly.mk layout.diff.hp_assembly.pdf MODE=hp_assembly
 ```
 
 ### Behavior
