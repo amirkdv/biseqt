@@ -20,8 +20,9 @@ clean:
 tests: align/libalign.so
 	python -m align.tests.homopolymeric
 	python -m align.tests.align
-	make -f assembly.mk clean layout_diff
-	MODE=hp_assembly make -f assembly.mk genome.db layout_diff
+	make -f assembly.mk clean
+	make -f assembly.mk genome.assembly.db    overlap.assembly.layout.pdf    layout.diff.assembly.pdf
+	make -f assembly.mk genome.hp_assembly.db overlap.hp_assembly.layout.pdf layout.diff.hp_assembly.pdf MODE=hp_assembly
 
 loc:
 	find align -type f -regex '.*\(\.py\|\.c\|\.h\)' | xargs wc -l

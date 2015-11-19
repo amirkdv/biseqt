@@ -9,38 +9,27 @@ source env/bin/activate
 make clean tests
 ```
 
-For genome assembly simulations:
-```shell
-# creates genome.assembly.fa, reads.assembly.fa, genome.assembly.db
-make -f assembly.mk clean genome.assembly.db
-
-# builds overlap.assembly.layout.gml, and compares against the true version.
-make -f assembly.mk layout.diff.assembly.pdf
-```
-
-To simulate assembly in condensed alphabet:
-```shell
-# creates genome.hp_assembly.fa, reads.hp_assembly.fa, genome.hp_assembly.db
-make -f assembly.mk clean genome.hp_assembly.db MODE=hp_assembly
-
-# builds overlap.hp_assembly.layout.gml, and compares against the true version.
-make -f assembly.mk clean layout.diff.hp_assembly.pdf MODE=hp_assembly
-```
-
 ## To Do
 
-* Move seed expansion from Python to C.
+* Performance:
+  * Move seed expansion from Python to C.
+  * Support [Hirschberg](https://en.wikipedia.org/wiki/Hirschberg\'s_algorithm) -style
+    linear space optimization in `libalign`.
 * Simulations:
-
-    * Test on larger data sets (requires speedup).
-    * Separate sanity tests from simulations; write sanity tests for individual
-      parts of assembly.
-    * Support hompolymeric-specific indel parameters in random generation of genome
-      sequencing reads.
-    * *Real* data: test against Leishmania dataset.
-
+    * *Real* data: test against chromosome 1 of Leishmania dataset: this
+      requires linear space optimization for true overlap discovery and
+      potentially seed expansion in C to operate on ~ 10 Kbp reads.
+    * Support hompolymeric-specific indel parameters in random generation of
+      genome sequencing reads.
 * Improvements:
-
+    * The alignment problem in the condensed alphabet seems ill-defined as it
+      currently stands. A clear example of this is the fact that we currently
+      don't have a way to properly align `AAAAAA` and `AAACCC`: our best option
+      is `A6--` and `A3C3`. A possible complicated formulation is to allow
+      single letters to be matched to multiple letters in an alignment:
+      this requires allowing nonstandard choices in the DP table. There is a
+      way of doing this while maintaining polynomial time complexity (at most
+      cubic) but the implementation is not trivial.
     * When performing alignments in the condensed alphabet we currently have
       no choice but to score indels (i.e non-homopolymeric indels) identically.
       For example, a deletion of `A9T7` is scored exactly the same as a
@@ -48,9 +37,20 @@ make -f assembly.mk clean layout.diff.hp_assembly.pdf MODE=hp_assembly
       clear effect is not yet observed in simulations. Fixing this would require
       that `libalign` accept content-dependent scores for indels which is
       feasible but not trivial.
-    * An overlap graph must satisfy two consistency criteria: it is a DAG,
-      and for any vertex *u* in it, any pair of outgoing (incoming) neighbors of
-      *u* are adjacent.  Assembly overlap graphs are DAG (or close to it) but
+    * Demanding global alignments in each window during seed expansion is too
+      restrictive. As a toy example, consider the region immediately following
+      a seed to be `AAAAGTGTGTAAAA` and `AAAAAAA` and suppose we have a window
+      size of 8. Fixing this requires introducing two new kinds of alignment:
+      * start anchored and required to hit the end of frame in at least one
+        sequence,
+      * end anchored and required to hit the beginning of frame in at least one
+        sequence.
+    * An overlap graph must satisfy two consistency criteria:
+      * it is a DAG, and
+      * for any vertex *u* in it, any pair of outgoing (incoming) neighbors of
+        *u* are adjacent.
+
+      Assembly overlap graphs are DAG (or close to it) but
       they rarely satisfy the second. The second criteria can be used to find
       missing edges by brute force overlap alignment (this matches the typical
       case of left-out-vertices in simulations). The difficulty is to find a way
@@ -71,6 +71,4 @@ make -f assembly.mk clean layout.diff.hp_assembly.pdf MODE=hp_assembly
       [[3]](http://www.jstor.org/stable/1427732?seq=1#page_scan_tab_contents), and
       chap. 7-9 [[4]](https://books.google.ca/books?id=uZvlBwAAQBAJ)) to the
       problem of finding overlaps.
-    * Support [Hirschberg](https://en.wikipedia.org/wiki/Hirschberg\'s_algorithm) -style
-      linear space optimization in `libalign`.
     * Make it work with Python 3.

@@ -11,8 +11,8 @@ params = {
     'coverage': 5,          # coverage of random sequencing reads
     'read_len_mean': 300,   # average length of sequencing read
     'read_len_var': 10,     # variance of sequencing read length
-    'go_prob': 0.1,        # gap open score
-    'ge_prob': 0.3,        # gap extend score
+    'go_prob': 0.05,        # gap open score
+    'ge_prob': 0.1,        # gap extend score
     'hp_maxlen': 5,         # HpCondenser maxlen
     'hp_gap_prob': 0.4,     # HpCondenser Hp gap probability
     'hp_prob': 0.15,        # Parameter for geometric distributions of hp stretches
