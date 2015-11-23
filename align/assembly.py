@@ -68,6 +68,8 @@ class OverlapGraph(object):
                 ``eades`` which uses a suboptimal `heuristic
                 <http://www.sciencedirect.com/science/article/pii/002001909390079O>`__.
         """
+        if self.iG.is_dag():
+            return
         rm = self.iG.feedback_arc_set(weights=self.iG.es['weight'], method=method)
         for e in rm:
             sys.stderr.write('removed edge: %s' % self.eid_to_str(e))
