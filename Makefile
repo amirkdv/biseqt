@@ -8,11 +8,8 @@ align/libalign.so: align/libalign.c align/libalign.h
 	$(GCC) align/libalign.c -o $@
 
 clean:
-	find . -regex .\*.pyc | grep -v '^./.git' | while read f; do rm -rf $$f; done
-	find . -regex .\*.swp | grep -v '^./.git' | while read f; do rm -rf $$f; done
-	find . -regex .\*.egg | grep -v '^./.git' | while read f; do rm -rf $$f; done
-	find . -regex .\*.egg-info | grep -v '^./.git' | while read f; do rm -rf $$f; done
-	rm -rf env build dist
+	@find . -regextype posix-extended -regex '.*.(pyc|swp|egg|egg-info)' | grep -v '^./.git' | tee /dev/stderr  | while read f; do rm -rf $$f; done
+	rm -rf build dist env
 	rm -f align/libalign.so core
 	rm -rf docs/$(DOCS_OUT)
 	make -f assembly.mk clean

@@ -7,10 +7,7 @@ DB = genome.$(MODE).db
 READS = reads.$(MODE).fa
 
 clean:
-	find . -regex .\*.fa  | grep -v '^./.git' | while read f; do rm -rf $$f; done
-	find . -regex .\*.db  | grep -v '^./.git' | while read f; do rm -rf $$f; done
-	find . -regex .\*.gml | grep -v '^./.git' | while read f; do rm -rf $$f; done
-	find . -regex .\*.svg | grep -v '^./.git' | while read f; do rm -rf $$f; done
+	@find . -regextype posix-extended -regex '.*.(fa|db|gml|svg)' | grep -v '^./.git' | tee /dev/stderr  | while read f; do rm -rf $$f; done
 
 $(READS):
 	python -c 'import $(ASSEMBLY_TEST) as T; T.create_example("$@", "$(READS)");'
