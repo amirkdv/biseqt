@@ -7,10 +7,10 @@ DB = genome.$(MODE).db
 READS = reads.$(MODE).fa
 
 clean:
-	find . -regex .\*.fa  -not -path ./.git | while read f; do rm -rf $$f; done
-	find . -regex .\*.db  -not -path ./.git | while read f; do rm -rf $$f; done
-	find . -regex .\*.gml -not -path ./.git | while read f; do rm -rf $$f; done
-	find . -regex .\*.pdf -not -path ./.git | while read f; do rm -rf $$f; done
+	find . -regex .\*.fa  | grep -v '^./.git' | while read f; do rm -rf $$f; done
+	find . -regex .\*.db  | grep -v '^./.git' | while read f; do rm -rf $$f; done
+	find . -regex .\*.gml | grep -v '^./.git' | while read f; do rm -rf $$f; done
+	find . -regex .\*.svg | grep -v '^./.git' | while read f; do rm -rf $$f; done
 
 $(READS):
 	python -c 'import $(ASSEMBLY_TEST) as T; T.create_example("$@", "$(READS)");'
