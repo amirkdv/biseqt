@@ -229,20 +229,29 @@ class HpCondenser(object):
             subst_probs_d[idx] = [x/s for x in row]
         return subst_probs_d
 
-    def condense_align_params(self, align_params, hp_go_score=0,
-                              hp_ge_score=0):
+    def condense_align_params(self, align_params, hp_gap_score=0):
         """Translates alignment parameters to one that applies to the condensed
         alphabet. Translation is done based on homopolymeric indel scores which
-        are treated separately from ordinary indels.
+        are treated separately from ordinary indels. Letting :math:`x,y` denote
+        original alphabet letters and :math:`x_i,y_j` denote condensed alphabet
+        letters, the substitution cost is the following when :math:`x=y`:
+
+            :math:`S(x_i \\rightarrow x_j) = \\min(i,j) S(x \\rightarrow x) + G_h(|i-j|)`
+
+        where :math:`G_h(n) = ng_h` is the linear homopolymeric gap penalty.
+        The substitution score is the following when :math:`x \\ne y`:
+
+            :math:`S(x_i \\rightarrow y_j) = \\min(i,j) S(x \\rightarrow x) + G(|i-j|)`
+
+        where :math:`G(\cdot)` is the usual (non-homopolymeric) gap penalty.
 
         Args:
             align_params (pw.AlignParams): Alignment parameters for the
                 source alphabet.
-            hp_go_score (float): Alignment score (in source alphabet) for
-                homopolymeric gap open. Use 0 for linear gap penalty for
-                homopolymeric indels.
-            hp_ge_score (float): Alignment score (in source alphabet) for
-                hompolymeric gap extension.
+            hp_gap_score (float): Alignment score (in source alphabet) for
+                homopolymeric gaps. This is incorporated in the substitution
+                costs of homopolymeric stretches. Only a linear gap model is
+                well-defined.
 
         Returns:
             pw.AlignParams: Alignment parameters for the destination
@@ -264,11 +273,12 @@ class HpCondenser(object):
                 kj = align_params.alphabet.letters.index(cj)
                 if ci == cj:
                     subst_scores_d[i][j] = min(ni, nj) * subst_scores[ki][kj] \
-                        + hp_go_score + hp_ge_score * abs(ni-nj)
+                        + hp_gap_score * abs(ni-nj)
                 else:
-                    subst_scores_d[i][j] = min(ni, nj) * subst_scores[ki][kj] \
-                        + align_params.gap_open_score \
-                        + align_params.gap_extend_score * abs(ni - nj)
+                    subst_scores_d[i][j] = min(ni, nj) * subst_scores[ki][kj]
+                    if ni != nj:
+                        subst_scores_d[i][j] += align_params.gap_open_score \
+                            + align_params.gap_extend_score * abs(ni - nj)
 
         return pw.AlignParams(
             alphabet=self.dst_alphabet,

@@ -5,8 +5,6 @@ import igraph
 
 from .. import pw, tuples, seq, assembly
 
-A = seq.Alphabet('ACGT')
-
 params = {
     'wordlen': 10,          # tuple word lengths
     'genome_length': 50000, # length of randomly generated genome
@@ -20,6 +18,8 @@ params = {
     'drop_threshold': 0,    # what constitutes a drop in score of a window
     'max_succ_drops': 3,    # how many consecutive drops are allowed
 }
+
+A = seq.Alphabet('ACGT')
 subst_scores = pw.AlignParams.subst_scores_from_probs(A, **params)
 go_score, ge_score = pw.AlignParams.gap_scores_from_probs(params['go_prob'], params['ge_prob'])
 C = pw.AlignParams(

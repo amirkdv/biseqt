@@ -28,11 +28,12 @@ exposed to Python by the ``pw`` module:
    beginning/end of the two sequences are considered,
 -  *Anchored Overlap* alignments where we demand both the suffix-prefix
    constraint and either of the start or end anchored constraints. This
-   mdoe of alignment is specifically designed for seed extension in
+   mode of alignment is specifically designed for seed expansion in
    `assembly <#genome-assembly>`__.
 -  *Affine gap* penalties are supported.
 -  *Banded* alignments are supported.
--  Alignment can be limited to a *frame* for each sequence.
+-  Alignment can be limited to a *frame* for each sequence, i.e using a
+   pair of ``min_idx,max_idx`` provided for both sequences.
 
 The result of an alignment performed by ``pw.AlignProblem`` is a score
 and potentially a traced-back ``pw.Transcript`` which is represented as

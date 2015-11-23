@@ -7,18 +7,19 @@ from .. import pw, tuples, seq, assembly, homopolymeric
 
 params = {
     'wordlen': 10,          # tuple word length for seed extension
-    'genome_length': 30000, # length of randomly generated genome
-    'coverage': 6,          # coverage of random sequencing reads
-    'read_len_mean': 3000,  # average length of sequencing read
+    'genome_length': 50000, # length of randomly generated genome
+    'coverage': 10,          # coverage of random sequencing reads
+    'read_len_mean': 5000,  # average length of sequencing read
     'read_len_var': 100,    # variance of sequencing read length
-    'go_prob': 0.15,        # gap open probability
-    'ge_prob': 0.3,         # gap extend probability
+    'go_prob': 0.1,        # gap open probability
+    'ge_prob': 0.3,     # gap extend probability
     'hp_maxlen_idx': 1,     # HpCondenser maxlen for seed discovery
-    'hp_maxlen': 9,         # HpCondenser maxlen for seed extension
+    'hp_maxlen': 5,         # HpCondenser maxlen for seed extension
     'hp_gap_prob': 0.4,     # HpCondenser Hp gap probability
+    'hp_gap_score': -0.9,   # HpCondenser Hp gap score
     'hp_prob': 0.15,        # Parameter for geometric distributions of hp stretches
     'subst_probs': [[0.91 if k==i else 0.03 for k in range(4)] for i in range(4)],
-    'window': 50,           # rolling window length for tuple extension
+    'window': 30,           # rolling window length for tuple extension
     'drop_threshold': 0,    # what constitutes a drop in score of a window
     'max_succ_drops': 3,    # how many consecutive drops are allowed
 }
@@ -26,15 +27,25 @@ params = {
 A = seq.Alphabet('ACGT')
 IdxTr = homopolymeric.HpCondenser(A, maxlen=params['hp_maxlen_idx'])
 Tr = homopolymeric.HpCondenser(A, maxlen=params['hp_maxlen'])
-subst_probs_d = Tr.condense_subst_probs(**params)
-subst_scores_d = pw.AlignParams.subst_scores_from_probs(Tr.dst_alphabet, subst_probs=subst_probs_d, gap_prob=params['go_prob'])
+
 go_score, ge_score = pw.AlignParams.gap_scores_from_probs(params['go_prob'], params['ge_prob'])
-C_d = pw.AlignParams(
-    alphabet=Tr.dst_alphabet,
-    subst_scores=subst_scores_d,
+subst_scores = pw.AlignParams.subst_scores_from_probs(A, **params)
+C = pw.AlignParams(
+    alphabet=A,
+    subst_scores=subst_scores,
     go_score=go_score,
     ge_score=ge_score
 )
+C_d = Tr.condense_align_params(C, hp_gap_score=params['hp_gap_score'])
+subst_scores_d = C_d.subst_scores
+subst_probs_d = Tr.condense_subst_probs(**params)
+# subst_scores_d = pw.AlignParams.subst_scores_from_probs(Tr.dst_alphabet, subst_probs=subst_probs_d, gap_prob=params['go_prob'])
+# C_d = pw.AlignParams(
+#     alphabet=Tr.dst_alphabet,
+#     subst_scores=subst_scores_d,
+#     go_score=go_score,
+#     ge_score=ge_score
+# )
 
 def show_params():
     print 'Substitution probabilities:'
@@ -71,6 +82,7 @@ def create_db(db, reads='reads.fa'):
 
 def overlap_by_seed_extension(db, path):
     B = tuples.TuplesDB(db, alphabet=A)
+    show_params()
     HpIdx = homopolymeric.HpCondensedIndex(B, params['wordlen'], hp_condenser=IdxTr)
     G = assembly.OverlapBuilder(HpIdx, C_d, hp_condenser=Tr, **params).build()
     G.save(path)

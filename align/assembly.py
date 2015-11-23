@@ -308,7 +308,7 @@ class OverlapGraph(object):
         vertex_color = ['white' if v.degree(mode=igraph.IN) else self.v_highlight for v in G.iG.vs]
 
         G.draw(fname, edge_color=edge_color, vertex_color=vertex_color,
-               edge_width=5, edge_arrow_width=3, edge_curved=0.1)
+               edge_width=5, edge_arrow_width=3, edge_curved=0.01)
 
     def save(self, fname):
         """Saves the graph in GML format
