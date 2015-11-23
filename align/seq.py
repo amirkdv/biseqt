@@ -311,8 +311,6 @@ def make_sequencing_fixture(genome_file, reads_file, genome_length=1000, **kw):
         kw['go_prob'] = 0.1
     if 'go_prob' not in kw:
         kw['ge_prob'] = 0.5
-    if 'subst_probs' not in kw:
-        kw['subst_probs'] = [[0.94 if k==i else 0.02 for k in range(4)] for i in range(4)]
     G = A.randseq(genome_length)
     seqrec = SeqRecord.SeqRecord(Seq.Seq(str(G)), id='genome', description="(full correct genome)")
     SeqIO.write([seqrec], genome_file, 'fasta')
