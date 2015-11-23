@@ -6,10 +6,10 @@ ASSEMBLED_GRAPH = overlap.$(MODE)
 DB = genome.$(MODE).db
 
 clean:
-	find . -regex .\*.fa | while read f; do rm -rf $$f; done
-	find . -regex .\*.db | while read f; do rm -rf $$f; done
-	find . -regex .\*.gml | while read f; do rm -rf $$f; done
-	find . -regex .\*.pdf | while read f; do rm -rf $$f; done
+	find . -regex .\*.fa  -not -path ./.git | while read f; do rm -rf $$f; done
+	find . -regex .\*.db  -not -path ./.git | while read f; do rm -rf $$f; done
+	find . -regex .\*.gml -not -path ./.git | while read f; do rm -rf $$f; done
+	find . -regex .\*.pdf -not -path ./.git | while read f; do rm -rf $$f; done
 
 $(DB):
 	python -c 'import $(ASSEMBLY_TEST) as T; T.create_example("$@")'

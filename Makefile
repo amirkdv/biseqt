@@ -8,10 +8,10 @@ align/libalign.so: align/libalign.c align/libalign.h
 	$(GCC) align/libalign.c -o $@
 
 clean:
-	find . -regex .\*.pyc | while read f; do rm -rf $$f; done
-	find . -regex .\*.swp | while read f; do rm -rf $$f; done
-	find . -regex .\*.egg | while read f; do rm -rf $$f; done
-	find . -regex .\*.egg-info | while read f; do rm -rf $$f; done
+	find . -regex .\*.pyc -not -path ./.git | while read f; do rm -rf $$f; done
+	find . -regex .\*.swp -not -path ./.git | while read f; do rm -rf $$f; done
+	find . -regex .\*.egg -not -path ./.git | while read f; do rm -rf $$f; done
+	find . -regex .\*.egg-info -not -path ./.git | while read f; do rm -rf $$f; done
 	rm -rf env build dist
 	rm -f align/libalign.so core
 	rm -rf docs/$(DOCS_OUT)
