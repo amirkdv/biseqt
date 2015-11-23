@@ -19,17 +19,10 @@ class Segment(namedtuple('Segment', ['S_id', 'T_id', 'tx'])):
     """
 
 class TuplesDB(object):
-    """Wraps an SQLite database containing tuple indices for sequences. For now,
-    only one word length is allowed. The tables are:
-
-        * ``seq`` contains all the provided
-          sequences (the "database"), each sequence and its name are mapped to
-          an internal integer used for calculations (see :func:`populate`).
-        * ``tuples_N`` contains all observed words of length ``N``
-          where ``N`` is :attr:`wordlen`.
-        * ``tuples_N_hits`` contains all the "hits" (see :func:`index`).
-
-    SQL schemas are as follows (replace `N` with word length):
+    """Wraps an SQLite database containing tuple indices for sequences. For
+    all indexing and querying refer to :class:`Index`. For now,
+    only one word length is allowed. The sequences are stored in a ``seq``
+    table with the following schema:
 
     .. code-block:: sql
 
@@ -39,21 +32,9 @@ class TuplesDB(object):
           'description' text,
           'seq' text
         );
-        CREATE TABLE tuples_N (
-          'id' integer PRIMARY KEY ASC,
-          'tuple' char(N),
-          UNIQUE(tuple)
-        );
-        CREATE TABLE tuples_N_hits (
-          'tuple' integer REFERENCES tuples_N(id),
-          'seq'   integer REFERENCES seq(id),
-          'idx'   integer,
-          UNIQUE(seq, idx)
-        )
 
     Attributes:
         db (string): Path to the SQLite datbase.
-        wordlen (int): Length of tuples
     """
     def __init__(self, db, alphabet=None):
         assert isinstance(alphabet, seq.Alphabet)
@@ -62,6 +43,7 @@ class TuplesDB(object):
     def initdb(self):
         """Initializes the database: creates the required tables and
         fails if any of them already exists."""
+        sys.stderr.write('Initializing tuples DB at: %s\n' % self.db)
         with sqlite3.connect(self.db) as conn:
             c = conn.cursor()
             q = """
@@ -73,7 +55,6 @@ class TuplesDB(object):
                 );
             """
             c.execute(q)
-        sys.stderr.write('Initialized tuples DB at: %s\n' % self.db)
 
     def populate(self, fasta_src, lim=-1):
         """Given a FASTA source file, loads all the sequences (up to a limit, if
@@ -84,6 +65,7 @@ class TuplesDB(object):
             lim (Optional[int]): If positive, will be the number of sequences
                 loaded from FASTA source, default is -1.
         """
+        sys.stderr.write('Populating tuples DB at: %s\n' % self.db)
         def give_seq():
             for idx, seq in enumerate(SeqIO.parse(fasta_src, "fasta")):
                 if lim < 0 or idx < lim:
@@ -147,28 +129,43 @@ class TuplesDB(object):
 
 
 class Index(object):
+    # FIXME docs
+    """The main responsibility of an Index is to respond to :func:`seeds`
+    with a list of :class:`Segment` s given two sequence IDs.
+    This is done by recording all "tuples" observed in all sequences
+    in the database during :func:`index`. Each index is uniquely defined by
+    its :attr:`tuplesdb` and its :attr:`wordlen`. Each such index stores all
+    hits in a single database table with the following schema (replace `N`
+    with :attr:`wordlen`):
+
+    .. code-block:: sql
+
+        CREATE TABLE tuples_N (
+          'tuple' char(N)
+          'hits'  varchar,
+          UNIQUE(tuple)
+        )
+        CREATE TABLE seeds_N (
+          'S_id' integer REFERENCES seq(id),
+          'T_id' integer REFERENCES seq(id),
+          'S_idx' integer,
+          'T_idx' integer,
+          UNIQUE(S_id, T_id, S_idx, T_idx)
+        );
+
+    The ``hits`` column of ``tuples_N`` contains a single string with the format
+    ``(@<id>:<idx>)*``. For example, a hit at position 12 of sequence with ID 57
+    (according to the ``seq`` table) is represented by ``@57:12``.
+
+    Attributes:
+        tuplesdb (tuplesDB): The tuples database.
+        wordlen (int): Length of tuples.
+    """
     def __init__(self, tuplesdb, wordlen):
         self.tuplesdb = tuplesdb
         self.wordlen = wordlen
         self.tuples_table = 'tuples_%d' % self.wordlen
-        self.hits_table = 'hits_%d' % self.wordlen
-
-    def tup_scan(self, string):
-        """A generator for ``(string, idx)`` tuples to scan through any given
-        string. For example::
-
-                string = 'ACGTGT'
-                tup_scan(string, 5) # => ('ACGTG', 0), ('CGTGT', 1)
-
-        Args:
-            string (str): The string to scan.
-            wordlen(int): Length of the words.
-
-        Yields:
-            tuple: A ``string`` of length ``wordlen`` and a starting position (``int``).
-        """
-        for idx in range(len(string) - self.wordlen + 1):
-            yield (string[idx:idx + self.wordlen], idx)
+        self.seeds_table = 'seeds_%d' % self.wordlen
 
     def initdb(self):
         """Initializes the database: creates the required tables and
@@ -177,98 +174,149 @@ class Index(object):
             c = conn.cursor()
             q = """
                 CREATE TABLE %s (
-                  'id' integer PRIMARY KEY ASC,
                   'tuple' char(%d),
+                  'hits'  varchar,
                   UNIQUE(tuple)
                 );
             """ % (self.tuples_table, self.wordlen)
             c.execute(q)
             q = """
                 CREATE TABLE %s (
-                  'tuple' integer REFERENCES %s(id),
-                  'seq'   integer REFERENCES seq(id),
-                  'idx'   integer,
-                  UNIQUE(seq, idx)
+                  'S_id' integer REFERENCES seq(id),
+                  'T_id' integer REFERENCES seq(id),
+                  'S_idx' integer,
+                  'T_idx' integer,
+                  UNIQUE(S_id, T_id, S_idx, T_idx)
                 );
-            """ % (self.hits_table, self.tuples_table)
+            """ % (self.seeds_table)
             c.execute(q)
-        sys.stderr.write('Initialized index tables %s, %s at: %s\n' %
-            (self.tuples_table, self.hits_table, self.tuplesdb.db))
+            # create an index for IDs:
+            c.execute('CREATE INDEX seeds_ids ON %s (S_id, T_id)'
+                % self.seeds_table)
+        sys.stderr.write('Initialized index table %s at: %s\n' %
+            (self.tuples_table, self.tuplesdb.db))
+
+    def tup_scan(self, string):
+        """A generator for ``(string, idx)`` tuples to scan through any given
+        string. For example::
+
+            string = 'ACGTGT'
+            tup_scan(string, 5) # => ('ACGTG', 0), ('CGTGT', 1)
+
+        Args:
+            string (str): The string to scan.
+            wordlen(int): Length of the words.
+
+        Yields:
+            tuple: A ``str`` of length :attr:`wordlen` and a starting position (``int``).
+        """
+        for idx in range(len(string) - self.wordlen + 1):
+            yield (string[idx:idx + self.wordlen], idx)
+
+
+    # helper for index(): yields data values to be inserted in the seeds index.
+    def _give_seeds(self, cursor):
+        # count the total number of tuples so we can report percentage
+        # progress:
+        cursor.execute('SELECT count(*) FROM %s' % self.tuples_table)
+        for row in cursor:
+            num_tuples = int(row[0])
+            break
+        indicator = ProgressIndicator('indexing %d seeds' % num_tuples, num_tuples)
+        indicator.start()
+
+        cursor.execute('SELECT tuple, hits from %s' % self.tuples_table)
+        for tup, hits in cursor:
+            # report progess:
+            indicator.progress()
+
+            # hits contains multiple entries of the form: "@<seqid>:<idx>".
+            assert(hits[0] == '@')
+            hits = [tuple(hit.split(':')) for hit in hits[1:].split('@')]
+            hits = [(hit[0], int(hit[1])) for hit in hits]
+            # not interested in seeds from a sequence to itself:
+            if len(set([hit[0] for hit in hits])) < 2:
+                continue
+            for S_hit_idx in range(len(hits)):
+                for T_hit_idx in range(S_hit_idx + 1, len(hits)):
+                    S_hit, T_hit = hits[S_hit_idx], hits[T_hit_idx]
+                    yield (S_hit[0], T_hit[0], S_hit[1], T_hit[1])
+
+        indicator.finish()
 
     def index(self):
         """Scans all sequences in the ``seq`` table and records all observed
-        tuples in ``tuples_N`` tables and all hits in ``tuples_N_hits`` tables.
-
-        Args:
-            hp_condenser (homopolymeic.HpCondenser): If specified, its
-                :func:`tup_scan <align.homopolymeric.HpCondenser.tup_scan>` is
-                used instead of :func:`this module <tup_scan>`'s generic
-                version.
-
-        Note:
-            It takes ~3 minutes to index 10-mers of 500 sequences with average
-            length 11Kbp into a DB of ~250MB. With 20-mers takes ~4 minutes and
-            DB size is ~600MB!
+        tuples in ``tuples_N`` table. Then scans all the observed hits to
+        populate the ``seeds_N`` table used by :func:`seeds`. Each "seed" record
+        is a 4-tuple ``(S_id, T_id, S_idx, T_idx)`` where the first two entries
+        are ID's of sequences (as per the ``seq`` table) and the last two
+        entries are integers corresponding to the starting position of the seed
+        in the sequence pair.
         """
-        # We want an Upsert to avoid changing tuple
-        # IDs see http://stackoverflow.com/a/4330694 .
-        tup_insert_q = """
-            INSERT OR REPLACE INTO %s (id, tuple)
-            VALUES ((SELECT id FROM %s WHERE tuple = ?), ?)
+        hit_ins_q = """
+            INSERT OR REPLACE INTO %s (tuple, hits)
+            SELECT ?, IFNULL( (SELECT hits FROM %s WHERE tuple = ?), "") || ?
         """ % (self.tuples_table, self.tuples_table)
-        hit_insert_q = """
-            INSERT INTO %s (tuple, seq, idx)
-                SELECT id, ?, ?  FROM %s WHERE tuple = ?
-        """ % (self.hits_table, self.tuples_table)
-        sys.stderr.write('indexing sequences:')
         with sqlite3.connect(self.tuplesdb.db) as conn:
-            c = conn.cursor()
-            # can't nest sqlite queries, pick out IDs first and load each
-            # sequence separately:
-            c.execute('SELECT id FROM seq')
-            ids = [row[0] for row in c]
-            for seqid in ids:
-                c.execute('SELECT seq FROM seq WHERE id = ?', (seqid,))
-                for row in c:
-                    string = row[0]
-                    break
-                c.executemany(
-                    tup_insert_q,
-                    [(s,s) for s, _ in self.tup_scan(string)]
+            # We need multiple cursors: one two read from the seq table
+            # (seq_c), one two read/write from/to the tuples table (tuples_c),
+            # and one to write to the seeds table (seeds_c).
+            tuples_c = conn.cursor()
+            seq_c = conn.cursor()
+            seeds_c = conn.cursor()
+
+            # count the total number so we can report percentage progress:
+            seq_c.execute('SELECT count(*) FROM seq')
+            for row in seq_c:
+                num_seqs = int(row[0])
+                break
+            indicator = ProgressIndicator('indexing %d sequences' % num_seqs, num_seqs)
+            indicator.start()
+
+            # populate the tuples table:
+            seq_c.execute('SELECT id, seq FROM seq')
+            for seqid, string in seq_c:
+                tuples_c.executemany(
+                    hit_ins_q,
+                    [(s, s, '@%s:%d' % (seqid, idx)) for s, idx in self.tup_scan(string)]
                 )
-                c.executemany(
-                    hit_insert_q,
-                    [(seqid, idx, s) for s, idx in self.tup_scan(string)]
-                )
-                sys.stderr.write(' ' + str(seqid))
-            sys.stderr.write('\n')
+                indicator.progress()
+
+            indicator.finish()
+
+            # populate the seeds table:
+            seed_ins_q = """
+                INSERT INTO %s (S_id, T_id, S_idx, T_idx)
+                VALUES (?, ?, ?, ?)
+            """ % self.seeds_table
+            seeds_c.executemany(seed_ins_q, self._give_seeds(tuples_c))
 
     def seeds(self, S_id, T_id):
         """Given two sequence ids, finds all maximal exactly matching segments
-        between the two. A segment is in its maximal form if there are no other
-        exactly-matching segments whose span is a unit shift in both the query
-        and target sequences.
+        (see :class:`Segment`) between the two. A segment is in its maximal
+        form if it cannot be extended in either direction by an exact match.
 
         Note:
             Scores of transcripts for exact matches are left as 0 to avoid
-            unnecessary cycles, we populate the score first thing in
-            :func:`extend`.
+            unnecessary cycles.
         """
         q = """
-            SELECT H1.idx, H2.idx FROM %s H1 -- H1 is S, H2 is T
-            INNER JOIN %s H2
-            ON H1.tuple = H2.tuple
-            WHERE H1.seq = ? AND H2.seq = ?
-        """ % (self.hits_table, self.hits_table)
-        def row_factory(cursor, row):
-            tx = pw.Transcript(row[0], row[1], 0, 'M'*self.wordlen)
-            return Segment(S_id=S_id, T_id=T_id, tx=tx)
-
+            SELECT S_id, T_id, S_idx, T_idx FROM %s
+            WHERE S_id = ? AND T_id = ? OR S_id = ? AND T_id = ?
+        """ % (self.seeds_table)
+        exacts = []
         with sqlite3.connect(self.tuplesdb.db) as conn:
-            conn.row_factory = row_factory
             c = conn.cursor()
-            c.execute(q, (S_id, T_id))
-            exacts = [r for r in c]
+            c.execute(q, (S_id, T_id, T_id, S_id))
+            for row in c:
+                if row[0] == S_id and row[1] == T_id:
+                    S_idx, T_idx = row[2], row[3]
+                elif row[0] == T_id and row[1] == S_id:
+                    T_idx, S_idx = row[2], row[3]
+                else:
+                    raise RuntimeError("This should not have happend!")
+                tx = pw.Transcript(S_idx, T_idx, 0, 'M'*self.wordlen)
+                exacts += [Segment(S_id=S_id, T_id=T_id, tx=tx)]
 
         exacts.sort(key=lambda s: s.tx.idx_S)
         # merge overlapping tuples:
