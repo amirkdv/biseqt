@@ -13,6 +13,7 @@ alignment problem:
 """
 from math import log
 import re
+import sys
 from termcolor import colored
 from contextlib import contextmanager
 
@@ -344,7 +345,7 @@ class Transcript(object):
     def __repr__(self):
         return '(%d,%d),%.2f:%s' % (self.idx_S, self.idx_T, self.score, self.opseq)
 
-    def pretty_print(self, S, T, f, width=120, margin=20, colors=True):
+    def pretty_print(self, S, T, f=sys.stdout, width=120, margin=20, colors=True):
         """Pretty prints a transcript to f.
 
         Args:

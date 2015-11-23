@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-import sys
 from .. import pw, seq
 
 params = {
@@ -39,8 +38,8 @@ with pw.AlignProblem(S, T, C, align_type=params['type']) as P:
 
 print '\n--> optimal alignment:\n%s\n' % str(transcript)
 if transcript:
-    transcript.pretty_print(S, T, sys.stdout, margin=10)
+    transcript.pretty_print(S, T)
 
 m_transcript = pw.Transcript(idx_S=0, idx_T=0, score=P.score(m_opseq), opseq=m_opseq)
 print '\n--> mutation transcript:\n%s\n' % str(m_transcript)
-m_transcript.pretty_print(S, T, sys.stdout, margin=10)
+m_transcript.pretty_print(S, T)
