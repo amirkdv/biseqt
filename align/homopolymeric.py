@@ -241,7 +241,7 @@ class HpCondenser(object):
         where :math:`G_h(n) = ng_h` is the linear homopolymeric gap penalty.
         The substitution score is the following when :math:`x \\ne y`:
 
-            :math:`S(x_i \\rightarrow y_j) = \\min(i,j) S(x \\rightarrow x) + G(|i-j|)`
+            :math:`S(x_i \\rightarrow y_j) = \\min(i,j) S(x \\rightarrow y) + G(|i-j|)`
 
         where :math:`G(\cdot)` is the usual (non-homopolymeric) gap penalty.
 
@@ -254,8 +254,7 @@ class HpCondenser(object):
                 well-defined.
 
         Returns:
-            pw.AlignParams: Alignment parameters for the destination
-                alphabet.
+            pw.AlignParams: Alignment parameters for the destination alphabet.
         """
         assert(align_params.alphabet.letters == self.src_alphabet.letters)
 

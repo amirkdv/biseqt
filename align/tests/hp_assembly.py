@@ -6,7 +6,9 @@ import igraph
 from .. import pw, tuples, seq, assembly, homopolymeric
 
 params = {
-    'wordlen': 10,          # tuple word length for seed extension
+    'show_params': False,   # print a summary of parameters
+    'profile': False,        # profile building the overlap graph
+    'wordlen': 15,          # tuple word length for seed extension
     'genome_length': 50000, # length of randomly generated genome
     'coverage': 10,          # coverage of random sequencing reads
     'read_len_mean': 5000,  # average length of sequencing read
@@ -48,6 +50,8 @@ subst_probs_d = Tr.condense_subst_probs(**params)
 # )
 
 def show_params():
+    if not params['show_params']:
+        return
     print 'Substitution probabilities:'
     for i in subst_probs_d:
         print [round(f,4) for f in i]
@@ -84,7 +88,7 @@ def overlap_by_seed_extension(db, path):
     B = tuples.TuplesDB(db, alphabet=A)
     show_params()
     HpIdx = homopolymeric.HpCondensedIndex(B, params['wordlen'], hp_condenser=IdxTr)
-    G = assembly.OverlapBuilder(HpIdx, C_d, hp_condenser=Tr, **params).build()
+    G = assembly.OverlapBuilder(HpIdx, C_d, hp_condenser=Tr, **params).build(profile=params['profile'])
     G.save(path)
 
 def overlap_graph_by_known_order(db):

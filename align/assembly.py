@@ -387,14 +387,14 @@ class OverlapBuilder(object):
         es, ws = [], []
         seqinfo = self.index.tuplesdb.seqinfo()
         seqids = seqinfo.keys()
-        num_pairs = (len(seqids) * (len(seqids)-1)) / 2
-        indicator = ProgressIndicator('discovering overlaps', num_pairs)
+        msg = 'discovering overlaps between %d reads' % len(seqids)
+        num_pairs = self.index.num_potential_homolog_pairs()
+        indicator = ProgressIndicator(msg, num_pairs)
         progress_cnt = 0
         if not profile:
             indicator.start()
-        for sid_idx in range(len(seqids)):
-            for tid_idx in range(sid_idx + 1, len(seqids)):
-                S_id, T_id = seqids[sid_idx], seqids[tid_idx]
+        for S_id in seqids:
+            for T_id in self.index.potential_homologs(S_id):
                 S_info, T_info = seqinfo[S_id], seqinfo[T_id]
                 S_min_idx, T_min_idx = S_info['start'], T_info['start']
                 S_max_idx = S_info['start'] + S_info['length']

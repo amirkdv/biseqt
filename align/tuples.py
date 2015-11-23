@@ -132,33 +132,36 @@ class TuplesDB(object):
 
 
 class Index(object):
-    # FIXME docs
     """The main responsibility of an Index is to respond to :func:`seeds`
     with a list of :class:`Segment` s given two sequence IDs.
     This is done by recording all "tuples" observed in all sequences
     in the database during :func:`index`. Each index is uniquely defined by
-    its :attr:`tuplesdb` and its :attr:`wordlen`. Each such index stores all
-    hits in a single database table with the following schema (replace `N`
-    with :attr:`wordlen`):
+    its :attr:`tuplesdb` and its :attr:`wordlen`. Each such index operates
+    using 3 database tables with the following schema (replace `N`
+    with :attr:`wordlen`). All tables are populated, in the order presented
+    below, by :func:`index`.
 
     .. code-block:: sql
 
         CREATE TABLE tuples_N (
-          'tuple' char(N)
-          'hits'  varchar,
+          'tuple' char(N), -- literal tuple of length N
+          'hits'  varchar, -- '@' delimited string of hits with format (@<id>:<idx>)*
           UNIQUE(tuple)
         )
         CREATE TABLE seeds_N (
+          -- each record corresponds to a single exactly matching segment
           'S_id' integer REFERENCES seq(id),
           'T_id' integer REFERENCES seq(id),
-          'S_idx' integer,
-          'T_idx' integer,
+          'S_idx' integer, -- starting position of seed in S
+          'T_idx' integer, -- starting position of seed in T
           UNIQUE(S_id, T_id, S_idx, T_idx)
         );
-
-    The ``hits`` column of ``tuples_N`` contains a single string with the
-    format ``(@<id>:<idx>)*``. For example, a hit at position 12 of sequence
-    with ID 57 (according to the ``seq`` table) is represented by ``@57:12``.
+        CREATE TABLE potential_homologs_N (
+          'id' integer REFERENCES seq(id),
+          'homologs' varchar, -- comma separated list of sequence IDs, with
+                              -- potential homology to sequence with ID 'id'.
+          UNIQUE(id)
+        );
 
     Attributes:
         tuplesdb (tuplesDB): The tuples database.
@@ -169,6 +172,7 @@ class Index(object):
         self.wordlen = wordlen
         self.tuples_table = 'tuples_%d' % self.wordlen
         self.seeds_table = 'seeds_%d' % self.wordlen
+        self.potential_homologs_table = 'potential_homologs_%d' % self.wordlen
 
     def initdb(self):
         """Initializes the database: creates the required tables and
@@ -196,8 +200,17 @@ class Index(object):
             c.execute(
                 'CREATE INDEX seeds_ids ON %s (S_id, T_id)' % self.seeds_table
             )
-        sys.stderr.write('Initialized index table %s at: %s\n'
-                         % (self.tuples_table, self.tuplesdb.db))
+            q = """
+                CREATE TABLE %s (
+                  'id' integer REFERENCES seq(id),
+                  'homologs' varchar,
+                  UNIQUE(id)
+                );
+            """ % (self.potential_homologs_table)
+            c.execute(q)
+        sys.stderr.write('Initialized index tables %s, %s, %s at: %s\n'
+                         % (self.tuples_table, self.seeds_table,
+                            self.potential_homologs_table, self.tuplesdb.db))
 
     def tup_scan(self, string):
         """A generator for ``(string, idx)`` tuples to scan through any given
@@ -238,13 +251,56 @@ class Index(object):
             assert(hits[0] == '@')
             hits = [tuple(hit.split(':')) for hit in hits[1:].split('@')]
             hits = [(hit[0], int(hit[1])) for hit in hits]
-            # not interested in seeds from a sequence to itself:
-            if len(set([hit[0] for hit in hits])) < 2:
-                continue
             for S_hit_idx in range(len(hits)):
                 for T_hit_idx in range(S_hit_idx + 1, len(hits)):
                     S_hit, T_hit = hits[S_hit_idx], hits[T_hit_idx]
+                    # not interested in seeds from a sequence to itself:
+                    if S_hit[0] == T_hit[0]:
+                        continue
                     yield (S_hit[0], T_hit[0], S_hit[1], T_hit[1])
+
+        indicator.finish()
+
+    def num_potential_homolog_pairs(self, cursor=None):
+        """Returns the number of potential homolog pairs in the database.
+        Provide a specific cursor object to access the SQLite database if
+        accessing this function through a transaction.
+        """
+        cnt_q = """
+            SELECT COUNT(*) FROM (
+                SELECT DISTINCT S_id, T_id
+                FROM %s
+            )
+        """ % self.seeds_table
+        if cursor is None:
+            with sqlite3.connect(self.tuplesdb.db) as conn:
+                cursor = conn.cursor()
+                cursor.execute(cnt_q)
+        else:
+            cursor.execute(cnt_q)
+        for row in cursor:
+            return row[0]
+
+    # Helper for index(): yields data values for the potential homologs index.
+    # Note that for each sequence id (which is an integer as per the seq table),
+    # only potential homologs with greater sequence IDs are reported to avoid
+    # duplicates.
+    def _give_potential_homologs(self, cursor):
+        num_total = self.num_potential_homolog_pairs(cursor)
+        msg = 'indexing reads sharing at least one seed'
+        indicator = ProgressIndicator(msg, num_total)
+        indicator.start()
+        q = 'SELECT DISTINCT S_id, T_id FROM %s' % self.seeds_table
+        cursor.execute(q)
+        for row in cursor:
+            if row[0] < row[1]:
+                yield (row[0], row[0], str(row[1]) + ',')
+            elif row[0] > row[1]:
+                yield (row[1], row[1], str(row[0]) + ',')
+            else:
+                print row
+                raise RuntimeError("This shouldn't have happened.")
+            indicator.progress()
 
         indicator.finish()
 
@@ -256,6 +312,9 @@ class Index(object):
         entries are ID's of sequences (as per the ``seq`` table) and the last
         two entries are integers corresponding to the starting position of the
         seed in the sequence pair.
+
+        Finally, the contents of the ``seeds_N`` table is scanned to populate
+        ``potential_homologs_N`` for every sequence in the database.
         """
         hit_ins_q = """
             INSERT OR REPLACE INTO %s (tuple, hits)
@@ -264,23 +323,25 @@ class Index(object):
         with sqlite3.connect(self.tuplesdb.db) as conn:
             # We need multiple cursors: one two read from the seq table
             # (seq_c), one two read/write from/to the tuples table (tuples_c),
-            # and one to write to the seeds table (seeds_c).
+            # one to read/write from/to the seeds table (seeds_c), and one
+            # to write to the seeds cache table (potential_homologs_c)
             tuples_c = conn.cursor()
             seq_c = conn.cursor()
             seeds_c = conn.cursor()
+            potential_homologs_c = conn.cursor()
 
             # count the total number so we can report percentage progress:
             seq_c.execute('SELECT count(*) FROM seq')
             for row in seq_c:
                 num_seqs = int(row[0])
                 break
-            indicator = ProgressIndicator(
-                'indexing %d sequences' % num_seqs, num_seqs
-            )
+
+            msg = 'indexing %d sequences with word length %d' \
+                % (num_seqs, self.wordlen)
+            indicator = ProgressIndicator(msg, num_seqs)
             indicator.start()
 
             # populate the tuples table:
-
             def _give_tuple():
                 for s, idx in self.tup_scan(string):
                     yield (s, s, '@%s:%d' % (seqid, idx))
@@ -299,6 +360,30 @@ class Index(object):
             """ % self.seeds_table
             seeds_c.executemany(seed_ins_q, self._give_seeds(tuples_c))
 
+            # populate the seeds cache table:
+            seed_cache_ins_q = """
+                INSERT OR REPLACE INTO %s (id, homologs)
+                SELECT ?, IFNULL( (SELECT homologs FROM %s WHERE id = ?), "") || ?
+            """ % (self.potential_homologs_table, self.potential_homologs_table)
+            potential_homologs_c.executemany(seed_cache_ins_q, self._give_potential_homologs(seeds_c))
+
+    def potential_homologs(self, seqid):
+        """Given a sequence ID, returns a list of sequence IDs, all integers
+        greater than ``seqid`` (to avoid duplicates in assembly), that are
+        potentially homologous to the given sequence. The result is read
+        directly from the ``potential_homologs_N`` table.
+        """
+        q = """
+            SELECT homologs FROM %s WHERE id = ?
+        """ % self.potential_homologs_table
+        with sqlite3.connect(self.tuplesdb.db) as conn:
+            c = conn.cursor()
+            c.execute(q, (seqid,))
+            for row in c:
+                return [int(i) for i in row[0].split(',') if i]
+
+        return []
+
     def seeds(self, S_id, T_id):
         """Given two sequence ids, finds all maximal exactly matching segments
         (see :class:`Segment`) between the two. A segment is in its maximal
@@ -310,7 +395,7 @@ class Index(object):
         """
         q = """
             SELECT S_id, T_id, S_idx, T_idx FROM %s
-            WHERE S_id = ? AND T_id = ? OR S_id = ? AND T_id = ?
+            WHERE (S_id = ? AND T_id = ? ) OR (S_id = ? AND T_id = ?)
         """ % (self.seeds_table)
         exacts = []
         with sqlite3.connect(self.tuplesdb.db) as conn:
