@@ -45,7 +45,7 @@ class OverlapGraph(object):
         """
         return self.iG.es['weight'][self.iG.get_eid(u, v)]
 
-    def eid_to_str(self, eid, maxlen=20):
+    def eid_to_str(self, eid, maxlen=50):
         """Prepares an edge for pretty printing. Truncates and paths the end
         point labels (``name`` is used as label) to ensure they both have
         length ``maxlen``.
@@ -217,7 +217,7 @@ class OverlapGraph(object):
         }
         igraph.plot(self.iG, fname, **plot_kw)
 
-    def diff_text(self, OG, f):
+    def diff_text(self, OG, f=sys.stdout, summary_only=True):
         """Prints a diff-style comparison of our :attr:`iG` against another
         given :class:`OverlapGraph` and writes the output to the given file
         handle. Missing edges are printed in red with a leading '-' and added
@@ -235,11 +235,13 @@ class OverlapGraph(object):
             elif endpoints in sE2:
                 return OG.eid_to_str(OG.iG.get_eid(*endpoints))
             else:
-                raise ValueError("This should not have happened")
+                raise RuntimeError("This should not have happened")
         missing, added, both = sE1 - sE2, sE2 - sE1, sE1.intersection(sE2)
         f.write('G1 (%d edges) --> G2 (%d edges): %%%.2f lost, %%%.2f added\n' %
             (len(sE1), len(sE2), len(missing)*100.0/len(sE1),
              len(added)*100.0/len(sE1)))
+        if summary_only:
+            return
         diff = [('-', edge) for edge in missing] + \
             [('+', edge) for edge in added] + [(None, edge) for edge in both]
         for edge in sorted(diff, cmp=lambda x, y: cmp(x[1], y[1])):
@@ -288,7 +290,7 @@ class OverlapGraph(object):
         vertex_color = ['white' if v.degree(mode=igraph.IN) else self.v_highlight for v in G.iG.vs]
 
         G.draw(fname, edge_color=edge_color, vertex_color=vertex_color,
-            edge_width=5, edge_arrow_width=3, edge_curved=0.3)
+            edge_width=5, edge_arrow_width=3, edge_curved=0.1)
 
     def save(self, fname):
         """Saves the graph in GML format
@@ -297,6 +299,7 @@ class OverlapGraph(object):
             fname (str): path to GML file.
         """
         self.iG.write_gml(fname)
+
 
 class OverlapBuilder(object):
     """Provided a :class:`align.tuples.Index` builds an overlap graph of all the
@@ -313,16 +316,16 @@ class OverlapBuilder(object):
 
     All arguments to the constructor become class attributes with the same name:
 
-    Args:
+    Attributes:
         index (tuples.Index): A tuples index that responds to
             :func:`align.tuples.Index.seeds`.
         align_params (pw.AlignParams): The alignment parameters for the
             rolling alignment.
-        hp_condenser (Optional[homopolymeric.HpCondenser]): If specified,
+        hp_condenser (homopolymeric.HpCondenser): If specified,
             all alignments will be performed in condensed alphabet.
             Consequently, all other arguments are interpretted in the condensed
             alphabet.
-        drop_threshold (Optional[float]): What constitutes a drop in the
+        drop_threshold (float): What constitutes a drop in the
             score from one window to the next, default is 0. This means that
             if the overall score does not strictly increase (or the score of the
             new window is not positive) we drop the seed.
