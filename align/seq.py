@@ -1,7 +1,7 @@
 import random
 from Bio import SeqIO, Seq, SeqRecord
 
-from . import ffi, lib, CffiObject
+from . import ffi, lib, CffiObject, ProgressIndicator
 
 class Alphabet(CffiObject):
     """Wraps a C ``sequence_alphabet*``.
@@ -266,12 +266,15 @@ class Sequence():
         coverage = kw.get('coverage', 5)
         len_mean, len_var = kw.get('len_mean', 100), kw.get('len_var', 1)
         N = self.length
+        num = int(1.0 * N * coverage/len_mean)
+        indicator = ProgressIndicator('generating %d random reads' % num + 2, num + 2)
+        indicator.start()
 
         # include a read that reaches the begenning:
         read, _ = Sequence(self[:len_mean], self.alphabet).mutate(**kw)
         yield read, 0
+        indicator.progress()
 
-        num = int(1.0 * N * coverage/len_mean)
         for i in range(num):
             # minimum read leangth is 10, and max is N-1
             length = max(10, min(N-1, int(random.gauss(len_mean, len_var))))
@@ -279,10 +282,13 @@ class Sequence():
             x = Sequence(''.join([self[k] for k in range(start, start + length)]), self.alphabet)
             read, _ = x.mutate(**kw)
             yield read, start
+            indicator.progress()
 
         # include a read that reaches the end:
         read, _ = Sequence(self[-len_mean:], self.alphabet).mutate(**kw)
         yield read, N - len_mean
+        indicator.progress()
+        indicator.finish()
 
 def make_sequencing_fixture(genome_file, reads_file, genome_length=1000, **kw):
     """Helper method for tests. Generates a random genome and a random sequence

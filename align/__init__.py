@@ -2,6 +2,7 @@
 # where 0.8.2 comes from: apt-cache policy python-cffi (which is the "backend")
 import cffi
 import os
+import sys
 
 ffi = cffi.FFI()
 lib = ffi.dlopen(os.path.join(os.path.dirname(__file__), 'libalign.so'))
@@ -41,3 +42,22 @@ def hp_tokenize(string):
     if counter and len(string):
         yield string[0], counter
 
+
+class ProgressIndicator(object):
+    def __init__(self, msg, num_total):
+        self.msg, self.num_total, self.f = msg, num_total, f
+        self.freq = max(num_total/100, 1)
+        self.progress_cnt = 0
+
+    def start(self):
+        sys.stderr.write('%s: 0%%' % self.msg)
+
+    def finish(self):
+        sys.stderr.write('\r%s: %d%%.\n' %
+            (self.msg, (self.progress_cnt * 100)/self.num_total))
+
+    def progress(self, num=1):
+        self.progress_cnt += num
+        if self.progress_cnt % self.freq == 0:
+            sys.stderr.write('\r%s: %d%%' %
+                (self.msg, (self.progress_cnt * 100)/self.num_total))
