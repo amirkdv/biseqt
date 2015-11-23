@@ -8,6 +8,9 @@
 *.svg
 *.pdf
 *.gml
+*.nhr
+*.nin
+*.nsq
 
 *.egg-info
 *.egg
