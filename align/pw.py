@@ -33,22 +33,27 @@ OVERLAP = lib.OVERLAP
 START_ANCHORED_OVERLAP = lib.START_ANCHORED_OVERLAP
 END_ANCHORED_OVERLAP = lib.END_ANCHORED_OVERLAP
 
+
 class AlignParams(CffiObject):
     """Wraps the C struct ``align_params``, see ``libalign.h``.
 
     Attributes:
         alphabet (Alphabet): alphabet used to represent the sequences.
-        c_obj (cffi.cdata): points to the underlying `align_params` struct.
+        c_obj (cffi.cdata): points to the underlying C ``align_params`` struct.
+        subst_scores (List[List]): rebuilt from the C ``double**`` upon access.
 
     Additionally all struct members of ``align_params`` can be read (and not
     written) as usual attributes.
     """
     def __init__(self, alphabet=None, subst_scores=[],
-        go_score=0, ge_score=0, max_diversion=-1):
+                 go_score=0, ge_score=0, max_diversion=-1):
         self.alphabet = alphabet
-        # each row in the subst matrix must be "owned" by an object that's kept
-        # alive.
-        self._c_subst_rows_ka = [ffi.new('double[]', subst_scores[i]) for i in range(self.alphabet.length)]
+        # each row in the substitution matrix must be "owned" by an object that
+        # is kept alive.
+        L = self.alphabet.length
+        self._c_subst_rows_ka = [
+            ffi.new('double[]', subst_scores[i]) for i in range(L)
+        ]
         self._c_subst_full_ka = ffi.new('double *[]', self._c_subst_rows_ka)
         self.c_obj = ffi.new('align_params*', {
             'alphabet': self.alphabet.c_obj,
@@ -64,7 +69,7 @@ class AlignParams(CffiObject):
         matrix using a null-hypothesis letters distribution. The scores are
         natural logs of odds ratios:
 
-            :math:`S(a_i,a_j) = \log[1-g] + \log[\Pr(a_j|a_i)] - \log[\Pr(a_j)]`
+            :math:`S(a_i,a_j) = \log[(1-g)\Pr(a_j|a_i)] - \log[\Pr(a_j)]`
 
         where :math:`S(a_i,a_j)` is the substitution score of letter
         :math:`a_i` to letter :math:`a_j` and :math:`g` is the gap probability.
@@ -74,7 +79,8 @@ class AlignParams(CffiObject):
                 probabilities are in order of letter index in alphabet.
 
         Keyword Args:
-            subst_probs(List[List[float]]): As in :func:`align.seq.Sequence.mutate`.
+            subst_probs(List[List[float]]): As in
+                :func:`align.seq.Sequence.mutate`.
             letter_dist(Optional[List[float]]): Probability distributions of
                 each letter of the alphabet in the null (random) hypothesis,
                 default is uniform.
@@ -88,8 +94,8 @@ class AlignParams(CffiObject):
             to scores. This is because under an affine model where the
             probability of opening a gap differs from that of extending a gap,
             the substitution probabilities also become context-dependent (see
-            where :math:`g` appears in the formula above) which is not supported
-            by ``libalign``.
+            where :math:`g` appears in the formula above) which is not
+            supported by ``libalign``.
         """
         L = alphabet.length
         subst_probs = kw['subst_probs']
@@ -101,8 +107,8 @@ class AlignParams(CffiObject):
             for j in range(L):
                 assert(subst_probs[i][j] > 0)
                 assert(letter_dist[i] * letter_dist[j] != 0)
-                subst_scores[i][j] = log(1-gap_prob) + log(subst_probs[i][j]) - \
-                    log(letter_dist[j])
+                subst_scores[i][j] = log(1-gap_prob) + \
+                    log(subst_probs[i][j]) - log(letter_dist[j])
         return subst_scores
 
     @classmethod
@@ -121,10 +127,10 @@ class AlignParams(CffiObject):
             In the above sense the score (log likelihood) of a gap of
             length :math:`n \\ge 1` is :math:`\log g_o + (n-1)\log g_e`.
             This differs by the 1 offset from textbook definitions of the
-            affine gap penalty (and from what ``libalign`` expects). The two are
-            equivalent since the above gap penalty function can be rewritten as
-            :math:`\log {g_o \over g_e} + n \log g_e`. These are precisely the
-            scores this function returns.
+            affine gap penalty (and from what ``libalign`` expects). The two
+            are equivalent since the above gap penalty function can be
+            rewritten as :math:`\log {g_o \over g_e} + n \log g_e`.
+            These are precisely the scores this function returns.
 
             Consequently, to ensure that the gap open score is not positive,
             we require that the gap open probability be less than the gap
@@ -138,10 +144,6 @@ class AlignParams(CffiObject):
         return log(go_prob/ge_prob), log(ge_prob)
 
     def __getattr__(self, name):
-        """Allow attributes to access members of the underlying ``align_params``
-        struct. Additionally provides a ``subst_scores`` attribute which builds
-        a python list of lists from the corresponding C ``double **``.
-        """
         if name == 'subst_scores':
             idx = range(self.alphabet.length)
             return [[self.c_obj.subst_scores[i][j] for j in idx] for i in idx]
@@ -169,10 +171,12 @@ class AlignParams(CffiObject):
         """
         score = 0.0
         i, j = S_min_idx, T_min_idx
-        for op,num in hp_tokenize(opseq):
+        for op, num in hp_tokenize(opseq):
             if op in 'MS':
                 for k in range(num):
-                    score += self.subst_scores[S.c_idxseq[i+k]][T.c_idxseq[j+k]]
+                    S_let_idx = S.c_idxseq[i + k]
+                    T_let_idx = T.c_idxseq[j + k]
+                    score += self.subst_scores[S_let_idx][T_let_idx]
                 i, j = i + num, j + num
             elif op in 'ID':
                 score += self.gap_open_score + self.gap_extend_score * num
@@ -183,6 +187,7 @@ class AlignParams(CffiObject):
             else:
                 raise ValueError('Invalid edit operation: %c' % op)
         return score
+
 
 class AlignProblem(CffiObject):
     """Wraps the C struct ``align_problem`` and provides a context manager to
@@ -207,16 +212,17 @@ class AlignProblem(CffiObject):
         params (pw.AlignParams): Alignment parameters.
 
     Keyword Args:
-        S_min_idx (int): Starting position of the frame for ``S``, default is 0.
-        T_min_idx (int): Starting position of the frame for ``T``, default is 0.
-        S_max_idx (int): Ending position (non-inclusive) of the frame for ``S``,
-            default is the length of ``S``.
-        T_max_idx (int): Ending position (non-inclusive) of the frame for ``T``,
-            default is the length of ``T``.
+        S_min_idx (int): Starting position of frame for ``S``, default is 0.
+        T_min_idx (int): Starting position of frame for ``T``, default is 0.
+        S_max_idx (int): Ending position (non-inclusive) of the frame for
+            ``S``, default is the length of ``S``.
+        T_max_idx (int): Ending position (non-inclusive) of the frame for
+            ``T``, default is the length of ``T``.
 
     Attributes:
         c_obj (cffi.cdata): points to the underlying ``align_problem`` struct.
-        c_dp_table (cffi.cdata): points to the underlying ``double **`` DP table.
+        c_dp_table (cffi.cdata): points to the underlying ``double **``
+            dynamic programming table.
     """
     def __init__(self, S, T, params, **kw):
         align_type = kw.pop('align_type', GLOBAL)
@@ -248,7 +254,9 @@ class AlignProblem(CffiObject):
 
     def __exit__(self, *args):
         if self.c_dp_table not in [ffi.NULL, -1]:
-            lib.free_dp_table(self.c_dp_table, self.c_dp_row_cnt, self.c_dp_col_cnt)
+            lib.free_dp_table(
+                self.c_dp_table, self.c_dp_row_cnt, self.c_dp_col_cnt
+            )
 
     def score(self, opseq):
         """Calculates the score for an arbitray opseq. Opseqs are allowed to be
@@ -257,7 +265,9 @@ class AlignProblem(CffiObject):
             P = AlignProblem(...)
             P.score('MMMSSISSD') #=> 23.50
         """
-        return self.params.score(self.S, self.T, opseq, self.S_min_idx, self.T_min_idx)
+        return self.params.score(
+            self.S, self.T, opseq, self.S_min_idx, self.T_min_idx
+        )
 
     def solve(self, print_dp_table=False):
         """Populates the DP table and returns the optimal score.
@@ -273,7 +283,7 @@ class AlignProblem(CffiObject):
         if print_dp_table:
             mat = self.dp_table
             for i in range(len(mat)):
-                print [round(f,2) for f in mat[i]]
+                print [round(f, 2) for f in mat[i]]
         if self.opt == ffi.NULL:
             self.opt = None
             return None
@@ -304,26 +314,28 @@ class AlignProblem(CffiObject):
         if name == 'dp_table':
             i_idx = range(self.S_max_idx - self.S_min_idx + 1)
             j_idx = range(self.T_max_idx - self.T_min_idx + 1)
-            def score(i,j):
+
+            def score(i, j):
                 if self.c_dp_table[i][j].num_choices != 0:
                     return self.c_dp_table[i][j].choices[0].score
                 else:
                     return None
-            return [[score(i,j) for j in j_idx] for i in i_idx]
+            return [[score(i, j) for j in j_idx] for i in i_idx]
         else:
             return super(AlignProblem, self).__getattr__(name)
 
+
 class Transcript(object):
-    """A wrapper for alignment transcripts. Solutions to the alignment problem are
-    represented by transcript strings with the following format::
+    """A wrapper for alignment transcripts. Solutions to the alignment problem
+    are represented by transcript strings with the following format::
 
         (<Si,Tj>),<score>:<opseq>
 
     ``Si`` and ``Tj`` are integers specifying the positiong along each string
-    where the alignment begins (relative to the corresponding frames). ``score``
-    is the score of the transcript to 2 decimal places. And ``opseq`` is a
-    sequence of edit "ops" defined as follows where insertion/deletions are
-    meant to mean "from S to T"::
+    where the alignment begins (relative to the corresponding frames) and
+    ``score`` is the score of the transcript to 2 decimal places. And ``opseq``
+    is a sequence of edit "ops" defined as follows where insertion/deletions
+    are meant to mean *from S to T*::
 
         M match
         S substitution
@@ -336,23 +348,29 @@ class Transcript(object):
             ignored and instead this string is parsed to populate the
             attributes.
     """
-    def __init__(self, idx_S=0, idx_T=0, score=0.0, opseq='', raw_transcript=None):
+    def __init__(self, idx_S=0, idx_T=0, score=0.0, opseq='',
+                 raw_transcript=None):
         if raw_transcript is None:
             self.idx_S, self.idx_T = idx_S, idx_T
             self.score, self.opseq = score, opseq
             return
 
-        assert(re.match('\([0-9]+,[0-9]+\),[0-9-\.]+:[MISD]+', raw_transcript) is not None)
+        assert(
+            re.match('\([0-9]+,[0-9]+\),[0-9-\.]+:[MISD]+', raw_transcript)
+            is not None
+        )
         infostr, opseq = raw_transcript.split(':', 1)
         indices, score = infostr.rsplit(',', 1)
-        idx_S, idx_T = indices[1:-1].split(',') # skip the open/close parens
+        idx_S, idx_T = indices[1:-1].split(',')  # skip the open/close parens.
         self.idx_S, self.idx_T = int(idx_S), int(idx_T)
         self.opseq, self.score = opseq, float(score)
 
     def __repr__(self):
-        return '(%d,%d),%.2f:%s' % (self.idx_S, self.idx_T, self.score, self.opseq)
+        return '(%d,%d),%.2f:%s' \
+            % (self.idx_S, self.idx_T, self.score, self.opseq)
 
-    def pretty_print(self, S, T, f=sys.stdout, width=120, margin=20, colors=True):
+    def pretty_print(self, S, T, f=sys.stdout, width=120, margin=20,
+                     colors=True):
         """Pretty prints a transcript to f.
 
         Args:
@@ -378,7 +396,7 @@ class Transcript(object):
         def print_lines(sline, tline, f):
             maxlen = max(len(sline), len(tline))
             sline, tline = sline.rjust(maxlen), tline.rjust(maxlen)
-            f.write('%s\n%s\n' % (sline,tline))
+            f.write('%s\n%s\n' % (sline, tline))
 
         def new_line(sline, tline, _idx_S, _idx_T, f):
             print_lines(sline, tline, f)
@@ -392,7 +410,9 @@ class Transcript(object):
         counter = max(len(sline), len(tline))
         for i in reversed(range(1, pre_margin)):
             if counter >= width:
-                counter, sline, tline = new_line(sline, tline, idx_S+i, idx_T+i, f)
+                counter, sline, tline = new_line(
+                    sline, tline, idx_S+i, idx_T+i, f
+                )
             sline += S[idx_S-i] if i <= idx_S else ' '
             tline += T[idx_T-i] if i <= idx_T else ' '
             counter += letlen

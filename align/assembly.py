@@ -2,10 +2,9 @@ import re
 import sys
 import igraph
 from termcolor import colored
-
 import time
-
 from . import tuples, pw, homopolymeric, ProgressIndicator
+
 
 class OverlapGraph(object):
     """Wraps an :class:`igraph.Graph` object with additional methods to build
@@ -31,7 +30,7 @@ class OverlapGraph(object):
         scheme. Instead convert everything to "name"s which are the original
         sequence IDs.
 
-        See https://lists.nongnu.org/archive/html/igraph-help/2010-03/msg00078.html
+        See: https://lists.nongnu.org/archive/html/igraph-help/2010-03/msg00078.html
         """
         if isinstance(eid, igraph.Edge):
             eid = eid.index
@@ -42,8 +41,8 @@ class OverlapGraph(object):
         return [self.iG.vs[vid]['name'] for vid in vids]
 
     def _edge_weight(self, u, v):
-        """Internal helper; given to vertex names returns the weight of the edge
-        connecting them.
+        """Internal helper; given to vertex names returns the weight of the
+        edge connecting them.
         """
         return self.iG.es['weight'][self.iG.get_eid(u, v)]
 
@@ -59,8 +58,10 @@ class OverlapGraph(object):
         return '%s %s %s\n' % (u, w, v)
 
     def break_cycles(self, method='ip'):
-        """Removes a `feedback arc set <https://en.wikipedia.org/wiki/Feedback_arc_set>`__
-        from the graph. Depending on the ``method`` the result may not be optimal.
+        """Removes a
+        `feedback arc set <https://en.wikipedia.org/wiki/Feedback_arc_set>`__
+        from the graph. Depending on the ``method`` the result may not be
+        optimal.
 
         Keyword Args:
             method (str): The FAS discovery algorithm; passed to
@@ -72,7 +73,9 @@ class OverlapGraph(object):
         """
         if self.iG.is_dag():
             return
-        rm = self.iG.feedback_arc_set(weights=self.iG.es['weight'], method=method)
+        rm = self.iG.feedback_arc_set(
+            weights=self.iG.es['weight'], method=method
+        )
         for e in rm:
             sys.stderr.write('removed edge: %s' % self.eid_to_str(e))
         self.iG.delete_edges(rm)
@@ -87,9 +90,9 @@ class OverlapGraph(object):
             - Find a heaviest path using the sorting in :math:`O(|V|)` time.
 
         Keyword Arguments:
-            exclude (Optional[List[str]]): A list of vertex names to be excluded
-                from the graph when finding the longest path. This is only of
-                use to :func:`all_longest_paths`.
+            exclude (Optional[List[str]]): A list of vertex names to be
+                excluded from the graph when finding the longest path. This is
+                only of use to :func:`all_longest_paths`.
 
         Returns:
             list[str]: A list of vertex names in order of appearance in the
@@ -111,13 +114,17 @@ class OverlapGraph(object):
             else:
                 w = lambda x: longest_paths[x][0] + self._edge_weight(x, v)
                 cands = [(w(u), u) for u in incoming]
-                longest_paths[v] = sorted(cands, key=lambda x: x[0], reverse=True)[0]
+                longest_paths[v] = sorted(
+                    cands, key=lambda x: x[0], reverse=True
+                )[0]
 
         if not longest_paths:
             return []
 
         # Find the terminal vertex of the longest path:
-        end = sorted(longest_paths.items(), key=lambda x: x[1][0], reverse=True)[0][0]
+        end = sorted(
+            longest_paths.items(), key=lambda x: x[1][0], reverse=True
+        )[0][0]
         path = []
         # Trace back the entire path:
         while end and longest_paths:
@@ -166,7 +173,8 @@ class OverlapGraph(object):
             paths = [self.longest_path()]
         eids = []
         for path in paths:
-            eids += [self.iG.get_eid(path[idx-1], path[idx]) for idx in range(1, len(path))]
+            for idx in range(1, len(path)):
+                eids += [self.iG.get_eid(path[idx-1], path[idx])]
 
         return OverlapGraph(self.iG.subgraph_edges(eids))
 
@@ -186,24 +194,28 @@ class OverlapGraph(object):
                 specified in which case starting vertices are green.
             edge_width ([List|float]): Passed to :func:`igraph.Graph.plot`.
                 Default is 10 for edges in highlighted path and 1 otherwise.
-            edge_arrow_widge ([List|float]): Passed to :func:`igraph.Graph.plot`.
-                Default is 3 for highlighted edges and 1 otherwise.
+            edge_arrow_widge ([List|float]): Passed to
+                :func:`igraph.Graph.plot`. Default is 3 for highlighted edges
+                and 1 otherwise.
             edge_curvred (float): Passed to :func:`igraph.Graph.plot`. Default
                 is 0.1.
         """
         highlight_paths = kw.get('highlight_paths', [])
+
         def e_in_path(eid):
             u, v = self._endpoint_names(eid)
-            return any([u in p and v in p and p.index(u) == p.index(v) - 1 for p in highlight_paths])
+            return any([
+                u in p and v in p and
+                p.index(u) == p.index(v) - 1 for p in highlight_paths
+            ])
 
         v_start_path = lambda v: any([p[0] == v for p in highlight_paths])
 
         # Sugiyama works on non-DAG graphs as well
         n = len(self.iG.vs)
-        layout_kw = {
-            'weights': 'weight' if 'weight' in self.iG.es.attributes() else None,
-            'maxiter': n * 20,
-        }
+        layout_kw = {'maxiter': n * 20, 'weights': None}
+        if 'weight' in self.iG.es.attributes():
+            layout_kw['weights'] = 'weight'
         plot_kw = {
             'layout': self.iG.layout_sugiyama(**layout_kw),
             'bbox': (n*150, n*150),
@@ -231,6 +243,7 @@ class OverlapGraph(object):
         """
         sE1 = set([self._endpoint_names(e) for e in self.iG.es])
         sE2 = set([OG._endpoint_names(e) for e in OG.iG.es])
+
         def _edge_str(endpoints):
             if endpoints in sE1:
                 return self.eid_to_str(self.iG.get_eid(*endpoints))
@@ -239,9 +252,12 @@ class OverlapGraph(object):
             else:
                 raise RuntimeError("This should not have happened")
         missing, added, both = sE1 - sE2, sE2 - sE1, sE1.intersection(sE2)
-        f.write('G1 (%d edges) --> G2 (%d edges): %%%.2f lost, %%%.2f added\n' %
-            (len(sE1), len(sE2), len(missing)*100.0/len(sE1),
-             len(added)*100.0/len(sE1)))
+        missing_pctg = len(missing)*100.0/len(sE1)
+        added_pctg = len(added)*100.0/len(sE1)
+        f.write(
+            'G1 (%d edges) --> G2 (%d edges): %%%.2f lost, %%%.2f added\n' %
+            (len(sE1), len(sE2), missing_pctg, added_pctg)
+        )
         if summary_only:
             return
         diff = [('-', edge) for edge in missing] + \
@@ -292,7 +308,7 @@ class OverlapGraph(object):
         vertex_color = ['white' if v.degree(mode=igraph.IN) else self.v_highlight for v in G.iG.vs]
 
         G.draw(fname, edge_color=edge_color, vertex_color=vertex_color,
-            edge_width=5, edge_arrow_width=3, edge_curved=0.1)
+               edge_width=5, edge_arrow_width=3, edge_curved=0.1)
 
     def save(self, fname):
         """Saves the graph in GML format
@@ -304,8 +320,8 @@ class OverlapGraph(object):
 
 
 class OverlapBuilder(object):
-    """Provided a :class:`align.tuples.Index` builds an overlap graph of all the
-    sequences. All sequences must have already been indexed in the
+    """Provided a :class:`align.tuples.Index` builds an overlap graph of all
+    the sequences. All sequences must have already been indexed in the
     tuples database. For example::
 
         B = tuples.TuplesDB('path/to/file.db', alphabet=seq.Alphabet("ACGT"))
@@ -316,7 +332,8 @@ class OverlapBuilder(object):
         G = assembly.OverlapBuilder(I, C).build()
         G.save(path)
 
-    All arguments to the constructor become class attributes with the same name:
+    All arguments to the constructor become class attributes with the same
+    name.
 
     Attributes:
         index (tuples.Index): A tuples index that responds to
@@ -329,8 +346,8 @@ class OverlapBuilder(object):
             alphabet.
         drop_threshold (float): What constitutes a drop in the
             score from one window to the next, default is 0. This means that
-            if the overall score does not strictly increase (or the score of the
-            new window is not positive) we drop the seed.
+            if the overall score does not strictly increase (or the score of
+            the new window is not positive) we drop the seed.
         window (int): The size of the rolling window.
         max_succ_drops (int): Maximum number of "drops" until the
             segment is dropped, default is 3.
@@ -346,8 +363,8 @@ class OverlapBuilder(object):
         self.max_succ_drops = kwargs.get('max_succ_drops', 3)
 
     def build(self, profile=False):
-        """Builds a weighted, directed graph by using tuple methods. The process
-        has 2 steps:
+        """Builds a weighted, directed graph by using tuple methods. The
+        process has 2 steps:
 
         * Find all seeds using :func:`align.tuples.Index.seeds`,
         * Extend all seeds to suffix-prefix segments using :func:`extend`.
@@ -357,9 +374,10 @@ class OverlapBuilder(object):
         graph is acyclic. For this, see :func:`OverlapGraph.break_cycles`.
 
         Keyword Args:
-            profile (Optional[bool]): If truthy, instead of reporting percentage
-                progress time consumption is reported at *every* step (for
-                every pair of sequences). This generates *a lot* of output.
+            profile (Optional[bool]): If truthy, instead of reporting
+                percentage progress time consumption is reported at *every*
+                step (for every pair of sequences). This generates *a lot* of
+                output.
 
         Returns:
             assembly.OverlapGraph: The overlap graph, potentially containing
@@ -378,12 +396,14 @@ class OverlapBuilder(object):
             for tid_idx in range(sid_idx + 1, len(seqids)):
                 S_id, T_id = seqids[sid_idx], seqids[tid_idx]
                 S_info, T_info = seqinfo[S_id], seqinfo[T_id]
-                S_min_idx, S_max_idx = S_info['start'], S_info['start'] + S_info['length']
-                T_min_idx, T_max_idx = T_info['start'], T_info['start'] + T_info['length']
-                S_name = '%s %d-%d #%d' % (S_info['name'], S_min_idx, S_max_idx, S_id)
-                T_name = '%s %d-%d #%d' % (T_info['name'], T_min_idx, T_max_idx, T_id)
+                S_min_idx, T_min_idx = S_info['start'], T_info['start']
+                S_max_idx = S_info['start'] + S_info['length']
+                T_max_idx = T_info['start'] + T_info['length']
+                S_name = '%s %d-%d #%d' \
+                    % (S_info['name'], S_min_idx, S_max_idx, S_id)
+                T_name = '%s %d-%d #%d' \
+                    % (T_info['name'], T_min_idx, T_max_idx, T_id)
 
-                # report progress:
                 if profile:
                     sys.stderr.write('"%s" and "%s": ' % (S_name, T_name))
                 else:
@@ -395,7 +415,9 @@ class OverlapBuilder(object):
                 seeds = self.index.seeds(S_id, T_id)
                 if profile:
                     _t_seeds = 1000 * (time.time() - _t_seeds)
-                    sys.stderr.write('found %d seeds (%.0f ms)' % (len(seeds), _t_seeds))
+                    sys.stderr.write(
+                        'found %d seeds (%.0f ms)' % (len(seeds), _t_seeds)
+                    )
                     if not seeds:
                         sys.stderr.write('.\n')
 
@@ -414,8 +436,10 @@ class OverlapBuilder(object):
                 overlap = self.extend(S, T, seeds)
                 if profile:
                     _t_extend = 1000 * (time.time() - _t_extend)
-                    sys.stderr.write(' overlaps (%.0f ms): %s\n' %
-                        (_t_extend, '+' if overlap else '-'))
+                    sys.stderr.write(
+                        ' overlaps (%.0f ms): %s\n'
+                        % (_t_extend, '+' if overlap else '-')
+                    )
 
                 if not overlap:
                     continue
@@ -447,14 +471,15 @@ class OverlapBuilder(object):
 
         G = OverlapGraph()
         G.iG.add_vertices(list(vs))
-        es = [(G.iG.vs.find(name=u), G.iG.vs.find(name=v)) for u,v in es]
+        es = [(G.iG.vs.find(name=u), G.iG.vs.find(name=v)) for u, v in es]
         G.iG.add_edges(es)
         G.iG.es['weight'] = ws
         return G
 
     def _extend_fwd_once(self, S, T, segment, window):
         """Helper method for ``extend1d``."""
-        S_len, T_len = self._S_len(segment.tx.opseq), self._T_len(segment.tx.opseq)
+        S_len = self._S_len(segment.tx.opseq)
+        T_len = self._T_len(segment.tx.opseq)
         align_problem_kw = {
             'S': S, 'T': T, 'params': self.align_params,
             'align_type': pw.START_ANCHORED_OVERLAP,
@@ -527,8 +552,10 @@ class OverlapBuilder(object):
             if backwards:
                 w = min(self.window, min(cur_seg.tx.idx_S, cur_seg.tx.idx_T))
             else:
-                S_wiggle = S.length - (cur_seg.tx.idx_S + self._S_len(cur_seg.tx.opseq))
-                T_wiggle = T.length - (cur_seg.tx.idx_T + self._T_len(cur_seg.tx.opseq))
+                S_end = cur_seg.tx.idx_S + self._S_len(cur_seg.tx.opseq)
+                T_end = cur_seg.tx.idx_T + self._T_len(cur_seg.tx.opseq)
+                S_wiggle = S.length - S_end
+                T_wiggle = T.length - T_end
                 w = min(self.window, min(S_wiggle, T_wiggle))
 
             if w == 0:
@@ -548,8 +575,8 @@ class OverlapBuilder(object):
             if len(score_history) > self.max_succ_drops:
                 score_history = score_history[-self.max_succ_drops:]
 
-            if len(score_history) == self.max_succ_drops and \
-                all([x <= self.drop_threshold for x in score_history]):
+            if (len(score_history) == self.max_succ_drops and
+                all([x <= self.drop_threshold for x in score_history])):
                 break
 
             cur_seg = seg
@@ -563,8 +590,8 @@ class OverlapBuilder(object):
 
         Each seed is extended by a rolling frame of size :attr:`window` along
         the two sequences and is dropped once as many as :attr:`max_succ_drops`
-        successive bad scores are observed. A bad score (over a single frame) is
-        one that has a score of smaller than :attr:`drop_threshold`.
+        successive bad scores are observed. A bad score (over a single frame)
+        is one that has a score of smaller than :attr:`drop_threshold`.
 
         Args:
             S (seq.Sequence): The "from" sequence.
@@ -582,18 +609,18 @@ class OverlapBuilder(object):
         for segment in segments:
             fwd = self._extend1d(S, T, segment)
             bwd = self._extend1d(S, T, segment, backwards=True)
-            if fwd and bwd and min(fwd.tx.score, bwd.tx.score) > self.drop_threshold:
+            if (fwd and bwd and
+                min(fwd.tx.score, bwd.tx.score) > self.drop_threshold):
                 assert(bwd.tx.idx_S == 0 or bwd.tx.idx_T == 0)
                 opseq = bwd.tx.opseq[:-len(segment.tx.opseq)] + fwd.tx.opseq
                 score = self.align_params.score(
                     S, T, opseq,
-                    S_min_idx=bwd.tx.idx_S,
-                    T_min_idx=bwd.tx.idx_T
+                    S_min_idx=bwd.tx.idx_S, T_min_idx=bwd.tx.idx_T
                 )
                 tx = pw.Transcript(
-                    idx_S=bwd.tx.idx_S,
-                    idx_T=bwd.tx.idx_T,
-                    score=score,
-                    opseq=opseq
+                    idx_S=bwd.tx.idx_S, idx_T=bwd.tx.idx_T,
+                    score=score, opseq=opseq
                 )
-                return tuples.Segment(S_id=segment.S_id, T_id=segment.T_id, tx=tx)
+                return tuples.Segment(
+                    S_id=segment.S_id, T_id=segment.T_id, tx=tx
+                )

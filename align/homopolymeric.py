@@ -1,6 +1,7 @@
 from math import log10, floor
 from . import seq, pw, hp_tokenize, tuples
 
+
 class HpCondenser(object):
     """Transforms a sequence back and forth to an alternative alphabet by
     collapsing all homopolymeric substrings into single "letters".
@@ -33,7 +34,8 @@ class HpCondenser(object):
         letters = []
         for char in src_alphabet.letters:
             for num in range(1, self.maxlen + 1):
-                letter = char + str(min(num, self.maxlen)).rjust(self.letlen - 1, '0')
+                num = str(min(num, self.maxlen)).rjust(self.letlen - 1, '0')
+                letter = char + num
                 letters += [letter]
         self.dst_alphabet = seq.Alphabet(letters)
         # Calculate the number of parititons of integers up to self.maxlen,
@@ -46,7 +48,9 @@ class HpCondenser(object):
                 for part in partitions[n - x]:
                     partitions[n].add(tuple(sorted((x, ) + part)))
 
-        self._num_partitions = [len(partitions[n]) for n in range(self.maxlen  + 1)]
+        self._num_partitions = [
+            len(partitions[n]) for n in range(self.maxlen + 1)
+        ]
 
     def condense_sequence(self, sequence):
         """Translates a given sequence into the condensed alphabet.
@@ -62,7 +66,9 @@ class HpCondenser(object):
             seq.Sequence: The translated sequence in condensed alphabet.
         """
         assert(sequence.alphabet.letters == self.src_alphabet.letters)
-        condensed = ''.join([self._condense(*x) for x in hp_tokenize(str(sequence))])
+        condensed = ''.join(
+            [self._condense(*x) for x in hp_tokenize(str(sequence))]
+        )
         return seq.Sequence(condensed, self.dst_alphabet)
 
     def _condense(self, char, num):
@@ -90,7 +96,7 @@ class HpCondenser(object):
         for i in range(len(string)/self.letlen):
             letter = string[self.letlen*i: self.letlen*i+self.letlen]
             char, num = letter[0], int(letter[1:])
-            orig +=  char * num
+            orig += char * num
         return seq.Sequence(orig, self.src_alphabet)
 
     def expand_transcript(self, S, T, transcript):
@@ -110,9 +116,9 @@ class HpCondenser(object):
 
         Note:
             Although ``expand(condense())`` can be lossy for homopolymeric
-            substrings longer than :attr:`maxlen`, ``expand_transcript()`` does not
-            have an issue with them since the original sequences (i.e ``S`` and
-            ``T``) are available.
+            substrings longer than :attr:`maxlen`, ``expand_transcript()`` does
+            not have an issue with them since the original sequences (i.e ``S``
+            and ``T``) are available.
         """
         S, T = str(S), str(T)
         opseq = ''
@@ -151,8 +157,8 @@ class HpCondenser(object):
                     opseq += 'D' * (num_S - self.maxlen)
                 elif num_T > self.maxlen and num_S == self.maxlen:
                     opseq += 'I' * (num_T - self.maxlen)
-                char_S, num_S = next(tokens_S, (None,None))
-                char_T, num_T = next(tokens_T, (None,None))
+                char_S, num_S = next(tokens_S, (None, None))
+                char_T, num_T = next(tokens_T, (None, None))
             if op == 'S':
                 if char_S == char_T:
                     opseq += 'M' * min(num_T, num_S)
@@ -163,31 +169,32 @@ class HpCondenser(object):
                     opseq += 'I' * (num_T - num_S)
                 elif num_S > num_T:
                     opseq += 'D' * (num_S - num_T)
-                char_S, num_S = next(tokens_S, (None,None))
-                char_T, num_T = next(tokens_T, (None,None))
+                char_S, num_S = next(tokens_S, (None, None))
+                char_T, num_T = next(tokens_T, (None, None))
             if op == 'I':
                 opseq += 'I' * num_T
-                char_T, num_T = next(tokens_T, (None,None))
+                char_T, num_T = next(tokens_T, (None, None))
             if op == 'D':
                 opseq += 'D' * num_S
-                char_S, num_S = next(tokens_S, (None,None))
+                char_S, num_S = next(tokens_S, (None, None))
 
-        return pw.Transcript(idx_S=idx_S, idx_T=idx_T,
-            score=transcript.score, opseq=opseq)
+        return pw.Transcript(
+            idx_S=idx_S, idx_T=idx_T, score=transcript.score, opseq=opseq
+        )
 
     def condense_subst_probs(self, **kw):
         """Translates the substitution probabilities in the source alphabet
         to substitution probabilities in the destination (condensed) alphabet.
-        Letting :math:`x,y` denote original alphabet letters and :math:`x_i,y_j`
-        denote condensed alphabet letters, the translation formula is the
-        following when the length of letters are identical:
+        Letting :math:`x,y` denote original alphabet letters and
+        :math:`x_i,y_j` denote condensed alphabet letters, the translation
+        formula is the following when the length of letters are identical:
 
             :math:`\Pr(x_i \\rightarrow y_i) = \Pr(x \\rightarrow y)^i(1-g_h)^{i-1}`
 
         where :math:`g_h` is the homopolymeric gap probability (only a linear
         model is supported). When the length of letters differ:
 
-            :math:`\Pr(x_i \\rightarrow y_j) = \\pi(i)\Pr(x \\rightarrow y)^{\\min(i,j)}(1-g_h)^{\\min(i,j)-1}g_h^{|i-j|}`
+            :math:`\Pr(x_i \\rightarrow y_j) = \\pi(i)\Pr(x \\rightarrow y)^{\\min(i,j)} (1-g_h)^{\\min(i,j)-1}g_h^{|i-j|}`
 
         where :math:`\\pi(\\cdot)` is the integer partition function.
 
@@ -203,10 +210,9 @@ class HpCondenser(object):
         N, L = len(self.src_alphabet), len(self.dst_alphabet)
         letters_dist = kw.get('letters_dist', [1.0/N for _ in range(N)])
         subst_probs_d = [[None for _ in range(L)] for _ in range(L)]
-        num_partitions = lambda n: exp(pi * sqrt(2.0 * n / 3)) / (4 * sqrt(3) * n)
         for i in range(L):
             let = self.dst_alphabet.letters[i]
-            ci, ni = let[0], int(let[1:]) # e.g A31 gives ci = 'A' and ni = 31
+            ci, ni = let[0], int(let[1:])  # e.g A31 gives ci = 'A' and ni = 31
             for j in range(L):
                 let = self.dst_alphabet.letters[j]
                 cj, nj = let[0], int(let[1:])
@@ -223,7 +229,8 @@ class HpCondenser(object):
             subst_probs_d[idx] = [x/s for x in row]
         return subst_probs_d
 
-    def condense_align_params(self, align_params, hp_go_score=0, hp_ge_score=0):
+    def condense_align_params(self, align_params, hp_go_score=0,
+                              hp_ge_score=0):
         """Translates alignment parameters to one that applies to the condensed
         alphabet. Translation is done based on homopolymeric indel scores which
         are treated separately from ordinary indels.
@@ -256,11 +263,12 @@ class HpCondenser(object):
                 ki = align_params.alphabet.letters.index(ci)
                 kj = align_params.alphabet.letters.index(cj)
                 if ci == cj:
-                    subst_scores_d[i][j] = min(ni, nj) * subst_scores[ki][kj] + \
-                        hp_go_score + hp_ge_score * abs(ni-nj)
+                    subst_scores_d[i][j] = min(ni, nj) * subst_scores[ki][kj] \
+                        + hp_go_score + hp_ge_score * abs(ni-nj)
                 else:
-                    subst_scores_d[i][j] = min(ni, nj) * subst_scores[ki][kj] + \
-                        align_params.gap_open_score + align_params.gap_extend_score * abs(ni - nj)
+                    subst_scores_d[i][j] = min(ni, nj) * subst_scores[ki][kj] \
+                        + align_params.gap_open_score \
+                        + align_params.gap_extend_score * abs(ni - nj)
 
         return pw.AlignParams(
             alphabet=self.dst_alphabet,
@@ -271,11 +279,11 @@ class HpCondenser(object):
         )
 
     def condense_seed(self, S, T, seed):
-        """Condenses a seed into a :class:`tuples.Segment` for the corresponding
-        condensed sequences. Note that this process is not well-defined unless
-        certain assumptions is made about segments. Here we require that the
-        provided seed is an exactly matching seed, at least in some condensed
-        alphabet.
+        """Condenses a seed into a :class:`tuples.Segment` for the
+        corresponding condensed sequences. Note that this process is not
+        well-defined unless certain assumptions is made about segments. Here we
+        require that the provided seed is an exactly matching seed, at least in
+        some condensed alphabet.
 
         Args:
             S (seq.Sequence): The "from" sequence in original alphabet.
@@ -319,8 +327,9 @@ class HpCondenser(object):
                 opseq += 'S'
             i += max(num_S, num_T)
 
-        tx = pw.Transcript(idx_S=S_min_idx, idx_T=T_min_idx,
-            score=seed.tx.score, opseq=opseq)
+        tx = pw.Transcript(
+            idx_S=S_min_idx, idx_T=T_min_idx, score=seed.tx.score, opseq=opseq
+        )
         return tuples.Segment(S_id=seed.S_id, T_id=seed.T_id, tx=tx)
 
 

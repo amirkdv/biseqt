@@ -2,8 +2,8 @@ import random
 import sys
 from uuid import uuid4
 from Bio import SeqIO, Seq, SeqRecord
-
 from . import ffi, lib, CffiObject, ProgressIndicator
+
 
 class Alphabet(CffiObject):
     """Wraps a C ``sequence_alphabet*``.
@@ -25,7 +25,9 @@ class Alphabet(CffiObject):
         assert(len(set([len(s) for s in letters])) == 1)
         # each letter string in the alphabet must be "owned" by an object
         # that's kept alive.
-        self._c_letters_ka = [ffi.new('char[]', letters[i]) for i in range(len(letters))]
+        self._c_letters_ka = [
+            ffi.new('char[]', letters[i]) for i in range(len(letters))
+        ]
         self._c_alph_ka = ffi.new('char *[]', self._c_letters_ka)
         self.c_obj = ffi.new('sequence_alphabet*', {
             'length': len(letters),
@@ -39,7 +41,9 @@ class Alphabet(CffiObject):
     def __getattr__(self, name):
         if name == 'letters':
             N, L = self.length, self.letter_length
-            return [''.join([self.c_obj.letters[i][j] for j in range(L)]) for i in range(N)]
+            return [''.join([
+                self.c_obj.letters[i][j] for j in range(L)]) for i in range(N)
+            ]
         else:
             return super(Alphabet, self).__getattr__(name)
 
@@ -68,34 +72,37 @@ class Alphabet(CffiObject):
             hp_prob(Optional[float]): If specified each randomly generated
                 letter is stretched to a homopolymeric region with length
                 according to a geometric distribution with this parameter.
-            precision(Optional[float]): The maximum precision of the probability
-                distribution. Default is 0.001.
+            precision(Optional[float]): The maximum precision of the
+                probability distribution. Default is 0.001.
         Returns:
             str: A random string.
         """
-        letters_dist = kw.get('letters_dist', [1.0/self.length for _ in range(self.length)])
+        letters_dist = kw.get('letters_dist', [
+            1.0/self.length for _ in range(self.length)
+        ])
         precision = kw.get('precision', 0.001)
         assert(precision > 0)
         assert(abs(1-sum(letters_dist)) < precision)
         space = []
         for i in range(self.length):
             N = 1.0/precision
-            space += [ffi.string(self._c_letters_ka[i])] * int(N * length * letters_dist[i])
+            let = ffi.string(self._c_letters_ka[i])
+            space += [let] * int(N * length * letters_dist[i])
         if 'hp_prob' in kw:
             assert(kw['hp_prob'] > 0 and kw['hp_prob'] < 1)
+            cutoff = kw['hp_prob'] * N
             cur_len = 0
             ret = ''
             while cur_len < length:
                 let = random.sample(space, 1)[0]
                 cur_len += 1
-                while random.randint(0, N) < kw['hp_prob'] * N and cur_len < length:
+                while random.randint(0, N) < cutoff and cur_len < length:
                     let += let
                     cur_len += 1
                 ret += let
             return ret
         else:
             return ''.join(random.sample(space, length))
-
 
     def randseq(self, length, **kw):
         """Generates a random :class:`Sequence` of the specified length from
@@ -105,6 +112,7 @@ class Alphabet(CffiObject):
             seq.Sequence: A random sequence.
         """
         return Sequence(self.randstr(length, **kw), self)
+
 
 class Sequence():
     """Wraps a C ``char[]`` and its corresponding ``int*`` of letter indices.
@@ -128,7 +136,9 @@ class Sequence():
         self.alphabet = alphabet
         self.length = len(string)/alphabet.letter_length
         self.c_charseq = ffi.new('char[]', string)
-        self.c_idxseq = lib.idxseq_from_charseq(alphabet.c_obj, self.c_charseq, self.length)
+        self.c_idxseq = lib.idxseq_from_charseq(
+            alphabet.c_obj, self.c_charseq, self.length
+        )
 
     def __repr__(self):
         N, L = self.length, self.alphabet.letter_length
@@ -140,14 +150,19 @@ class Sequence():
     def __getitem__(self, key):
         if isinstance(key, int):
             if key < self.length:
-                s, f = key, key + 1
+                start, finish = key, key + 1
             else:
                 raise IndexError('Sequence index out of range')
         elif isinstance(key, slice):
-            s, f, _ = key.indices(self.length)
+            start, finish, _ = key.indices(self.length)
         else:
-            raise TypeError('Sequence indices must be integers not {}'.format(type(key).__name__))
-        return ffi.string(self.c_charseq)[s*self.alphabet.letter_length: f*self.alphabet.letter_length]
+            raise TypeError(
+                'Sequence indices must be integers not {}' % type(key).__name__
+            )
+
+        min_idx = self.alphabet.letter_length * start
+        max_idx = self.alphabet.letter_length * finish
+        return ffi.string(self.c_charseq)[min_idx:max_idx]
 
     def mutate(self, **kw):
         """Returns a mutant of this sequence with specified probabilities. The
@@ -168,9 +183,9 @@ class Sequence():
         Keyword Args:
             subst_probs(List[List[float]]): the probability distribution for
                 each pair of possible substitutions such that
-                :attr:`c_obj.subst_probs[i][j]` is the probability of letter *i*
-                (integer index) of the alphabet being substituted by letter *j*
-                (integer index).
+                :attr:`c_obj.subst_probs[i][j]` is the probability of lette
+                *i* (integer index) of the alphabet being substituted by letter
+                *j* (integer index).
             go_prob(Optional[float]): probability of a gap starting at any
                 position, default 0 (use 1 for linear gap penalty).
             ge_prob(Optional[float]): Bernoulli success probability of the gap
@@ -186,7 +201,7 @@ class Sequence():
                 (an :class:`align.pw.Transcript`).
         """
         subst_probs = kw['subst_probs']
-        go_prob, ge_prob =  kw.get('go_prob', 0), kw.get('ge_prob', 0)
+        go_prob, ge_prob = kw.get('go_prob', 0), kw.get('ge_prob', 0)
         assert(go_prob <= ge_prob)
         insert_dist = kw.get('insert_dist', None)
         precision = kw.get('precision', 0.001)
@@ -205,27 +220,27 @@ class Sequence():
             elif op == 'I' and random.randint(0, N) < ge_prob * N:
                 # with probability ge_prob extend the insertion stretch:
                 op, k = 'I', k
-                T += self.alphabet.randstr(1,
-                    letter_dist=insert_dist,
-                    precision=precision
+                T += self.alphabet.randstr(
+                    1, letter_dist=insert_dist, precision=precision
                 )
                 continue
             else:
-                # FIXME use an hp specific go_prob if given, then we'd have
+                # TODO use an hp specific go_prob if given, then we'd have
                 # to check also if S[k-1] == S[k]
                 # with probability go_prob start a gap unless previous op was
                 # a gap itself.
-                if str(op) not in 'ID' and random.randint(0, N) < go_prob * N / 2.0:
+                go_cutoff = go_prob * N / 2.0
+                if str(op) not in 'ID' and random.randint(0, N) < go_cutoff:
                     op, k = 'D', k + 1
-                elif str(op) not in 'ID' and random.randint(0,N) < go_prob * N / 2.0:
+                elif str(op) not in 'ID' and random.randint(0, N) < go_cutoff:
                     op, k = 'I', k
-                    T += self.alphabet.randstr(1,
-                        letter_dist=insert_dist,
-                        precision=precision
+                    T += self.alphabet.randstr(
+                        1, letter_dist=insert_dist, precision=precision
                     )
                 else:
                     # math/sub with probability 1 - g_o
-                    T += self.alphabet.randstr(1,
+                    T += self.alphabet.randstr(
+                        1,
                         letters_dist=subst_probs[self.c_idxseq[k]],
                         precision=precision
                     )
@@ -239,7 +254,8 @@ class Sequence():
         sequence. Each read is generated by reading a substring with Gaussian
         length and mutating it with given probabilites. Additionally, two
         substrings, both of lenght ``len_mean``, are included one covering the
-        very beginning and the other the very end of the sequence. For example::
+        very beginning and the other the very end of the sequence. For
+        example::
 
             subst_probs = {
                 ... # snip
@@ -261,15 +277,17 @@ class Sequence():
                 distribution or read lengths. Default is 1.
 
         Yields:
-            tuple: the read (a :class:`Sequence`) and its starting position (``int``).
+            tuple: of :class:`Sequence` and ``int`` (starting position).
         """
         subst_probs = kw['subst_probs']
-        go_prob, ge_prob =  kw.get('go_prob', 0), kw.get('ge_prob', 0)
+        go_prob, ge_prob = kw.get('go_prob', 0), kw.get('ge_prob', 0)
         coverage = kw.get('coverage', 5)
         len_mean, len_var = kw.get('len_mean', 100), kw.get('len_var', 1)
         N = self.length
         num = int(1.0 * N * coverage/len_mean)
-        indicator = ProgressIndicator('generating %d random reads' % (num + 2), num + 2)
+        indicator = ProgressIndicator(
+            'generating %d random reads' % (num + 2), num + 2
+        )
         indicator.start()
 
         # include a read that reaches the begenning:
@@ -281,8 +299,9 @@ class Sequence():
             # minimum read leangth is 10, and max is N-1
             length = max(10, min(N-1, int(random.gauss(len_mean, len_var))))
             start = random.randint(0, N-length)
-            x = Sequence(''.join([self[k] for k in range(start, start + length)]), self.alphabet)
-            read, _ = x.mutate(**kw)
+            read = ''.join([self[k] for k in range(start, start + length)])
+            read = Sequence(read, self.alphabet)
+            read, _ = read.mutate(**kw)
             yield read, start
             indicator.progress()
 
@@ -291,6 +310,7 @@ class Sequence():
         yield read, N - len_mean
         indicator.progress()
         indicator.finish()
+
 
 def make_sequencing_fixture(genome_file, reads_file, genome_length=1000, **kw):
     """Helper method for tests. Generates a random genome and a random sequence
@@ -303,8 +323,8 @@ def make_sequencing_fixture(genome_file, reads_file, genome_length=1000, **kw):
     Keyword Args:
         genome_length(int): Length of random genome.
 
-    Additionally, all keyword arguments of :func:`Sequence.randread` are allowed
-    and passed as is.
+    Additionally, all keyword arguments of :func:`Sequence.randread` are
+    allowed and passed as is.
     """
     A = Alphabet('ACGT')
     if 'go_prob' not in kw:
@@ -312,7 +332,9 @@ def make_sequencing_fixture(genome_file, reads_file, genome_length=1000, **kw):
     if 'go_prob' not in kw:
         kw['ge_prob'] = 0.5
     G = A.randseq(genome_length)
-    seqrec = SeqRecord.SeqRecord(Seq.Seq(str(G)), id='genome', description="(full correct genome)")
+    seqrec = SeqRecord.SeqRecord(
+        Seq.Seq(str(G)), id='genome', description="(full correct genome)"
+    )
     SeqIO.write([seqrec], genome_file, 'fasta')
     readrecs = []
     for idx, (read, start) in enumerate(G.randread(**kw)):
