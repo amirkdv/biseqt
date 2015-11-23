@@ -3,7 +3,9 @@ import sys
 import igraph
 from termcolor import colored
 
-from . import tuples, pw, homopolymeric
+import time
+
+from . import tuples, pw, homopolymeric, ProgressIndicator
 
 class OverlapGraph(object):
     """Wraps an :class:`igraph.Graph` object with additional methods to build
@@ -329,13 +331,9 @@ class OverlapBuilder(object):
             score from one window to the next, default is 0. This means that
             if the overall score does not strictly increase (or the score of the
             new window is not positive) we drop the seed.
-        window (Optional[int]): The size of the rolling window.
-        max_succ_drops (Optional[int]): Maximum number of "drops" until the
+        window (int): The size of the rolling window.
+        max_succ_drops (int): Maximum number of "drops" until the
             segment is dropped, default is 3.
-        max_correct_seeds (Optional[int]): Maximum number of seeds extending
-            successfully to a proper overlap alignment before we stop
-            processing seeds and report an edge. Default is 3; use any
-            nonpositive number to block this feature (i.e extend all seeds).
     """
 
     def __init__(self, index, align_params, **kwargs):
@@ -346,9 +344,8 @@ class OverlapBuilder(object):
         self.window = kwargs.get('window', 20)
         self.drop_threshold = kwargs.get('drop_threshold', 0)
         self.max_succ_drops = kwargs.get('max_succ_drops', 3)
-        self.max_correct_seeds = kwargs.get('max_correct_seeds', 3)
 
-    def build(self):
+    def build(self, profile=False):
         """Builds a weighted, directed graph by using tuple methods. The process
         has 2 steps:
 
@@ -359,10 +356,10 @@ class OverlapBuilder(object):
         processing (e.g to find the layout) we need to ensure the overlap
         graph is acyclic. For this, see :func:`OverlapGraph.break_cycles`.
 
-        Args:
-            tuplesdb (tuples.TuplesDB): The tuples database.
-            align_params (pw.AlignParams): Alignment parameters for overlap
-                alignments.
+        Keyword Args:
+            profile (Optional[bool]): If truthy, instead of reporting percentage
+                progress time consumption is reported at *every* step (for
+                every pair of sequences). This generates *a lot* of output.
 
         Returns:
             assembly.OverlapGraph: The overlap graph, potentially containing
@@ -372,10 +369,12 @@ class OverlapBuilder(object):
         es, ws = [], []
         seqinfo = self.index.tuplesdb.seqinfo()
         seqids = seqinfo.keys()
-        sys.stderr.write('finding adjacent reads for sequence: ')
+        num_pairs = (len(seqids) * (len(seqids)-1)) / 2
+        indicator = ProgressIndicator('discovering overlaps', num_pairs)
+        progress_cnt = 0
+        if not profile:
+            indicator.start()
         for sid_idx in range(len(seqids)):
-            sys.stderr.write('%d ' % seqids[sid_idx])
-            sys.stderr.flush()
             for tid_idx in range(sid_idx + 1, len(seqids)):
                 S_id, T_id = seqids[sid_idx], seqids[tid_idx]
                 S_info, T_info = seqinfo[S_id], seqinfo[T_id]
@@ -383,13 +382,27 @@ class OverlapBuilder(object):
                 T_min_idx, T_max_idx = T_info['start'], T_info['start'] + T_info['length']
                 S_name = '%s %d-%d #%d' % (S_info['name'], S_min_idx, S_max_idx, S_id)
                 T_name = '%s %d-%d #%d' % (T_info['name'], T_min_idx, T_max_idx, T_id)
+
+                # report progress:
+                if profile:
+                    sys.stderr.write('"%s" and "%s": ' % (S_name, T_name))
+                else:
+                    indicator.progress()
                 vs = vs.union([S_name, T_name])
 
-                # do they overlap?
+                # do they have any seeds in common?
+                _t_seeds = time.time()
                 seeds = self.index.seeds(S_id, T_id)
+                if profile:
+                    _t_seeds = 1000 * (time.time() - _t_seeds)
+                    sys.stderr.write('found %d seeds (%.0f ms)' % (len(seeds), _t_seeds))
+                    if not seeds:
+                        sys.stderr.write('.\n')
+
                 if not seeds:
                     continue
 
+                # are the seeds part of an overlap?
                 S = self.index.tuplesdb.loadseq(S_id)
                 T = self.index.tuplesdb.loadseq(T_id)
                 if self.hp_condenser:
@@ -397,7 +410,13 @@ class OverlapBuilder(object):
                     S = self.hp_condenser.condense_sequence(S)
                     T = self.hp_condenser.condense_sequence(T)
 
+                _t_extend = time.time()
                 overlap = self.extend(S, T, seeds)
+                if profile:
+                    _t_extend = 1000 * (time.time() - _t_extend)
+                    sys.stderr.write(' overlaps (%.0f ms): %s\n' %
+                        (_t_extend, '+' if overlap else '-'))
+
                 if not overlap:
                     continue
 
@@ -417,12 +436,15 @@ class OverlapBuilder(object):
                 elif overlap.tx.idx_S == 0:
                     es += [(T_name, S_name)]
                 else:
-                    # shouldn't happen
-                    raise ValueError("This should not have happened")
+                    raise RuntimeError("This should not have happened")
 
                 ws += [overlap.tx.score]
 
-        sys.stderr.write('\n')
+        if profile:
+            sys.stderr.write('\n')
+        else:
+            indicator.finish()
+
         G = OverlapGraph()
         G.iG.add_vertices(list(vs))
         es = [(G.iG.vs.find(name=u), G.iG.vs.find(name=v)) for u,v in es]
@@ -435,7 +457,7 @@ class OverlapBuilder(object):
         S_len, T_len = self._S_len(segment.tx.opseq), self._T_len(segment.tx.opseq)
         align_problem_kw = {
             'S': S, 'T': T, 'params': self.align_params,
-            'align_type': pw.GLOBAL,
+            'align_type': pw.START_ANCHORED_OVERLAP,
         }
         align_problem_kw.update({
             'S_min_idx': segment.tx.idx_S + S_len,
@@ -465,7 +487,7 @@ class OverlapBuilder(object):
         """Helper method for ``extend1d``."""
         align_problem_kw = {
             'S': S, 'T': T, 'params': self.align_params,
-            'align_type': pw.GLOBAL,
+            'align_type': pw.END_ANCHORED_OVERLAP,
         }
         align_problem_kw.update({
             'S_max_idx': segment.tx.idx_S,
@@ -535,16 +557,23 @@ class OverlapBuilder(object):
         return None
 
     def extend(self, S, T, segments):
-        """Given two sequences and a number of matching segments finds all
-        extended, potentially gap-containing segments by repeatedly aligning a
-        rolling frame along the two sequences and dropping a segment once it
-        is observed to not be a high-scoring overlap alignment.
+        """Given two sequences and a number of matching segments returns the
+        first fully extended segment. A fully extended segment is one that
+        corresponds to an suffix-prefix alignment of the sequences.
+
+        Each seed is extended by a rolling frame of size :attr:`window` along
+        the two sequences and is dropped once as many as :attr:`max_succ_drops`
+        successive bad scores are observed. A bad score (over a single frame) is
+        one that has a score of smaller than :attr:`drop_threshold`.
 
         Args:
             S (seq.Sequence): The "from" sequence.
             T (seq.Sequence): The "to" sequence.
             segments (List[tuples.Segment]): The starting segments. If called
                 from :func:`build`, these are seeds but no assumption is made.
+
+        Returns:
+            tuples.Segment: A segment corresponding to an overlap alignment.
         """
         assert(S.alphabet.letters == T.alphabet.letters)
         if self.hp_condenser:
@@ -567,9 +596,4 @@ class OverlapBuilder(object):
                     score=score,
                     opseq=opseq
                 )
-                res += [tuples.Segment(S_id=segment.S_id, T_id=segment.T_id, tx=tx)]
-                if self.max_correct_seeds > 0 and len(res) >= self.max_correct_seeds:
-                    break
-        if not res:
-            return None
-        return sorted(res, key=lambda s: s.tx.score, reverse=True)[0]
+                return tuples.Segment(S_id=segment.S_id, T_id=segment.T_id, tx=tx)
