@@ -4,12 +4,17 @@ alignment problem:
 
 - ``GLOBAL``: Global alignment problem, i.e Needeman-Wunsch.
 - ``LOCAL``: Local alignment problem, i.e Smith-Waterman.
-- ``OVERLAP``: Find a prefix-suffix alignment in any direction, typically used
-  for assembly.
+- ``OVERLAP``: Find a suffix-prefix alignment in any direction; this includes
+  alignments where a prefix of either sequence matches a suffix of the other
+  and alignments where one sequence is a substring of the other.
 - ``START_ANCHORED``: Find a local alignment demanding that it begins at the
-  starting position of both sequences.
-- ``END_ANCHORED``: Find a local alignment demanding that it ends at the ending
-  position of both sequences.
+  start of frame of both sequences.
+- ``END_ANCHORED``: Find a local alignment demanding that it ends at the end
+  of frame of both sequences.
+- ``START_ANCHORED_OVERLAP``: Find a suffix-prefix alignment demanding that it
+  begins at the start of frame of both sequences.
+- ``END_ANCHORED_OVERLAP``:  Find a suffix-prefix alignment demanding that it
+  ends at the end of frame of both sequences.
 """
 from math import log
 import re
@@ -25,6 +30,8 @@ LOCAL = lib.LOCAL
 START_ANCHORED = lib.START_ANCHORED
 END_ANCHORED = lib.END_ANCHORED
 OVERLAP = lib.OVERLAP
+START_ANCHORED_OVERLAP = lib.START_ANCHORED_OVERLAP
+END_ANCHORED_OVERLAP = lib.END_ANCHORED_OVERLAP
 
 class AlignParams(CffiObject):
     """Wraps the C struct ``align_params``, see ``libalign.h``.

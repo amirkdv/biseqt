@@ -94,7 +94,7 @@ align_dp_cell* solve(align_dp_cell** P, align_problem* def) {
         // Already dealt with
         continue;
       }
-      // Sane default so we can continue when a cell is not worth pursuing
+      // Sane default so we can "continue" when a cell is not worth pursuing
       P[i][j].num_choices = 0;
 
       if (alts != NULL) {
@@ -111,15 +111,16 @@ align_dp_cell* solve(align_dp_cell** P, align_problem* def) {
       }
       // Build all the alternatives at cell (i,j)
       num_choices = 0;
-      if (def->type == LOCAL ||
-          (def->type == OVERLAP && j == 0) ||
-          (def->type == OVERLAP && i == 0) ||
-          (def->type == END_ANCHORED)
+      if (def->type == LOCAL || // local alignments can start anywhere
+          def->type == END_ANCHORED || // end-anchored alignments can ...
+          // Overlap alignments and end-anchored alignments can start anywhere
+          // on either of the left or top edges:
+          (def->type == OVERLAP && (i == 0 || j == 0)) ||
+          (def->type == END_ANCHORED_OVERLAP && (i == 0 || j == 0))
         ) {
         // 1. local alignments can start anywhere,
         // 2. overlap alignments can start anywhere on the left column or the
         //    top row,
-        // 3. end-anchored alignments can start anywhere.
         alts[num_choices].op = 'B';
         alts[num_choices].score = 0;
         alts[num_choices].diversion = 0;
@@ -262,7 +263,9 @@ align_dp_cell* find_optimal(align_dp_cell** P, align_problem* def) {
   double max;
   int i,j;
   int row = -1, col = -1;
-  if (def->type == GLOBAL || def->type == END_ANCHORED) {
+  if (def->type == GLOBAL ||
+      def->type == END_ANCHORED ||
+      def->type == END_ANCHORED_OVERLAP) {
     // Global and end-anchored alignments must end at the bottom right corner
     row = def->S_max_idx - def->S_min_idx;
     col = def->T_max_idx - def->T_min_idx;
@@ -270,9 +273,9 @@ align_dp_cell* find_optimal(align_dp_cell** P, align_problem* def) {
       return NULL;
     }
   }
-  else if (def->type == OVERLAP) {
-    // Overlap alignments must end on the bottom row or the right column,
-    // find the best:
+  else if (def->type == OVERLAP || def->type == START_ANCHORED_OVERLAP) {
+    // Overlap alignments (except end-anchored ones) can end anywhere on either
+    // of the bottom or right edges; find the best:
     max = -INT_MAX;
     for (i = 0; i < def->S_max_idx - def->S_min_idx + 1; i++){
       for (j = 0; j < def->T_max_idx - def->T_min_idx + 1; j++) {
@@ -293,7 +296,8 @@ align_dp_cell* find_optimal(align_dp_cell** P, align_problem* def) {
     }
   }
   else if (def->type == LOCAL || def->type == START_ANCHORED) {
-    // Local and start-anchored alignments can end anywhere, find the best:
+    // Local and start-anchored alignments (except for overlap ones) can end
+    // anywhere; find the best:
     max = P[0][0].choices[0].score;
     for (i = 0; i < def->S_max_idx - def->S_min_idx + 1; i++){
       for (j = 0; j < def->T_max_idx - def->T_min_idx + 1; j++) {
@@ -426,9 +430,8 @@ char *traceback(align_dp_cell** P, align_problem* def, align_dp_cell* end) {
 
 /**
  * Translates a given sequence to integer indices of each letter
- * in the corresponding alphabet. This is done at the first step of solve()
- * so that we don't have to worry about alphabet pecularities (e.g letters
- * longer than one character each).
+ * in the corresponding alphabet. This is the array that has to be provided
+ * to all other functions, e.g solve().
  */
 int* idxseq_from_charseq(sequence_alphabet* alphabet, char* sequence, int length) {
   int i,j;
@@ -441,6 +444,7 @@ int* idxseq_from_charseq(sequence_alphabet* alphabet, char* sequence, int length
       alphabet->letter_length + 1,
       "%s", sequence + i*(alphabet->letter_length)
     );
+    // TODO Would it make things better if the following was cached somehow?
     for (j = 0; j < alphabet->length; j++) {
       if (strcmp(alphabet->letters[j], cur) == 0) {
         cur_idx = j;

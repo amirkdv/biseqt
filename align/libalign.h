@@ -1,9 +1,11 @@
 typedef enum {
   GLOBAL, // Needleman-Wunsch
   LOCAL,  // Smith-Waterman
-  START_ANCHORED, // Solves for the optimal local alignment starting at the beginning
-  END_ANCHORED, // Solves for the optimal local alignment ending at the end
-  OVERLAP // Solves for the optimal suffix-prefix alignment
+  START_ANCHORED, // local alignments starting at the beginning
+  END_ANCHORED, // local alignments ending at the end
+  OVERLAP, // optimal suffix-prefix alignments
+  START_ANCHORED_OVERLAP, // optimal suffix-prefix alignments starting at the beginning
+  END_ANCHORED_OVERLAP, // optimal suffix-prefix alignments ending at the end
 } align_type;
 
 typedef struct {

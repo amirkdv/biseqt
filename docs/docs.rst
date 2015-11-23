@@ -26,6 +26,10 @@ exposed to Python by the ``pw`` module:
    considered.
 -  *Anchored* alignments where only alignments starting/ending at the
    beginning/end of the two sequences are considered,
+-  *Anchored Overlap* alignments where we demand both the suffix-prefix
+   constraint and either of the start or end anchored constraints. This
+   mdoe of alignment is specifically designed for seed extension in
+   `assembly <#genome-assembly>`__.
 -  *Affine gap* penalties are supported.
 -  *Banded* alignments are supported.
 -  Alignment can be limited to a *frame* for each sequence.

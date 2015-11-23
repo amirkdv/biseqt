@@ -6,7 +6,7 @@ import sqlite3
 from Bio import SeqIO
 from collections import namedtuple
 
-from . import pw, seq
+from . import pw, seq, ProgressIndicator
 class Segment(namedtuple('Segment', ['S_id', 'T_id', 'tx'])):
     """Represents an aligned pair of substrings in two sequences. The alignment
     may potentially contain indels. Maximal, exactly-matching segments are
