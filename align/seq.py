@@ -269,7 +269,7 @@ class Sequence():
         len_mean, len_var = kw.get('len_mean', 100), kw.get('len_var', 1)
         N = self.length
         num = int(1.0 * N * coverage/len_mean)
-        indicator = ProgressIndicator('generating %d random reads' % num + 2, num + 2)
+        indicator = ProgressIndicator('generating %d random reads' % (num + 2), num + 2)
         indicator.start()
 
         # include a read that reaches the begenning:
