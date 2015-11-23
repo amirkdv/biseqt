@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-import sys
 from math import erf, sqrt, log
 
 from .. import pw, seq
@@ -37,7 +36,7 @@ with pw.AlignProblem(S=S, T=T, params=C, align_type=params['type']) as P:
     P.solve(print_dp_table=params['show_dp'])
     transcript = P.traceback()
     print transcript
-    transcript.pretty_print(S, T, sys.stdout)
+    transcript.pretty_print(S, T)
 print
 
 S_d, T_d = Tr.condense_sequence(S), Tr.condense_sequence(T)
@@ -48,11 +47,11 @@ with pw.AlignProblem(S=S_d, T=T_d, params=C_d, align_type=params['type']) as P:
     P.solve(print_dp_table=params['show_dp'])
     transcript_d = P.traceback()
     print transcript_d
-    transcript_d.pretty_print(S_d, T_d, sys.stdout)
+    transcript_d.pretty_print(S_d, T_d)
 
     if transcript_d:
         expanded_transcript_d = Tr.expand_transcript(S, T, transcript_d)
         print expanded_transcript_d
         print 'Expanded condensed alignment: '
-        expanded_transcript_d.pretty_print(S, T, sys.stdout)
+        expanded_transcript_d.pretty_print(S, T)
         print 'Score of condensed alignment in original alphabet:', C.score(S,T,expanded_transcript_d.opseq)

@@ -8,18 +8,17 @@ from .. import pw, tuples, seq, assembly
 A = seq.Alphabet('ACGT')
 
 params = {
-    'wordlen': 5,           # tuple word lengths
-    'genome_length': 1500,  # length of randomly generated genome
-    'coverage': 5,          # coverage of random sequencing reads
-    'read_len_mean': 300,   # average length of sequencing read
-    'read_len_var': 10,     # variance of sequencing read length
-    'go_prob': 0.05,        # gap open score
-    'ge_prob': 0.3,         # gap extend score
-    'subst_probs': [[0.97 if k==i else 0.01 for k in range(4)] for i in range(4)],
-    'min_align_score': 120, # minimum overlap alignment score to constitue an edge
-    'window': 20,           # rolling window length for tuple extension
-    'drop_threshold': 10,   # what constitutes a drop in score of a window
-    'max_succ_drops': 3     # how many consecutive drops are allowed
+    'wordlen': 10,          # tuple word lengths
+    'genome_length': 50000, # length of randomly generated genome
+    'coverage': 10,         # coverage of random sequencing reads
+    'read_len_mean': 5000,  # average length of sequencing read
+    'read_len_var': 100,    # variance of sequencing read length
+    'go_prob': 0.15,        # gap open probability
+    'ge_prob': 0.3,         # gap extend probability
+    'subst_probs': [[0.91 if k==i else 0.03 for k in range(4)] for i in range(4)],
+    'window': 50,           # rolling window length for tuple extension
+    'drop_threshold': 0,    # what constitutes a drop in score of a window
+    'max_succ_drops': 3,    # how many consecutive drops are allowed
 }
 subst_scores = pw.AlignParams.subst_scores_from_probs(A, **params)
 go_score, ge_score = pw.AlignParams.gap_scores_from_probs(params['go_prob'], params['ge_prob'])
@@ -41,9 +40,9 @@ def show_params():
     print 'drop_threshold = %.2f, max_succ_drops = %d, window = %d' % \
         (params['drop_threshold'], params['max_succ_drops'], params['window'])
 
-def create_example(db):
+def create_example(db, reads='reads.fa'):
     show_params()
-    seq.make_sequencing_fixture('genome.fa', 'reads.fa',
+    seq.make_sequencing_fixture('genome.fa', reads,
         genome_length=params['genome_length'],
         coverage=params['coverage'],
         len_mean=params['read_len_mean'],
@@ -52,9 +51,11 @@ def create_example(db):
         ge_prob=params['ge_prob'],
         go_prob=params['go_prob']
     )
+
+def create_db(db, reads='reads.fa'):
     B = tuples.TuplesDB(db, alphabet=A)
     B.initdb()
-    B.populate('reads.fa');
+    B.populate(reads);
     I = tuples.Index(B, wordlen=params['wordlen'])
     I.initdb()
     I.index()
@@ -68,7 +69,7 @@ def overlap_by_seed_extension(db, path):
 
 def overlap_graph_by_known_order(db):
     """Builds the *correct* weighted, directed graph by using hints left in
-    reads databse by ``seq.make_sequencing_fixture()``.
+    reads databse by :func:`seq.make_sequencing_fixture`.
 
     Args:
         tuplesdb (tuples.TuplesDB): The tuples database.

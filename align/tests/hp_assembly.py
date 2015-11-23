@@ -6,24 +6,25 @@ import igraph
 from .. import pw, tuples, seq, assembly, homopolymeric
 
 params = {
-    'wordlen': 5,           # tuple word lengths # FIXME separate idx_wordlen
-    'genome_length': 1500,  # length of randomly generated genome
-    'coverage': 5,          # coverage of random sequencing reads
-    'read_len_mean': 300,   # average length of sequencing read
-    'read_len_var': 10,     # variance of sequencing read length
-    'go_prob': 0.05,        # gap open score
-    'ge_prob': 0.1,        # gap extend score
-    'hp_maxlen': 5,         # HpCondenser maxlen
+    'wordlen': 10,          # tuple word length for seed extension
+    'genome_length': 30000, # length of randomly generated genome
+    'coverage': 6,          # coverage of random sequencing reads
+    'read_len_mean': 3000,  # average length of sequencing read
+    'read_len_var': 100,    # variance of sequencing read length
+    'go_prob': 0.15,        # gap open probability
+    'ge_prob': 0.3,         # gap extend probability
+    'hp_maxlen_idx': 1,     # HpCondenser maxlen for seed discovery
+    'hp_maxlen': 9,         # HpCondenser maxlen for seed extension
     'hp_gap_prob': 0.4,     # HpCondenser Hp gap probability
     'hp_prob': 0.15,        # Parameter for geometric distributions of hp stretches
-    'subst_probs': [[0.97 if k==i else 0.01 for k in range(4)] for i in range(4)],
-    'window': 20,           # rolling window length for tuple extension
-    'drop_threshold': 10,   # what constitutes a drop in score of a window
+    'subst_probs': [[0.91 if k==i else 0.03 for k in range(4)] for i in range(4)],
+    'window': 50,           # rolling window length for tuple extension
+    'drop_threshold': 0,    # what constitutes a drop in score of a window
     'max_succ_drops': 3,    # how many consecutive drops are allowed
-    'max_correct_seeds': 3, # how many seeds until we call it an edge
 }
 
 A = seq.Alphabet('ACGT')
+IdxTr = homopolymeric.HpCondenser(A, maxlen=params['hp_maxlen_idx'])
 Tr = homopolymeric.HpCondenser(A, maxlen=params['hp_maxlen'])
 subst_probs_d = Tr.condense_subst_probs(**params)
 subst_scores_d = pw.AlignParams.subst_scores_from_probs(Tr.dst_alphabet, subst_probs=subst_probs_d, gap_prob=params['go_prob'])
@@ -45,12 +46,11 @@ def show_params():
     print 'Pr(go) = %.2f, Pr(ge) = %.2f +----> Score(go)=%.2f, Score(ge)=%.2f' % \
         (params['go_prob'], params['ge_prob'], go_score, ge_score)
 
-    print 'drop_threshold = %.2f, max_succ_drops = %d, window = %d, max_correct_seeds: %d' % \
-        (params['drop_threshold'], params['max_succ_drops'], params['window'], params['max_correct_seeds'])
+    print 'drop_threshold = %.2f, max_succ_drops = %d, window = %d' % \
+        (params['drop_threshold'], params['max_succ_drops'], params['window'])
 
-def create_example(db):
-    show_params()
-    seq.make_sequencing_fixture('genome.fa', 'reads.fa',
+def create_example(db, reads='reads.fa'):
+    seq.make_sequencing_fixture('genome.fa', reads,
         genome_length=params['genome_length'],
         coverage=params['coverage'],
         len_mean=params['read_len_mean'],
@@ -60,18 +60,19 @@ def create_example(db):
         go_prob=params['go_prob'],
         hp_prob=params['hp_prob']
     )
+
+def create_db(db, reads='reads.fa'):
     B = tuples.TuplesDB(db, alphabet=A)
-    HpI = homopolymeric.HpCondensedIndex(B, params['wordlen'], hp_condenser=Tr)
+    HpIdx = homopolymeric.HpCondensedIndex(B, params['wordlen'], hp_condenser=IdxTr)
     B.initdb()
-    B.populate('reads.fa');
-    HpI.initdb()
-    HpI.index()
+    B.populate(reads);
+    HpIdx.initdb()
+    HpIdx.index()
 
 def overlap_by_seed_extension(db, path):
     B = tuples.TuplesDB(db, alphabet=A)
-    HpI = homopolymeric.HpCondensedIndex(B, params['wordlen'], hp_condenser=Tr)
-    show_params()
-    G = assembly.OverlapBuilder(HpI, C_d, hp_condenser=Tr, **params).build()
+    HpIdx = homopolymeric.HpCondensedIndex(B, params['wordlen'], hp_condenser=IdxTr)
+    G = assembly.OverlapBuilder(HpIdx, C_d, hp_condenser=Tr, **params).build()
     G.save(path)
 
 def overlap_graph_by_known_order(db):
