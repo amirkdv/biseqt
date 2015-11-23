@@ -1,4 +1,6 @@
 import random
+import sys
+from uuid import uuid4
 from Bio import SeqIO, Seq, SeqRecord
 
 from . import ffi, lib, CffiObject, ProgressIndicator
@@ -316,7 +318,9 @@ def make_sequencing_fixture(genome_file, reads_file, genome_length=1000, **kw):
     SeqIO.write([seqrec], genome_file, 'fasta')
     readrecs = []
     for idx, (read, start) in enumerate(G.randread(**kw)):
+        seqid = 'R%s_P%d' % (str(uuid4())[:8], start)
         readrecs += [
-            SeqRecord.SeqRecord(Seq.Seq(str(read)), id="R%d_P%d" % (idx+1, start))
+            SeqRecord.SeqRecord(Seq.Seq(str(read)), id=seqid)
         ]
+    sys.stderr.write('saving reads to %s.\n' % reads_file)
     SeqIO.write(readrecs, reads_file, 'fasta')
