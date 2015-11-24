@@ -33,7 +33,6 @@ typedef struct {
   align_params *params;
 } align_problem;
 
-
 typedef struct align_choice { // we need the name to be able to reference ourselves
   char op; // 'M'atch, 'S'ubstitute, 'I'nsert, 'D'elete, 'B'egin
   int diversion; // used to ignore out-of-band positions in banded alignment.
@@ -48,11 +47,20 @@ typedef struct {
   struct align_choice *choices; // optimal scoring choices
 } align_dp_cell;
 
+typedef struct {
+  int S_idx;
+  int T_idx;
+  double score;
+  int length;
+  char* opseq;
+} transcript;
+
 align_dp_cell** init_dp_table(align_problem* def);
 void free_dp_table(align_dp_cell** P, int row_cnt, int col_cnt);
 align_dp_cell* solve(align_dp_cell** P, align_problem* def);
 align_dp_cell* find_optimal(align_dp_cell** P, align_problem* def);
-char* traceback(align_dp_cell** P, align_problem* def, align_dp_cell* end);
+transcript* traceback(align_dp_cell** P, align_problem* def, align_dp_cell* end);
 int* idxseq_from_charseq(sequence_alphabet* alphabet, char* sequence, int length);
 // So that we can free memory directly from python
 void free(void *);
+size_t strlen(const char*);

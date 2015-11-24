@@ -301,12 +301,10 @@ class AlignProblem(CffiObject):
         if self.opt is None:
             return None
 
-        raw_transcript = lib.traceback(self.c_dp_table, self.c_obj, self.opt)
-        if raw_transcript == ffi.NULL:
+        transcript = lib.traceback(self.c_dp_table, self.c_obj, self.opt)
+        if transcript == ffi.NULL:
             return None
-        tx = Transcript(raw_transcript=ffi.string(raw_transcript))
-        lib.free(raw_transcript)
-        return tx
+        return Transcript(c_obj=transcript)
 
     def __getattr__(self, name):
         if name == 'dp_table':
@@ -323,48 +321,73 @@ class AlignProblem(CffiObject):
             return super(AlignProblem, self).__getattr__(name)
 
 
-class Transcript(namedtuple('Transcript', ['S_idx', 'T_idx', 'score', 'opseq'])):
-    """A wrapper for alignment transcripts. Solutions to the alignment problem
-    are represented by transcript strings with the following format::
+class Transcript(CffiObject):
+    """Wrapps alignment transcripts represented as C `transcript*`.
+    All keyword arguments become attributes with identical names.
 
-        (<S_idx,T_idx>),<score>:<opseq>
+    Keyword Args:
+        S_idx (int): The starting position in the "from" sequence.
+        T_idx (int): The starting position in the "to" sequence.
+        score (float): The score of the alignment.
+        opseq (str): The sequence of edit "ops" defined as follows where
+            insertion/deletions are meant to mean *from S to T*::
 
-    The components are:
+                M match
+                S substitution
+                I insert
+                D delete
 
-    * ``S_idx`` and ``T_idx`` are integers specifying the positiong along each
-      sequence where the alignment begins. These postiions are relative to the
-      corresponding frames of the sequences.
-    * ``score`` is the score of the transcript upto to 2 decimal places.
-    * ``opseq`` is a sequence of edit "ops" defined as follows where insertion/deletions
-      are meant to mean *from S to T*::
-
-        M match
-        S substitution
-        I insert
-        D delete
-
-    Args:
-        raw_transcript (Optional[str]): If provided all other arguments are
-            ignored and instead this string is parsed to populate the
-            attributes.
+        c_obj (Optional[cffi.cdata]): If provided all other arguments are
+            ignored and instead this is used as the underlying C
+            ``transcript *``.
     """
-    def __new__(cls, S_idx=0, T_idx=0, score=0.0, opseq='',
-                 raw_transcript=None):
-        if raw_transcript is None:
-            return super(Transcript, cls).__new__(
-                cls, S_idx, T_idx, score, opseq
-            )
+    def __init__(self, **kw):
+        if 'c_obj' in kw:
+            self.c_obj = kw['c_obj']
+            self.c_opseq = self.c_obj.opseq
+        else:
+            self.c_opseq = ffi.new('char[]', kw['opseq'])
+            self.c_obj = ffi.new('transcript*', {
+                'S_idx': kw['S_idx'],
+                'T_idx': kw['T_idx'],
+                'score': kw['score'],
+                'opseq': self.c_opseq,
+            })
 
+    @classmethod
+    def parse_transcript(cls, raw_transcript):
+        """Parses a raw transcript in string form into a :class:`Transcript`
+        object. The format of raw_transcript is
+        ``(<S_idx,T_idx>),<score>:<opseq>``.
+
+        Args:
+            raw_transcript (str): The raw transcript.
+
+        Returns:
+            Transcript: The populated transcript object.
+        """
         assert(
             re.match('\([0-9]+,[0-9]+\),[0-9-\.]+:[MISD]+', raw_transcript)
             is not None
         )
         infostr, opseq = raw_transcript.split(':', 1)
         indices, score = infostr.rsplit(',', 1)
-        S_idx, T_idx = indices[1:-1].split(',')  # skip the open/close parens.
-        return super(Transcript, cls).__new__(
-            cls, int(S_idx), int(T_idx), float(score), opseq
-        )
+        # skip the open/close parens.
+        S_idx, T_idx = indices[1:-1].split(',')
+        kw = {
+            'S_idx': int(S_idx),
+            'T_idx': int(T_idx),
+            'score': float(score),
+            'opseq': opseq,
+        }
+        return cls(**kw)
+
+    def __getattr__(self, name):
+        if name == 'opseq':
+            length = lib.strlen(self.c_opseq)
+            return ''.join([self.c_opseq[i] for i in range(length)])
+        else:
+            return super(Transcript, self).__getattr__(name)
 
     def __repr__(self):
         return '(%d,%d),%.2f:%s' \

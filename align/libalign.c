@@ -326,7 +326,7 @@ align_dp_cell* find_optimal(align_dp_cell** P, align_problem* def) {
  * @param end (align_dp_cell*): ending point of alignment, starting point of
  *    traceback
  *
- * @return char*: string with the following format:
+ * @return transcript*: A transcript has the following components:
  *
  *           (<Si,Tj>),<score>:<opseq>
  *
@@ -346,26 +346,23 @@ align_dp_cell* find_optimal(align_dp_cell** P, align_problem* def) {
  *    and requires some sort of global state keeping to avoid convoluted
  *    recursions. I couldn't get it right in the first go; leave for later.
  */
-char *traceback(align_dp_cell** P, align_problem* def, align_dp_cell* end) {
-  char *infostr, *transcript, *ret;
-  char op;
+transcript* traceback(align_dp_cell** P, align_problem* def, align_dp_cell* end) {
+  char op, *opseq;
+  transcript* tx = malloc(sizeof(transcript));
   int S_idx = end->row,
-      T_idx = end->col;
-  align_dp_cell curr = P[S_idx][T_idx];
-  // string manipulation indices for the transcript:
-  int len, infolen, pos;
-  // allocate more than enough memory for the transcript as we trace back.
-  len = S_idx + T_idx + 1;
-  // We write ops to rev_transcript backwards starting from the end (position `len')
-  char rev_transcript[len];
-  pos = len - 1;
+      T_idx = end->col,
+      len = S_idx + T_idx + 1,
+      pos = len - 1;
+  align_dp_cell cur = P[S_idx][T_idx];
+  // We write ops to rev_opseq backwards starting from the end (position `len')
+  char rev_opseq[len];
   while (1) {
-    op = curr.choices[0].op;
+    op = cur.choices[0].op;
     if (op == 'B') {
       break;
     }
     pos--;
-    rev_transcript[pos] = op;
+    rev_opseq[pos] = op;
     if (op == 'M' || op == 'S') {
       S_idx --;
       T_idx --;
@@ -376,56 +373,28 @@ char *traceback(align_dp_cell** P, align_problem* def, align_dp_cell* end) {
     if (op == 'D') {
       S_idx --;
     }
-    curr = P[S_idx][T_idx];
+    cur = P[S_idx][T_idx];
   }
   if (pos == len - 1) {
     // empty opseq
     return NULL;
   }
-  // build the info string: "(<S_idx>,<T_idx>),<score>:"
-  infolen = 8; // for "(,),:" and the 2 decimal points
-  // add the space for S_min_idx and T_min_idx, default 0
-  infolen += 2;
-  if (S_idx + def->S_min_idx > 0 ) {
-    // if nonzero, we need this many more digits:
-    infolen += (int)floor(log10(S_idx + def->S_min_idx));
-  }
-  if (T_idx + def->T_min_idx > 0 ) {
-    // potential additional digits for T_min_idx
-    infolen += (int)floor(log10(T_idx + def->T_min_idx));
-  }
-  // add the space for the score, default 0.00
-  infolen += 3;
-  // If the actual score is -0.0014 we will still be printing 0.00:
-  if (fabs(end->choices[0].score) > 0.01) {
-    // if nonzero we need this many more digits for the integer part:
-    infolen += (int)floor(log10(fabs(end->choices[0].score)));
-    if (end->choices[0].score < 0) {
-      // for the negative sign
-      infolen += 1;
-    }
-  }
-  infostr = malloc(infolen);
-  if (infostr == NULL) {
-    printf("Failed to allocate memory.\n");
-    return NULL;
-  }
-  sprintf(infostr, "(%d,%d),%.2f:", (S_idx + def->S_min_idx), (T_idx + def->T_min_idx), end->choices[0].score);
-  // the backtraced transcript was written backwords to the end of rev_transcript
-  len = len - pos - 1;
-  transcript = malloc(len + 1);
-  if (transcript == NULL) {
-    printf("Failed to allocate memory.\n");
-    return NULL;
-  }
-  strncpy(transcript, rev_transcript + pos, len);
-  transcript[len] = '\0';
-  ret = malloc(infolen + len + 1);
-  sprintf(ret, "%s%s", infostr, transcript);
 
-  free(infostr);
-  free(transcript);
-  return ret;
+  len = len - pos - 1;
+  opseq = malloc(len + 1);
+  if (opseq == NULL) {
+    printf("Failed to allocate memory.\n");
+    return NULL;
+  }
+  strncpy(opseq, rev_opseq + pos, len);
+  // strncpy does not null terminate:
+  opseq[len] = '\0';
+
+  tx->S_idx = S_idx + def->S_min_idx;
+  tx->T_idx = T_idx + def->T_min_idx;
+  tx->score = end->choices[0].score;
+  tx->opseq = opseq;
+  return tx;
 }
 
 /**
