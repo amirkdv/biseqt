@@ -220,6 +220,8 @@ class AlignProblem(CffiObject):
             ``T``, default is the length of ``T``.
 
     Attributes:
+        dp_table (List[List[float]]): The dynamic programming table built upon
+            access from the underlying C ``double **``.
         c_obj (cffi.cdata): points to the underlying ``align_problem`` struct.
         c_dp_table (cffi.cdata): points to the underlying ``double **``
             dynamic programming table.
@@ -294,7 +296,7 @@ class AlignProblem(CffiObject):
         """Traces back any optimal alignment found via ``solve()``.
 
         Returns:
-            align.pw.Transcript
+            align.pw.Transcript: The transcript corresponding to the alignment.
         """
         if self.opt is None:
             return None
@@ -307,10 +309,6 @@ class AlignProblem(CffiObject):
         return tx
 
     def __getattr__(self, name):
-        """Allow attributes to access members of the underlying `align_problem`
-        struct. Additionally provide a `dp_table` attribute which builds a
-        python list of lists from the corresponding C data structure.
-        """
         if name == 'dp_table':
             i_idx = range(self.S_max_idx - self.S_min_idx + 1)
             j_idx = range(self.T_max_idx - self.T_min_idx + 1)
@@ -329,13 +327,16 @@ class Transcript(namedtuple('Transcript', ['S_idx', 'T_idx', 'score', 'opseq']))
     """A wrapper for alignment transcripts. Solutions to the alignment problem
     are represented by transcript strings with the following format::
 
-        (<Si,Tj>),<score>:<opseq>
+        (<S_idx,T_idx>),<score>:<opseq>
 
-    ``Si`` and ``Tj`` are integers specifying the positiong along each string
-    where the alignment begins (relative to the corresponding frames) and
-    ``score`` is the score of the transcript to 2 decimal places. And ``opseq``
-    is a sequence of edit "ops" defined as follows where insertion/deletions
-    are meant to mean *from S to T*::
+    The components are:
+
+    * ``S_idx`` and ``T_idx`` are integers specifying the positiong along each
+      sequence where the alignment begins. These postiions are relative to the
+      corresponding frames of the sequences.
+    * ``score`` is the score of the transcript upto to 2 decimal places.
+    * ``opseq`` is a sequence of edit "ops" defined as follows where insertion/deletions
+      are meant to mean *from S to T*::
 
         M match
         S substitution
