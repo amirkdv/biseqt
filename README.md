@@ -11,17 +11,8 @@ make clean tests
 
 ## To Do
 
-* Performance:
-  * Move seed expansion from Python to C.
-  * Support [Hirschberg](https://en.wikipedia.org/wiki/Hirschberg\'s_algorithm) -style
-    linear space optimization in `libalign`.
-* Simulations:
-    * *Real* data: test against chromosome 1 of Leishmania dataset: this
-      requires linear space optimization for true overlap discovery and
-      potentially seed expansion in C to operate on ~ 10 Kbp reads.
-    * Support hompolymeric-specific indel parameters in random generation of
-      genome sequencing reads.
 * Improvements:
+    * Move seed expansion from Python to C.
     * The alignment problem in the condensed alphabet seems ill-defined as it
       currently stands. A clear example of this is the fact that we currently
       don't have a way to properly align `AAAAAA` and `AAACCC`: our best option
@@ -37,14 +28,6 @@ make clean tests
       clear effect is not yet observed in simulations. Fixing this would require
       that `libalign` accept content-dependent scores for indels which is
       feasible but not trivial.
-    * Demanding global alignments in each window during seed expansion is too
-      restrictive. As a toy example, consider the region immediately following
-      a seed to be `AAAAGTGTGTAAAA` and `AAAAAAA` and suppose we have a window
-      size of 8. Fixing this requires introducing two new kinds of alignment:
-      * start anchored and required to hit the end of frame in at least one
-        sequence,
-      * end anchored and required to hit the beginning of frame in at least one
-        sequence.
     * An overlap graph must satisfy two consistency criteria:
       * it is a DAG, and
       * for any vertex *u* in it, any pair of outgoing (incoming) neighbors of
@@ -61,7 +44,8 @@ make clean tests
       direction wrong on a heavy edge.
 
 * Low priority:
-
+    * Support [Hirschberg](https://en.wikipedia.org/wiki/Hirschberg\'s_algorithm) -style
+      linear space optimization in `libalign`.
     * Figure out how to pull in docstrings from C code into sphinx (e.g look
       at [Breathe](https://github.com/michaeljones/breathe)).
     * Add an ungapped seed expansion phase.

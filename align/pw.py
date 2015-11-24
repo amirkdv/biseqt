@@ -294,7 +294,7 @@ class AlignProblem(CffiObject):
         """Traces back any optimal alignment found via ``solve()``.
 
         Returns:
-            align.Transcript
+            align.pw.Transcript
         """
         if self.opt is None:
             return None
