@@ -238,7 +238,7 @@ class Index(object):
             num_tuples = int(row[0])
             break
         indicator = ProgressIndicator(
-            'indexing %d seeds' % num_tuples, num_tuples
+            'Indexing %d seeds' % num_tuples, num_tuples
         )
         indicator.start()
 
@@ -287,7 +287,7 @@ class Index(object):
     # duplicates.
     def _give_potential_homologs(self, cursor):
         num_total = self.num_potential_homolog_pairs(cursor)
-        msg = 'indexing reads sharing at least one seed'
+        msg = 'Indexing potentially homologous pairs of sequences'
         indicator = ProgressIndicator(msg, num_total)
         indicator.start()
         q = 'SELECT DISTINCT S_id, T_id FROM %s' % self.seeds_table
@@ -336,7 +336,7 @@ class Index(object):
                 num_seqs = int(row[0])
                 break
 
-            msg = 'indexing %d sequences with word length %d' \
+            msg = 'Indexing %d sequences with word length %d' \
                 % (num_seqs, self.wordlen)
             indicator = ProgressIndicator(msg, num_seqs)
             indicator.start()
