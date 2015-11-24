@@ -21,4 +21,7 @@ $(ANNOTATED_READS): $(REFERENCE) $(READS)
 	READS=$(READS) DB=$(BLAST_DB) python prepare.py $@
 
 $(ASSEMBLY_DB): $(ANNOTATED_READS)
-	python -c 'import align.tests.assembly as T; T.create_db("$@", "$(ANNOTATED_READS)")'
+	python -c 'import align.tests.hp_assembly as A; A.create_db("$@", "$(ANNOTATED_READS)")'
+
+layout.diff.hp_assembly.svg: $(ASSEMBLY_DB)
+	make -f assembly.mk layout.diff.hp_assembly.svg MODE=hp_assembly DB=$(ASSEMBLY_DB) READS=$(ANNOTATED_READS)

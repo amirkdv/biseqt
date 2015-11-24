@@ -12,7 +12,6 @@ BLAST_DB = os.environ['DB']
 READS_IN = os.environ['READS']
 READS_OUT = sys.argv[1]
 NUM_READS = 300
-# NUM_READS = 1
 annotated = []
 
 count = 0
@@ -24,11 +23,6 @@ for rec in SeqIO.parse(READS_IN, 'fasta'):
         args = ['blastn', '-db', BLAST_DB, '-query', tmp.name, '-outfmt', '7 qstart sstart']
         proc = subprocess.Popen(args, stdout=subprocess.PIPE)
         out, err = proc.communicate()
-
-        # print out
-        # count += 1
-        # continue
-
         tokens = [l for l in out.split('\n') if l and l[0] != '#']
         if not tokens:
             continue
