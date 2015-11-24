@@ -44,10 +44,11 @@ def hp_tokenize(string):
 
 
 class ProgressIndicator(object):
-    def __init__(self, msg, num_total):
+    def __init__(self, msg, num_total, percentage=True):
         self.msg, self.num_total, self.f = msg, num_total, f
         self.freq = max(num_total/100, 1)
         self.progress_cnt = 0
+        self.percentage = percentage
 
     def start(self):
         sys.stderr.write('%s: 0%%' % self.msg)
@@ -58,6 +59,10 @@ class ProgressIndicator(object):
 
     def progress(self, num=1):
         self.progress_cnt += num
-        if self.progress_cnt % self.freq == 0:
-            sys.stderr.write('\r%s: %d%%' %
-                (self.msg, (self.progress_cnt * 100)/self.num_total))
+        if self.percentage:
+            if self.progress_cnt % self.freq == 0:
+                sys.stderr.write('\r%s: %d%%' %
+                    (self.msg, (self.progress_cnt * 100)/self.num_total))
+        else:
+            sys.stderr.write('\r%s: %d/%d' %
+                (self.msg, self.progress_cnt, self.num_total))
