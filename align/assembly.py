@@ -538,34 +538,52 @@ class OverlapBuilder(object):
         )
         return tuples.Segment(S_id=segment.S_id, T_id=segment.T_id, tx=tx)
 
+    # Inetrnal helper: for a given opseq from S to T return the length of opseq
+    # as projected on S.
     def _S_len(self, opseq):
         return sum([opseq.count(op) for op in 'DMS'])
 
+    # Inetrnal helper: for a given opseq from S to T return the length of opseq
+    # as projected on T.
     def _T_len(self, opseq):
         return sum([opseq.count(op) for op in 'IMS'])
 
-    def _extend1d(self, S, T, segment, backwards=False):
-        """Helper method for ``extend()``"""
+    def extend1d(self, S, T, segment, forward=True):
+        """Given two sequences and a single segment attempts to fully expand
+        the segment in one direction (default: forward). If as many as
+        :attr:`max_succ_drops` successive windows every have a score of smaller
+        than :attr:`drop_threshold` the seed is "dropped", i.e ``None`` is
+        returned.
+
+        Args:
+            S (seq.Sequence): The "from" sequence.
+            T (seq.Sequence): The "to" sequence.
+            segment (tuples.Segment): The starting segment.
+
+        Returns:
+            tuples.Segment: A fully expand segment in one direction (fwd or
+                bwd), and ``None`` if the segment does not expand.
+        """
         cur_seg = segment
         score_history = [segment.tx.score]
         while True:
-            if backwards:
-                w = min(self.window, min(cur_seg.tx.idx_S, cur_seg.tx.idx_T))
-            else:
+            if forward:
                 S_end = cur_seg.tx.idx_S + self._S_len(cur_seg.tx.opseq)
                 T_end = cur_seg.tx.idx_T + self._T_len(cur_seg.tx.opseq)
                 S_wiggle = S.length - S_end
                 T_wiggle = T.length - T_end
                 w = min(self.window, min(S_wiggle, T_wiggle))
+            else:
+                w = min(self.window, min(cur_seg.tx.idx_S, cur_seg.tx.idx_T))
 
             if w == 0:
                 # hit the end:
                 return cur_seg
 
-            if backwards:
-                seg = self._extend_bwd_once(S, T, cur_seg, w)
-            else:
+            if forward:
                 seg = self._extend_fwd_once(S, T, cur_seg, w)
+            else:
+                seg = self._extend_bwd_once(S, T, cur_seg, w)
 
             if seg is None:
                 # no non-empty alignment found.
@@ -608,7 +626,7 @@ class OverlapBuilder(object):
         res = []
         for segment in segments:
             fwd = self._extend1d(S, T, segment)
-            bwd = self._extend1d(S, T, segment, backwards=True)
+            bwd = self._extend1d(S, T, segment, forward=False)
             if (fwd and bwd and
                 min(fwd.tx.score, bwd.tx.score) > self.drop_threshold):
                 assert(bwd.tx.idx_S == 0 or bwd.tx.idx_T == 0)
