@@ -127,16 +127,16 @@ class HpCondenser(object):
 
         char_S, num_S = tokens_S.next()
         char_T, num_T = tokens_T.next()
-        # calculate the original idx_S and idx_T
-        idx_S, idx_T = 0, 0
+        # calculate the original S_idx and T_idx
+        S_idx, T_idx = 0, 0
         cnt = 0
-        while cnt < transcript.idx_S:
-            idx_S += num_S
+        while cnt < transcript.S_idx:
+            S_idx += num_S
             cnt += 1
             char_S, num_S = tokens_S.next()
         cnt = 0
-        while cnt < transcript.idx_T:
-            idx_T += num_T
+        while cnt < transcript.T_idx:
+            T_idx += num_T
             cnt += 1
             char_T, num_T = tokens_T.next()
 
@@ -179,7 +179,7 @@ class HpCondenser(object):
                 char_S, num_S = next(tokens_S, (None, None))
 
         return pw.Transcript(
-            idx_S=idx_S, idx_T=idx_T, score=transcript.score, opseq=opseq
+            S_idx=S_idx, T_idx=T_idx, score=transcript.score, opseq=opseq
         )
 
     def condense_subst_probs(self, **kw):
@@ -307,20 +307,20 @@ class HpCondenser(object):
         assert(set(seed.tx.opseq).issubset(set('IMD')))
         tokens_S = hp_tokenize(str(S))
         tokens_T = hp_tokenize(str(T))
-        # calculate the condensed idx_S and idx_T
+        # calculate the condensed S_idx and T_idx
         S_min_idx, cnt = 0, 0
-        while cnt < seed.tx.idx_S:
+        while cnt < seed.tx.S_idx:
             char_S, num_S = tokens_S.next()
             S_min_idx += 1
             cnt += num_S
-        assert(cnt == seed.tx.idx_S)
+        assert(cnt == seed.tx.S_idx)
 
         T_min_idx, cnt = 0, 0
-        while cnt < seed.tx.idx_T:
+        while cnt < seed.tx.T_idx:
             char_T, num_T = tokens_T.next()
             T_min_idx += 1
             cnt += num_T
-        assert(cnt == seed.tx.idx_T)
+        assert(cnt == seed.tx.T_idx)
         i = 0
         opseq = ''
         # Heavy usage of the assumption that the opseq belongs to an exactly
@@ -337,7 +337,7 @@ class HpCondenser(object):
             i += max(num_S, num_T)
 
         tx = pw.Transcript(
-            idx_S=S_min_idx, idx_T=T_min_idx, score=seed.tx.score, opseq=opseq
+            S_idx=S_min_idx, T_idx=T_min_idx, score=seed.tx.score, opseq=opseq
         )
         return tuples.Segment(S_id=seed.S_id, T_id=seed.T_id, tx=tx)
 

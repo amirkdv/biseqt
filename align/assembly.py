@@ -446,18 +446,18 @@ class OverlapBuilder(object):
 
                 S_len = self._S_len(overlap.tx.opseq)
                 T_len = self._T_len(overlap.tx.opseq)
-                if abs(overlap.tx.idx_S - overlap.tx.idx_T) < self.window or \
-                    abs(overlap.tx.idx_S + S_len - (overlap.tx.idx_T + T_len)) < self.window:
+                if abs(overlap.tx.S_idx - overlap.tx.T_idx) < self.window or \
+                    abs(overlap.tx.S_idx + S_len - (overlap.tx.T_idx + T_len)) < self.window:
                     # end points are too close, ignore
                     continue
-                if overlap.tx.idx_S == 0 and overlap.tx.idx_T == 0:
+                if overlap.tx.S_idx == 0 and overlap.tx.T_idx == 0:
                     if S_len < T_len:
                         es += [(S_name, T_name)]
                     elif S_len > T_len:
                         es += [(T_name, S_name)]
-                elif overlap.tx.idx_T == 0:
+                elif overlap.tx.T_idx == 0:
                     es += [(S_name, T_name)]
-                elif overlap.tx.idx_S == 0:
+                elif overlap.tx.S_idx == 0:
                     es += [(T_name, S_name)]
                 else:
                     raise RuntimeError("This should not have happened")
@@ -485,8 +485,8 @@ class OverlapBuilder(object):
             'align_type': pw.START_ANCHORED_OVERLAP,
         }
         align_problem_kw.update({
-            'S_min_idx': segment.tx.idx_S + S_len,
-            'T_min_idx': segment.tx.idx_T + T_len,
+            'S_min_idx': segment.tx.S_idx + S_len,
+            'T_min_idx': segment.tx.T_idx + T_len,
         })
         align_problem_kw.update({
             'S_max_idx': align_problem_kw['S_min_idx'] + window,
@@ -501,8 +501,8 @@ class OverlapBuilder(object):
                 return None
 
         tx = pw.Transcript(
-            idx_S=segment.tx.idx_S,
-            idx_T=segment.tx.idx_T,
+            S_idx=segment.tx.S_idx,
+            T_idx=segment.tx.T_idx,
             score=segment.tx.score + transcript.score,
             opseq=segment.tx.opseq + transcript.opseq
         )
@@ -515,8 +515,8 @@ class OverlapBuilder(object):
             'align_type': pw.END_ANCHORED_OVERLAP,
         }
         align_problem_kw.update({
-            'S_max_idx': segment.tx.idx_S,
-            'T_max_idx': segment.tx.idx_T,
+            'S_max_idx': segment.tx.S_idx,
+            'T_max_idx': segment.tx.T_idx,
         })
         align_problem_kw.update({
             'S_min_idx': align_problem_kw['S_max_idx'] - window,
@@ -531,8 +531,8 @@ class OverlapBuilder(object):
                 return None
 
         tx = pw.Transcript(
-            idx_S=transcript.idx_S,
-            idx_T=transcript.idx_T,
+            S_idx=transcript.S_idx,
+            T_idx=transcript.T_idx,
             score=transcript.score + segment.tx.score,
             opseq=transcript.opseq + segment.tx.opseq
         )
@@ -568,13 +568,13 @@ class OverlapBuilder(object):
         score_history = [segment.tx.score]
         while True:
             if forward:
-                S_end = cur_seg.tx.idx_S + self._S_len(cur_seg.tx.opseq)
-                T_end = cur_seg.tx.idx_T + self._T_len(cur_seg.tx.opseq)
+                S_end = cur_seg.tx.S_idx + self._S_len(cur_seg.tx.opseq)
+                T_end = cur_seg.tx.T_idx + self._T_len(cur_seg.tx.opseq)
                 S_wiggle = S.length - S_end
                 T_wiggle = T.length - T_end
                 w = min(self.window, min(S_wiggle, T_wiggle))
             else:
-                w = min(self.window, min(cur_seg.tx.idx_S, cur_seg.tx.idx_T))
+                w = min(self.window, min(cur_seg.tx.S_idx, cur_seg.tx.T_idx))
 
             if w == 0:
                 # hit the end:
@@ -629,14 +629,14 @@ class OverlapBuilder(object):
             bwd = self._extend1d(S, T, segment, forward=False)
             if (fwd and bwd and
                 min(fwd.tx.score, bwd.tx.score) > self.drop_threshold):
-                assert(bwd.tx.idx_S == 0 or bwd.tx.idx_T == 0)
+                assert(bwd.tx.S_idx == 0 or bwd.tx.T_idx == 0)
                 opseq = bwd.tx.opseq[:-len(segment.tx.opseq)] + fwd.tx.opseq
                 score = self.align_params.score(
                     S, T, opseq,
-                    S_min_idx=bwd.tx.idx_S, T_min_idx=bwd.tx.idx_T
+                    S_min_idx=bwd.tx.S_idx, T_min_idx=bwd.tx.T_idx
                 )
                 tx = pw.Transcript(
-                    idx_S=bwd.tx.idx_S, idx_T=bwd.tx.idx_T,
+                    S_idx=bwd.tx.S_idx, T_idx=bwd.tx.T_idx,
                     score=score, opseq=opseq
                 )
                 return tuples.Segment(

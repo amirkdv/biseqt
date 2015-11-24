@@ -19,9 +19,9 @@ alignment problem:
 from math import log
 import re
 import sys
+from collections import namedtuple
 from termcolor import colored
 from contextlib import contextmanager
-
 from . import ffi, lib, seq, CffiObject
 from . import hp_tokenize
 
@@ -325,7 +325,7 @@ class AlignProblem(CffiObject):
             return super(AlignProblem, self).__getattr__(name)
 
 
-class Transcript(object):
+class Transcript(namedtuple('Transcript', ['S_idx', 'T_idx', 'score', 'opseq'])):
     """A wrapper for alignment transcripts. Solutions to the alignment problem
     are represented by transcript strings with the following format::
 
@@ -342,18 +342,17 @@ class Transcript(object):
         I insert
         D delete
 
-
     Args:
         raw_transcript (Optional[str]): If provided all other arguments are
             ignored and instead this string is parsed to populate the
             attributes.
     """
-    def __init__(self, idx_S=0, idx_T=0, score=0.0, opseq='',
+    def __new__(cls, S_idx=0, T_idx=0, score=0.0, opseq='',
                  raw_transcript=None):
         if raw_transcript is None:
-            self.idx_S, self.idx_T = idx_S, idx_T
-            self.score, self.opseq = score, opseq
-            return
+            return super(Transcript, cls).__new__(
+                cls, S_idx, T_idx, score, opseq
+            )
 
         assert(
             re.match('\([0-9]+,[0-9]+\),[0-9-\.]+:[MISD]+', raw_transcript)
@@ -361,13 +360,14 @@ class Transcript(object):
         )
         infostr, opseq = raw_transcript.split(':', 1)
         indices, score = infostr.rsplit(',', 1)
-        idx_S, idx_T = indices[1:-1].split(',')  # skip the open/close parens.
-        self.idx_S, self.idx_T = int(idx_S), int(idx_T)
-        self.opseq, self.score = opseq, float(score)
+        S_idx, T_idx = indices[1:-1].split(',')  # skip the open/close parens.
+        return super(Transcript, cls).__new__(
+            cls, int(S_idx), int(T_idx), float(score), opseq
+        )
 
     def __repr__(self):
         return '(%d,%d),%.2f:%s' \
-            % (self.idx_S, self.idx_T, self.score, self.opseq)
+            % (self.S_idx, self.T_idx, self.score, self.opseq)
 
     def pretty_print(self, S, T, f=sys.stdout, width=120, margin=20,
                      colors=True):
@@ -388,7 +388,7 @@ class Transcript(object):
         assert(S.alphabet.letter_length == T.alphabet.letter_length)
         assert(S.alphabet.letters == T.alphabet.letters)
         letlen = S.alphabet.letter_length
-        idx_S, idx_T = self.idx_S, self.idx_T
+        S_idx, T_idx = self.S_idx, self.T_idx
 
         slines = tlines = []
         sline = tline = ''
@@ -398,40 +398,40 @@ class Transcript(object):
             sline, tline = sline.rjust(maxlen), tline.rjust(maxlen)
             f.write('%s\n%s\n' % (sline, tline))
 
-        def new_line(sline, tline, _idx_S, _idx_T, f):
+        def new_line(sline, tline, _S_idx, _T_idx, f):
             print_lines(sline, tline, f)
-            sline, tline = 'S[%d]: ' % _idx_S, 'T[%d]: ' % _idx_T
+            sline, tline = 'S[%d]: ' % _S_idx, 'T[%d]: ' % _T_idx
             return (max(len(sline), len(tline)), sline, tline)
 
         # The pre margin:
-        pre_margin = min(margin, max(idx_S, idx_T) * letlen)
-        sline = 'S[%d]: ' % idx_S
-        tline = 'T[%d]: ' % idx_T
+        pre_margin = min(margin, max(S_idx, T_idx) * letlen)
+        sline = 'S[%d]: ' % S_idx
+        tline = 'T[%d]: ' % T_idx
         counter = max(len(sline), len(tline))
         for i in reversed(range(1, pre_margin)):
             if counter >= width:
                 counter, sline, tline = new_line(
-                    sline, tline, idx_S+i, idx_T+i, f
+                    sline, tline, S_idx+i, T_idx+i, f
                 )
-            sline += S[idx_S-i] if i <= idx_S else ' '
-            tline += T[idx_T-i] if i <= idx_T else ' '
+            sline += S[S_idx-i] if i <= S_idx else ' '
+            tline += T[T_idx-i] if i <= T_idx else ' '
             counter += letlen
 
         gap = '-' * letlen
         # The alignment itself:
         for op in self.opseq:
             if counter >= width:
-                counter, sline, tline = new_line(sline, tline, idx_S, idx_T, f)
+                counter, sline, tline = new_line(sline, tline, S_idx, T_idx, f)
             if op in 'MS':
-                s, t = S[idx_S], T[idx_T]
-                idx_S += 1
-                idx_T += 1
+                s, t = S[S_idx], T[T_idx]
+                S_idx += 1
+                T_idx += 1
             elif op == 'I':
-                s, t = gap, T[idx_T]
-                idx_T += 1
+                s, t = gap, T[T_idx]
+                T_idx += 1
             elif op == 'D':
-                s, t = S[idx_S], gap
-                idx_S += 1
+                s, t = S[S_idx], gap
+                S_idx += 1
             else:
                 raise ValueError('Invalid edit operation: %c' % op)
             on_color = color = None
@@ -450,16 +450,16 @@ class Transcript(object):
         post_margin = min(
             margin,
             max(
-                (S.length - idx_S) * letlen,
-                (T.length - idx_T) * letlen
+                (S.length - S_idx) * letlen,
+                (T.length - T_idx) * letlen
             )
         )
         for i in range(post_margin):
             if counter >= width:
                 counter, sline, tline = new_line(
-                    sline, tline, idx_S + i, idx_T + i, f)
-            sline += S[idx_S+i] if idx_S + i < S.length else ' ' * letlen
-            tline += T[idx_T+i] if idx_T + i < T.length else ' ' * letlen
+                    sline, tline, S_idx + i, T_idx + i, f)
+            sline += S[S_idx+i] if S_idx + i < S.length else ' ' * letlen
+            tline += T[T_idx+i] if T_idx + i < T.length else ' ' * letlen
             counter += letlen
 
         print_lines(sline, tline, f)

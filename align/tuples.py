@@ -411,19 +411,19 @@ class Index(object):
                 tx = pw.Transcript(S_idx, T_idx, 0, 'M'*self.wordlen)
                 exacts += [Segment(S_id=S_id, T_id=T_id, tx=tx)]
 
-        exacts.sort(key=lambda s: s.tx.idx_S)
+        exacts.sort(key=lambda s: s.tx.S_idx)
         # merge overlapping tuples:
         idx = 0
         while idx < len(exacts):
             cand = idx + 1
             while cand < len(exacts):
-                shift_S = exacts[cand].tx.idx_S - exacts[idx].tx.idx_S
-                shift_T = exacts[cand].tx.idx_T - exacts[idx].tx.idx_T
+                shift_S = exacts[cand].tx.S_idx - exacts[idx].tx.S_idx
+                shift_T = exacts[cand].tx.T_idx - exacts[idx].tx.T_idx
                 # we know the transcripts are all M's.
                 if shift_S == shift_T and shift_S > 0 and \
                    shift_S < len(exacts[idx].tx.opseq):
                     tx = pw.Transcript(
-                        exacts[idx].tx.idx_S, exacts[idx].tx.idx_T,
+                        exacts[idx].tx.S_idx, exacts[idx].tx.T_idx,
                         0,  # score
                         exacts[cand].tx.opseq + 'M'*shift_S  # transcript
                     )

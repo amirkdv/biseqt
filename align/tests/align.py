@@ -40,6 +40,6 @@ print '\n--> optimal alignment:\n%s\n' % str(transcript)
 if transcript:
     transcript.pretty_print(S, T)
 
-m_transcript = pw.Transcript(idx_S=0, idx_T=0, score=P.score(m_opseq), opseq=m_opseq)
+m_transcript = pw.Transcript(S_idx=0, T_idx=0, score=P.score(m_opseq), opseq=m_opseq)
 print '\n--> mutation transcript:\n%s\n' % str(m_transcript)
 m_transcript.pretty_print(S, T)

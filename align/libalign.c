@@ -349,13 +349,13 @@ align_dp_cell* find_optimal(align_dp_cell** P, align_problem* def) {
 char *traceback(align_dp_cell** P, align_problem* def, align_dp_cell* end) {
   char *infostr, *transcript, *ret;
   char op;
-  int idx_S = end->row,
-      idx_T = end->col;
-  align_dp_cell curr = P[idx_S][idx_T];
+  int S_idx = end->row,
+      T_idx = end->col;
+  align_dp_cell curr = P[S_idx][T_idx];
   // string manipulation indices for the transcript:
   int len, infolen, pos;
   // allocate more than enough memory for the transcript as we trace back.
-  len = idx_S + idx_T + 1;
+  len = S_idx + T_idx + 1;
   // We write ops to rev_transcript backwards starting from the end (position `len')
   char rev_transcript[len];
   pos = len - 1;
@@ -367,32 +367,32 @@ char *traceback(align_dp_cell** P, align_problem* def, align_dp_cell* end) {
     pos--;
     rev_transcript[pos] = op;
     if (op == 'M' || op == 'S') {
-      idx_S --;
-      idx_T --;
+      S_idx --;
+      T_idx --;
     }
     if (op == 'I') {
-      idx_T --;
+      T_idx --;
     }
     if (op == 'D') {
-      idx_S --;
+      S_idx --;
     }
-    curr = P[idx_S][idx_T];
+    curr = P[S_idx][T_idx];
   }
   if (pos == len - 1) {
     // empty opseq
     return NULL;
   }
-  // build the info string: "(<idx_S>,<idx_T>),<score>:"
+  // build the info string: "(<S_idx>,<T_idx>),<score>:"
   infolen = 8; // for "(,),:" and the 2 decimal points
   // add the space for S_min_idx and T_min_idx, default 0
   infolen += 2;
-  if (idx_S + def->S_min_idx > 0 ) {
+  if (S_idx + def->S_min_idx > 0 ) {
     // if nonzero, we need this many more digits:
-    infolen += (int)floor(log10(idx_S + def->S_min_idx));
+    infolen += (int)floor(log10(S_idx + def->S_min_idx));
   }
-  if (idx_T + def->T_min_idx > 0 ) {
+  if (T_idx + def->T_min_idx > 0 ) {
     // potential additional digits for T_min_idx
-    infolen += (int)floor(log10(idx_T + def->T_min_idx));
+    infolen += (int)floor(log10(T_idx + def->T_min_idx));
   }
   // add the space for the score, default 0.00
   infolen += 3;
@@ -410,7 +410,7 @@ char *traceback(align_dp_cell** P, align_problem* def, align_dp_cell* end) {
     printf("Failed to allocate memory.\n");
     return NULL;
   }
-  sprintf(infostr, "(%d,%d),%.2f:", (idx_S + def->S_min_idx), (idx_T + def->T_min_idx), end->choices[0].score);
+  sprintf(infostr, "(%d,%d),%.2f:", (S_idx + def->S_min_idx), (T_idx + def->T_min_idx), end->choices[0].score);
   // the backtraced transcript was written backwords to the end of rev_transcript
   len = len - pos - 1;
   transcript = malloc(len + 1);
