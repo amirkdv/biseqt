@@ -7,7 +7,7 @@ DB = genome.$(MODE).db
 READS = reads.$(MODE).fa
 
 clean:
-	@find . -regextype posix-extended -regex '.*.(fa|db|gml|svg)' | grep -v '^./.git' | tee /dev/stderr  | while read f; do rm -rf $$f; done
+	@find . -regextype posix-extended -regex '.*.(fa|db|gml|svg)' | grep -v '^./.git' | grep -v '^./docs' | tee /dev/stderr  | while read f; do rm -rf $$f; done
 
 $(READS):
 	python -c 'import $(ASSEMBLY_TEST) as T; T.create_example("$@", "$(READS)");'
@@ -44,7 +44,7 @@ $(TRUE_GRAPH).layout.gml: $(TRUE_GRAPH).gml
 
 $(ASSEMBLED_GRAPH).layout.gml: $(ASSEMBLED_GRAPH).dag.gml
 	python -c 'import align.assembly as A, igraph as ig; \
-		A.OverlapGraph(ig.read("$(ASSEMBLED_GRAPH).dag.gml")).layout(full=True).save("$@")'
+		A.OverlapGraph(ig.read("$(ASSEMBLED_GRAPH).dag.gml")).layout(full=False).save("$@")'
 
 $(TRUE_GRAPH).layout.svg: $(TRUE_GRAPH).gml
 	python -c 'import align.assembly as A, igraph as ig; \

@@ -6,6 +6,8 @@ import igraph
 from .. import pw, tuples, seq, assembly
 
 params = {
+    'show_params': False,
+    'profile': False,
     'wordlen': 10,          # tuple word lengths
     'genome_length': 50000, # length of randomly generated genome
     'coverage': 10,         # coverage of random sequencing reads

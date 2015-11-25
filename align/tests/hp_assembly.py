@@ -21,7 +21,7 @@ params = {
     'hp_gap_score': -0.9,   # HpCondenser Hp gap score
     'hp_prob': 0.15,        # Parameter for geometric distributions of hp stretches
     'subst_probs': [[0.91 if k==i else 0.03 for k in range(4)] for i in range(4)],
-    'window': 30,           # rolling window length for tuple extension
+    'window': 50,           # rolling window length for tuple extension
     'drop_threshold': 0,    # what constitutes a drop in score of a window
     'max_succ_drops': 3,    # how many consecutive drops are allowed
 }
