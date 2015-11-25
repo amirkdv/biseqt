@@ -46,8 +46,6 @@ make clean tests
 * Low priority:
     * Support [Hirschberg](https://en.wikipedia.org/wiki/Hirschberg\'s_algorithm) -style
       linear space optimization in `libalign`.
-    * Figure out how to pull in docstrings from C code into sphinx (e.g look
-      at [Breathe](https://github.com/michaeljones/breathe)).
     * Add an ungapped seed expansion phase.
     * Adapt Karlin-Altschul statistics (references:
       [[1]](http://www.pnas.org/content/87/6/2264.full.pdf),
