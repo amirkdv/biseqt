@@ -33,7 +33,7 @@ env:
 DOCS_EXCLUDE = align/tests
 DOCS_OUT = _build
 docs: align/libalign.so docs/docs.rst docs/doxygen
-	sphinx-apidoc -f -e -o $@ align/ $(DOCS_EXCLUDE)
+	sphinx-apidoc -e -o $@ align/ $(DOCS_EXCLUDE)
 	cd $@ && sphinx-build -b html . $(DOCS_OUT)
 	cd $@ && sphinx-build -b latex . $(DOCS_OUT)
 	@echo "Find the docs at file://`readlink -f $@/$(DOCS_OUT)/index.html`"

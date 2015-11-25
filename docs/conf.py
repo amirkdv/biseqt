@@ -55,9 +55,11 @@ extensions = [
     'breathe',
 ]
 
+# Breathe configuration
 breathe_projects = {"align.py": "doxygen"}
 breathe_default_project = "align.py"
 breathe_domain_by_extension = {"h": "c", "c": "c"}
+breathe_default_members = ('members', 'undoc-members')
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']
