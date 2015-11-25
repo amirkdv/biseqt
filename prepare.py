@@ -11,12 +11,12 @@ HERE = os.path.dirname(__file__)
 BLAST_DB = os.environ['DB']
 READS_IN = os.environ['READS']
 READS_OUT = sys.argv[1]
-NUM_READS = 300
+NUM_READS = -1
 annotated = []
 
 count = 0
 for rec in SeqIO.parse(READS_IN, 'fasta'):
-    if count == NUM_READS:
+    if NUM_READS > 0 and count == NUM_READS:
         break
     with tempfile.NamedTemporaryFile(suffix='.fasta') as tmp:
         tmp.write('>tmp\n' + str(rec.seq))
