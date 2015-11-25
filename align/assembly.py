@@ -219,7 +219,7 @@ class OverlapGraph(object):
         plot_kw = {
             'layout': self.iG.layout_sugiyama(**layout_kw),
             'bbox': (n*150, n*150),
-            'vertex_size': 100,
+            'vertex_size': 150,
             'vertex_label': [x.replace(' ', '\n') for x in self.iG.vs['name']],
             'vertex_label_size': 18,
             'vertex_color': kw.get('vertex_color', [self.v_highlight if v_start_path(v) else 'white' for v in self.iG.vs['name']]),
