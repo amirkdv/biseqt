@@ -54,15 +54,18 @@ class ProgressIndicator(object):
         sys.stderr.write('%s: 0%%' % self.msg)
 
     def finish(self):
-        sys.stderr.write('\r%s: %d%%.\n' %
-            (self.msg, (self.progress_cnt * 100)/self.num_total))
+        self.status();
+        sys.stderr.write('.\n');
 
-    def progress(self, num=1):
-        self.progress_cnt += num
+    def status(self):
         if self.percentage:
-            if self.progress_cnt % self.freq == 0:
-                sys.stderr.write('\r%s: %d%%' %
-                    (self.msg, (self.progress_cnt * 100)/self.num_total))
+            sys.stderr.write('\r%s: %d%%' %
+                (self.msg, (self.progress_cnt * 100)/self.num_total))
         else:
             sys.stderr.write('\r%s: %d/%d' %
                 (self.msg, self.progress_cnt, self.num_total))
+
+    def progress(self, num=1):
+        self.progress_cnt += num
+        if not self.percentage or self.progress_cnt % self.freq == 0:
+            self.status()

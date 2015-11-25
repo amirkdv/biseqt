@@ -257,9 +257,7 @@ class Sequence():
         very beginning and the other the very end of the sequence. For
         example::
 
-            subst_probs = {
-                ... # snip
-            }
+            subst_probs = { ... }
             N = 10000
             genome = seq.Alphabet('ACGT').randseq(N)
             reads = genome.randread(subst_probs=subst_probs, coverage=40)
