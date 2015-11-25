@@ -8,13 +8,15 @@
 #include "libalign.h"
 
 /**
- * Given an alignment problem definition, creates and initializes the DP matrix.
+ * Given an alignment problem definition, creates and initializes the dynamic
+ * programming table.
  *
- * @param def (align_problem*): pointer to problem definition struct. The only
- *    members that are relevant at this point is the corresponding frames of S
- *    and T (which determine the size of the table).
+ * @param def
+ *    Alignment problem definition. The only members that are relevant at this
+ *    point is the corresponding frames of the two sequences which determine
+ *    the size of the table).
  *
- * @return align_dp_cell**: pointer to the malloced DP matrix.
+ * @return pointer to the `malloc` ed dynamic programming table.
  */
 align_dp_cell** init_dp_table(align_problem* def) {
   int n = def->S_max_idx - def->S_min_idx;
@@ -39,10 +41,13 @@ align_dp_cell** init_dp_table(align_problem* def) {
   return P;
 }
 
-
 /**
  * Frees the allocated memory for a given alignment problem so that we can reuse
- * the same align_problem* over and over.
+ * the same ::align_problem over and over.
+ *
+ * @param P the dynamic programming table.
+ * @param row_cnt the number of rows in the table.
+ * @param col_cnt the number of columns in the table.
  */
 void free_dp_table(align_dp_cell** P, int row_cnt, int col_cnt) {
   if (P == NULL) {
@@ -63,7 +68,21 @@ void free_dp_table(align_dp_cell** P, int row_cnt, int col_cnt) {
 /**
  * Given an alignment with allocated DP table, solves the alignment problem (i.e
  * populates the alignment table). The optimal score and transcript can then
- * be obtained by calling traceback on P.
+ * be obtained by using `traceback`. Half of the constraints imposed by
+ * an alignment type (see ::align_type) are implemented here where we decide
+ * what positions on the table can be starting positions of alignments. The
+ * other half of the constraints concerning the ending position of the alignment
+ * on the table is encapsulated in `traceback`.
+ *
+ * The rules of starting alignments are:
+ * - Local and end-anchored alignments (except for overlap ones) can start
+ *   anywhere.
+ * - Overlap alignments (except for start anchored ones) can start anywhere.
+ * - Global and start anchored alignments must start at the top left corner.
+ *
+ * @param P The dynamic programming table,
+ * @param def The alignment problem definition.
+ * @return The optimal cell of the DP table for the alignment to *end* at.
  */
 align_dp_cell* solve(align_dp_cell** P, align_problem* def) {
   int n = def->S_max_idx - def->S_min_idx;
@@ -118,9 +137,6 @@ align_dp_cell* solve(align_dp_cell** P, align_problem* def) {
           (def->type == OVERLAP && (i == 0 || j == 0)) ||
           (def->type == END_ANCHORED_OVERLAP && (i == 0 || j == 0))
         ) {
-        // 1. local alignments can start anywhere,
-        // 2. overlap alignments can start anywhere on the left column or the
-        //    top row,
         alts[num_choices].op = 'B';
         alts[num_choices].score = 0;
         alts[num_choices].diversion = 0;
@@ -253,11 +269,18 @@ align_dp_cell* solve(align_dp_cell** P, align_problem* def) {
 /**
  * Finds the optimal cell to start traceback from given a populated DP table
  * and an alignment problem definition (to know where to look for the optimal
- * cell).
- * @param P (align_dp_cell**):  pointer to a solved alignment DP table.
- * @param def (align_problem*): pointer to the align_problem struct.
+ * cell). This is internally used by `solve` in the final step. The rules are
+ * as follows:
+ * - Global and end-anchored alignments must end at the bottom right corner.
+ * - Overlap alignments (except end-anchored ones) can end anywhere on either
+ *   of the bottom or right edges; the best is found.
+ * - Local and start-anchored alignments (except for overlap ones) can end
+ *   anywhere; the best is found.
  *
- * @return align_dp_cell*: pointer to the optimal cell of the table.
+ * @param P  The *solved* (populated) dynamic programming table.
+ * @param def The alignment problem definition.
+ *
+ * @return The optimal cell of the table for the alignment to *end* at.
  */
 align_dp_cell* find_optimal(align_dp_cell** P, align_problem* def) {
   double max;
@@ -319,30 +342,17 @@ align_dp_cell* find_optimal(align_dp_cell** P, align_problem* def) {
 }
 
 /**
- * Traces back the calculated optimal solutions backwards starting from a given
- * "end" point:
- * @param P (align_dp_cell**):  pointer to a solved alignment DP table.
- * @param def (align_problem*): pointer to the align_problem struct.
- * @param end (align_dp_cell*): ending point of alignment, starting point of
- *    traceback
+ * Traces back *an* alignment (and not all alignments with identical scores)
+ * from a given cell all the way back to a cell with a `NULL` base (i.e an
+ * alignment start cell).
  *
- * @return transcript*: A transcript has the following components:
+ * @param P The solved (i.e populated) alignment DP table.
+ * @param def The alignment problem definition.
+ * @param end The desired ending point of alignment which becomes the starting
+ *    point of traceback.
  *
- *           (<Si,Tj>),<score>:<opseq>
- *
- *     Si and Tj are integers specifying the positiong along each string where
- *     the alignment begins. Score is the score of the transcript to 2 decimal
- *     places. What follows the ':' is a sequence of "ops" defined as follows:
- *       B begin
- *       M match
- *       S substitution
- *       I insert
- *       D delete
- *     All op sequences begin with a B and insertion/deletions are meant to
- *     mean "from S to T".
- *
- * Limitations:
- *  - Finding more than one optimal alignment is a nontrivial search problem,
+ * @note
+ *    Finding more than one optimal alignment is a nontrivial search problem,
  *    and requires some sort of global state keeping to avoid convoluted
  *    recursions. I couldn't get it right in the first go; leave for later.
  */

@@ -17,6 +17,7 @@ Functions
 ---------
 
 .. doxygenfunction:: init_dp_table
+.. doxygenfunction:: free_dp_table
 .. doxygenfunction:: solve
 .. doxygenfunction:: find_optimal
 .. doxygenfunction:: traceback
