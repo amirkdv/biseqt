@@ -7,7 +7,9 @@ DB = genome.$(MODE).db
 READS = reads.$(MODE).fa
 
 clean:
-	@find . -regextype posix-extended -regex '.*.(fa|db|gml|svg)' | grep -v '^./.git' | grep -v '^./docs' | tee /dev/stderr  | while read f; do rm -rf $$f; done
+	rm -f $(ASSEMBLED_GRAPH).gml $(ASSEMBLED_GRAPH).dag.gml $(ASSEMBLED_GRAPH).layout.gml
+	rm -f $(DB) $(READS)
+	rm -f $(TRUE_GRAPH).gml $(TRUE_GRAPH).layout.gml layout.diff.$(ASSEMBLED_GRAPH).svg
 
 $(READS):
 	python -c 'import $(ASSEMBLY_TEST) as T; T.create_example("$@", "$(READS)");'
@@ -57,7 +59,7 @@ $(ASSEMBLED_GRAPH).layout.svg: $(ASSEMBLED_GRAPH).layout.gml
 		g = A.OverlapGraph(ig.read("$(ASSEMBLED_GRAPH).dag.gml")); \
 		g.draw("$@", highlight_paths=g.all_longest_paths());'
 
-layout.diff.$(MODE).svg: $(ASSEMBLED_GRAPH).layout.gml $(TRUE_GRAPH).layout.gml
+layout.diff.$(ASSEMBLED_GRAPH).svg: $(ASSEMBLED_GRAPH).layout.gml $(TRUE_GRAPH).layout.gml
 	python -c 'import align.assembly as A, igraph as ig; \
 		g = A.OverlapGraph(ig.read("$(TRUE_GRAPH).layout.gml")); \
 		g.diff_draw(A.OverlapGraph(ig.read("$(ASSEMBLED_GRAPH).layout.gml")), "$@")'
