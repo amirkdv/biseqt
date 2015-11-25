@@ -37,6 +37,7 @@ setup(
             'sphinx.ext.napoleon',
             'sphinx.rdt.theme',
             'sphinx.ext.mathjax',
+            'breathe',
             'mock' # only used on rtfd.org to mock packages with binary dependencies
         ]
     }

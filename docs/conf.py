@@ -15,6 +15,7 @@
 import sys
 import os
 import shlex
+import subprocess
 
 # Mock dependencies that require arbitrary C binaries.
 from mock import Mock as MagicMock
@@ -28,6 +29,7 @@ if os.environ.get('READTHEDOCS', None) == 'True':
         def __getattr__(cls, name):
             return Mock()
 
+    subprocess.call('cd .. && pip install breathe && doxygen docs/doxygen.conf', shell=True)
     MOCK_MODULES = ['cffi', 'igraph', 'numpy', 'termcolor', 'Bio', 'Bio.SeqIO']
     sys.modules.update((mod_name, Mock()) for mod_name in MOCK_MODULES)
 
@@ -44,12 +46,18 @@ sys.path.insert(0, os.path.abspath('..'))
 # Add any Sphinx extension module names here, as strings. They can be
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
 # ones.
+sys.path.append('/var/shelf/book01/projects/align.py/env/local/lib/python2.7/site-packages/breathe')
 extensions = [
     'sphinx.ext.autodoc',
     'sphinx.ext.napoleon',
     'sphinx.ext.mathjax',
     'sphinx.ext.viewcode',
+    'breathe',
 ]
+
+breathe_projects = {"align.py": "doxygen"}
+breathe_default_project = "align.py"
+breathe_domain_by_extension = {"h": "c", "c": "c"}
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']

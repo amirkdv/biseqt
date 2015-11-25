@@ -1,5 +1,5 @@
+# FIXME actually use the virtualenv
 GCC = gcc -shared -Wall -fPIC -std=c99 -g
-
 # To get coredumps:
 # 	$ ulimit -c unlimited
 # To debug coredump:
@@ -32,13 +32,16 @@ env:
 
 DOCS_EXCLUDE = align/tests
 DOCS_OUT = _build
-docs: align/libalign.so docs/docs.rst
+docs: align/libalign.so docs/docs.rst docs/doxygen
 	sphinx-apidoc -f -e -o $@ align/ $(DOCS_EXCLUDE)
 	cd $@ && sphinx-build -b html . $(DOCS_OUT)
 	cd $@ && sphinx-build -b latex . $(DOCS_OUT)
 	@echo "Find the docs at file://`readlink -f $@/$(DOCS_OUT)/index.html`"
 
+docs/doxygen:
+	doxygen docs/doxygen.conf
+
 docs/docs.rst:
 	pandoc -f markdown -t rst -o $@ -i docs.md
 
-.PHONY: clean tests *.pdf loc docs docs/docs.rst
+.PHONY: clean tests *.pdf loc docs docs/docs.rst docs/doxygen

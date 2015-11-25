@@ -272,7 +272,8 @@ class AlignProblem(CffiObject):
         )
 
     def solve(self, print_dp_table=False):
-        """Populates the DP table and returns the optimal score.
+        """Wraps :c:func:`libalign.solve() <solve()>`: populates the DP table
+        and returns the optimal score.
 
         Args:
             print_dp_table(Optional[bool]): whether or not to print the
