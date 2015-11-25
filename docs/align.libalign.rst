@@ -16,10 +16,12 @@ Data Structures
 Functions
 ---------
 
+.. doxygenfunction:: idxseq_from_charseq
 .. doxygenfunction:: init_dp_table
 .. doxygenfunction:: free_dp_table
 .. doxygenfunction:: solve
 .. doxygenfunction:: find_optimal
 .. doxygenfunction:: traceback
-.. doxygenfunction:: extend1d
 .. doxygenfunction:: extend
+.. doxygenfunction:: extend_1d
+.. doxygenfunction:: extend_1d_once

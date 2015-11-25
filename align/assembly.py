@@ -3,7 +3,7 @@ import sys
 import igraph
 from termcolor import colored
 import time
-from . import tuples, pw, homopolymeric, ProgressIndicator
+from . import tuples, pw, homopolymeric, ProgressIndicator, lib, ffi
 
 
 class OverlapGraph(object):
@@ -85,9 +85,9 @@ class OverlapGraph(object):
         vertices with names specified in ``exclude``. This, naturally requires
         that the graph is acyclic. Assuming the graph is a DAG, we can find the
         longest path in two steps:
-            - Find a topological ordering of the graph in :math:`O(|V|+|E|)`
-              time,
-            - Find a heaviest path using the sorting in :math:`O(|V|)` time.
+
+        - Find a topological ordering of the graph in :math:`O(|V|+|E|)` time,
+        - Find a heaviest path using the sorting in :math:`O(|V|)` time.
 
         Keyword Arguments:
             exclude (Optional[List[str]]): A list of vertex names to be
@@ -427,6 +427,13 @@ class OverlapBuilder(object):
                 # are the seeds part of an overlap?
                 S = self.index.tuplesdb.loadseq(S_id)
                 T = self.index.tuplesdb.loadseq(T_id)
+
+                # Calculate the score of each seed
+                for seed in seeds:
+                    seed.tx.score = self.align_params.score(
+                        S, T, seed.tx.opseq,
+                        S_min_idx=seed.tx.S_idx, T_min_idx=seed.tx.T_idx
+                    )
                 if self.hp_condenser:
                     seeds = [self.hp_condenser.condense_seed(S, T, seed) for seed in seeds]
                     S = self.hp_condenser.condense_sequence(S)
@@ -444,8 +451,8 @@ class OverlapBuilder(object):
                 if not overlap:
                     continue
 
-                S_len = self._S_len(overlap.tx.opseq)
-                T_len = self._T_len(overlap.tx.opseq)
+                S_len = lib.tx_seq_len(overlap.tx.c_obj, 'S')
+                T_len = lib.tx_seq_len(overlap.tx.c_obj, 'T')
                 if abs(overlap.tx.S_idx - overlap.tx.T_idx) < self.window or \
                     abs(overlap.tx.S_idx + S_len - (overlap.tx.T_idx + T_len)) < self.window:
                     # end points are too close, ignore
@@ -476,140 +483,9 @@ class OverlapBuilder(object):
         G.iG.es['weight'] = ws
         return G
 
-    def _extend_fwd_once(self, S, T, segment, window):
-        """Helper method for ``extend1d``."""
-        S_len = self._S_len(segment.tx.opseq)
-        T_len = self._T_len(segment.tx.opseq)
-        align_problem_kw = {
-            'S': S, 'T': T, 'params': self.align_params,
-            'align_type': pw.START_ANCHORED_OVERLAP,
-        }
-        align_problem_kw.update({
-            'S_min_idx': segment.tx.S_idx + S_len,
-            'T_min_idx': segment.tx.T_idx + T_len,
-        })
-        align_problem_kw.update({
-            'S_max_idx': align_problem_kw['S_min_idx'] + window,
-            'T_max_idx': align_problem_kw['T_min_idx'] + window
-        })
-
-        with pw.AlignProblem(**align_problem_kw) as P:
-            score = P.solve()
-            assert(score is not None)
-            transcript = P.traceback()
-            if transcript is None:
-                return None
-
-        tx = pw.Transcript(
-            S_idx=segment.tx.S_idx,
-            T_idx=segment.tx.T_idx,
-            score=segment.tx.score + transcript.score,
-            opseq=segment.tx.opseq + transcript.opseq
-        )
-        return tuples.Segment(S_id=segment.S_id, T_id=segment.T_id, tx=tx)
-
-    def _extend_bwd_once(self, S, T, segment, window):
-        """Helper method for ``extend1d``."""
-        align_problem_kw = {
-            'S': S, 'T': T, 'params': self.align_params,
-            'align_type': pw.END_ANCHORED_OVERLAP,
-        }
-        align_problem_kw.update({
-            'S_max_idx': segment.tx.S_idx,
-            'T_max_idx': segment.tx.T_idx,
-        })
-        align_problem_kw.update({
-            'S_min_idx': align_problem_kw['S_max_idx'] - window,
-            'T_min_idx': align_problem_kw['T_max_idx'] - window
-        })
-
-        with pw.AlignProblem(**align_problem_kw) as P:
-            score = P.solve()
-            assert(score is not None)
-            transcript = P.traceback()
-            if transcript is None:
-                return None
-
-        tx = pw.Transcript(
-            S_idx=transcript.S_idx,
-            T_idx=transcript.T_idx,
-            score=transcript.score + segment.tx.score,
-            opseq=transcript.opseq + segment.tx.opseq
-        )
-        return tuples.Segment(S_id=segment.S_id, T_id=segment.T_id, tx=tx)
-
-    # Inetrnal helper: for a given opseq from S to T return the length of opseq
-    # as projected on S.
-    def _S_len(self, opseq):
-        return sum([opseq.count(op) for op in 'DMS'])
-
-    # Inetrnal helper: for a given opseq from S to T return the length of opseq
-    # as projected on T.
-    def _T_len(self, opseq):
-        return sum([opseq.count(op) for op in 'IMS'])
-
-    def extend1d(self, S, T, segment, forward=True):
-        """Given two sequences and a single segment attempts to fully expand
-        the segment in one direction (default: forward). If as many as
-        :attr:`max_succ_drops` successive windows every have a score of smaller
-        than :attr:`drop_threshold` the seed is "dropped", i.e ``None`` is
-        returned.
-
-        Args:
-            S (seq.Sequence): The "from" sequence.
-            T (seq.Sequence): The "to" sequence.
-            segment (tuples.Segment): The starting segment.
-
-        Returns:
-            tuples.Segment: A fully expand segment in one direction (fwd or
-                bwd), and ``None`` if the segment does not expand.
-        """
-        cur_seg = segment
-        score_history = [segment.tx.score]
-        while True:
-            if forward:
-                S_end = cur_seg.tx.S_idx + self._S_len(cur_seg.tx.opseq)
-                T_end = cur_seg.tx.T_idx + self._T_len(cur_seg.tx.opseq)
-                S_wiggle = S.length - S_end
-                T_wiggle = T.length - T_end
-                w = min(self.window, min(S_wiggle, T_wiggle))
-            else:
-                w = min(self.window, min(cur_seg.tx.S_idx, cur_seg.tx.T_idx))
-
-            if w == 0:
-                # hit the end:
-                return cur_seg
-
-            if forward:
-                seg = self._extend_fwd_once(S, T, cur_seg, w)
-            else:
-                seg = self._extend_bwd_once(S, T, cur_seg, w)
-
-            if seg is None:
-                # no non-empty alignment found.
-                break
-
-            score_history += [seg.tx.score - segment.tx.score]
-            if len(score_history) > self.max_succ_drops:
-                score_history = score_history[-self.max_succ_drops:]
-
-            if (len(score_history) == self.max_succ_drops and
-                all([x <= self.drop_threshold for x in score_history])):
-                break
-
-            cur_seg = seg
-
-        return None
-
     def extend(self, S, T, segments):
-        """Given two sequences and a number of matching segments returns the
-        first fully extended segment. A fully extended segment is one that
-        corresponds to an suffix-prefix alignment of the sequences.
-
-        Each seed is extended by a rolling frame of size :attr:`window` along
-        the two sequences and is dropped once as many as :attr:`max_succ_drops`
-        successive bad scores are observed. A bad score (over a single frame)
-        is one that has a score of smaller than :attr:`drop_threshold`.
+        """Wraps :c:func:`extend()`: given two sequences and a number of
+        matching segments returns the first fully extended segment.
 
         Args:
             S (seq.Sequence): The "from" sequence.
@@ -620,25 +496,8 @@ class OverlapBuilder(object):
         Returns:
             tuples.Segment: A segment corresponding to an overlap alignment.
         """
-        assert(S.alphabet.letters == T.alphabet.letters)
-        if self.hp_condenser:
-            assert S.alphabet.letters == self.hp_condenser.dst_alphabet.letters
-        res = []
-        for segment in segments:
-            fwd = self._extend1d(S, T, segment)
-            bwd = self._extend1d(S, T, segment, forward=False)
-            if (fwd and bwd and
-                min(fwd.tx.score, bwd.tx.score) > self.drop_threshold):
-                assert(bwd.tx.S_idx == 0 or bwd.tx.T_idx == 0)
-                opseq = bwd.tx.opseq[:-len(segment.tx.opseq)] + fwd.tx.opseq
-                score = self.align_params.score(
-                    S, T, opseq,
-                    S_min_idx=bwd.tx.S_idx, T_min_idx=bwd.tx.T_idx
-                )
-                tx = pw.Transcript(
-                    S_idx=bwd.tx.S_idx, T_idx=bwd.tx.T_idx,
-                    score=score, opseq=opseq
-                )
-                return tuples.Segment(
-                    S_id=segment.S_id, T_id=segment.T_id, tx=tx
-                )
+        segs = ffi.new('segment* []', [seg.c_obj for seg in segments])
+        res = lib.extend(segs, len(segs),
+            S.c_idxseq, T.c_idxseq, len(S), len(T), self.align_params.c_obj,
+            self.window, self.max_succ_drops, self.drop_threshold)
+        return tuples.Segment(c_obj=res) if res != ffi.NULL else None

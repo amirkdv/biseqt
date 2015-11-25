@@ -30,10 +30,10 @@ typedef struct {
  */
 typedef struct {
   sequence_alphabet* alphabet; /**< The alphabet of the aligned sequences. */
-  double **subst_scores;
-  double gap_open_score;
-  double gap_extend_score;
-  int max_diversion; // band length (banded alignment only if >= 0)
+  double **subst_scores; /**< The substitution score matrix, ordered the same as letters in the alphabet.*/
+  double gap_open_score; /**< The gap open score in the affine gap penalty scheme, use 0 for a linear gap model.*/
+  double gap_extend_score; /**< The gap extension score, or the linear gap score when using a linear gap model.*/
+  int max_diversion; /**< band length (banded alignment only if >= 0).*/
 } align_params;
 
 /**
@@ -98,12 +98,33 @@ typedef struct {
   char* opseq; /**< The sequence of edit operations, as in ::align_choice, that defines the alignment.*/
 } transcript;
 
+/**
+ * A segment corresponds to a local alignment of two sequences.
+ * Segments are the currency of alignment by seed extension. Each segment is
+ * uniquely identified by two sequence IDs and a transcript.
+ */
+typedef struct segment {
+  int S_id; /**< The identifier of the "from" sequence. */
+  int T_id; /**<The identifier of the "to" sequence. */
+  transcript* tx; /**< The transcript of the local alignment. */
+} segment;
+
+int tx_seq_len(transcript* tx, char on);
+int extend_1d_once(segment* res, segment* seg,
+  int* S, int* T, align_params* params,
+  int window, int forward);
+int extend_1d(segment* res, segment* seg,
+  int* S, int* T, int S_len, int T_len, align_params* params,
+  int window, int max_succ_drops, double drop_threshold,
+  int forward);
+segment* extend(segment** segs, int num_segs, int* S, int* T, int S_len, int T_len,
+  align_params* params, int window, int max_succ_drops, double drop_threshold);
 align_dp_cell** init_dp_table(align_problem* def);
 void free_dp_table(align_dp_cell** P, int row_cnt, int col_cnt);
 align_dp_cell* solve(align_dp_cell** P, align_problem* def);
 align_dp_cell* find_optimal(align_dp_cell** P, align_problem* def);
 transcript* traceback(align_dp_cell** P, align_problem* def, align_dp_cell* end);
-int* idxseq_from_charseq(sequence_alphabet* alphabet, char* sequence, int length);
+int* idxseq_from_charseq(sequence_alphabet* alphabet, char* sequence);
 // So that we can free memory directly from python
 void free(void *);
 size_t strlen(const char*);

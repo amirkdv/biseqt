@@ -12,7 +12,6 @@ make clean tests
 ## To Do
 
 * Improvements:
-    * Move seed expansion from Python to C.
     * The alignment problem in the condensed alphabet seems ill-defined as it
       currently stands. A clear example of this is the fact that we currently
       don't have a way to properly align `AAAAAA` and `AAACCC`: our best option

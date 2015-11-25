@@ -5,19 +5,33 @@ import re
 import sqlite3
 from Bio import SeqIO
 from collections import namedtuple
-from . import pw, seq, ProgressIndicator
+from . import pw, seq, ProgressIndicator, CffiObject, ffi, lib
 
 
-class Segment(namedtuple('Segment', ['S_id', 'T_id', 'tx'])):
-    """Represents an aligned pair of substrings in two sequences. The alignment
-    may potentially contain indels. Maximal, exactly-matching segments are
-    refered to as "seeds".
+class Segment(CffiObject):
+    """Wraps a C ``segment``: represents an aligned pair of substrings in
+    two sequences.
 
     Attributes:
         S_id (int): The id of the "from" sequence as found in ``seq``.
         T_id (int): The id of the "to" sequence as found in ``seq``.
-        tx (pw.Transcript):  object representing the alignment.
+        tx (align.pw.Transcript): The alignment transctipt.
     """
+    def __init__(self, **kw):
+        if 'c_obj' in kw:
+            self.c_obj = kw['c_obj']
+            self.tx = pw.Transcript(c_obj=kw['c_obj'].tx)
+        else:
+            self.tx = kw['tx']
+            self.c_obj = ffi.new('segment*', {
+                'S_id': kw['S_id'],
+                'T_id': kw['T_id'],
+                'tx': kw['tx'].c_obj,
+            })
+
+    def __repr__(self):
+        return 'Segment(S_id=%d,T_id=%d,tx=%s)' \
+            % (self.S_id, self.T_id, self.tx)
 
 
 class TuplesDB(object):
@@ -408,7 +422,9 @@ class Index(object):
                     T_idx, S_idx = row[2], row[3]
                 else:
                     raise RuntimeError("This should not have happend!")
-                tx = pw.Transcript(S_idx, T_idx, 0, 'M'*self.wordlen)
+                tx = pw.Transcript(
+                    S_idx=S_idx, T_idx=T_idx, score=0, opseq='M'*self.wordlen
+                )
                 exacts += [Segment(S_id=S_id, T_id=T_id, tx=tx)]
 
         exacts.sort(key=lambda s: s.tx.S_idx)
@@ -421,16 +437,17 @@ class Index(object):
                 shift_T = exacts[cand].tx.T_idx - exacts[idx].tx.T_idx
                 # we know the transcripts are all M's.
                 if shift_S == shift_T and shift_S > 0 and \
-                   shift_S < len(exacts[idx].tx.opseq):
+                   shift_S < lib.strlen(exacts[idx].tx.opseq):
                     tx = pw.Transcript(
-                        exacts[idx].tx.S_idx, exacts[idx].tx.T_idx,
-                        0,  # score
-                        exacts[cand].tx.opseq + 'M'*shift_S  # transcript
+                        S_idx=exacts[idx].tx.S_idx,
+                        T_idx=exacts[idx].tx.T_idx,
+                        score=0,
+                        opseq=exacts[cand].tx.opseq + 'M'*shift_S
                     )
                     exacts[idx] = Segment(S_id=S_id, T_id=T_id, tx=tx)
                     exacts.pop(cand)
                 else:
                     cand += 1
             idx += 1
-        exacts.sort(key=lambda s: len(s.tx.opseq), reverse=True)
+        exacts.sort(key=lambda s: lib.strlen(s.tx.opseq), reverse=True)
         return exacts

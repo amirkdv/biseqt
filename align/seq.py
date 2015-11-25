@@ -137,7 +137,7 @@ class Sequence():
         self.length = len(string)/alphabet.letter_length
         self.c_charseq = ffi.new('char[]', string)
         self.c_idxseq = lib.idxseq_from_charseq(
-            alphabet.c_obj, self.c_charseq, self.length
+            alphabet.c_obj, self.c_charseq
         )
 
     def __repr__(self):

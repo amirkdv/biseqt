@@ -28,6 +28,8 @@ C = pw.AlignParams(
 )
 
 def show_params():
+    if not params['show_params']:
+        return
     print 'Substitution probabilities:'
     for i in params['subst_probs']:
         print i
@@ -64,7 +66,7 @@ def overlap_by_seed_extension(db, path):
     show_params()
     B = tuples.TuplesDB(db, alphabet=A)
     I = tuples.Index(B, wordlen=params['wordlen'])
-    G = assembly.OverlapBuilder(I, C, **params).build()
+    G = assembly.OverlapBuilder(I, C, **params).build(profile=params['profile'])
     G.save(path)
 
 def overlap_graph_by_known_order(db):
