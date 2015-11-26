@@ -6,7 +6,8 @@ from ..homopolymeric import HpCondenser
 
 params = {
     'gap_prob': 0.05, # gap open score
-    'hp_gap_prob': 0.1, # homopolymeric gap probability (linear model)
+    'hp_gap_prob': 0.4, # homopolymeric gap probability (linear model)
+    'hp_gap_score': -0.9,
     'hp_maxlen': 5, # maxlen of the HpCondenser
     'band':    -1, # band width if positive
     'show_condensed_probs': 10,
@@ -40,8 +41,9 @@ with pw.AlignProblem(S=S, T=T, params=C, align_type=params['type']) as P:
 print
 
 S_d, T_d = Tr.condense_sequence(S), Tr.condense_sequence(T)
-subst_scores_d = pw.AlignParams.subst_scores_from_probs(A_d, subst_probs=subst_probs_d, **{k:params[k] for k in params if k != 'subst_probs'})
-C_d = pw.AlignParams(alphabet=A_d, subst_scores=subst_scores_d, go_score=go_score, ge_score=ge_score)
+# subst_scores_d = pw.AlignParams.subst_scores_from_probs(A_d, subst_probs=subst_probs_d, **{k:params[k] for k in params if k != 'subst_probs'})
+# C_d = pw.AlignParams(alphabet=A_d, subst_scores=subst_scores_d, go_score=go_score, ge_score=ge_score)
+C_d = Tr.condense_align_params(C, hp_gap_score=params['hp_gap_score'])
 with pw.AlignProblem(S=S_d, T=T_d, params=C_d, align_type=params['type']) as P:
     print 'Alignment in condensed alphabet:'
     P.solve(print_dp_table=params['show_dp'])

@@ -26,10 +26,10 @@ $(BLAST_DB): $(REFERENCE)
 $(ANNOTATED_READS): $(READS) $(BLAST_DB)
 	READS=$(READS) DB=$(BLAST_DB) NUM_READS=$(NUM_READS) python prepare.py $@
 
-$(ASSEMBLY_DB): $(ANNOTATED_READS)
+$(ASSEMBLY_DB): # $(ANNOTATED_READS)
 	python -c 'import align.tests.$(MODE) as A; A.create_db("$@", "$(ANNOTATED_READS)")'
 
-leishmania.gml: $(ASSEMBLY_DB)
+leishmania.gml:
 	make -f assembly.mk $@ $(ASSEMBLY_OPTS)
 
 leishmania_true.layout.svg: $(ASSEMBLY_DB)

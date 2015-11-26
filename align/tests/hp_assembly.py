@@ -13,14 +13,14 @@ params = {
     'coverage': 10,          # coverage of random sequencing reads
     'read_len_mean': 5000,  # average length of sequencing read
     'read_len_var': 100,    # variance of sequencing read length
-    'go_prob': 0.1,        # gap open probability
-    'ge_prob': 0.3,     # gap extend probability
-    'hp_maxlen_idx': 1,     # HpCondenser maxlen for seed discovery
+    'go_prob': 0.05,        # gap open probability
+    'ge_prob': 0.1,         # gap extend probability
+    'hp_maxlen_idx': 5,     # HpCondenser maxlen for seed discovery
     'hp_maxlen': 5,         # HpCondenser maxlen for seed extension
-    'hp_gap_prob': 0.4,     # HpCondenser Hp gap probability
-    'hp_gap_score': -0.9,   # HpCondenser Hp gap score
+    'hp_gap_prob': 0.2,     # HpCondenser Hp gap probability
+    'hp_gap_score': -1.6,   # HpCondenser Hp gap score
     'hp_prob': 0.15,        # Parameter for geometric distributions of hp stretches
-    'subst_probs': [[0.91 if k==i else 0.03 for k in range(4)] for i in range(4)],
+    'subst_probs': [[0.982 if k==i else 0.006 for k in range(4)] for i in range(4)],
     'window': 50,           # rolling window length for tuple extension
     'drop_threshold': 0,    # what constitutes a drop in score of a window
     'max_succ_drops': 3,    # how many consecutive drops are allowed
@@ -137,5 +137,6 @@ def overlap_graph_by_known_order(db):
     G.iG.add_vertices(list(vs))
     es = [(G.iG.vs.find(name=u), G.iG.vs.find(name=v)) for u,v in es]
     G.iG.add_edges(es)
-    G.iG.es['weight'] = ws
+    # FIXME should we have this instead of "ws"? we actually prefer if ALL reads are included
+    G.iG.es['weight'] = [1 for _ in range(G.iG.ecount())]
     return G
