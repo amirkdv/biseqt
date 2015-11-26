@@ -87,7 +87,7 @@ void free_dp_table(align_dp_cell** P, int row_cnt, int col_cnt) {
 align_dp_cell* solve(align_dp_cell** P, align_problem* def) {
   int n = def->S_max_idx - def->S_min_idx;
   int m = def->T_max_idx - def->T_min_idx;
-  double max_score, prev_score, max_prev_score;
+  double max_score, prev_score, max_prev_score, del_score, ins_score;
   int num_choices, max_prev_choice_idx, num_max_scores;
   int i,j,k;
   int *max_score_alts = NULL;
@@ -144,6 +144,18 @@ align_dp_cell* solve(align_dp_cell** P, align_problem* def) {
 
         num_choices++;
       }
+      // the indices in the table are on ahead of the indices of letters:
+      s = def->S[def->S_min_idx + i - 1];
+      t = def->T[def->T_min_idx + j - 1];
+
+      if (def->params->content_dependent_gap_scores == NULL) {
+        del_score = def->params->gap_extend_score;
+        ins_score = def->params->gap_extend_score;
+      } else {
+        // the indices in the table are on ahead of the indices of letters:
+        del_score = def->params->content_dependent_gap_scores[s];
+        ins_score = def->params->content_dependent_gap_scores[t];
+      }
       // To (i-1,j)
       if (i > 0) {
         // Are there choices for (i-1,j) and are we inside the band?
@@ -155,8 +167,7 @@ align_dp_cell* solve(align_dp_cell** P, align_problem* def) {
           max_prev_choice_idx = 0;
           max_prev_score = -INT_MAX;
           for (k = 0; k < P[i-1][j].num_choices; k++) {
-            prev_score = P[i-1][j].choices[k].score
-              + def->params->gap_extend_score;
+            prev_score = P[i-1][j].choices[k].score + del_score;
             if (P[i-1][j].choices[k].op != 'D') {
               prev_score += def->params->gap_open_score;
             }
@@ -184,8 +195,7 @@ align_dp_cell* solve(align_dp_cell** P, align_problem* def) {
           max_prev_choice_idx = 0;
           max_prev_score = - INT_MAX;
           for (k = 0; k < P[i][j-1].num_choices; k++) {
-            prev_score = P[i][j-1].choices[k].score
-              + def->params->gap_extend_score;
+            prev_score = P[i][j-1].choices[k].score + ins_score;
             if (P[i][j-1].choices[k].op != 'I') {
               prev_score += def->params->gap_open_score;
             }
@@ -206,9 +216,6 @@ align_dp_cell* solve(align_dp_cell** P, align_problem* def) {
       if ((i > 0) && (j > 0)) {
         // Are there choices for (i-1,j-1)? (We must be in band if (i-1,j-1) is:
         if (P[i-1][j-1].num_choices > 0) {
-          // the indices in the table are on ahead of the indices of letters:
-          s = def->S[def->S_min_idx + i - 1];
-          t = def->T[def->T_min_idx + j - 1];
           // All choices to (i-1,j-1) have the same score as there is no
           // gap open distinction, add the choice right away:
           if (s == t) {

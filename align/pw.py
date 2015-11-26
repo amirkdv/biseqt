@@ -34,6 +34,7 @@ START_ANCHORED_OVERLAP = lib.START_ANCHORED_OVERLAP
 END_ANCHORED_OVERLAP = lib.END_ANCHORED_OVERLAP
 
 
+# FIXME document content_dependent_gap_scores
 class AlignParams(CffiObject):
     """Wraps the C struct ``align_params``, see ``libalign.h``.
 
@@ -46,7 +47,7 @@ class AlignParams(CffiObject):
     written) as usual attributes.
     """
     def __init__(self, alphabet=None, subst_scores=[],
-                 go_score=0, ge_score=0, max_diversion=-1):
+                 go_score=0, ge_score=0, max_diversion=-1, content_dependent_gap_scores=None):
         self.alphabet = alphabet
         # each row in the substitution matrix must be "owned" by an object that
         # is kept alive.
@@ -55,13 +56,19 @@ class AlignParams(CffiObject):
             ffi.new('double[]', subst_scores[i]) for i in range(L)
         ]
         self._c_subst_full_ka = ffi.new('double *[]', self._c_subst_rows_ka)
-        self.c_obj = ffi.new('align_params*', {
+        kw = {
             'alphabet': self.alphabet.c_obj,
             'subst_scores': self._c_subst_full_ka,
             'gap_open_score': go_score,
             'gap_extend_score': ge_score,
             'max_diversion': max_diversion,
-        })
+        }
+        if content_dependent_gap_scores:
+            self._c_gaps_ka = ffi.new('double []', content_dependent_gap_scores)
+            kw['content_dependent_gap_scores'] = self._c_gaps_ka;
+        else:
+            self._c_gaps_ka = ffi.NULL
+        self.c_obj = ffi.new('align_params*', kw)
 
     @classmethod
     def subst_scores_from_probs(cls, alphabet, **kw):

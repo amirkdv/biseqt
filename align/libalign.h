@@ -1,16 +1,26 @@
 /**
- * Classifies alignment problems into a number of types. Note that Any of these
- * problems can be solved in a banded (and thus naturally non-optimal) fashion,
- * see ::align_params.
+ * Classifies alignment problems into a number of types. Each type specifies
+ * the boundary conditions (where an alignment can start and where it can end)
+ * on the dynamic programming table.
+ *
+ * @note Any of these alignments can be made banded using `max_diversion` of
+ * ::align_params.
 */
 typedef enum {
-  GLOBAL, /**< Equivalent to the [Needleman-Wunsch](https://en.wikipedia.org/wiki/Needleman%E2%80%93Wunsch_algorithm) algorithm.*/
-  LOCAL,  /**< Equivalent to the [Smith-Waterman](https://en.wikipedia.org/wiki/Smith%E2%80%93Waterman_algorithm) algorithm.*/
-  START_ANCHORED, /**< Local alignments starting at the beginning of both sequences.*/
-  END_ANCHORED, /**< Local alignments ending at the end of both sequences.*/
-  OVERLAP, /**< Suffix-prefix alignments of either direction (including substring alignments).*/
-  START_ANCHORED_OVERLAP, /**< Suffix-prefix alignments starting at the beginning of both sequences.*/
-  END_ANCHORED_OVERLAP, /**< Suffix-prefix alignments ending at the end of both sequences.*/
+  GLOBAL, /**< Solve for optimal global alignments, equivalent to the
+    Needleman-Wunsch algorithm.*/
+  LOCAL,  /**< Solve for optimal local alignments, equivalent to the
+    Smith-Waterman algorithm.*/
+  START_ANCHORED, /**< Solve for optimal local alignments starting at the
+    start of alignment frame for both sequences.*/
+  END_ANCHORED, /**< Solve for optimal local alignments ending at the
+    end of alignment frame for both sequences.*/
+  OVERLAP, /**< Solve for suffix-prefix alignments of either direction
+    (including substring alignments).*/
+  START_ANCHORED_OVERLAP, /**< Solve or suffix-prefix alignments starting
+    at the start of alignment frame for both sequences.*/
+  END_ANCHORED_OVERLAP, /**< Solve or suffix-prefix alignments ending
+    at the end of alignment frame for both sequences.*/
 } align_type;
 
 /**
@@ -20,7 +30,7 @@ typedef enum {
  */
 typedef struct {
   int length; /**< The number of letters in the alphabet.*/
-  int letter_length; /**< All letters in the alphabet must have the same length.*/
+  int letter_length; /**< The common length of all letters in the alphabet.*/
   char** letters; /**< The letters of the alphabet. */
 } sequence_alphabet;
 
@@ -30,10 +40,18 @@ typedef struct {
  */
 typedef struct {
   sequence_alphabet* alphabet; /**< The alphabet of the aligned sequences. */
-  double **subst_scores; /**< The substitution score matrix, ordered the same as letters in the alphabet.*/
-  double gap_open_score; /**< The gap open score in the affine gap penalty scheme, use 0 for a linear gap model.*/
-  double gap_extend_score; /**< The gap extension score, or the linear gap score when using a linear gap model.*/
-  int max_diversion; /**< band length (banded alignment only if >= 0).*/
+  double **subst_scores; /**< The substitution score matrix, ordered the same
+    as letters in the alphabet.*/
+  double gap_open_score; /**< The gap open score in the affine gap
+    penalty scheme, use 0 for a linear gap model. This is in effect regardless
+    of content-dependence of gap extension score. */
+  double gap_extend_score; /**< The gap extension score, or the linear gap
+    score when using a linear gap model. This is only in effect when
+    `content_dependent_gap_scores == NULL`.*/
+  double* content_dependent_gap_scores; /**< The gap extension scores based on
+    what letter is inserted/deleted. If this is `NULL`, `gap_extend_score` will
+    be in effect and all gaps of equal length are scored identically.*/
+  int max_diversion; /**< band length (banded alignment only if `>= 0`).*/
 } align_params;
 
 /**
@@ -43,8 +61,10 @@ typedef struct {
  * type and a set of alignment parameters.
  */
 typedef struct {
-  int* S; /**< The "from" sequence, each letter translated to its position in alphabet.*/
-  int* T; /**< The "to" sequence, each letter translated to its position in alphabet.*/
+  int* S; /**< The "from" sequence where each letter is represented by its
+    position in alphabet.*/
+  int* T; /**< The "to" sequence where each letter is represented by its
+    position in alphabet.*/
   int S_min_idx; /**< The opening index for the frame of S, inclusive.*/
   int S_max_idx; /**< The closing index for the frame of S: exclusive.*/
   int T_min_idx; /**< The opening index for the frame of T: inclusive.*/
@@ -68,11 +88,15 @@ typedef struct {
  * This architecture allows us to easily capture path-dependent scoring schemes,
  * for example, the affine gap penalty.
  */
-typedef struct align_choice { // we need the name to be able to reference ourselves
-  char op; /**< Either of `M` for match, `S` for substitution, `I` for insertion, and `D` for deletion. */
-  int diversion; /**< Used to ignore out-of-band positions in banded alignment.*/
-  double score; /**< The overall score of the alignment corresponding to the chain of bases leading to here.*/
-  struct align_choice *base; /**< The choice for the consequent subproblem on which this choice and its score depends.*/
+typedef struct align_choice {
+  char op; /**< Either of `M` for match, `S` for substitution, `I`
+    for insertion, and `D` for deletion. */
+  int diversion; /**< Used to ignore out-of-band positions in the dynamic
+    programming table when performing banded alignments.*/
+  double score; /**< The overall score of the alignment corresponding to the
+    chain of bases leading to here.*/
+  struct align_choice *base; /**< The choice for the consequent subproblem on
+    which this choice and its score depends.*/
 } align_choice;
 
 /**
@@ -84,18 +108,24 @@ typedef struct align_choice { // we need the name to be able to reference oursel
 typedef struct {
   int row; /**< Vertical position (row number) in the table.*/
   int col; /**< horizontal position (col number) in the table.*/
-  int num_choices; /**< The number of optimal scoring choices for the subproblem.*/
-  struct align_choice *choices; /**< The optimal scoring choices. We need to keep all in case of path-dependent scoring schemes, e.g affine gap.*/
+  int num_choices; /**< The number of optimal scoring choices for the
+    corresponding subproblem.*/
+  struct align_choice *choices; /**< The optimal scoring choices. We need to
+    keep all in case of path-dependent scoring schemes, e.g affine gap.*/
 } align_dp_cell;
 
 /**
  * Represents a solution to an alignment problem.
  */
 typedef struct {
-  int S_idx; /**< The starting position of the alignment along the "from" sequence.*/
-  int T_idx; /**< The starting position of the alignment along the "to" sequence.*/
-  double score; /**< The score of the alignment according to the corresponding ::align_params.*/
-  char* opseq; /**< The sequence of edit operations, as in ::align_choice, that defines the alignment.*/
+  int S_idx; /**< The starting position of the alignment along the
+    "from" sequence. This is *not* relative to the start of frame.*/
+  int T_idx; /**< The starting position of the alignment along the "to"
+    sequence. This is *not* relative to the start of frame.*/
+  double score; /**< The score of the alignment according to the
+    corresponding ::align_params.*/
+  char* opseq; /**< The sequence of edit operations, as in ::align_choice,
+    that defines the alignment.*/
 } transcript;
 
 /**

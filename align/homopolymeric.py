@@ -229,6 +229,7 @@ class HpCondenser(object):
             subst_probs_d[idx] = [x/s for x in row]
         return subst_probs_d
 
+    # FIXME document content_dependent_gap_scores.
     def condense_align_params(self, align_params, hp_gap_score=0):
         """Translates alignment parameters to one that applies to the condensed
         alphabet. Translation is done based on homopolymeric indel scores which
@@ -262,9 +263,11 @@ class HpCondenser(object):
         subst_scores = align_params.subst_scores
         L = len(self.dst_alphabet)
         subst_scores_d = [[None for _ in range(L)] for _ in range(L)]
+        gap_scores_d = [None for _ in range(L)]
         for i in range(L):
             let = self.dst_alphabet.letters[i]
             ci, ni = let[0], int(let[1:])
+            gap_scores_d[i] = ni * align_params.gap_extend_score
             for j in range(L):
                 let = self.dst_alphabet.letters[j]
                 cj, nj = let[0], int(let[1:])
@@ -283,10 +286,14 @@ class HpCondenser(object):
             alphabet=self.dst_alphabet,
             subst_scores=subst_scores_d,
             go_score=align_params.gap_open_score,
-            ge_score=align_params.gap_extend_score,
+            content_dependent_gap_scores=gap_scores_d,
             max_diversion=align_params.max_diversion
         )
 
+    # FIXME document the fact that seed edges MUST lie on the edges of
+    # homopolymeric stretches, i.e the index must be built using an HpCondensedIndex.
+    # FIXME document the fact that indexing with maxlen 1 is not that good of
+    # an idea.
     def condense_seed(self, S, T, seed):
         """Condenses a seed into a :class:`tuples.Segment` for the
         corresponding condensed sequences. Note that this process is not

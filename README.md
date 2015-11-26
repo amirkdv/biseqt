@@ -20,13 +20,6 @@ make clean tests
       this requires allowing nonstandard choices in the DP table. There is a
       way of doing this while maintaining polynomial time complexity (at most
       cubic) but the implementation is not trivial.
-    * When performing alignments in the condensed alphabet we currently have
-      no choice but to score indels (i.e non-homopolymeric indels) identically.
-      For example, a deletion of `A9T7` is scored exactly the same as a
-      deletion of `A1T1`. This can clearly lead to wrong alignments, but a
-      clear effect is not yet observed in simulations. Fixing this would require
-      that `libalign` accept content-dependent scores for indels which is
-      feasible but not trivial.
     * An overlap graph must satisfy two consistency criteria:
       * it is a DAG, and
       * for any vertex *u* in it, any pair of outgoing (incoming) neighbors of
