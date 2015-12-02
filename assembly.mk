@@ -16,11 +16,16 @@ $(READS):
 $(DB): $(READS)
 	python -c 'import $(ASSEMBLY_TEST) as T; T.create_db("$@", "$(READS)")'
 
+$(ASSEMBLED_GRAPH).gml: SUMMARY_ONLY=True
 $(ASSEMBLED_GRAPH).gml: $(DB) $(TRUE_GRAPH).gml
 	python -c 'import $(ASSEMBLY_TEST) as T; T.overlap_by_seed_extension("$(DB)", "$@")'
+	$(MAKE) diff
+
+SUMMARY_ONLY = False
+diff:
 	python -c 'import align.assembly as A, igraph as ig, sys; \
 		g = A.OverlapGraph(ig.read("$(TRUE_GRAPH).gml")); \
-		g.diff_text(A.OverlapGraph(ig.read("$(ASSEMBLED_GRAPH).gml")), summary_only=True)'
+		g.diff_text(A.OverlapGraph(ig.read("$(ASSEMBLED_GRAPH).gml")), summary_only=$(SUMMARY_ONLY))'
 
 $(ASSEMBLED_GRAPH).dag.gml: $(ASSEMBLED_GRAPH).gml
 	python -c 'import align.assembly as A, igraph as ig; \
