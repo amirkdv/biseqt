@@ -34,7 +34,7 @@ $(ASSEMBLY_DB): $(ANNOTATED_READS)
 ASSEMBLY_TARGET = leishmania.gml
 assembly:
 	@echo $(ASSEMBLY_TARGET)
-	make -f assembly.mk $(ASSEMBLY_TARGET) $(ASSEMBLY_OPTS)
+	$(MAKE) -f assembly.mk $(ASSEMBLY_TARGET) $(ASSEMBLY_OPTS)
 
 clean:
 	rm -f $(BLAST_DB)*

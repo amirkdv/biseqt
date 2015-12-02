@@ -36,11 +36,11 @@ $(TRUE_GRAPH).gml: $(DB)
 	python -c 'import $(ASSEMBLY_TEST) as A; \
 		A.overlap_graph_by_known_order("$(DB)").save("$@")'
 
-$(ASSEMBLED_GRAPH).pdf:
+$(ASSEMBLED_GRAPH).svg:
 	python -c 'import align.assembly as A, igraph as ig; \
 		A.OverlapGraph(ig.read("$(ASSEMBLED_GRAPH).gml")).draw("$@");'
 
-$(TRUE_GRAPH).pdf: $(TRUE_GRAPH).gml
+$(TRUE_GRAPH).svg: $(TRUE_GRAPH).gml
 	python -c 'import align.assembly as A, igraph as ig; \
 		A.OverlapGraph(ig.read("$(TRUE_GRAPH).gml")).draw("$@");'
 
