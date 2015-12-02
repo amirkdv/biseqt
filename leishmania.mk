@@ -5,7 +5,9 @@ REFERENCE = leishmania/reference.fa
 BLAST_DB = leishmania/blast.db
 ASSEMBLY_DB = genome.leishmania.db
 MODE = hp_assembly
-ASSEMBLY_OPTS = MODE=$(MODE) DB=$(ASSEMBLY_DB) READS=$(ANNOTATED_READS) ASSEMBLED_GRAPH=leishmania TRUE_GRAPH=leishmania_true
+ASSEMBLED_GRAPH = leishmania
+TRUE_GRAPH = leishmania_true
+ASSEMBLY_OPTS = MODE=$(MODE) DB=$(ASSEMBLY_DB) READS=$(ANNOTATED_READS) ASSEMBLED_GRAPH=$(ASSEMBLED_GRAPH) TRUE_GRAPH=$(TRUE_GRAPH)
 NUM_READS = -1
 
 $(GENOME):
@@ -26,20 +28,18 @@ $(BLAST_DB): $(REFERENCE)
 $(ANNOTATED_READS): $(READS) $(BLAST_DB)
 	READS=$(READS) DB=$(BLAST_DB) NUM_READS=$(NUM_READS) python prepare.py $@
 
-$(ASSEMBLY_DB): # $(ANNOTATED_READS)
+$(ASSEMBLY_DB): $(ANNOTATED_READS)
 	python -c 'import align.tests.$(MODE) as A; A.create_db("$@", "$(ANNOTATED_READS)")'
 
-leishmania.gml:
-	make -f assembly.mk $@ $(ASSEMBLY_OPTS)
-
-leishmania_true.layout.svg: $(ASSEMBLY_DB)
-	make -f assembly.mk $@ $(ASSEMBLY_OPTS)
-
-layout.diff.leishmania.svg: $(ASSEMBLY_DB)
-	make -f assembly.mk $@ $(ASSEMBLY_OPTS)
+ASSEMBLY_TARGET = leishmania.gml
+assembly:
+	@echo $(ASSEMBLY_TARGET)
+	make -f assembly.mk $(ASSEMBLY_TARGET) $(ASSEMBLY_OPTS)
 
 clean:
 	rm -f $(BLAST_DB)*
 	rm -f $(ANNOTATED_READS)
 	rm -f $(ASSEMBLY_DB)
 	make -f assembly.mk clean $(ASSEMBLY_OPTS)
+
+.PHONY: clean
