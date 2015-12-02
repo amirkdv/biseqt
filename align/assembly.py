@@ -40,12 +40,6 @@ class OverlapGraph(object):
     def _vids_to_names(self, vids):
         return [self.iG.vs[vid]['name'] for vid in vids]
 
-    def _edge_weight(self, u, v):
-        """Internal helper; given to vertex names returns the weight of the
-        edge connecting them.
-        """
-        return self.iG.es['weight'][self.iG.get_eid(u, v)]
-
     def eid_to_str(self, eid, maxlen=50):
         """Prepares an edge for pretty printing. Truncates and paths the end
         point labels (``name`` is used as label) to ensure they both have
@@ -80,11 +74,12 @@ class OverlapGraph(object):
             sys.stderr.write('removed edge: %s' % self.eid_to_str(e))
         self.iG.delete_edges(rm)
 
-    def longest_path(self, exclude=[]):
-        """Finds the longest path (i.e heaviest path) of the graph, excluding
-        vertices with names specified in ``exclude``. This, naturally requires
-        that the graph is acyclic. Assuming the graph is a DAG, we can find the
-        longest path in two steps:
+    def longest_path(self, exclude=[], equal_weights=False):
+        """Finds the heaviest path (and potantially the longest path in the
+        sense of number of edges) of the graph, excluding vertices whose name
+        is included in ``exclude``. This, naturally requires that the graph is
+        acyclic. Assuming the graph is a DAG, we can find the longest path in
+        two steps:
 
         - Find a topological ordering of the graph in :math:`O(|V|+|E|)` time,
         - Find a heaviest path using the sorting in :math:`O(|V|)` time.
@@ -93,11 +88,19 @@ class OverlapGraph(object):
             exclude (Optional[List[str]]): A list of vertex names to be
                 excluded from the graph when finding the longest path. This is
                 only of use to :func:`all_longest_paths`.
+            equal_weights (Optional[bool]): If truthy, all edges are considered
+                equal in which sense the solution is the literal longest path.
 
         Returns:
             list[str]: A list of vertex names in order of appearance in the
                 longest path.
         """
+        def weight_of_edge(u, v):
+            if equal_weights:
+                return 1
+            else:
+                return self.iG.es['weight'][self.iG.get_eid(u, v)]
+
         sorting = self._vids_to_names(self.iG.topological_sorting())
         sorting = [v for v in sorting if v not in exclude]
         # longest paths ending at each vertex keyed by vertex. Each entry is a
@@ -112,7 +115,7 @@ class OverlapGraph(object):
             if not incoming:
                 longest_paths[v] = (0, None)
             else:
-                w = lambda x: longest_paths[x][0] + self._edge_weight(x, v)
+                w = lambda x: longest_paths[x][0] + weight_of_edge(x, v)
                 cands = [(w(u), u) for u in incoming]
                 longest_paths[v] = sorted(
                     cands, key=lambda x: x[0], reverse=True
@@ -134,9 +137,10 @@ class OverlapGraph(object):
         # Don't report trivial paths:
         return path if len(path) > 1 else []
 
-    def all_longest_paths(self):
+    def all_longest_paths(self, equal_weights=False):
         """Repeatedly finds the longest path in the graph while excluding
         vertices that are already included in a path. See :func:`longest_path`.
+        All keyword arguments are passed as-is to :func:`longest_path`.
 
         Returns:
             List[List[str]]: A list of paths, each a list of vertex names in
@@ -152,13 +156,17 @@ class OverlapGraph(object):
             exclude += path
         return paths
 
-    def layout(self, full=False):
-        """Finds the heaviest path of the directed graph and creates a new
-        :class:`OverlapGraph` containing only this layout path.
+    def layout(self, full=False, equal_weights=False):
+        """Finds the heaviest path (or potentially the longest path) of the
+        directed graph and creates a new :class:`OverlapGraph` containing only
+        this layout path. Optionally, we can demand that ALL longest paths of
+        the graph are reported (to ensure all vertices are included in some
+        sub-layout), see :func:`all_longest_paths`.
 
         Keyword Args:
             full (bool): If truthy, an effort is made to add other paths to
                 cover all vertices of the graph.
+            equal_weights (Optional[bool]): see :func:`longest_path`.
 
         Returns:
             assembly.OverlapGraph: A linear subgraph (the heaviest path).
@@ -168,9 +176,9 @@ class OverlapGraph(object):
         """
         assert(self.iG.is_dag())
         if full:
-            paths = self.all_longest_paths()
+            paths = self.all_longest_paths(equal_weights=equal_weights)
         else:
-            paths = [self.longest_path()]
+            paths = [self.longest_path(equal_weights=equal_weights)]
         eids = []
         for path in paths:
             for idx in range(1, len(path)):

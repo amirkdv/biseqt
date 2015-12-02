@@ -137,6 +137,5 @@ def overlap_graph_by_known_order(db):
     G.iG.add_vertices(list(vs))
     es = [(G.iG.vs.find(name=u), G.iG.vs.find(name=v)) for u,v in es]
     G.iG.add_edges(es)
-    # FIXME should we have this instead of "ws"? we actually prefer if ALL reads are included
-    G.iG.es['weight'] = [1 for _ in range(G.iG.ecount())]
+    G.iG.es['weight'] = ws
     return G

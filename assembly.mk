@@ -47,16 +47,16 @@ $(TRUE_GRAPH).pdf: $(TRUE_GRAPH).gml
 # The true graph doesn't have any cycles, no need for a .dag.gml.
 $(TRUE_GRAPH).layout.gml: $(TRUE_GRAPH).gml
 	python -c 'import align.assembly as A, igraph as ig; \
-		A.OverlapGraph(ig.read("$(TRUE_GRAPH).gml")).layout().save("$@")'
+		A.OverlapGraph(ig.read("$(TRUE_GRAPH).gml")).layout(equal_weights=True).save("$@")'
 
 $(ASSEMBLED_GRAPH).layout.gml: $(ASSEMBLED_GRAPH).dag.gml
 	python -c 'import align.assembly as A, igraph as ig; \
-		A.OverlapGraph(ig.read("$(ASSEMBLED_GRAPH).dag.gml")).layout(full=False).save("$@")'
+		A.OverlapGraph(ig.read("$(ASSEMBLED_GRAPH).dag.gml")).layout(full=True).save("$@")'
 
 $(TRUE_GRAPH).layout.svg: $(TRUE_GRAPH).gml
 	python -c 'import align.assembly as A, igraph as ig; \
 		g = A.OverlapGraph(ig.read("$(TRUE_GRAPH).gml")); \
-		g.draw("$@", highlight_paths=g.all_longest_paths());'
+		g.draw("$@", highlight_paths=g.all_longest_paths(equal_weights=True));'
 
 # When drawing the layout show all paths; the .gml file contains the longest path only.
 $(ASSEMBLED_GRAPH).layout.svg: $(ASSEMBLED_GRAPH).layout.gml
