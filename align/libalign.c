@@ -626,7 +626,6 @@ int extend_1d(segment* res, segment* seg, int* S, int* T, int S_len, int T_len,
  *    segment is dropped (i.e -1 is returned).
  * @param drop_threshold What constitutes a drop in the score when comparing
  *    an (n+1)-th window extension and the n-th window extension.
- * @param forward Either of 0 or 1 indicating the direction of extension.
  *
  * @return 0 if the seed successfully extends to the boundary of either of
  *   the sequences and -1 otherwise.
