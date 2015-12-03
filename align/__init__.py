@@ -51,7 +51,7 @@ class ProgressIndicator(object):
         self.percentage = percentage
 
     def start(self):
-        sys.stderr.write('%s: 0%%' % self.msg)
+        self.status()
 
     def finish(self):
         self.status();
