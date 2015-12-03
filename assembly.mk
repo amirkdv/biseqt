@@ -16,10 +16,9 @@ $(READS):
 $(DB): $(READS)
 	python -c 'import $(ASSEMBLY_TEST) as T; T.create_db("$@", "$(READS)")'
 
-$(ASSEMBLED_GRAPH).gml: SUMMARY_ONLY=True
 $(ASSEMBLED_GRAPH).gml: $(DB) $(TRUE_GRAPH).gml
 	python -c 'import $(ASSEMBLY_TEST) as T; T.overlap_by_seed_extension("$(DB)", "$@")'
-	$(MAKE) diff
+	$(MAKE) -f assembly.mk diff SUMMARY_ONLY=True
 
 SUMMARY_ONLY = False
 diff:
@@ -59,7 +58,7 @@ $(TRUE_GRAPH).layout.svg: $(TRUE_GRAPH).gml
 		g.draw("$@", highlight_paths=g.all_longest_paths(equal_weights=True));'
 
 # When drawing the layout show all paths; the .gml file contains the longest path only.
-$(ASSEMBLED_GRAPH).layout.svg: $(ASSEMBLED_GRAPH).layout.gml
+$(ASSEMBLED_GRAPH).layout.svg: $(ASSEMBLED_GRAPH).dag.gml
 	python -c 'import align.assembly as A, igraph as ig; \
 		g = A.OverlapGraph(ig.read("$(ASSEMBLED_GRAPH).dag.gml")); \
 		g.draw("$@", highlight_paths=g.all_longest_paths());'

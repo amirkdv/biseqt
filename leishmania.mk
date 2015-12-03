@@ -3,9 +3,9 @@ ANNOTATED_READS = leishmania/reads.annotated.fa
 GENOME = leishmania/genome.fa
 REFERENCE = leishmania/reference.fa
 BLAST_DB = leishmania/blast.db
-ASSEMBLY_DB = genome.leishmania.db
 MODE = hp_assembly
-ASSEMBLED_GRAPH = leishmania
+ASSEMBLY_DB = genome.leishmania.$(MODE).db
+ASSEMBLED_GRAPH = leishmania.$(MODE)
 TRUE_GRAPH = leishmania_true
 ASSEMBLY_OPTS = MODE=$(MODE) DB=$(ASSEMBLY_DB) READS=$(ANNOTATED_READS) ASSEMBLED_GRAPH=$(ASSEMBLED_GRAPH) TRUE_GRAPH=$(TRUE_GRAPH)
 NUM_READS = -1
@@ -33,7 +33,6 @@ $(ASSEMBLY_DB): $(ANNOTATED_READS)
 
 ASSEMBLY_TARGET = leishmania.gml
 assembly:
-	@echo $(ASSEMBLY_TARGET)
 	$(MAKE) -f assembly.mk $(ASSEMBLY_TARGET) $(ASSEMBLY_OPTS)
 
 clean:
