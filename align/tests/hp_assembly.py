@@ -18,11 +18,11 @@ params = {
     'hp_maxlen_idx': 5,     # HpCondenser maxlen for seed discovery
     'hp_maxlen': 5,         # HpCondenser maxlen for seed extension
     'hp_gap_prob': 0.2,     # HpCondenser Hp gap probability
-    'hp_gap_score': -1.6,   # HpCondenser Hp gap score
+    'hp_gap_score': -0.5,   # HpCondenser Hp gap score
     'hp_prob': 0.15,        # Parameter for geometric distributions of hp stretches
-    'subst_probs': [[0.982 if k==i else 0.006 for k in range(4)] for i in range(4)],
+    'subst_probs': [[0.94 if k==i else 0.02 for k in range(4)] for i in range(4)],
     'window': 50,           # rolling window length for tuple extension
-    'drop_threshold': 0,    # what constitutes a drop in score of a window
+    'drop_threshold': -30,    # what constitutes a drop in score of a window
     'max_succ_drops': 3,    # how many consecutive drops are allowed
 }
 
