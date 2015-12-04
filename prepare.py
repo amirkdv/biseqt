@@ -5,7 +5,7 @@ import sys
 import tempfile
 from Bio import SeqIO, SeqRecord
 import subprocess
-from uuid import uuid4
+from hashlib import sha1
 from align import ProgressIndicator
 
 BLAST_DB = os.environ['DB']
@@ -44,7 +44,7 @@ for rec in SeqIO.parse(READS_IN, 'fasta'):
         pos = sstart - qstart if strand == 'plus' else send - len(rec.seq) + qend
         annotated += [SeqRecord.SeqRecord(
             rec.seq if strand == 'plus' else rec.seq.reverse_complement(),
-            id='R%s_P%d' % (str(uuid4())[:8], pos),
+            id='R%s_P%d' % (sha1(str(rec.seq)).hexdigest()[:8], pos),
             description=rec.id)
         ]
 
