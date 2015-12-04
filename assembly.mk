@@ -16,7 +16,7 @@ $(READS):
 $(DB): $(READS)
 	python -c 'import $(ASSEMBLY_TEST) as T; T.create_db("$@", "$(READS)")'
 
-$(ASSEMBLED_GRAPH).gml: $(DB) $(TRUE_GRAPH).gml
+$(ASSEMBLED_GRAPH).gml:
 	python -c 'import $(ASSEMBLY_TEST) as T; T.overlap_by_seed_extension("$(DB)", "$@")'
 	$(MAKE) -f assembly.mk diff SUMMARY_ONLY=True
 
@@ -31,7 +31,7 @@ $(ASSEMBLED_GRAPH).dag.gml: $(ASSEMBLED_GRAPH).gml
 		G = A.OverlapGraph(ig.read("$(ASSEMBLED_GRAPH).gml")); \
 		G.break_cycles(); G.save("$@")'
 
-$(TRUE_GRAPH).gml: $(DB)
+$(TRUE_GRAPH).gml:
 	python -c 'import $(ASSEMBLY_TEST) as A; \
 		A.overlap_graph_by_known_order("$(DB)").save("$@")'
 
