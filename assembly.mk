@@ -26,10 +26,11 @@ diff:
 		g = A.OverlapGraph(ig.read("$(TRUE_GRAPH).gml")); \
 		g.diff_text(A.OverlapGraph(ig.read("$(ASSEMBLED_GRAPH).gml")), summary_only=$(SUMMARY_ONLY))'
 
+FAS_METHOD = ip
 $(ASSEMBLED_GRAPH).dag.gml: $(ASSEMBLED_GRAPH).gml
 	python -c 'import align.assembly as A, igraph as ig; \
 		G = A.OverlapGraph(ig.read("$(ASSEMBLED_GRAPH).gml")); \
-		G.break_cycles(); G.save("$@")'
+		G.break_cycles(method="$(FAS_METHOD)"); G.save("$@")'
 
 $(TRUE_GRAPH).gml:
 	python -c 'import $(ASSEMBLY_TEST) as A; \
