@@ -148,7 +148,8 @@ int extend_1d(segment* res, segment* seg,
   int window, int max_succ_drops, double drop_threshold,
   int forward);
 segment* extend(segment** segs, int num_segs, int* S, int* T, int S_len, int T_len,
-  align_params* params, int window, int max_succ_drops, double drop_threshold);
+  align_params* params, int window, int max_succ_drops, double drop_threshold,
+  double min_overlap_score);
 align_dp_cell** init_dp_table(align_problem* def);
 void free_dp_table(align_dp_cell** P, int row_cnt, int col_cnt);
 align_dp_cell* solve(align_dp_cell** P, align_problem* def);

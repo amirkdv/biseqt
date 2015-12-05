@@ -368,6 +368,7 @@ class OverlapBuilder(object):
         self.index, self.align_params = index, align_params
         self.window = kwargs.get('window', 20)
         self.drop_threshold = kwargs.get('drop_threshold', 0)
+        self.min_overlap_score = kwargs.get('min_overlap_score', self.drop_threshold)
         self.max_succ_drops = kwargs.get('max_succ_drops', 3)
 
     def build(self, profile=False):
@@ -461,6 +462,7 @@ class OverlapBuilder(object):
 
                 S_len = lib.tx_seq_len(overlap.tx.c_obj, 'S')
                 T_len = lib.tx_seq_len(overlap.tx.c_obj, 'T')
+                assert(overlap.tx.T_idx * overlap.tx.S_idx == 0)
                 if abs(overlap.tx.S_idx - overlap.tx.T_idx) < self.window or \
                     abs(overlap.tx.S_idx + S_len - (overlap.tx.T_idx + T_len)) < self.window:
                     # end points are too close, ignore
@@ -507,5 +509,6 @@ class OverlapBuilder(object):
         segs = ffi.new('segment* []', [seg.c_obj for seg in segments])
         res = lib.extend(segs, len(segs),
             S.c_idxseq, T.c_idxseq, len(S), len(T), self.align_params.c_obj,
-            self.window, self.max_succ_drops, self.drop_threshold)
+            self.window, self.max_succ_drops, self.drop_threshold,
+            self.min_overlap_score)
         return tuples.Segment(c_obj=res) if res != ffi.NULL else None

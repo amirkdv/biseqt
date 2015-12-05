@@ -626,28 +626,35 @@ int extend_1d(segment* res, segment* seg, int* S, int* T, int S_len, int T_len,
  *    segment is dropped (i.e -1 is returned).
  * @param drop_threshold What constitutes a drop in the score when comparing
  *    an (n+1)-th window extension and the n-th window extension.
+ * @param min_overlap_score The minimum overall score required for a fully
+ *    extended segment to be reported as an overlap alignment.
  *
  * @return 0 if the seed successfully extends to the boundary of either of
  *   the sequences and -1 otherwise.
  */
 segment* extend(segment** segs, int num_segs, int* S, int* T, int S_len, int T_len,
-  align_params* params, int window, int max_succ_drops, double drop_threshold) {
+  align_params* params, int window, int max_succ_drops, double drop_threshold,
+  double min_overlap_score) {
 
   segment fwd, bwd, *res;
   transcript* tx;
   char* opseq;
-  int fwd_tx_len, bwd_tx_len, seg_tx_len, retcode;
+  int fwd_tx_len, bwd_tx_len, seg_tx_len, retcode, overlap_score;
   for (int i = 0; i < num_segs; i ++) {
     retcode = extend_1d(&fwd, segs[i],
         S, T, S_len, T_len, params,
         window, max_succ_drops, drop_threshold, 1);
-    if (retcode == -1 || fwd.tx->score <= drop_threshold) {
+    if (retcode == -1) {
       continue;
     }
     retcode = extend_1d(&bwd, segs[i],
       S, T, S_len, T_len, params,
       window, max_succ_drops, drop_threshold, 0);
-    if (retcode == -1 || bwd.tx->score <= drop_threshold) {
+    if (retcode == -1) {
+      continue;
+    }
+    overlap_score = bwd.tx->score + fwd.tx->score - segs[i]->tx->score;
+    if (overlap_score <= min_overlap_score) {
       continue;
     }
     // Found a fully extending segment; return it:
@@ -663,7 +670,7 @@ segment* extend(segment** segs, int num_segs, int* S, int* T, int S_len, int T_l
     tx = malloc(sizeof(transcript));
     tx->S_idx = bwd.tx->S_idx;
     tx->T_idx = bwd.tx->T_idx;
-    tx->score = bwd.tx->score + fwd.tx->score - segs[i]->tx->score;
+    tx->score = overlap_score;
     tx->opseq = opseq;
 
     // build the fully extended segment

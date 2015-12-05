@@ -6,19 +6,20 @@ import igraph
 from .. import pw, tuples, seq, assembly
 
 params = {
-    'show_params': False,
-    'profile': False,
-    'wordlen': 10,          # tuple word lengths
+    'show_params': False,   # print a summary of parameters
+    'profile': False,        # profile building the overlap graph
+    'wordlen': 15,          # tuple word length for seed extension
+    'go_prob': 0.15,        # gap open probability
+    'ge_prob': 0.2,         # gap extend probability
+    'subst_probs': [[0.94 if k==i else 0.02 for k in range(4)] for i in range(4)],
+    'window': 50,           # rolling window length for tuple extension
+    'drop_threshold': 0,    # what constitutes a drop in score of a window
+    'max_succ_drops': 3,    # how many consecutive drops are allowed
+    # --------- Simulations ---------------
     'genome_length': 50000, # length of randomly generated genome
     'coverage': 10,         # coverage of random sequencing reads
     'read_len_mean': 5000,  # average length of sequencing read
     'read_len_var': 100,    # variance of sequencing read length
-    'go_prob': 0.05,        # gap open probability
-    'ge_prob': 0.1,         # gap extend probability
-    'subst_probs': [[0.982 if k==i else 0.006 for k in range(4)] for i in range(4)],
-    'window': 50,           # rolling window length for tuple extension
-    'drop_threshold': 0,    # what constitutes a drop in score of a window
-    'max_succ_drops': 3,    # how many consecutive drops are allowed
 }
 
 A = seq.Alphabet('ACGT')

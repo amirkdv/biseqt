@@ -250,9 +250,9 @@ class HpCondenser(object):
             align_params (pw.AlignParams): Alignment parameters for the
                 source alphabet.
             hp_gap_score (float): Alignment score (in source alphabet) for
-                homopolymeric gaps. This is incorporated in the substitution
-                costs of homopolymeric stretches. Only a linear gap model is
-                well-defined.
+                homopolymeric gaps. This is incorporated as a linear gap
+                extension score in the substitution scores of homopolymeric
+                stretches (see above).
 
         Returns:
             pw.AlignParams: Alignment parameters for the destination alphabet.
