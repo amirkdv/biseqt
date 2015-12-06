@@ -239,7 +239,7 @@ class OverlapGraph(object):
         }
         igraph.plot(self.iG, fname, **plot_kw)
 
-    def diff_text(self, OG, f=sys.stdout, summary_only=True):
+    def diff_text(self, OG, f=sys.stdout, summary_only=True, weights_from='theirs'):
         """Prints a diff-style comparison of our :attr:`iG` against another
         given :class:`OverlapGraph` and writes the output to the given file
         handle. Missing edges are printed in red with a leading '-' and added
@@ -247,12 +247,25 @@ class OverlapGraph(object):
 
         Args:
             OG (OverlapGraph): The "to" directed graph ("from" is us).
-            f (file): File handle to write output to.
+
+        Keyword Args:
+            f (Optional[file]): Open file handle to which output is written;
+                default is ``sys.stdout``.
+            summary_only (Optional[bool]): Only show a summary of changes and
+                not edge-by-edge diff; default is True.
+            weights_from (Optional[str]): Which graph's edge weights should be
+                used for common edges, either 'ours' or 'theirs'; default is
+                'theirs'.
         """
         sE1 = set([self._endpoint_names(e) for e in self.iG.es])
         sE2 = set([OG._endpoint_names(e) for e in OG.iG.es])
-
+        assert(weights_from in ['ours', 'theirs'])
         def _edge_str(endpoints):
+            if endpoints in sE1 and endpoints in sE2:
+                if weights_from == 'ours':
+                    return self.eid_to_str(self.iG.get_eid(*endpoints))
+                else:
+                    return OG.eid_to_str(OG.iG.get_eid(*endpoints))
             if endpoints in sE1:
                 return self.eid_to_str(self.iG.get_eid(*endpoints))
             elif endpoints in sE2:
