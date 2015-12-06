@@ -292,7 +292,7 @@ class OverlapGraph(object):
             elif edge[0] == '+':
                 color = 'green'
 
-            if color:
+            if color and f.isatty():
                 f.write(colored(line, color=color))
             else:
                 f.write(line)
