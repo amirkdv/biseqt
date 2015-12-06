@@ -5,7 +5,6 @@
 
 *.db
 *.fa
-*.svg
 *.pdf
 *.gml
 *.nhr
