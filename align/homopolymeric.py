@@ -359,8 +359,8 @@ class HpCondensedIndex(tuples.Index):
         HpI = homopolymeric.HpCondensedIndex(B, 5, hp_condenser=Tr)
     """
     def __init__(self, *args, **kwargs):
-        self.hp_condenser = kwargs['hp_condenser']
-        super(HpCondensedIndex, self).__init__(*args)
+        self.hp_condenser = kwargs.pop('hp_condenser')
+        super(HpCondensedIndex, self).__init__(*args, **kwargs)
 
     def tup_scan(self, string):
         """Similar to :func:`align.tuples.Index.tup_scan` except a tuple of

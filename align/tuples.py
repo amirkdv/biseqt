@@ -181,12 +181,20 @@ class Index(object):
         tuplesdb (tuplesDB): The tuples database.
         wordlen (int): Length of tuples.
     """
-    def __init__(self, tuplesdb, wordlen):
+    # FIXME document min_seeds_for_homology.
+    def __init__(self, tuplesdb, wordlen, min_seeds_for_homology=1):
         self.tuplesdb = tuplesdb
         self.wordlen = wordlen
+        self.min_seeds_for_homology = min_seeds_for_homology
         self.tuples_table = 'tuples_%d' % self.wordlen
         self.seeds_table = 'seeds_%d' % self.wordlen
         self.potential_homologs_table = 'potential_homologs_%d' % self.wordlen
+        self.potential_homologs_q = """
+            SELECT S_id, T_id, COUNT(*) AS count
+            FROM %s
+            GROUP BY S_id, T_id
+            HAVING count > %d
+        """ % (self.seeds_table, self.min_seeds_for_homology)
 
     def initdb(self):
         """Initializes the database: creates the required tables and
@@ -280,12 +288,7 @@ class Index(object):
         Provide a specific cursor object to access the SQLite database if
         accessing this function through a transaction.
         """
-        cnt_q = """
-            SELECT COUNT(*) FROM (
-                SELECT DISTINCT S_id, T_id
-                FROM %s
-            )
-        """ % self.seeds_table
+        cnt_q = 'SELECT COUNT(*) FROM (%s)' % self.potential_homologs_q
         if cursor is None:
             with sqlite3.connect(self.tuplesdb.db) as conn:
                 cursor = conn.cursor()
@@ -304,16 +307,16 @@ class Index(object):
         msg = 'Indexing potentially homologous pairs of sequences'
         indicator = ProgressIndicator(msg, num_total)
         indicator.start()
-        q = 'SELECT DISTINCT S_id, T_id FROM %s' % self.seeds_table
-        cursor.execute(q)
+        cursor.execute(self.potential_homologs_q)
         for row in cursor:
+            if int(row[2]) < self.min_seeds_for_homology:
+                continue;
             if row[0] < row[1]:
                 yield (row[0], row[0], str(row[1]) + ',')
             elif row[0] > row[1]:
                 yield (row[1], row[1], str(row[0]) + ',')
             else:
-                print row
-                raise RuntimeError("This shouldn't have happened.")
+                raise RuntimeError("This shouldn't have happened, row=%s", str(row))
             indicator.progress()
 
         indicator.finish()
