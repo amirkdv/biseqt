@@ -49,6 +49,8 @@ class ProgressIndicator(object):
         self.freq = max(num_total/100, 1)
         self.progress_cnt = 0
         self.percentage = percentage
+        if self.percentage and self.num_total == 0:
+            raise ValueError('Cannot make a percentage progress indicator with num_total=0')
 
     def start(self):
         self.status()
