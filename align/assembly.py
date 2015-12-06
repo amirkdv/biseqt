@@ -372,9 +372,11 @@ class OverlapBuilder(object):
         window (int): The size of the rolling window.
         max_succ_drops (int): Maximum number of "drops" until the
             segment is dropped, default is 3.
+        min_overlap_score (float): The minimum required score for an alignment
+            to be reported; default is :attr:`drop_threshold`.
+        min_margin (int): The minimum margin required for the direction of an
+            overlap to be reliable; default is :attr:`window`.
     """
-    # FIXME document min_overlap_score
-    # FIXME document min_margin
     def __init__(self, index, align_params, **kwargs):
         self.hp_condenser = kwargs.get('hp_condenser', None)
         if self.hp_condenser:

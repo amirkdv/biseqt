@@ -180,8 +180,9 @@ class Index(object):
     Attributes:
         tuplesdb (tuplesDB): The tuples database.
         wordlen (int): Length of tuples.
+        min_seeds_for_homology (int): Minimum number of seeds between two
+            sequences that makes them "potential homologs"; default is 1.
     """
-    # FIXME document min_seeds_for_homology.
     def __init__(self, tuplesdb, wordlen, min_seeds_for_homology=1):
         self.tuplesdb = tuplesdb
         self.wordlen = wordlen
