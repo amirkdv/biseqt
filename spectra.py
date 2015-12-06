@@ -3,8 +3,8 @@ import igraph
 import os
 from matplotlib import pyplot as plt
 
-db = 'genome.leishmania.hp_assembly.db'
-wordlen = 10
+db = 'genome.leishmania.assembly.db'
+wordlen = 20
 base_dir = 'spectra-%d' % wordlen
 pos_dir = os.path.join(base_dir, 'positive')
 neg_dir = os.path.join(base_dir, 'negative')
