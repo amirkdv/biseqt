@@ -445,8 +445,8 @@ class Transcript(CffiObject):
                 counter, sline, tline = new_line(
                     sline, tline, S_idx+i, T_idx+i, f
                 )
-            sline += S[S_idx-i] if i <= S_idx else ' '
-            tline += T[T_idx-i] if i <= T_idx else ' '
+            sline += S[S_idx-i] if i <= S_idx else ' ' * S.alphabet.letter_length
+            tline += T[T_idx-i] if i <= T_idx else ' ' * S.alphabet.letter_length
             counter += letlen
 
         gap = '-' * letlen
