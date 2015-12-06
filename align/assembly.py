@@ -373,7 +373,8 @@ class OverlapBuilder(object):
         max_succ_drops (int): Maximum number of "drops" until the
             segment is dropped, default is 3.
     """
-
+    # FIXME document min_overlap_score
+    # FIXME document min_margin
     def __init__(self, index, align_params, **kwargs):
         self.hp_condenser = kwargs.get('hp_condenser', None)
         if self.hp_condenser:
@@ -382,6 +383,7 @@ class OverlapBuilder(object):
         self.window = kwargs.get('window', 20)
         self.drop_threshold = kwargs.get('drop_threshold', 0)
         self.min_overlap_score = kwargs.get('min_overlap_score', self.drop_threshold)
+        self.min_margin = kwargs.get('min_margin', self.window)
         self.max_succ_drops = kwargs.get('max_succ_drops', 3)
 
     def build(self, profile=False):
@@ -476,8 +478,9 @@ class OverlapBuilder(object):
                 S_len = lib.tx_seq_len(overlap.tx.c_obj, 'S')
                 T_len = lib.tx_seq_len(overlap.tx.c_obj, 'T')
                 assert(overlap.tx.T_idx * overlap.tx.S_idx == 0)
-                if abs(overlap.tx.S_idx - overlap.tx.T_idx) < self.window or \
-                    abs(overlap.tx.S_idx + S_len - (overlap.tx.T_idx + T_len)) < self.window:
+                lmargin = abs(overlap.tx.S_idx - overlap.tx.T_idx)
+                rmargin = abs(overlap.tx.S_idx + S_len - (overlap.tx.T_idx + T_len))
+                if lmargin < self.min_margin or rmargin < self.min_margin:
                     # end points are too close, ignore
                     continue
                 if overlap.tx.S_idx == 0 and overlap.tx.T_idx == 0:
