@@ -28,7 +28,7 @@ $(BLAST_DB): $(REFERENCE)
 $(ANNOTATED_READS): $(READS) $(BLAST_DB)
 	READS=$(READS) DB=$(BLAST_DB) NUM_READS=$(NUM_READS) python prepare.py $@
 
-$(ASSEMBLY_DB): $(ANNOTATED_READS)
+$(ASSEMBLY_DB):
 	python -c 'import align.tests.$(MODE) as A; A.create_db("$@", "$(ANNOTATED_READS)")'
 
 ASSEMBLY_TARGET = leishmania.gml
