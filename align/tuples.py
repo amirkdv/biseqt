@@ -170,13 +170,11 @@ class Index(object):
           'T_id' integer REFERENCES seq(id),
           'S_idx' integer, -- starting position of seed in S
           'T_idx' integer, -- starting position of seed in T
-          UNIQUE(S_id, T_id, S_idx, T_idx)
         );
         CREATE TABLE potential_homologs_N (
           'id' integer REFERENCES seq(id),
           'homologs' varchar, -- comma separated list of sequence IDs, with
                               -- potential homology to sequence with ID 'id'.
-          UNIQUE(id)
         );
 
     Attributes:
@@ -216,14 +214,10 @@ class Index(object):
                   'S_id' integer REFERENCES seq(id),
                   'T_id' integer REFERENCES seq(id),
                   'S_idx' integer,
-                  'T_idx' integer,
-                  UNIQUE(S_id, T_id, S_idx, T_idx)
+                  'T_idx' integer
                 );
             """ % (self.seeds_table)
             c.execute(q)
-            c.execute(
-                'CREATE INDEX seeds_ids ON %s (S_id, T_id)' % self.seeds_table
-            )
             q = """
                 CREATE TABLE %s (
                   'id' integer REFERENCES seq(id),
@@ -287,6 +281,11 @@ class Index(object):
                     yield (S_hit[0], T_hit[0], S_hit[1], T_hit[1])
 
         indicator.finish()
+        sys.stderr.write('Creating SQL index on %s'  % self.seeds_table)
+        cursor.execute("""
+            CREATE INDEX seeds_ids ON %s (S_id, T_id)
+        """ % self.seeds_table)
+        sys.stderr.write('.\n')
 
     def num_potential_homolog_pairs(self, cursor=None):
         """Returns the number of potential homolog pairs in the database.
@@ -388,6 +387,52 @@ class Index(object):
                 SELECT ?, IFNULL( (SELECT homologs FROM %s WHERE id = ?), "") || ?
             """ % (self.potential_homologs_table, self.potential_homologs_table)
             potential_homologs_c.executemany(seed_cache_ins_q, self._give_potential_homologs(seeds_c))
+
+    def verify(self):
+        """Verifies the database contents to make sure:
+
+            * There seeds table contains no more than one for each 4-tuple
+              ``(S_id,T_id,S_idx,T_idx)``.
+            * The potential homologs table contains no more than one row for
+              each sequence in ``seq``.
+
+            If an inconsistency is found an ``AssertionError`` is raised.
+
+            Note:
+                The point of this function is to avoid setting up the above
+                constraints on the SQLite tables. The reason is:
+                * SQLite does not allow modifying constraints on a table after
+                  creation.
+                * Having the constraints in place while we are munging seeds
+                  cripples performance.
+        """
+        with sqlite3.connect(self.tuplesdb.db) as conn:
+            c = conn.cursor()
+            sys.stderr.write('Verifying consistency of database:')
+            # potential homologs should have at most a single row per sequence.
+            potential_homologs_c.execute("""
+                SELECT COUNT(*) FROM %s
+            """ % self.potential_homologs_table)
+            for row in potential_homologs_c:
+                num_records = row[0]
+            potential_homologs_c.execute("""
+                SELECT COUNT(*) FROM (SELECT DISTINCT id FROM %s)
+            """ % self.potential_homologs_table)
+            for row in potential_homologs_c:
+                assert(num_records == row[0])
+
+            seeds_c.execute("""
+                SELECT COUNT(*) FROM %s
+            """ % self.seeds_table)
+            for row in seeds_c:
+                num_records = row[0]
+            potential_homologs_c.execute("""
+                SELECT COUNT(*) FROM (SELECT DISTINCT S_id,T_id,S_idx,T_idx FROM %s)
+            """ % self.seeds_table)
+            for row in seeds_c:
+                assert(num_records == row[0])
+
+            sys.stderr.write('looks good!\n')
 
     def potential_homologs(self, seqid):
         """Given a sequence ID, returns a list of sequence IDs, all integers
