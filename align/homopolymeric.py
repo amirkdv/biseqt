@@ -318,7 +318,7 @@ class HpCondenser(object):
         :math:`(j_S,j_T)` in `S` and `T`, then the two seeds are
         *comparable* if:
             :math:`(i_S-j_S)(i_T-j_T)\ge 0`
-        that is, both coordinates have the same order). We can extend this
+        that is, both coordinates have the same order. We can extend this
         partial order to a *total order* by letting :math:`i\le j` if:
             :math:`i_S < j_S` or if
 

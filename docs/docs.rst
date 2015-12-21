@@ -139,6 +139,17 @@ supported:
    `assembly <#genome-assembly>`__ below) into a seed in the condensed
    alphabet.
 
+Content dependent gap scores
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+When aligning sequences in the condensed alphabet the usual
+linear/affine gap penalty which only takes into consideration the length
+of a gap has undesirable consequences. For example, the sequences
+``A2C7T3`` and ``A1T4`` can get a positive score despiting have a
+7-character long gap. To overcome this, ``libalign`` allows specifying
+gap scores that are *content-dependent* in that the extension score of
+gaps may depend on the content that is inserted or deleted.
+
 Score translation
 ^^^^^^^^^^^^^^^^^
 
@@ -191,12 +202,33 @@ Overlap and layout graphs (i.e OLC minus consensus) can be calculated by
 methods provided by ``assembly.OverlapBuilder``. All graph algorithms
 are delegated to `igraph <http://igraph.org/python/>`__. Overlap graphs
 are represented by ``assembly.OverlapGraph`` (which wraps an igraph
-directed graph). The weighted overlap DAG is built by seed expansion
-(see `Tuples Methods <#tuples>`__) on all pairs of sequences and the
-longest path is reported as the layout. Expansion is done by a rolling
-window of small global alignments (see tuning parameters in
-`Simulations <#simulations>`__) to find *overlap* alignments of
-sequences in the database.
+directed graph). The weighted overlap graph is built as follows:
+
+-  For any pair of potentially overlapping reads, find the *shift*
+   distribution of all seeds using a rolling sum window. The *shift* of
+   a seed with coordinates :math:`(i_S,i_T)` is the integer
+   :math:`i_S-i_T`.
+-  Find the ratio of the mode frequency of shifts over the uniform
+   frequency (which is 1 over the range of possible shifts). This ratio
+   is taken as a measure of "peakedness" of the shift distribution.
+
+   -  If the ratio is large enough, the pair of reads are considered
+      overlapping with score equal to the overlap length that mode shift
+      implies.
+   -  If the ratio is small enough, the pair of reads are considered
+      non-overlapping.
+   -  If the ratio is neither small or large enough, proceed to seed
+      extension.
+
+-  Only considering those seeds with shifts close to the shift mode, try
+   to find a seed that extends to a full overlap alignment by
+   consecutive start/end-anchored overlap alignments in a moving window
+   along the two reads.
+
+   -  If any such seed is found, the seeds are considered overlapping
+      with score equal to the alignment score of the extended segment.
+   -  If no such seeds are found, the seeds are considered
+      non-overlapping.
 
 Cycle breaking
 ~~~~~~~~~~~~~~
@@ -205,10 +237,13 @@ The resulting overlap graph may not be a DAG due to two main reasons:
 
 -  wrong weak edges that should not exist.
 -  strong edges with the wrong direction.
+-  strong edges that should not exist.
 
 The second case is typically caused by highly overlapping sequences (i.e
 the start or end index of end points are too close). Currently such
-edges are ignored altogether.
+edges are ignored altogether. The first and third case are delegated to
+the cycle breaking algorithm, the latter being the hardest to get rid
+of.
 
 Regardless, cycle breaking is delegated to
 ``igraph.Graph.feedback_arc_set`` which finds a set of edges the removal
@@ -223,7 +258,8 @@ heuristic <http://www.sciencedirect.com/science/article/pii/002001909390079O>`__
 Assembly in condensed alphabet
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Assembly can be modified in two places to use condensed alphabets:
+The assembly line can be modified in two places to use condensed
+alphabets:
 
 -  *Indexing*: The sequence of reads can be indexed in the condensed
    alphabet. For example, if we are indexing 5-mers the read
@@ -238,69 +274,18 @@ Assembly can be modified in two places to use condensed alphabets:
    indexing, i.e have a different ``maxlen``). This has the added
    benefit of allowing us to lower the penalty of homopolymeric indels.
 
-Simulations
-~~~~~~~~~~~
+Condensing seeds
+^^^^^^^^^^^^^^^^
 
-For the simulated case where the true genome is known a *difference
-graph* (which looks like a ``diff``, with matching edges in black,
-missing edges in red, and added edges in green) can be generated between
-the true layout path and the assembled layout path. The key parameters
-for overlap discovery are:
+Performing homopolymeric compression during indexing has the upside that
+seeds found in this stage are immediately consumbale for seed extension.
+However, this is not compatible with usage of shift distributions to
+quickly rule in/out overlapping reads since the coordinates of h.p.
+condensed seeds yield a different shift than the true shift in the
+original alphabet.
 
--  Window size for successive alignment frames,
--  What constitutes a bad score in a single window,
--  Number of consecutive bad scores which disqualifies a seed.
--  Number of successful seeds (extending to boundaries) which is enough
-   to call two reads overlapping (this is mainly an
-   performance-optimization trick and does not seem to introduce
-   errors).
-
-Input generation parameters are:
-
--  Length of the original genome,
--  Parameters for the normal distribution of read lengths,
--  Expected coverage.
--  Substitution and gap probabilities used to mutate reads from true
-   genome.
-
-Usage:
-
-.. code:: shell
-
-    # creates genome.assembly.fa, reads.assembly.fa, genome.assembly.db
-    make -f assembly.mk clean genome.assembly.db
-
-    # builds overlap.assembly.layout.gml, and compares against the true version.
-    make -f assembly.mk layout.diff.assembly.pdf
-
-To perform assembly in condensed alphabet:
-
-.. code:: shell
-
-    # creates genome.hp_assembly.fa, reads.hp_assembly.fa, genome.hp_assembly.db
-    make -f assembly.mk clean genome.hp_assembly.db MODE=hp_assembly
-
-    # builds overlap.hp_assembly.layout.gml, and compares against the true version.
-    make -f assembly.mk clean layout.diff.hp_assembly.pdf MODE=hp_assembly
-
-Behavior
-~~~~~~~~
-
-**Good**
-
-i.   When compared to the true graph, the assembled overlap graph
-     typically has some missing edges (e.g %15 of edges missing) but
-     very few wrong edges are added (often none).
-ii.  Generated overlap graphs are (close to) acyclic.
-iii. As a consequence of the (1), the assembled layout path is
-     consistent with the true layout in the sense that the sequence of
-     reads it announces as layout (its heaviest path) is a subsequence
-     (i.e in correct order) of the correct layout path.
-
-**Bad**
-
-i.  When two reads are both mostly overlapping the direction may come
-    out wrong and this can cause cycles in the overlap graph.
-ii. There are occasional insertions too which do not seem to be
-    problematic since they are weak (i.e low scoring alignments).
-
+Therefore, it is desirable to perform indexing in the original alphabet
+and to proceed to seed extension in the condensed alphabet. This is
+allowed since an ``HpCondenser`` can "condense" seeds in the original
+alphabet into seeds in the condensed alphabet. This, however, raises
+some non-trivial caveats discussed in the API docs.

@@ -356,29 +356,13 @@ class OverlapBuilder(object):
     All arguments to the constructor become class attributes with the same
     name.
 
-    Overlaps are found as follows:
+    Overlaps are found as follows for any pair of potentially overlapping reads:
 
-    * For any pair of potentially overlapping reads, find the *shift*
-      distribution of all seeds using a rolling sum window. The *shift* of a
+    * Try to decide if the reads overlap based on their shift distribution,
+      see :func:`overlap_by_seed_shift_distribution`. The *shift* of a
       seed with coordinates :math:`(i_S,i_T)` is the integer :math:`i_S-i_T`.
-    * Find the ratio of the mode frequency of shifts over the uniform frequency
-      (which is 1 over the range of possible shifts). This ratio is taken as
-      a measure of "peakedness" of the shift distribution.
-
-      * If the ratio is large enough, the pair of reads are considered
-        overlapping with score equal to the overlap length that mode shift
-        implies.
-      * If the ratio is small enough, the pair of reads are considered
-        non-overlapping.
-      * If the ratio is neither small or large enough, proceed to seed extension.
-    * Only considering those seeds with shifts close to the shift mode, try to
-      find a seed that extends to a full overlap alignment by consecutive
-      start/end-anchored overlap alignments in a moving window along the two
-      reads.
-
-      * If any such seed is found, the seeds are considered overlapping with
-        score equal to the alignment score of the extended segment.
-      * If no such seeds are found, the seeds are considered non-overlapping.
+    * If previous step was nonconclusive, try to extend seeds with shifts close
+      to the shift mode, see :func:`overlap_by_seed_extension`.
 
     Attributes:
         index (tuples.Index): A tuples index that responds to
@@ -421,10 +405,14 @@ class OverlapBuilder(object):
 
     def build(self, profile=False):
         """Builds a weighted, directed graph by using tuple methods. The
-        process has 2 steps:
+        process has 3 steps:
 
         * Find all seeds using :func:`align.tuples.Index.seeds`,
-        * Extend all seeds to suffix-prefix segments using :func:`extend`.
+        * Try to judge whether they are overlapping by judging their shift
+          distribution; see :func:`overlap_by_seed_shift_distribution`.
+        * If previous step was nonconclusive, extend select seeds (those with
+          shift close to the shift mode found above) to suffix-prefix segments;
+          see :func:`overlap_by_seed_extension`.
 
         The resulting graph may not necessarily be acyclic. For further
         processing (e.g to find the layout) we need to ensure the overlap
@@ -532,6 +520,7 @@ class OverlapBuilder(object):
         G.iG.es['weight'] = ws
         return G
 
+    # Helper method for overlap_by_seed_extension
     def _rolling_sum(self, data):
         if len(data) < self.shift_rolling_sum_width:
             return
@@ -546,16 +535,24 @@ class OverlapBuilder(object):
     def overlap_by_seed_shift_distribution(self, seeds, S_id, T_id):
         """Decides whether the shift distribution of seeds for a given sequence
         pair is "indicative" enough of an overlap or lack thereof:
+        * Find the shift distribution by using a rolling sum with window length
+          :attr:`shift_rolling_sum_width`.
+        * Find the ratio of the mode frequency of shifts over the uniform frequency
+          (which is 1 over the range of possible shifts). This ratio is taken as
+          a measure of "peakedness" of the shift distribution.
 
-            * If no decision can be made the seeds within radius
-              :attr:`shift_rolling_sum_width` of the mode shift are returned for
-              further processing.
-            * If a positive decision is made a single :class:`Segment <align.tuples.Segment>`
-              corresponding to an overlap alignment is returned by pretending
-              that the mode shift is accurate and the overlapping parts of
-              the sequences are exactly matching. This is not too bad since for
-              now there is no further processing of segments done by :func:`build`.
-            * If a negative decision is made ``None`` is returned.
+          * If the ratio is large enough, the pair of reads are considered
+            overlapping. A single :class:`Segment <align.tuples.Segment>`
+            corresponding to an overlap alignment is returned by pretending
+            that the mode shift is accurate and the overlapping parts of
+            the sequences are exactly matching. The fact that these returned
+            segments are inaccurate has no effect since :func:`build` performs
+            no further processing of overlap segments (at least for now).
+          * If the ratio is small enough, the pair of reads are considered
+            non-overlapping and ``None`` is returned.
+          * If the ratio is neither small or large enough, the seeds within
+            radius :attr:`shift_rolling_sum_width` of the mode shift are
+            returned for further processing.
 
         Args:
             seeds (list[Segment]): Exactly matching seeds as returned by
@@ -599,6 +596,22 @@ class OverlapBuilder(object):
         return sorted(seeds, key=lambda x: abs(seed.tx.S_idx - seed.tx.T_idx - shift_mode))
 
     def overlap_by_seed_extension(self, seeds, S_id, T_id):
+        """Tries to find a seed among given seeds that extends to a full overlap alignment by consecutive
+        start/end-anchored overlap alignments in a moving window along the two
+        reads:
+
+          * If any such seed is found, the fully extended segment is returned.
+          * If no such seeds are found, ``None`` is returned.
+
+        Args:
+            seeds (list[Segment]): Exactly matching seeds as returned by
+                :attr:`index`.
+            S_id (int): The database ID of the "from" sequence.
+            T_id (int): The database ID of the "to" sequence.
+
+        Returns:
+            Segment|None: Depending on whether any seed successfully extends to boundaries.
+        """
         S = self.index.tuplesdb.loadseq(S_id)
         T = self.index.tuplesdb.loadseq(T_id)
         # Calculate the score of each seed
