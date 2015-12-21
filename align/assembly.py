@@ -356,9 +356,33 @@ class OverlapBuilder(object):
     All arguments to the constructor become class attributes with the same
     name.
 
+    Overlaps are found as follows:
+
+    * For any pair of potentially overlapping reads, find the *shift*
+      distribution of all seeds using a rolling sum window. The *shift* of a
+      seed with coordinates :math:`(i_S,i_T)` is the integer :math:`i_S-i_T`.
+    * Find the ratio of the mode frequency of shifts over the uniform frequency
+      (which is 1 over the range of possible shifts). This ratio is taken as
+      a measure of "peakedness" of the shift distribution.
+
+      * If the ratio is large enough, the pair of reads are considered
+        overlapping with score equal to the overlap length that mode shift
+        implies.
+      * If the ratio is small enough, the pair of reads are considered
+        non-overlapping.
+      * If the ratio is neither small or large enough, proceed to seed extension.
+    * Only considering those seeds with shifts close to the shift mode, try to
+      find a seed that extends to a full overlap alignment by consecutive
+      start/end-anchored overlap alignments in a moving window along the two
+      reads.
+
+      * If any such seed is found, the seeds are considered overlapping with
+        score equal to the alignment score of the extended segment.
+      * If no such seeds are found, the seeds are considered non-overlapping.
+
     Attributes:
         index (tuples.Index): A tuples index that responds to
-            :func:`align.tuples.Index.seeds`.
+            :func:`seeds() <align.tuples.Index.seeds>`.
         align_params (pw.AlignParams): The alignment parameters for the
             rolling alignment.
         hp_condenser (homopolymeric.HpCondenser): If specified,
@@ -376,15 +400,22 @@ class OverlapBuilder(object):
             to be reported; default is :attr:`drop_threshold`.
         min_margin (int): The minimum margin required for the direction of an
             overlap to be reliable; default is :attr:`window`.
+        shift_rolling_sum_width (int): The width of the rolling sum used to
+            find the mode of the shifts distribution.
+        min_shift_freq_coeff (float): The lower cutoff for the ratio of
+            mode to uniform frequencies used to rule out non-overlapping reads.
+        max_shift_freq_coeff (float): The upper cutoff for the ratio of
+            mode to uniform frequencies used to rule in overlapping reads.
     """
     def __init__(self, index, align_params, **kwargs):
         self.hp_condenser = kwargs.get('hp_condenser', None)
-        if self.hp_condenser:
-            assert(isinstance(self.hp_condenser, homopolymeric.HpCondenser))
         self.index, self.align_params = index, align_params
         self.window = kwargs.get('window', 20)
         self.drop_threshold = kwargs.get('drop_threshold', 0)
         self.min_overlap_score = kwargs.get('min_overlap_score', self.drop_threshold)
+        self.shift_rolling_sum_width = kwargs.get('shift_rolling_sum_width', 500)
+        self.min_shift_freq_coeff = kwargs.get('min_shift_freq_coeff', 8)
+        self.max_shift_freq_coeff = kwargs.get('max_shift_freq_coeff', 15)
         self.min_margin = kwargs.get('min_margin', self.window)
         self.max_succ_drops = kwargs.get('max_succ_drops', 3)
 
@@ -450,23 +481,13 @@ class OverlapBuilder(object):
                 if not seeds:
                     continue
 
-                # are the seeds part of an overlap?
-                S = self.index.tuplesdb.loadseq(S_id)
-                T = self.index.tuplesdb.loadseq(T_id)
-
-                # Calculate the score of each seed
-                for seed in seeds:
-                    seed.tx.score = self.align_params.score(
-                        S, T, seed.tx.opseq,
-                        S_min_idx=seed.tx.S_idx, T_min_idx=seed.tx.T_idx
-                    )
-                if self.hp_condenser:
-                    seeds = [self.hp_condenser.condense_seed(S, T, seed) for seed in seeds]
-                    S = self.hp_condenser.condense_sequence(S)
-                    T = self.hp_condenser.condense_sequence(T)
-
+                # do the seeds indicate an overlap?
                 _t_extend = time.time()
-                overlap = self.extend(S, T, seeds)
+                overlap = self.overlap_by_seed_shift_distribution(seeds, S_id, T_id)
+                if isinstance(overlap, list):
+                    seeds = overlap
+                    overlap = self.overlap_by_seed_extension(seeds, S_id, T_id)
+
                 if profile:
                     _t_extend = 1000 * (time.time() - _t_extend)
                     sys.stderr.write(
@@ -511,6 +532,92 @@ class OverlapBuilder(object):
         G.iG.es['weight'] = ws
         return G
 
+    def _rolling_sum(self, data):
+        if len(data) < self.shift_rolling_sum_width:
+            return
+        cur = 0
+        for idx in range(0, len(data)):
+            if idx >= self.shift_rolling_sum_width:
+                cur -= data[idx - self.shift_rolling_sum_width]
+            if idx < len(data):
+                cur += data[idx]
+            yield cur
+
+    def overlap_by_seed_shift_distribution(self, seeds, S_id, T_id):
+        """Decides whether the shift distribution of seeds for a given sequence
+        pair is "indicative" enough of an overlap or lack thereof:
+
+            * If no decision can be made the seeds within radius
+              :attr:`shift_rolling_sum_width` of the mode shift are returned for
+              further processing.
+            * If a positive decision is made a single :class:`Segment <align.tuples.Segment>`
+              corresponding to an overlap alignment is returned by pretending
+              that the mode shift is accurate and the overlapping parts of
+              the sequences are exactly matching. This is not too bad since for
+              now there is no further processing of segments done by :func:`build`.
+            * If a negative decision is made ``None`` is returned.
+
+        Args:
+            seeds (list[Segment]): Exactly matching seeds as returned by
+                :attr:`index`.
+            S_id (int): The database ID of the "from" sequence.
+            T_id (int): The database ID of the "to" sequence.
+
+        Returns:
+            None|Segment|list[Segment]: Corresponding to scenarios described above.
+
+        """
+        S = self.index.tuplesdb.loadseq(S_id)
+        T = self.index.tuplesdb.loadseq(T_id)
+        # FIXME just load the lengths from DB
+        S_len, T_len = len(S), len(T)
+        shift_range = range(-T_len, S_len)
+        shift_coverage = {shift:0 for shift in shift_range}
+        for seed in seeds:
+            shift = seed.tx.S_idx - seed.tx.T_idx
+            shift_coverage[shift] += len(seed.tx.opseq)
+
+        shift_distrib = [x for x in self._rolling_sum([x[1] for x in sorted(shift_coverage.items())])]
+        shift_mean = float(sum(shift_distrib))/len(shift_distrib)
+        max_shift_frequency = max(shift_distrib)
+        shift_mode = shift_range[shift_distrib.index(max_shift_frequency)]
+        if max_shift_frequency <= self.min_shift_freq_coeff * shift_mean:
+            # definitely not overlapping:
+            return None
+        overlap_length = min(S_len, T_len + shift_mode) - max(0, shift_mode) if shift_mode < min(S_len,T_len) else 0
+        if max_shift_frequency >= self.max_shift_freq_coeff * shift_mean:
+            # definitely overlapping; fake the transcripts:
+            if shift_mode >= 0:
+                tx = pw.Transcript(S_idx=shift_mode, T_idx=0, score=overlap_length, opseq='M'*overlap_length)
+                return tuples.Segment(S_id=S_id, T_id=T_id, tx=tx)
+            else:
+                tx = pw.Transcript(S_idx=0, T_idx=-shift_mode, score=overlap_length, opseq='M'*overlap_length)
+                return tuples.Segment(S_id=S_id, T_id=T_id, tx=tx)
+
+        # Only return those seeds that have a shift close to the mode:
+        seeds = [seed for seed in seeds if abs(seed.tx.S_idx - seed.tx.T_idx - shift_mode) < self.shift_rolling_sum_width]
+        return sorted(seeds, key=lambda x: abs(seed.tx.S_idx - seed.tx.T_idx - shift_mode))
+
+    def overlap_by_seed_extension(self, seeds, S_id, T_id):
+        S = self.index.tuplesdb.loadseq(S_id)
+        T = self.index.tuplesdb.loadseq(T_id)
+        # Calculate the score of each seed
+        for seed in seeds:
+            seed.tx.score = self.align_params.score(
+                S, T, seed.tx.opseq,
+                S_min_idx=seed.tx.S_idx, T_min_idx=seed.tx.T_idx
+            )
+        if self.hp_condenser:
+            # condense the seeds using the original sequences; this process
+            # is lossy (sum seeds are ignored for various reasons).
+            seeds = self.hp_condenser.condense_seeds(S, T, seeds)
+            seeds = filter(lambda x: x, seeds)
+            # condense the sequences:
+            S = self.hp_condenser.condense_sequence(S)
+            T = self.hp_condenser.condense_sequence(T)
+
+        return self.extend(S, T, seeds)
+
     def extend(self, S, T, segments):
         """Wraps :c:func:`extend()`: given two sequences and a number of
         matching segments returns the first fully extended segment.
@@ -524,6 +631,8 @@ class OverlapBuilder(object):
         Returns:
             tuples.Segment: A segment corresponding to an overlap alignment.
         """
+        if not segments:
+            return None
         segs = ffi.new('segment* []', [seg.c_obj for seg in segments])
         res = lib.extend(segs, len(segs),
             S.c_idxseq, T.c_idxseq, len(S), len(T), self.align_params.c_obj,

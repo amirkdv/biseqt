@@ -18,8 +18,11 @@ params = {
     'drop_threshold': -20,    # what constitutes a drop in score of a window.
     'max_succ_drops': 3,      # how many consecutive drops are allowed.
     'min_overlap_score': 1000,# minimum score required for an overlap to be reported.
+    'shift_rolling_sum_width': 500,
+    'min_shift_freq_coeff': 4,
+    'max_shift_freq_coeff': 14,
     # ------------- HP / Index ----------------
-    'min_seeds_for_homology': 10, # minimum number of seeds for two reads to be considered.
+    'min_seeds_for_homology': 140, # minimum number of seeds for two reads to be considered.
     'hp_gap_score': -0.2,   # HpCondenser Hp gap score
     'hp_maxlen_idx': 5,     # HpCondenser maxlen for seed discovery
     'hp_maxlen': 5,         # HpCondenser maxlen for seed extension
@@ -83,23 +86,34 @@ def create_example(db, reads='reads.fa'):
 
 def create_db(db, reads='reads.fa'):
     B = tuples.TuplesDB(db, alphabet=A)
-    HpIdx = homopolymeric.HpCondensedIndex(B,
-        params['wordlen'],
-        min_seeds_for_homology=params['min_seeds_for_homology'],
-        hp_condenser=IdxTr)
+    # HpIdx = homopolymeric.HpCondensedIndex(B,
+    #     params['wordlen'],
+    #     min_seeds_for_homology=params['min_seeds_for_homology'],
+    #     hp_condenser=IdxTr)
+    Idx = tuples.Index(B,
+        wordlen=params['wordlen'],
+        min_seeds_for_homology=params['min_seeds_for_homology']
+    )
     B.initdb()
     B.populate(reads);
-    HpIdx.initdb()
-    HpIdx.index()
+    # HpIdx.initdb()
+    # HpIdx.index()
+    Idx.initdb()
+    Idx.index()
 
 def overlap_by_seed_extension(db, path):
     B = tuples.TuplesDB(db, alphabet=A)
-    HpIdx = homopolymeric.HpCondensedIndex(B,
-        params['wordlen'],
-        min_seeds_for_homology=params['min_seeds_for_homology'],
-        hp_condenser=IdxTr)
+    # HpIdx = homopolymeric.HpCondensedIndex(B,
+    #     params['wordlen'],
+    #     min_seeds_for_homology=params['min_seeds_for_homology'],
+    #     hp_condenser=IdxTr)
+    Idx = tuples.Index(B,
+        wordlen=params['wordlen'],
+        min_seeds_for_homology=params['min_seeds_for_homology']
+    )
     show_params()
-    G = assembly.OverlapBuilder(HpIdx, C_d, hp_condenser=Tr, **params).build(profile=params['profile'])
+    # G = assembly.OverlapBuilder(HpIdx, C_d, hp_condenser=Tr, **params).build(profile=params['profile'])
+    G = assembly.OverlapBuilder(Idx, C_d, hp_condenser=Tr, **params).build(profile=params['profile'])
     G.save(path)
 
 def overlap_graph_by_known_order(db):
