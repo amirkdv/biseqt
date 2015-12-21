@@ -62,6 +62,8 @@ class TuplesDB(object):
         sys.stderr.write('Initializing tuples DB at: %s\n' % self.db)
         with sqlite3.connect(self.db) as conn:
             c = conn.cursor()
+            sys.stderr.write("Turning off SQLite's journaling for performance: do not trust the contents of the database after a crash.\n")
+            c.execute('PRAGMA journal_mode = OFF;')
             q = """
                 CREATE TABLE seq (
                   'id' integer PRIMARY KEY ASC,
