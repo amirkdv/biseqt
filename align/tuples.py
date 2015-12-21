@@ -502,5 +502,4 @@ class Index(object):
                 else:
                     cand += 1
             idx += 1
-        exacts.sort(key=lambda s: lib.strlen(s.tx.opseq), reverse=True)
         return exacts
