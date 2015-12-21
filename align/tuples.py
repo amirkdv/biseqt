@@ -83,7 +83,7 @@ class TuplesDB(object):
             lim (Optional[int]): If positive, will be the number of sequences
                 loaded from FASTA source, default is -1.
         """
-        sys.stderr.write('Populating tuples DB at: %s\n' % self.db)
+        sys.stderr.write('Loading sequences from: %s\n' % fasta_src)
 
         def give_seq():
             for idx, seq in enumerate(SeqIO.parse(fasta_src, "fasta")):
@@ -160,7 +160,7 @@ class Index(object):
     .. code-block:: sql
 
         CREATE TABLE tuples_N (
-          'tuple' char(N), -- literal tuple of length N
+          'tuple' integer, -- tuple of length N represented in base 3
           'hits'  varchar, -- '@' delimited string of hits with format (@<id>:<idx>)*
           UNIQUE(tuple)
         )
@@ -206,11 +206,10 @@ class Index(object):
             c = conn.cursor()
             q = """
                 CREATE TABLE %s (
-                  'tuple' char(%d),
-                  'hits'  varchar,
-                  UNIQUE(tuple)
+                  'tuple' integer primary key,
+                  'hits'  varchar
                 );
-            """ % (self.tuples_table, self.wordlen)
+            """ % (self.tuples_table)
             c.execute(q)
             q = """
                 CREATE TABLE %s (
@@ -233,9 +232,9 @@ class Index(object):
                 );
             """ % (self.potential_homologs_table)
             c.execute(q)
-        sys.stderr.write('Initialized index tables %s, %s, %s at: %s\n'
-                         % (self.tuples_table, self.seeds_table,
-                            self.potential_homologs_table, self.tuplesdb.db))
+        sys.stderr.write('Initialized index tables %s, %s, %s.\n'
+            % (self.tuples_table, self.seeds_table, self.potential_homologs_table)
+        )
 
     def tup_scan(self, string):
         """A generator for ``(string, idx)`` tuples to scan through any given
@@ -251,8 +250,11 @@ class Index(object):
         Yields:
             tuple: A string of length :attr:`wordlen` and a starting position.
         """
+        digits = {'A':0, 'C':1, 'G':2, 'T':3}
         for idx in range(len(string) - self.wordlen + 1):
-            yield (string[idx:idx + self.wordlen], idx)
+            tup = string[idx:idx + self.wordlen]
+            tup = sum(digits[x]*(3**i) for x,i in zip(tup,reversed(range(len(tup)))))
+            yield (tup, idx)
 
     # Helper for index(): yields data values to be inserted in the seeds index.
     def _give_seeds(self, cursor):
@@ -263,7 +265,7 @@ class Index(object):
             num_tuples = int(row[0])
             break
         indicator = ProgressIndicator(
-            'Indexing %d seeds' % num_tuples, num_tuples
+            'Indexing %d observed %d-mers' % (num_tuples, self.wordlen), num_tuples
         )
         indicator.start()
 
@@ -356,7 +358,7 @@ class Index(object):
                 num_seqs = int(row[0])
                 break
 
-            msg = 'Indexing %d sequences with word length %d' \
+            msg = 'Scanning %d sequences for %d-mers' \
                 % (num_seqs, self.wordlen)
             indicator = ProgressIndicator(msg, num_seqs)
             indicator.start()
