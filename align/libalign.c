@@ -23,7 +23,7 @@ align_dp_cell** init_dp_table(align_problem* def) {
   int m = def->T_max_idx - def->T_min_idx;
   align_dp_cell** P = malloc((n+1) * sizeof(align_dp_cell *));
   if (P == NULL) {
-    printf("Failed to allocate memory.\n");
+    printf("Failed to allocate memory (`init_dp_table()`).\n");
     return NULL;
   }
   // We need an additional row/col in the beginning. Table indices are therefore
@@ -31,7 +31,7 @@ align_dp_cell** init_dp_table(align_problem* def) {
   for (int i = 0; i < n+1; i++) {
     P[i] = malloc((m+1) * sizeof(align_dp_cell));
     if (P[i] == NULL) {
-      printf("Failed to allocate memory.\n");
+      printf("Failed to allocate memory (`init_dp_table()`).\n");
       return NULL;
     }
     for (int j = 0; j < m+1; j++) {
@@ -98,7 +98,7 @@ align_dp_cell* solve(align_dp_cell** P, align_problem* def) {
   P[0][0].num_choices = 1;
   P[0][0].choices = malloc(sizeof(align_choice));
   if (P[0][0].choices == NULL) {
-    printf("Failed to allocate memory.\n");
+    printf("Failed to allocate memory (`solve()`).\n");
     return NULL;
   }
   P[0][0].choices[0].op = 'B';
@@ -125,7 +125,7 @@ align_dp_cell* solve(align_dp_cell** P, align_problem* def) {
       // Allocate for all 4 possible choices (B,M/S,I,D)
       alts = malloc(4 * sizeof(align_choice));
       if (alts == NULL) {
-        printf("Failed to allocate memory.\n");
+        printf("Failed to allocate memory (`solve()`).\n");
         return NULL;
       }
       // Build all the alternatives at cell (i,j)
@@ -241,7 +241,7 @@ align_dp_cell* solve(align_dp_cell** P, align_problem* def) {
       // indices of maximum choices in the `alts' array
       max_score_alts = malloc(num_choices * sizeof(int));
       if (max_score_alts == NULL) {
-        printf("Failed to allocate memory.\n");
+        printf("Failed to allocate memory (`solve()`).\n");
         return NULL;
       }
       num_max_scores = 0;
@@ -260,7 +260,7 @@ align_dp_cell* solve(align_dp_cell** P, align_problem* def) {
       P[i][j].num_choices = num_max_scores;
       P[i][j].choices = malloc(num_max_scores * sizeof(align_choice));
       if (P[i][j].choices == NULL) {
-        printf("Failed to allocate memory.\n");
+        printf("Failed to allocate memory (`solve()`).\n");
         return NULL;
       }
       for (k = 0; k < num_max_scores; k++) {
@@ -400,7 +400,7 @@ transcript* traceback(align_dp_cell** P, align_problem* def, align_dp_cell* end)
   len = len - pos - 1;
   opseq = malloc(len + 1);
   if (opseq == NULL) {
-    printf("Failed to allocate memory.\n");
+    printf("Failed to allocate memory (`tracback()`).\n");
     return NULL;
   }
   strncpy(opseq, rev_opseq + pos, len);
