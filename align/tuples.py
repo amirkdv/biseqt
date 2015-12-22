@@ -452,19 +452,28 @@ class Index(object):
         return []
 
     def seeds(self, S_id, T_id):
-        """Given two sequence ids, finds all maximal exactly matching segments
-        (see :class:`Segment`) between the two. A segment is in its maximal
-        form if it cannot be extended in either direction by an exact match.
+        """Given two sequence ids, finds all exactly matching segments
+        (see :class:`Segment`) of length :attr:`wordlen` between the two.
+        Segments are not necessarily in maximal form. For purposes of seed
+        extension, however, we prefer to not have too many segments that are
+        part of a one bigger segments (especially if they do not belong to an
+        actual overlap alignment). This can be worked out by using :func:`maximal_seeds`
+        which reduces any set of seeds into maximal, necessarily non-overlapping
+        segments.
+
+        Args:
+            S_id (int): The database ID of the "from" sequence.
+            T_id (int): The database ID of the "to" sequence.
 
         Note:
-            Scores of transcripts for exact matches are left as 0 to avoid
-            unnecessary cycles.
+            Scores of transcripts for exact matches are left as 0 since this
+            class does not concern itself with alignment scores.
         """
         q = """
             SELECT S_id, T_id, S_idx, T_idx FROM %s
             WHERE (S_id = ? AND T_id = ? ) OR (S_id = ? AND T_id = ?)
         """ % (self.seeds_table)
-        exacts = []
+        seeds = []
         with sqlite3.connect(self.tuplesdb.db) as conn:
             c = conn.cursor()
             c.execute(q, (S_id, T_id, T_id, S_id))
@@ -478,28 +487,45 @@ class Index(object):
                 tx = pw.Transcript(
                     S_idx=S_idx, T_idx=T_idx, score=0, opseq='M'*self.wordlen
                 )
-                exacts += [Segment(S_id=S_id, T_id=T_id, tx=tx)]
+                seeds += [Segment(S_id=S_id, T_id=T_id, tx=tx)]
 
-        exacts.sort(key=lambda s: s.tx.S_idx)
+        return seeds
+
+    @classmethod
+    def maximal_seeds(cls, seeds, S_id, T_id):
+        """Given a list of exactly matching segments, reduces them into a list
+        of *maximal* exactly matching segments in increasing order of ``S_idx``.
+        A segment is in its maximal form if it cannot be extended in either
+        direction by an exact match.
+
+        Args:
+            list[Segment]: Exactly matching segments, potentially overlapping.
+            S_id (int): The database ID of the "from" sequence.
+            T_id (int): The database ID of the "to" sequence.
+
+        Returns
+            list[Segment]: Maximal segments, guaranteed to not overlap.
+        """
+        seeds.sort(key=lambda s: s.tx.S_idx)
         # merge overlapping tuples:
         idx = 0
-        while idx < len(exacts):
+        while idx < len(seeds):
             cand = idx + 1
-            while cand < len(exacts):
-                shift_S = exacts[cand].tx.S_idx - exacts[idx].tx.S_idx
-                shift_T = exacts[cand].tx.T_idx - exacts[idx].tx.T_idx
+            while cand < len(seeds):
+                shift_S = seeds[cand].tx.S_idx - seeds[idx].tx.S_idx
+                shift_T = seeds[cand].tx.T_idx - seeds[idx].tx.T_idx
                 # we know the transcripts are all M's.
                 if shift_S == shift_T and shift_S > 0 and \
-                   shift_S < lib.strlen(exacts[idx].tx.opseq):
+                   shift_S < lib.strlen(seeds[idx].tx.opseq):
                     tx = pw.Transcript(
-                        S_idx=exacts[idx].tx.S_idx,
-                        T_idx=exacts[idx].tx.T_idx,
+                        S_idx=seeds[idx].tx.S_idx,
+                        T_idx=seeds[idx].tx.T_idx,
                         score=0,
-                        opseq=exacts[cand].tx.opseq + 'M'*shift_S
+                        opseq=seeds[cand].tx.opseq + 'M'*shift_S
                     )
-                    exacts[idx] = Segment(S_id=S_id, T_id=T_id, tx=tx)
-                    exacts.pop(cand)
+                    seeds[idx] = Segment(S_id=S_id, T_id=T_id, tx=tx)
+                    seeds.pop(cand)
                 else:
                     cand += 1
             idx += 1
-        return exacts
+        return seeds

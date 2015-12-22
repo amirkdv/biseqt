@@ -402,6 +402,7 @@ class OverlapBuilder(object):
         self.max_shift_freq_coeff = kwargs.get('max_shift_freq_coeff', 15)
         self.min_margin = kwargs.get('min_margin', self.window)
         self.max_succ_drops = kwargs.get('max_succ_drops', 3)
+        self.seqinfo = self.index.tuplesdb.seqinfo()
 
     def build(self, profile=False):
         """Builds a weighted, directed graph by using tuple methods. The
@@ -430,8 +431,7 @@ class OverlapBuilder(object):
         """
         vs = set()
         es, ws = [], []
-        seqinfo = self.index.tuplesdb.seqinfo()
-        seqids = seqinfo.keys()
+        seqids = self.seqinfo.keys()
         msg = 'Extending seeds on potentially homologous sequences'
         num_pairs = self.index.num_potential_homolog_pairs()
         indicator = ProgressIndicator(msg, num_pairs, percentage=False)
@@ -440,7 +440,7 @@ class OverlapBuilder(object):
             indicator.start()
         for S_id in seqids:
             for T_id in self.index.potential_homologs(S_id):
-                S_info, T_info = seqinfo[S_id], seqinfo[T_id]
+                S_info, T_info = self.seqinfo[S_id], self.seqinfo[T_id]
                 S_min_idx, T_min_idx = S_info['start'], T_info['start']
                 S_max_idx = S_info['start'] + S_info['length']
                 T_max_idx = T_info['start'] + T_info['length']
@@ -474,6 +474,7 @@ class OverlapBuilder(object):
                 overlap = self.overlap_by_seed_shift_distribution(seeds, S_id, T_id)
                 if isinstance(overlap, list):
                     seeds = overlap
+                    seeds = tuples.Index.maximal_seeds(seeds, S_id, T_id)
                     overlap = self.overlap_by_seed_extension(seeds, S_id, T_id)
 
                 if profile:
@@ -564,10 +565,8 @@ class OverlapBuilder(object):
             None|Segment|list[Segment]: Corresponding to scenarios described above.
 
         """
-        S = self.index.tuplesdb.loadseq(S_id)
-        T = self.index.tuplesdb.loadseq(T_id)
         # FIXME just load the lengths from DB
-        S_len, T_len = len(S), len(T)
+        S_len, T_len = self.seqinfo[S_id]['length'], self.seqinfo[T_id]['length']
         shift_range = range(-T_len, S_len)
         shift_coverage = {shift:0 for shift in shift_range}
         for seed in seeds:
