@@ -8,7 +8,7 @@ from .. import pw, tuples, seq, assembly, homopolymeric
 params = {
     'show_params': False,   # print a summary of parameters
     'profile': False,        # profile building the overlap graph
-    'wordlen': 15,          # tuple word length for seed extension
+    'wordlen': 10,          # tuple word length for seed extension
     'go_prob': 0.15,        # gap open probability
     'ge_prob': 0.2,         # gap extend probability
     'subst_probs': [[0.94 if k==i else 0.02 for k in range(4)] for i in range(4)],
@@ -19,10 +19,10 @@ params = {
     'max_succ_drops': 3,      # how many consecutive drops are allowed.
     'min_overlap_score': 1000,# minimum score required for an overlap to be reported.
     'shift_rolling_sum_width': 500,
-    'min_shift_freq_coeff': 4,
-    'max_shift_freq_coeff': 14,
+    'min_shift_freq_coeff': 3,
+    'max_shift_freq_coeff': 15,
     # ------------- HP / Index ----------------
-    'min_seeds_for_homology': 140, # minimum number of seeds for two reads to be considered.
+    'min_seeds_for_homology': 400, # minimum number of seeds for two reads to be considered.
     'hp_gap_score': -0.2,   # HpCondenser Hp gap score
     'hp_maxlen_idx': 5,     # HpCondenser maxlen for seed discovery
     'hp_maxlen': 5,         # HpCondenser maxlen for seed extension

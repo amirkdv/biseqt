@@ -565,13 +565,13 @@ class OverlapBuilder(object):
             None|Segment|list[Segment]: Corresponding to scenarios described above.
 
         """
-        # FIXME just load the lengths from DB
         S_len, T_len = self.seqinfo[S_id]['length'], self.seqinfo[T_id]['length']
         shift_range = range(-T_len, S_len)
         shift_coverage = {shift:0 for shift in shift_range}
         for seed in seeds:
-            shift = seed.tx.S_idx - seed.tx.T_idx
-            shift_coverage[shift] += len(seed.tx.opseq)
+            # all seeds are the same length at this stage (and they
+            # are potentially overlapping):
+            shift_coverage[seed.tx.S_idx - seed.tx.T_idx] += 1
 
         shift_distrib = [x for x in self._rolling_sum([x[1] for x in sorted(shift_coverage.items())])]
         shift_mean = float(sum(shift_distrib))/len(shift_distrib)
