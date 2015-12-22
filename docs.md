@@ -105,8 +105,8 @@ a single letter(e.g `AACCC` becomes `A2C3`).
 The machinery in `libalign` is capable of aligning sequences in alphabets with
 letters longer than a single character. The only requirement is that all letters
 in an alphabet have the same length (to avoid a book-keeping mess). This leads
-to a [caveat](#a-caveat) discussed below. Aside from the caveat, the following operations
-are supported:
+to a [caveat](#a-caveat) discussed below. Aside from the caveat, the following
+operations are supported:
 
 * "Condensing" transcripts into transcripts for condensed sequences and
   "expanding" transcripts for condensed sequences back into one for the original

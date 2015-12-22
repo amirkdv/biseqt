@@ -34,7 +34,6 @@ START_ANCHORED_OVERLAP = lib.START_ANCHORED_OVERLAP
 END_ANCHORED_OVERLAP = lib.END_ANCHORED_OVERLAP
 
 
-# FIXME document content_dependent_gap_scores
 class AlignParams(CffiObject):
     """Wraps the C struct ``align_params``, see ``libalign.h``.
 
