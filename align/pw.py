@@ -177,7 +177,7 @@ class AlignParams(CffiObject):
         """
         score = 0.0
         i, j = S_min_idx, T_min_idx
-        for op, num in hp_tokenize(opseq):
+        for op, num, _ in hp_tokenize(opseq):
             if op in 'MS':
                 for k in range(num):
                     S_let_idx = S.c_idxseq[i + k]

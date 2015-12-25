@@ -29,18 +29,20 @@ def hp_tokenize(string):
     is a (char, num) tuple, e.g. ``("A", 3)`` means ``AAA``.
     """
     counter = 0
-    cur = string[0]
-    while counter < len(string):
-        if string[counter] == cur:
-            counter += 1
+    assert(len(string))
+    cur_char = string[0]
+    pos = 0 # the starting position of the current h.p. stretch
+    for idx, char in enumerate(string):
+        if char == cur_char:
+            continue
         else:
-            yield string[0], counter
-            string = string[counter:]
-            counter = 0
-            cur = string[0]
+            # char is the first letter of the next h.p. stretch
+            yield cur_char, idx-pos, pos
+            pos = idx
+            cur_char = char
     # left overs:
-    if counter and len(string):
-        yield string[0], counter
+    if pos <= len(string):
+        yield cur_char, len(string) - pos, pos
 
 
 class ProgressIndicator(object):

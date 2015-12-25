@@ -114,7 +114,7 @@ class Alphabet(CffiObject):
         return Sequence(self.randstr(length, **kw), self)
 
 
-class Sequence():
+class Sequence(object):
     """Wraps a C ``char[]`` and its corresponding ``int*`` of letter indices.
     Note that this is *not* a :class:`CffiObject` subclass since there's no
     underlying C struct. String indexing and slicing are supported::
