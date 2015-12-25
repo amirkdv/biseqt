@@ -492,7 +492,8 @@ class OverlapBuilder(object):
                 assert(overlap.tx.T_idx * overlap.tx.S_idx == 0)
                 lmargin = abs(overlap.tx.S_idx - overlap.tx.T_idx)
                 rmargin = abs(overlap.tx.S_idx + S_len - (overlap.tx.T_idx + T_len))
-                if lmargin < self.min_margin or rmargin < self.min_margin:
+                if lmargin < self.min_margin or \
+                    (lmargin == 0 and rmargin < self.min_margin):
                     # end points are too close, ignore
                     continue
                 if overlap.tx.S_idx == 0 and overlap.tx.T_idx == 0:
