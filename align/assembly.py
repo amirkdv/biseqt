@@ -395,14 +395,13 @@ class OverlapBuilder(object):
     def __init__(self, index, align_params, **kwargs):
         self.hp_condenser = kwargs.get('hp_condenser', None)
         self.index, self.align_params = index, align_params
-        self.window = kwargs.get('window', 20)
-        self.drop_threshold = kwargs.get('drop_threshold', 0)
-        self.min_overlap_score = kwargs.get('min_overlap_score', self.drop_threshold)
-        self.shift_rolling_sum_width = kwargs.get('shift_rolling_sum_width', 500)
-        self.min_margin = kwargs.get('min_margin', self.window)
-        self.max_succ_drops = kwargs.get('max_succ_drops', 3)
+        self.window = kwargs['window']
+        self.min_overlap_score = kwargs['min_overlap_score']
+        self.shift_rolling_sum_width = kwargs['shift_rolling_sum_width']
         self.lower_log_pvalue_cutoff = kwargs['lower_log_pvalue_cutoff']
         self.upper_log_pvalue_cutoff = kwargs['upper_log_pvalue_cutoff']
+        self.min_margin = kwargs['min_margin']
+        self.max_new_mins = kwargs['max_new_mins']
         self.seqinfo = self.index.tuplesdb.seqinfo()
 
     def build(self, profile=False):
@@ -659,9 +658,11 @@ class OverlapBuilder(object):
         """
         if not segments:
             return None
+
         segs = ffi.new('segment* []', [seg.c_obj for seg in segments])
-        res = lib.extend(segs, len(segs),
+        res = lib.extend(
+            segs, len(segs),
             S.c_idxseq, T.c_idxseq, len(S), len(T), self.align_params.c_obj,
-            self.window, self.max_succ_drops, self.drop_threshold,
-            self.min_overlap_score)
+            self.window, self.max_new_mins, self.min_overlap_score
+        )
         return tuples.Segment(c_obj=res) if res != ffi.NULL else None

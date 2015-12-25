@@ -552,16 +552,23 @@ int extend_1d_once(segment* res, segment* seg,
  *   the sequences and -1 otherwise.
  */
 int extend_1d(segment* res, segment* seg, int* S, int* T, int S_len, int T_len,
-  align_params* params, int window, int max_succ_drops, double drop_threshold,
-  int forward) {
+  align_params* params, int window, int max_new_mins, int forward) {
+
+  FILE* f;
+  int debug = 0;
+  if (debug) {
+    f = fopen("opseqs.txt", "a");
+    if (f == NULL) {
+      printf("Failed to open file\n");
+      exit(1);
+    }
+    fprintf(f, "(%d:%d,%d:%d) [", seg->S_id, seg->tx->S_idx, seg->T_id, seg->tx->T_idx);
+  }
 
   segment cur_seg = *seg;
-  double prev_score = seg->tx->score;
-  int i, retcode, score_history[max_succ_drops];
-  for (i = 0; i < max_succ_drops; i++) {
-    score_history[i] = drop_threshold;
-  }
-  int S_end, T_end, S_wiggle, T_wiggle, min_wiggle, actual_window, drops;
+  double cur_min = seg->tx->score;
+  int num_mins = 0, retcode, actual_window;
+  int S_end, T_end, S_wiggle, T_wiggle, min_wiggle;
   while (1) {
     if (forward) {
       S_end = cur_seg.tx->S_idx + tx_seq_len(cur_seg.tx, 'S');
@@ -578,35 +585,42 @@ int extend_1d(segment* res, segment* seg, int* S, int* T, int S_len, int T_len,
     if (actual_window == 0) {
       // hit the end
       *res = cur_seg;
+      if (debug) {
+        fprintf(f, "] +\n");
+        fclose(f);
+      }
       return 0;
     }
 
     retcode = extend_1d_once(&cur_seg, &cur_seg, S, T, params, actual_window, forward);
     if (retcode == -1) {
       // No nonempty alignment found:
+      if (debug) {
+        fprintf(f, "] -\n");
+      }
       return -1;
     }
-
-    for (i = 0; i < max_succ_drops - 1; i++) {
-      score_history[i] = score_history[i+1];
+    if (debug) {
+      fprintf(f, "%.2f,", cur_seg.tx->score);
     }
-    // TODO is this correct?
-    score_history[max_succ_drops-1] = cur_seg.tx->score - prev_score;
-    drops = 0;
-    for (i = 0; i < max_succ_drops; i ++) {
-      if (score_history[i] < drop_threshold) {
-        drops += 1;
+
+    if (cur_seg.tx->score < cur_min) {
+      num_mins +=1;
+      if (num_mins >= max_new_mins) {
+        if (debug) {
+          fprintf(f, "] -\n");
+          fclose(f);
+        }
+        return -1;
       }
     }
-
-    if (drops >= max_succ_drops) {
-      return -1;
-    }
-    prev_score = cur_seg.tx->score;
+  }
+  if (debug) {
+    fprintf(f, "] -\n");
+    fclose(f);
   }
   return -1;
 }
-
 
 /**
  * Given an array of segments tries to extend all in both directions and returns
@@ -633,8 +647,7 @@ int extend_1d(segment* res, segment* seg, int* S, int* T, int S_len, int T_len,
  *   the sequences and -1 otherwise.
  */
 segment* extend(segment** segs, int num_segs, int* S, int* T, int S_len, int T_len,
-  align_params* params, int window, int max_succ_drops, double drop_threshold,
-  double min_overlap_score) {
+  align_params* params, int window, int max_new_mins, double min_overlap_score) {
 
   segment fwd, bwd, *res;
   transcript* tx;
@@ -643,13 +656,13 @@ segment* extend(segment** segs, int num_segs, int* S, int* T, int S_len, int T_l
   for (int i = 0; i < num_segs; i ++) {
     retcode = extend_1d(&fwd, segs[i],
         S, T, S_len, T_len, params,
-        window, max_succ_drops, drop_threshold, 1);
+        window, max_new_mins, 1);
     if (retcode == -1) {
       continue;
     }
     retcode = extend_1d(&bwd, segs[i],
       S, T, S_len, T_len, params,
-      window, max_succ_drops, drop_threshold, 0);
+      window, max_new_mins, 0);
     if (retcode == -1) {
       continue;
     }
