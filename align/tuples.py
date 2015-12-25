@@ -317,7 +317,7 @@ class Index(object):
     # duplicates.
     def _give_potential_homologs(self, cursor):
         num_total = self.num_potential_homolog_pairs(cursor)
-        msg = 'Indexing potentially homologous pairs of sequences'
+        msg = 'Indexing potentially homologous pairs of sequences with at least %d seeds' % self.min_seeds_for_homology
         indicator = ProgressIndicator(msg, num_total)
         indicator.start()
         cursor.execute(self.potential_homologs_q)
