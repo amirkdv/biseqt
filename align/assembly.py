@@ -2,6 +2,7 @@ import re
 import sys
 import igraph
 from termcolor import colored
+from math import log
 import time
 from . import tuples, pw, homopolymeric, ProgressIndicator, lib, ffi
 
@@ -398,10 +399,10 @@ class OverlapBuilder(object):
         self.drop_threshold = kwargs.get('drop_threshold', 0)
         self.min_overlap_score = kwargs.get('min_overlap_score', self.drop_threshold)
         self.shift_rolling_sum_width = kwargs.get('shift_rolling_sum_width', 500)
-        self.min_shift_freq_coeff = kwargs.get('min_shift_freq_coeff', 8)
-        self.max_shift_freq_coeff = kwargs.get('max_shift_freq_coeff', 15)
         self.min_margin = kwargs.get('min_margin', self.window)
         self.max_succ_drops = kwargs.get('max_succ_drops', 3)
+        self.lower_log_pvalue_cutoff = kwargs['lower_log_pvalue_cutoff']
+        self.upper_log_pvalue_cutoff = kwargs['upper_log_pvalue_cutoff']
         self.seqinfo = self.index.tuplesdb.seqinfo()
 
     def build(self, profile=False):
@@ -522,7 +523,7 @@ class OverlapBuilder(object):
         G.iG.es['weight'] = ws
         return G
 
-    # Helper method for overlap_by_seed_extension
+    # Helper method for overlap_by_seed_shift_distribution
     def _rolling_sum(self, data):
         if len(data) < self.shift_rolling_sum_width:
             return
@@ -533,6 +534,16 @@ class OverlapBuilder(object):
             if idx < len(data):
                 cur += data[idx]
             yield cur
+
+    def _shift_log_pvalue(self, S_len, T_len, shift, num):
+        L = self.shift_rolling_sum_width
+        log_pvalue = -log(S_len) - log(T_len) + log(L) + 0.5 * log(
+            0.5*((S_len-abs(shift))**2 + (T_len-abs(shift))**2)
+        )
+        # we have num observations each with the same p-value
+        # we are testing S_len+T_len simultaneous hypotheses;
+        # apply a Bonferroni correction:
+        return log(S_len + T_len) + num * log_pvalue
 
     def overlap_by_seed_shift_distribution(self, seeds, S_id, T_id):
         """Decides whether the shift distribution of seeds for a given sequence
@@ -575,25 +586,29 @@ class OverlapBuilder(object):
             shift_coverage[seed.tx.S_idx - seed.tx.T_idx] += 1
 
         shift_distrib = [x for x in self._rolling_sum([x[1] for x in sorted(shift_coverage.items())])]
-        shift_mean = float(sum(shift_distrib))/len(shift_distrib)
-        max_shift_frequency = max(shift_distrib)
-        shift_mode = shift_range[shift_distrib.index(max_shift_frequency)]
-        if max_shift_frequency <= self.min_shift_freq_coeff * shift_mean:
+        mode_idx, mode = max(enumerate(shift_distrib), key=lambda x: x[1])
+        mode_shift = shift_range[min(mode_idx, len(shift_range)-1)]
+        log_pvalue = self._shift_log_pvalue(S_len, T_len, mode_shift, mode)
+
+        # print
+        # print log_pvalue
+
+        if log_pvalue > self.upper_log_pvalue_cutoff:
             # definitely not overlapping:
             return None
-        overlap_length = min(S_len, T_len + shift_mode) - max(0, shift_mode) if shift_mode < min(S_len,T_len) else 0
-        if max_shift_frequency >= self.max_shift_freq_coeff * shift_mean:
+        overlap_length = min(S_len, T_len + mode_shift) - max(0, mode_shift) if mode_shift < min(S_len,T_len) else 0
+        if log_pvalue < self.lower_log_pvalue_cutoff:
             # definitely overlapping; fake the transcripts:
-            if shift_mode >= 0:
-                tx = pw.Transcript(S_idx=shift_mode, T_idx=0, score=overlap_length, opseq='M'*overlap_length)
+            if mode_shift >= 0:
+                tx = pw.Transcript(S_idx=mode_shift, T_idx=0, score=overlap_length, opseq='M'*overlap_length)
                 return tuples.Segment(S_id=S_id, T_id=T_id, tx=tx)
             else:
-                tx = pw.Transcript(S_idx=0, T_idx=-shift_mode, score=overlap_length, opseq='M'*overlap_length)
+                tx = pw.Transcript(S_idx=0, T_idx=-mode_shift, score=overlap_length, opseq='M'*overlap_length)
                 return tuples.Segment(S_id=S_id, T_id=T_id, tx=tx)
 
         # Only return those seeds that have a shift close to the mode:
-        seeds = [seed for seed in seeds if abs(seed.tx.S_idx - seed.tx.T_idx - shift_mode) < self.shift_rolling_sum_width]
-        return sorted(seeds, key=lambda x: abs(seed.tx.S_idx - seed.tx.T_idx - shift_mode))
+        seeds = [seed for seed in seeds if abs(seed.tx.S_idx - seed.tx.T_idx - mode_shift) < 0.5 * self.shift_rolling_sum_width]
+        return sorted(seeds, key=lambda x: abs(seed.tx.S_idx - seed.tx.T_idx - mode_shift))
 
     def overlap_by_seed_extension(self, seeds, S_id, T_id):
         """Tries to find a seed among given seeds that extends to a full overlap alignment by consecutive
