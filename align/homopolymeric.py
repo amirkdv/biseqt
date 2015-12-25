@@ -1,6 +1,11 @@
 from math import log10, floor
 from . import seq, pw, hp_tokenize, tuples
+from bisect import bisect_left, bisect_right
 
+class HpCondensedSequence(seq.Sequence):
+    def __init__(self, string, alphabet, hp_positions):
+        self.hp_positions = hp_positions
+        super(HpCondensedSequence, self).__init__(string, alphabet)
 
 class HpCondenser(object):
     """Transforms a sequence back and forth to an alternative alphabet by
@@ -66,168 +71,16 @@ class HpCondenser(object):
             seq.Sequence: The translated sequence in condensed alphabet.
         """
         assert(sequence.alphabet.letters == self.src_alphabet.letters)
-        condensed = ''.join(
-            [self._condense(*x) for x in hp_tokenize(str(sequence))]
-        )
-        return seq.Sequence(condensed, self.dst_alphabet)
+        condensed = ''
+        hp_positions = []
+        for char, num, pos in hp_tokenize(str(sequence)):
+            condensed += self._condense(char, num)
+            hp_positions += [pos]
+        hp_positions += [len(sequence)]
+        return HpCondensedSequence(condensed, self.dst_alphabet, hp_positions)
 
     def _condense(self, char, num):
         return char + str(min(num, self.maxlen)).rjust(self.letlen - 1, '0')
-
-    def expand_sequence(self, sequence):
-        """The inverse of condense_sequence(). For exmaple::
-
-            Tr = HpCondensor(seq.Alphabet('ACGT'))
-            Tr.expand_sequence('A2C4G2') #=> 'AACCCCGGT'
-
-        Note:
-            If the original sequence contains homopolymeric substrings longer
-            than self.maxlen then ``expand(condense(.))`` is not identity.
-
-        Args:
-            string (str): The condensed sequence.
-
-        Returns:
-            str: The original sequence in source alphabet.
-        """
-        string = str(sequence)
-        assert len(string) % self.letlen == 0
-        orig = ''
-        for i in range(len(string)/self.letlen):
-            letter = string[self.letlen*i: self.letlen*i+self.letlen]
-            char, num = letter[0], int(letter[1:])
-            orig += char * num
-        return seq.Sequence(orig, self.src_alphabet)
-
-    def expand_transcript(self, S, T, transcript):
-        """Expands a given transcript for condensed versions of S and T to the
-        equivalent transcript for S and T. The score is left untouched.
-
-        Args:
-            S (seq.Sequence): "From" sequence of the transcript in the source
-                alphabet.
-            T (seq.Sequence): "To" sequence of the transcript in the source
-                alphabet.
-            transcript (pw.Transcript): The transcript for condensed
-                sequences.
-
-        Returns:
-            pw.Transcript: The equivalent transcript for original sequences.
-
-        Note:
-            Although ``expand(condense())`` can be lossy for homopolymeric
-            substrings longer than :attr:`maxlen`, ``expand_transcript()`` does
-            not have an issue with them since the original sequences (i.e ``S``
-            and ``T``) are available.
-        """
-        S, T = str(S), str(T)
-        opseq = ''
-        tokens_S = hp_tokenize(S)
-        tokens_T = hp_tokenize(T)
-
-        char_S, num_S = tokens_S.next()
-        char_T, num_T = tokens_T.next()
-        # calculate the original S_idx and T_idx
-        S_idx, T_idx = 0, 0
-        cnt = 0
-        while cnt < transcript.S_idx:
-            S_idx += num_S
-            cnt += 1
-            char_S, num_S = tokens_S.next()
-        cnt = 0
-        while cnt < transcript.T_idx:
-            T_idx += num_T
-            cnt += 1
-            char_T, num_T = tokens_T.next()
-
-        # translate the opseq
-        for op in transcript.opseq:
-            if (None, None) in [(char_S, num_S), (char_T, num_T)]:
-                raise ValueError('The transcript does not match the sequences')
-
-            if op == 'M':
-                opseq += 'M' * min(num_S, self.maxlen)
-                if num_S > self.maxlen and num_T > self.maxlen:
-                    opseq += 'M' * (min(num_S, num_T) - self.maxlen)
-                    if num_S > num_T:
-                        opseq += 'D' * (num_S - num_T)
-                    elif num_T > num_S:
-                        opseq += 'I' * (num_S - num_T)
-                elif num_S > self.maxlen and num_T == self.maxlen:
-                    opseq += 'D' * (num_S - self.maxlen)
-                elif num_T > self.maxlen and num_S == self.maxlen:
-                    opseq += 'I' * (num_T - self.maxlen)
-                char_S, num_S = next(tokens_S, (None, None))
-                char_T, num_T = next(tokens_T, (None, None))
-            if op == 'S':
-                if char_S == char_T:
-                    opseq += 'M' * min(num_T, num_S)
-                else:
-                    opseq += 'S' * min(num_T, num_S)
-
-                if num_T > num_S:
-                    opseq += 'I' * (num_T - num_S)
-                elif num_S > num_T:
-                    opseq += 'D' * (num_S - num_T)
-                char_S, num_S = next(tokens_S, (None, None))
-                char_T, num_T = next(tokens_T, (None, None))
-            if op == 'I':
-                opseq += 'I' * num_T
-                char_T, num_T = next(tokens_T, (None, None))
-            if op == 'D':
-                opseq += 'D' * num_S
-                char_S, num_S = next(tokens_S, (None, None))
-
-        return pw.Transcript(
-            S_idx=S_idx, T_idx=T_idx, score=transcript.score, opseq=opseq
-        )
-
-    def condense_subst_probs(self, **kw):
-        """Translates the substitution probabilities in the source alphabet
-        to substitution probabilities in the destination (condensed) alphabet.
-        Letting :math:`x,y` denote original alphabet letters and
-        :math:`x_i,y_j` denote condensed alphabet letters, the translation
-        formula is the following when the length of letters are identical:
-
-            :math:`\Pr(x_i \\rightarrow y_i) = \Pr(x \\rightarrow y)^i(1-g_h)^{i-1}`
-
-        where :math:`g_h` is the homopolymeric gap probability (only a linear
-        model is supported). When the length of letters differ:
-
-            :math:`\Pr(x_i \\rightarrow y_j) = \\pi(i)\Pr(x \\rightarrow y)^{\\min(i,j)} (1-g_h)^{\\min(i,j)-1}g_h^{|i-j|}`
-
-        where :math:`\\pi(\\cdot)` is the integer partition function.
-
-        Note:
-            The calculations here may have serious errors. In fact, the
-            calculated probabilities as described above don't necessarily add
-            up to 1! Returned probability matrix is normalized in each row
-            to make sure the output is not terribly wrong.
-        """
-        subst_probs = kw['subst_probs']
-        hp_gap_prob = kw['hp_gap_prob']
-        assert(hp_gap_prob > 0)
-        N, L = len(self.src_alphabet), len(self.dst_alphabet)
-        letters_dist = kw.get('letters_dist', [1.0/N for _ in range(N)])
-        subst_probs_d = [[None for _ in range(L)] for _ in range(L)]
-        for i in range(L):
-            let = self.dst_alphabet.letters[i]
-            ci, ni = let[0], int(let[1:])  # e.g A31 gives ci = 'A' and ni = 31
-            for j in range(L):
-                let = self.dst_alphabet.letters[j]
-                cj, nj = let[0], int(let[1:])
-                ki = self.src_alphabet.letters.index(ci)
-                kj = self.src_alphabet.letters.index(cj)
-                subst_probs_d[i][j] = subst_probs[ki][kj] ** min(ni, nj) * \
-                    (1-hp_gap_prob) ** (min(ni, nj) - 1)
-                if ni != nj:
-                    subst_probs_d[i][j] *= self._num_partitions[ni] * \
-                        hp_gap_prob ** abs(ni - nj)
-        # FIXME probabilities don't add up to 1, normalize:
-        for idx, row in enumerate(subst_probs_d):
-            s = sum(row)
-            subst_probs_d[idx] = [x/s for x in row]
-        return subst_probs_d
 
     def condense_align_params(self, align_params, hp_gap_score=0):
         """Translates alignment parameters to one that applies to the condensed
@@ -293,148 +146,42 @@ class HpCondenser(object):
             max_diversion=align_params.max_diversion
         )
 
-    def condense_seeds(self, S, T, seeds):
-        """Condenses a seed into a :class:`Segment <align.tuples.Segment>` for the
-        corresponding condensed sequences. If the provided seed is not found by
-        an :class:`HpCondensedIndex` (e.g an ordinary :class:`Index <align.tuples.Index>`)
-        then the seed boundaries may not coincide with homopolymeric stretch
-        boundaries. In such cases an effort is made to "save" at least some
-        parts of the seed. There are two cases:
-            * If the seed does not *end* at an h.p. boundary (e.g the first
-              4-mers of ``AACCC`` and ``AACCT``) the longest possible segment
-              is reported which is exactly-matching upto its last letter
-              in the condensed alphabet (i.e in previous example 'A2' and
-              ``A2C2,A2C3`` is reported as the condensed segment with opseq
-              'MS').
-            * If the seed does not *begin*  at an h.p. boundary (e.g. the
-              second 4-mers of ``AAACC`` and ``TAACC``) the seed is ignored.
-
-        Furthermore, in order to avoid scanning entire sequences for every seed,
-        seeds are processed "in order" (as described below) which may lead to
-        some seeds being ignored.
-
-        Seeds have a natural *partial order*: denoting two seeds
-        :math:`i,j` by their coordinates :math:`(i_S, i_T)` and
-        :math:`(j_S,j_T)` in `S` and `T`, then the two seeds are
-        *comparable* if:
-            :math:`(i_S-j_S)(i_T-j_T)\ge 0`
-        that is, both coordinates have the same order. We can extend this
-        partial order to a *total order* by letting :math:`i\le j` if:
-            :math:`i_S < j_S` or if
-
-            :math:`i_S=j_S` and :math:`i_T\le j_T`.
-        As a consequence of this, seeds that are not partial-order-comparable
-        with their immediate total-order predecessors are ignored by this
-        function. For example, in the sequence of seeds with coordinates
-        :math:`(0,1), (1,4), (2,2), (2,5)` the third seed is ignored.
-
-        Args:
-            S (seq.Sequence): The "from" sequence in original alphabet.
-            T (seq.Sequence): The "to" sequence in original alphabet.
-            seed (tuples.Segment): An exactly matching segment, at least in
-                some condensed alphabet.
-
-        Returns:
-            list[tuples.Segment]: Corresponding segments translated such that it
-                applies to condensed sequences as generated by us.
+    # FIXME docs:
+    # 1- S and T are now required to be HpCondensedSequence and not the original sequences,
+    # 2- seeds are shortened with more accuracy (way fewer seeds are dropped),
+    #    document behaviour.
+    def condense_seed(self, S, T, seed):
         """
-        tokens_S = hp_tokenize(str(S))
-        tokens_T = hp_tokenize(str(T))
-        # calculate the condensed S_idx and T_idx
-        S_min_idx, S_cnt = 0, 0
-        T_min_idx, T_cnt = 0, 0
-        # sort the seeds by the natural tuple order:
-        for seed in sorted(seeds, key=lambda x: (x.tx.S_idx, x.tx.T_idx)):
-            # Make sure the segment is actually a seed (i.e exactly matching):
-            assert(set(seed.tx.opseq).issubset(set('IMD')))
-            while S_cnt < seed.tx.S_idx:
-                char_S, num_S = tokens_S.next()
-                S_min_idx += 1
-                S_cnt += num_S
-            if S_cnt != seed.tx.S_idx:
-                # seed begins in the middle of an h.p. stretch in S
-                # or is provided in wrong order; ignore:
-                continue
+        """
+        S_idx = bisect_right(S.hp_positions, seed.tx.S_idx)
+        T_idx = bisect_right(T.hp_positions, seed.tx.T_idx)
+        assert(S_idx < len(S.hp_positions) and T_idx < len(T.hp_positions))
+        # do they start at an h.p. boundary?
+        S_on_hp = S.hp_positions[S_idx-1] == seed.tx.S_idx
+        T_on_hp = T.hp_positions[T_idx-1] == seed.tx.T_idx
+        if S_on_hp and T_on_hp and S_idx*T_idx > 0:
+            # S_idx and T_idx are at the start of the next h.p. stretch,
+            # if both start on h.p. we can step back:
+            S_idx -= 1
+            T_idx -= 1
 
-            while T_cnt < seed.tx.T_idx:
-                char_T, num_T = tokens_T.next()
-                T_min_idx += 1
-                T_cnt += num_T
-            if T_cnt != seed.tx.T_idx:
-                # seed begins in the middle of an h.p. stretch in T
-                # or is provided in wrong order; ignore:
-                continue
+        S_end = bisect_left(S.hp_positions, seed.tx.S_idx + len(seed.tx.opseq))
+        T_end = bisect_left(T.hp_positions, seed.tx.T_idx + len(seed.tx.opseq))
+        assert(S_end < len(S.hp_positions) and T_end < len(T.hp_positions))
 
-            # Heavy usage of the assumption that the opseq belongs to an exactly
-            # matching seed follows (hopefully it works too if the index is built
-            # with a different HpCondenser)
-            i = 0
-            opseq = ''
-            while i < len(seed.tx.opseq):
-                char_T, num_T = tokens_T.next()
-                char_S, num_S = tokens_S.next()
-                if char_S != char_T:
-                    # truncate non-h.p.-matching tail of the seed
-                    break
-                if self._condense(char_S, num_S) == self._condense(char_T, num_T):
-                    opseq += 'M'
-                else:
-                    opseq += 'S'
-                i += max(num_S, num_T)
+        # do they end at an h.p. boundary?
+        S_on_hp = S.hp_positions[S_end] == seed.tx.S_idx + len(seed.tx.opseq)
+        T_on_hp = T.hp_positions[T_end] == seed.tx.T_idx + len(seed.tx.opseq)
+        if not S_on_hp or not T_on_hp:
+            S_end -= 1
+            T_end -= 1
 
-            tx = pw.Transcript(
-                S_idx=S_min_idx, T_idx=T_min_idx, score=seed.tx.score, opseq=opseq
+        assert(S_end - S_idx == T_end - T_idx)
+        length = S_end - S_idx
+        if not length:
+            return None
+        return tuples.Segment(S_id=seed.S_id, T_id=seed.T_id,
+            tx=pw.Transcript(
+                S_idx=S_idx, T_idx=T_idx, score=seed.tx.score, opseq=length*'M'
             )
-            yield tuples.Segment(S_id=seed.S_id, T_id=seed.T_id, tx=tx)
-
-
-class HpCondensedIndex(tuples.Index):
-    """Adds homopolymeric-condensed indexing support to tuples indices.
-    Example usage::
-
-        A = seq.Alphabet('ACGT')
-        Tr = homopolymeric.HpCondenser(A, maxlen=9)
-        B = tuples.TuplesDB('path/to/file', alphabet=Tr.dst_alphabet)
-        HpI = homopolymeric.HpCondensedIndex(B, 5, hp_condenser=Tr)
-    """
-    def __init__(self, *args, **kwargs):
-        self.hp_condenser = kwargs.pop('hp_condenser')
-        super(HpCondensedIndex, self).__init__(*args, **kwargs)
-
-    def tup_scan(self, string):
-        """Similar to :func:`align.tuples.Index.tup_scan` except a tuple of
-        length N is taken to mean N letters in the condensed alphabet.
-        The yielded indices also refer to positions in the condensed
-        sequence. For example::
-
-            Tr = HpCondenser(seq.Alphabet('ACGT'), maxlen=3)
-            Idx = HpCondensedIndex(Tr)
-            string = 'AAACCCCGGTGGT'
-            Idx.tup_scan(string, 5) # => ('A3C3G2T1G2', 0), ('C3G2T1G2T1', 1)
-
-        This modification alone is enough to ensure
-        :func:`index() <align.tuples.Index.index>` works properly in the
-        condensed alphabet.
-        """
-        tup = []
-        idx = [0]
-        for char, num in hp_tokenize(string):
-            if len(tup) == self.wordlen:
-                yield ''.join(tup), idx[0]
-                tup.pop(0)
-                idx.pop(0)
-            tup += [self.hp_condenser._condense(char, num)]
-            idx += [(idx[-1] if idx else 0) + 1]
-        if tup:
-            yield ''.join(tup), idx[0]
-
-    def seeds(self, S_id, T_id):
-        """Wraps parent's :func:`seeds() <align.tuples.Index.seeds>` to
-        translate all seed transcripts back to original alphabet."""
-        condensed_seeds = super(HpCondensedIndex, self).seeds(S_id, T_id)
-        res = []
-        S, T = self.tuplesdb.loadseq(S_id), self.tuplesdb.loadseq(T_id)
-        for seed in condensed_seeds:
-            tx = self.hp_condenser.expand_transcript(S, T, seed.tx)
-            res += [tuples.Segment(S_id=S_id, T_id=T_id, tx=tx)]
-        return res
+        )

@@ -614,20 +614,18 @@ class OverlapBuilder(object):
         """
         S = self.index.tuplesdb.loadseq(S_id)
         T = self.index.tuplesdb.loadseq(T_id)
-        # Calculate the score of each seed
+        # Calculate the score of each seed; FIXME do we need this?
         for seed in seeds:
             seed.tx.score = self.align_params.score(
                 S, T, seed.tx.opseq,
                 S_min_idx=seed.tx.S_idx, T_min_idx=seed.tx.T_idx
             )
         if self.hp_condenser:
-            # condense the seeds using the original sequences; this process
-            # is lossy (sum seeds are ignored for various reasons).
-            seeds = self.hp_condenser.condense_seeds(S, T, seeds)
+            # condense the sequences and their seeds:
+            S_d = self.hp_condenser.condense_sequence(S)
+            T_d = self.hp_condenser.condense_sequence(T)
+            seeds = (self.hp_condenser.condense_seed(S_d, T_d, s) for s in seeds)
             seeds = filter(lambda x: x, seeds)
-            # condense the sequences:
-            S = self.hp_condenser.condense_sequence(S)
-            T = self.hp_condenser.condense_sequence(T)
 
         return self.extend(S, T, seeds)
 
