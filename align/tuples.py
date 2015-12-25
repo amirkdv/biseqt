@@ -244,10 +244,19 @@ class Index(object):
         Yields:
             tuple: A string of length :attr:`wordlen` and a starting position.
         """
+        # FIXME document conversion to integers, we get ~ %30 less disk usage
+        # Does it make sense given how much ints and strings take up? But the
+        # space saving is not that important since as you increase the # of
+        # reads you quickly hit all the possible words. Is it quicker to
+        # lookup and compare integers?
+
+        # having a zero digit is OK as long as all strings represented
+        # have the same length (otherwise 'ACCT' would have the same
+        # representation as 'CCT') which we know is true.
         digits = {'A':0, 'C':1, 'G':2, 'T':3}
         for idx in range(len(string) - self.wordlen + 1):
             tup = string[idx:idx + self.wordlen]
-            tup = sum(digits[x]*(3**i) for x,i in zip(tup,reversed(range(len(tup)))))
+            tup = sum(digits[x]*(4**i) for x,i in zip(tup,reversed(range(len(tup)))))
             yield (tup, idx)
 
     # Helper for index(): yields data values to be inserted in the seeds index.
