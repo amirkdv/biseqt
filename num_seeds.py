@@ -51,17 +51,17 @@ n_pos, bins_pos, hist_pos = plt.hist(pos, num_bins, color='green',
     histtype='step', cumulative=True, normed=True, label='Overlapping reads')
 xmax = max(
     bins_neg[len(filter(lambda x: n_neg[x]<0.999, range(len(bins_neg)-1)))],
-    bins_pos[len(filter(lambda x: n_pos[x]<0.9, range(len(bins_pos)-1)))]
+    bins_pos[len(filter(lambda x: n_pos[x]<0.999, range(len(bins_pos)-1)))]
 )
 plt.grid(True)
 plt.xlim(-xmax/10, xmax)
 plt.ylim(-0.1, 1.2)
 plt.axvline(x=0, ymin=-0.1, ymax=1.2, color='k')
 plt.axhline(y=0, xmin=-100, xmax=xmax, color='k')
-plt.xticks([i*100 for i in range(int(xmax/100) + 1)], rotation='vertical')
+plt.xticks([i*1000 for i in range(int(xmax/1000) + 1)], rotation='vertical')
 plt.yticks([i*0.1 for i in range(11)], rotation='vertical')
 plt.tick_params(axis='x', labelsize=8, direction='vertical')
-plt.xlabel('# of exactly matching %d-mers (truncated)' % wordlen)
-plt.ylabel('# of read-pairs (cumulative, normalized)')
+plt.xlabel('Number of matching %d-mers' % wordlen)
+plt.ylabel('Proportion of read-pairs (cumulative)')
 plt.legend(loc='right')
 plt.savefig('num_seeds.%d.png' % wordlen)
