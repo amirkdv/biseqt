@@ -2,13 +2,11 @@ READS = leishmania/reads.fa
 ANNOTATED_READS = leishmania/reads.annotated.fa
 GENOME = leishmania/genome.fa
 REFERENCE = leishmania/reference.fa
-BLAST_DB = leishmania/blast.db
 MODE = hp_assembly
 ASSEMBLY_DB = genome.leishmania.$(MODE).db
 ASSEMBLED_GRAPH = leishmania.$(MODE)
 TRUE_GRAPH = leishmania_true
 ASSEMBLY_OPTS = MODE=$(MODE) DB=$(ASSEMBLY_DB) READS=$(ANNOTATED_READS) ASSEMBLED_GRAPH=$(ASSEMBLED_GRAPH) TRUE_GRAPH=$(TRUE_GRAPH)
-NUM_READS = -1
 
 $(GENOME):
 	wget http://www.cs.mcgill.ca/~blanchem/561/pacbio/GCA_000227135.2_ASM22713v2_genomic.fna -O $@
@@ -18,15 +16,14 @@ $(READS):
 
 # read the very first chromosome and write it to the reference file
 $(REFERENCE): $(GENOME)
-	python -c 'from Bio import SeqIO as I, SeqRecord as R; rec = I.parse("$(GENOME)", "fasta").next(); I.write([R.SeqRecord(rec.seq, id=rec.id)], "$@",
-	"fasta")'
-
-$(BLAST_DB): $(REFERENCE)
-	makeblastdb -dbtype nucl -in $(REFERENCE) -out $@ 2>&1 | sed 's/^/|  /'
+	python -c 'from Bio import SeqIO as I, SeqRecord as R; \
+		rec = I.parse("$(GENOME)", "fasta").next(); \
+		I.write([R.SeqRecord(rec.seq, id=rec.id)], "$@", "fasta")'
 
 # annotate all reads with their actual position in the genome
-$(ANNOTATED_READS): $(READS) $(BLAST_DB)
-	READS=$(READS) DB=$(BLAST_DB) NUM_READS=$(NUM_READS) python prepare.py $@
+$(ANNOTATED_READS): $(REFERENCE) $(READS)
+	bwa index $(REFERENCE)
+	READS=$(READS) DB=$(REFERENCE) python prepare.py $@
 
 $(ASSEMBLY_DB):
 	python -c 'import align.tests.$(MODE) as A; A.create_db("$@", "$(ANNOTATED_READS)")'
@@ -36,7 +33,7 @@ assembly:
 	$(MAKE) -f assembly.mk $(ASSEMBLY_TARGET) $(ASSEMBLY_OPTS)
 
 clean:
-	rm -f $(BLAST_DB)*
+	rm -f $(REFERENCE)*
 	rm -f $(ANNOTATED_READS)
 	rm -f $(ASSEMBLY_DB)
 	make -f assembly.mk clean $(ASSEMBLY_OPTS)
