@@ -69,7 +69,7 @@ void free_dp_table(align_dp_cell** P, int row_cnt, int col_cnt) {
  * Given an alignment with allocated DP table, solves the alignment problem (i.e
  * populates the alignment table). The optimal score and transcript can then
  * be obtained by using `traceback`. Half of the constraints imposed by
- * an alignment type (see ::align_type) are implemented here where we decide
+ * an alignment type are implemented here where we decide
  * what positions on the table can be starting positions of alignments. The
  * other half of the constraints concerning the ending position of the alignment
  * on the table is encapsulated in `traceback`.
@@ -638,7 +638,6 @@ int extend_1d(segment* res, segment* seg, int* S, int* T, int S_len, int T_len,
  * @param window The length of the extension alignment window.
  * @param max_new_mins Maximum number of new minima observed in the score
  *    random walk until the segement is dropped (i.e -1 is returned).
- * @param forward Either of 0 or 1 indicating the direction of extension.
  * @param min_overlap_score The minimum overall score required for a fully
  *    extended segment to be reported as an overlap alignment.
  * @param debug Whether to dump score random walks for all tried extensions. If

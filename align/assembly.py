@@ -387,10 +387,6 @@ class OverlapBuilder(object):
             overlap to be reliable; default is :attr:`window`.
         shift_rolling_sum_width (int): The width of the rolling sum used to
             find the mode of the shifts distribution.
-        min_shift_freq_coeff (float): The lower cutoff for the ratio of
-            mode to uniform frequencies used to rule out non-overlapping reads.
-        max_shift_freq_coeff (float): The upper cutoff for the ratio of
-            mode to uniform frequencies used to rule in overlapping reads.
         rw_collect (Optional[bool]): Whether to ask libalign to dump score
             random walk data for all tried extensions to 'scores.txt';
             default is False.
@@ -567,14 +563,17 @@ class OverlapBuilder(object):
 
     # FIXME return a best shift so we can sort them in order (the order dies
     # when we do maximal seeds)
+    # FIXME docs are out of date
     def overlap_by_seed_shift_distribution(self, seeds, S_id, T_id):
         """Decides whether the shift distribution of seeds for a given sequence
         pair is "indicative" enough of an overlap or lack thereof:
+
         * Find the shift distribution by using a rolling sum with window length
           :attr:`shift_rolling_sum_width`.
-        * Find the ratio of the mode frequency of shifts over the uniform frequency
-          (which is 1 over the range of possible shifts). This ratio is taken as
-          a measure of "peakedness" of the shift distribution.
+        * (*out of date*) Find the ratio of the mode frequency of shifts over
+          the uniform frequency (which is 1 over the range of possible shifts).
+          This ratio is taken as a measure of "peakedness" of the shift
+          distribution.
 
           * If the ratio is large enough, the pair of reads are considered
             overlapping. A single :class:`Segment <align.tuples.Segment>`

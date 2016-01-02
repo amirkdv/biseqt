@@ -161,7 +161,8 @@ class Index(object):
     .. code-block:: sql
 
         CREATE TABLE tuples_N (
-          'tuple' integer, -- tuple of length N represented in base 3
+          'tuple' integer, -- decimal represetnation of N-tuple taken as a number
+                           -- in base L (see tup_scan()).
           'hits'  varchar, -- '@' delimited string of hits with format (@<id>:<idx>)*
           UNIQUE(tuple)
         )
