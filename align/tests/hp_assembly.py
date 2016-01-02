@@ -7,6 +7,7 @@ from .. import pw, tuples, seq, assembly, homopolymeric
 
 params = {
     'show_params': False,   # print a summary of parameters
+    'rw_collect': False,      # whether to dump score random walks to 'scores.txt'
     'wordlen': int(os.environ['WORDLEN']), # 10,          # tuple word length for seed extension
     'go_prob': 0.1,        # gap open probability
     'ge_prob': 0.15,         # gap extend probability

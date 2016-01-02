@@ -542,20 +542,20 @@ int extend_1d_once(segment* res, segment* seg,
  * @param T_len The length of the "to" sequence.
  * @param params Alignment parameters to be used over the window.
  * @param window The length of the extension alignment window.
- * @param max_succ_drops Maximum number of "drops" until the
- *    segment is dropped (i.e -1 is returned).
- * @param drop_threshold What constitutes a drop in the score when comparing
- *    an (n+1)-th window extension and the n-th window extension.
+ * @param max_new_mins Maximum number of new minima observed in the score
+ *    random walk until the segement is dropped (i.e -1 is returned).
  * @param forward Either of 0 or 1 indicating the direction of extension.
+ * @param debug Whether to dump score random walks for all tried extensions. If
+ *    truthy, each segment's score random walk is written as a line in a file
+ *    "scores.txt" (The file is never truncated; all data is appended to it).
  *
  * @return 0 if the seed successfully extends to the boundary of either of
  *   the sequences and -1 otherwise.
  */
 int extend_1d(segment* res, segment* seg, int* S, int* T, int S_len, int T_len,
-  align_params* params, int window, int max_new_mins, int forward) {
+  align_params* params, int window, int max_new_mins, int forward, int debug) {
 
   FILE* f;
-  int debug = 0;
   if (debug) {
     f = fopen("scores.txt", "a");
     if (f == NULL) {
@@ -636,18 +636,20 @@ int extend_1d(segment* res, segment* seg, int* S, int* T, int S_len, int T_len,
  * @param T_len The length of the "to" sequence.
  * @param params Alignment parameters to be used over the window.
  * @param window The length of the extension alignment window.
- * @param max_succ_drops Maximum number of "drops" until the
- *    segment is dropped (i.e -1 is returned).
- * @param drop_threshold What constitutes a drop in the score when comparing
- *    an (n+1)-th window extension and the n-th window extension.
+ * @param max_new_mins Maximum number of new minima observed in the score
+ *    random walk until the segement is dropped (i.e -1 is returned).
+ * @param forward Either of 0 or 1 indicating the direction of extension.
  * @param min_overlap_score The minimum overall score required for a fully
  *    extended segment to be reported as an overlap alignment.
+ * @param debug Whether to dump score random walks for all tried extensions. If
+ *    truthy, each segment's score random walk is written as a line in a file
+ *    "scores.txt" (The file is never truncated; all data is appended to it).
  *
  * @return 0 if the seed successfully extends to the boundary of either of
  *   the sequences and -1 otherwise.
  */
 segment* extend(segment** segs, int num_segs, int* S, int* T, int S_len, int T_len,
-  align_params* params, int window, int max_new_mins, double min_overlap_score) {
+  align_params* params, int window, int max_new_mins, double min_overlap_score, int debug) {
 
   segment fwd, bwd, *res;
   transcript* tx;
@@ -656,13 +658,13 @@ segment* extend(segment** segs, int num_segs, int* S, int* T, int S_len, int T_l
   for (int i = 0; i < num_segs; i ++) {
     retcode = extend_1d(&fwd, segs[i],
         S, T, S_len, T_len, params,
-        window, max_new_mins, 1);
+        window, max_new_mins, 1, debug);
     if (retcode == -1) {
       continue;
     }
     retcode = extend_1d(&bwd, segs[i],
       S, T, S_len, T_len, params,
-      window, max_new_mins, 0);
+      window, max_new_mins, 0, debug);
     if (retcode == -1) {
       continue;
     }

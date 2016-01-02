@@ -391,6 +391,9 @@ class OverlapBuilder(object):
             mode to uniform frequencies used to rule out non-overlapping reads.
         max_shift_freq_coeff (float): The upper cutoff for the ratio of
             mode to uniform frequencies used to rule in overlapping reads.
+        rw_collect (Optional[bool]): Whether to ask libalign to dump score
+            random walk data for all tried extensions to 'scores.txt';
+            default is False.
     """
     def __init__(self, index, align_params, **kwargs):
         self.hp_condenser = kwargs.get('hp_condenser', None)
@@ -402,9 +405,10 @@ class OverlapBuilder(object):
         self.upper_log_pvalue_cutoff = kwargs['upper_log_pvalue_cutoff']
         self.min_margin = kwargs['min_margin']
         self.max_new_mins = kwargs['max_new_mins']
+        self.rw_collect = bool(kwargs.get('rw_collect', False))
         self.seqinfo = self.index.tuplesdb.seqinfo()
 
-    def build(self, profile=False):
+    def build(self):
         """Builds a weighted, directed graph by using tuple methods. The
         process has 3 steps:
 
@@ -418,12 +422,6 @@ class OverlapBuilder(object):
         The resulting graph may not necessarily be acyclic. For further
         processing (e.g to find the layout) we need to ensure the overlap
         graph is acyclic. For this, see :func:`OverlapGraph.break_cycles`.
-
-        Keyword Args:
-            profile (Optional[bool]): If truthy, instead of reporting
-                percentage progress time consumption is reported at *every*
-                step (for every pair of sequences). This generates *a lot* of
-                output.
 
         Returns:
             assembly.OverlapGraph: The overlap graph, potentially containing
@@ -667,6 +665,7 @@ class OverlapBuilder(object):
 
         return self.extend(S, T, seeds)
 
+    # FIXME merge the rw.py script in here
     def extend(self, S, T, segments):
         """Wraps :c:func:`extend()`: given two sequences and a number of
         matching segments returns the first fully extended segment.
@@ -687,6 +686,6 @@ class OverlapBuilder(object):
         res = lib.extend(
             segs, len(segs),
             S.c_idxseq, T.c_idxseq, len(S), len(T), self.align_params.c_obj,
-            self.window, self.max_new_mins, self.min_overlap_score
+            self.window, self.max_new_mins, self.min_overlap_score, int(self.rw_collect)
         )
         return tuples.Segment(c_obj=res) if res != ffi.NULL else None
