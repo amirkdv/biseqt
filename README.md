@@ -12,7 +12,7 @@ make clean tests
 ## To Do
 
 * Merge the functionality of ad hoc scripts: `num_seeds.py`, `spectra.py`,
-  `prepare.py` and `rw.py`.
+  `prepare.py`, `repetitive_seeds.py`, and `rw.py`.
 * Missing docs:
   * p-value calculation for words which discards potentially repetitive
     structures.
