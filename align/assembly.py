@@ -429,15 +429,19 @@ class OverlapBuilder(object):
             assembly.OverlapGraph: The overlap graph, potentially containing
                 cycles.
         """
+        process_time_spent = {
+            'extension': {'t.p.': 0, 'f.p.': 0, 't.n.': 0, 'f.n.': 0},
+            'p-values': 0,
+            'seeds': 0
+        }
         vs = set()
         es, ws = [], []
         seqids = self.seqinfo.keys()
         msg = 'Extending seeds on potentially homologous sequences'
-        num_pairs = self.index.num_potential_homolog_pairs()
-        indicator = ProgressIndicator(msg, num_pairs, percentage=False)
-        progress_cnt = 0
-        if not profile:
-            indicator.start()
+        indicator = ProgressIndicator(msg,
+            self.index.num_potential_homolog_pairs(), percentage=False)
+        num_shift_decided = 0
+        indicator.start()
         for S_id in seqids:
             for T_id in self.index.potential_homologs(S_id):
                 S_info, T_info = self.seqinfo[S_id], self.seqinfo[T_id]
@@ -449,40 +453,46 @@ class OverlapBuilder(object):
                 T_name = '%s %d-%d #%d' \
                     % (T_info['name'], T_min_idx, T_max_idx, T_id)
 
-                if profile:
-                    sys.stderr.write('"%s" and "%s": ' % (S_name, T_name))
-                else:
-                    indicator.progress()
+                indicator.progress()
                 vs = vs.union([S_name, T_name])
 
                 # do they have any seeds in common?
-                _t_seeds = time.time()
+                _t = time.clock()
                 seeds = self.index.seeds(S_id, T_id)
-                if profile:
-                    _t_seeds = 1000 * (time.time() - _t_seeds)
-                    sys.stderr.write(
-                        'found %d seeds (%.0f ms)' % (len(seeds), _t_seeds)
-                    )
-                    if not seeds:
-                        sys.stderr.write('.\n')
+                true_shift = T_min_idx - S_min_idx
+                process_time_spent['seeds'] += 1000 * (time.clock() - _t)
 
                 if not seeds:
                     continue
 
-                # do the seeds indicate an overlap?
-                _t_extend = time.time()
+                # do the seeds obviously (statistically) indicate an overlap?
+                _t = time.clock()
                 overlap = self.overlap_by_seed_shift_distribution(seeds, S_id, T_id)
+                process_time_spent['p-values'] += 1000 * (time.clock() - _t)
+                if isinstance(overlap, tuples.Segment):
+                    # FIXME some of these are later discarded because of margins,
+                    # we then get things like "10 out of 9 edges were decided by shift distribution"
+                    num_shift_decided += 1
                 if isinstance(overlap, list):
                     seeds = overlap
+                    _t = time.clock()
                     seeds = tuples.Index.maximal_seeds(seeds, S_id, T_id)
-                    overlap = self.overlap_by_seed_extension(seeds, S_id, T_id)
 
-                if profile:
-                    _t_extend = 1000 * (time.time() - _t_extend)
-                    sys.stderr.write(
-                        ' overlaps (%.0f ms): %s\n'
-                        % (_t_extend, '+' if overlap else '-')
-                    )
+                    process_time_spent['seeds'] += 1000 * (time.clock() - _t)
+                    _t = time.clock()
+                    overlap = self.overlap_by_seed_extension(seeds, S_id, T_id)
+                    t_extension = 1000 * (time.clock() - _t)
+                    if overlap:
+                        if cheat_overlaps:
+                            process_time_spent['extension']['t.p.'] += t_extension
+                        else:
+                            process_time_spent['extension']['f.p.'] += t_extension
+                    else:
+                        if cheat_overlaps:
+                            process_time_spent['extension']['f.n.'] += t_extension
+                        else:
+                            process_time_spent['extension']['t.n.'] += t_extension
+
 
                 if not overlap:
                     continue
@@ -510,15 +520,21 @@ class OverlapBuilder(object):
 
                 ws += [overlap.tx.score]
 
-        if profile:
-            sys.stderr.write('\n')
-        else:
-            indicator.finish()
+        indicator.finish()
+        # Make the process_time_spent dict look like yaml output
+        yamlify_depth1 = lambda v: '\n' + '\n'.join( '  %s: %.2f' % (p,q) for p,q in v.items())
+        report = '\n'.join(
+            '%s: %s' % (k, yamlify_depth1(v) if isinstance(v, dict) else '%.2f' % v) \
+            for k,v in process_time_spent.items() \
+        )
+        sys.stderr.write('* decomposition of time spent (in milliseconds):\n')
+        sys.stderr.write('  %s\n' % report.replace('\n', '\n  '))
 
         G = OverlapGraph()
         G.iG.add_vertices(list(vs))
         es = [(G.iG.vs.find(name=u), G.iG.vs.find(name=v)) for u, v in es]
         G.iG.add_edges(es)
+        sys.stderr.write('* %d out of %d edges where chosen by shift distribution\n' % (num_shift_decided, G.iG.ecount()))
         G.iG.es['weight'] = ws
         return G
 
