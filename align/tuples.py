@@ -231,11 +231,29 @@ class Index(object):
         )
 
     def tup_scan(self, string):
-        """A generator for ``(string, idx)`` tuples to scan through any given
-        string. For example::
+        """A generator for ``(word, idx)`` tuples to scan through any given
+        string. Each k-mer is translated to an integer in the following way: let
+        the alphabet (which is accessed through :attr:`tuplesdb`) has length
+        :math:`L` and the letters in the alphabet are :math:`l_0,\ldots,l_{L-1}`.
+        Letter :math:`l_i` is replaced by the digit :math:`i` and the resulting
+        sequence of digits is interpreted in base :math:`L` and reported in its
+        equivalent decimal (base 10) representation. Note that:
+
+            * This conversion reduces the required disk space by roughly a third
+              and allows for more efficient searching and indexing of the tuples
+              table.
+            * Having a letter representing zero is OK as long as all represented
+              words have the same length which is true here (otherwise ``ACCT``
+              would have the same representation as ``CCT``).
+
+        For example::
 
             string = 'ACGTGT'
-            tup_scan(string, 5) # => ('ACGTG', 0), ('CGTGT', 1)
+            tup_scan(string, 5) # => (110, 0), (443, 1)
+
+        where the integers 110 and 443 are decimal representations for 5-mers
+        ``ACGTG`` (which is ``01232`` in base 4) and ``CGTGT`` (which is
+        ``12323`` in base 4).
 
         Args:
             string (str): The string to scan.
@@ -244,16 +262,7 @@ class Index(object):
         Yields:
             tuple: A string of length :attr:`wordlen` and a starting position.
         """
-        # FIXME document conversion to integers, we get ~ %30 less disk usage
-        # Does it make sense given how much ints and strings take up? But the
-        # space saving is not that important since as you increase the # of
-        # reads you quickly hit all the possible words. Is it quicker to
-        # lookup and compare integers?
-
-        # having a zero digit is OK as long as all strings represented
-        # have the same length (otherwise 'ACCT' would have the same
-        # representation as 'CCT') which we know is true.
-        digits = {'A':0, 'C':1, 'G':2, 'T':3}
+        digits = {let:idx for idx,let in enumerate(self.tuplesdb.alphabet.letters)}
         for idx in range(len(string) - self.wordlen + 1):
             tup = string[idx:idx + self.wordlen]
             tup = sum(digits[x]*(4**i) for x,i in zip(tup,reversed(range(len(tup)))))
@@ -287,6 +296,7 @@ class Index(object):
                     # not interested in seeds from a sequence to itself:
                     if S_hit[0] == T_hit[0]:
                         continue
+
                     yield (S_hit[0], T_hit[0], S_hit[1], T_hit[1])
 
         indicator.finish()
@@ -372,13 +382,13 @@ class Index(object):
             indicator.start()
 
             # populate the tuples table:
-            def _give_tuple():
+            def _give_tuple(string):
                 for s, idx in self.tup_scan(string):
                     yield (s, s, '@%s:%d' % (seqid, idx))
 
             seq_c.execute('SELECT id, seq FROM seq')
-            for seqid, string in seq_c:
-                tuples_c.executemany(hit_ins_q, _give_tuple())
+            for seqid, seqstr in seq_c:
+                tuples_c.executemany(hit_ins_q, _give_tuple(seqstr))
                 indicator.progress()
 
             indicator.finish()
