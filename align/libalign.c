@@ -557,7 +557,7 @@ int extend_1d(segment* res, segment* seg, int* S, int* T, int S_len, int T_len,
   FILE* f;
   int debug = 0;
   if (debug) {
-    f = fopen("opseqs.txt", "a");
+    f = fopen("scores.txt", "a");
     if (f == NULL) {
       printf("Failed to open file\n");
       exit(1);
