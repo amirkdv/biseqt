@@ -1,6 +1,7 @@
 import random
 import sys
 from uuid import uuid4
+from bisect import bisect_left
 from Bio import SeqIO, Seq, SeqRecord
 from . import ffi, lib, CffiObject, ProgressIndicator
 
@@ -57,10 +58,6 @@ class Alphabet(CffiObject):
             :func:`Sequence.mutate`) should not be used in condensed alphabets
             since they may generate invalid sequences like ``A1T3T5``.
 
-        Note:
-            Arbitrary precision on probability distributions is not supported.
-            The default precision is 0.001, modify this with ``precision``.
-
         Args:
             length(int): Length of generated string in number of letters (and
                 not necessarily number of characters)
@@ -72,37 +69,15 @@ class Alphabet(CffiObject):
             hp_prob(Optional[float]): If specified each randomly generated
                 letter is stretched to a homopolymeric region with length
                 according to a geometric distribution with this parameter.
-            precision(Optional[float]): The maximum precision of the
-                probability distribution. Default is 0.001.
         Returns:
             str: A random string.
         """
-        letters_dist = kw.get('letters_dist', [
+        cummulative_dist = kw.get('letters_dist', [
             1.0/self.length for _ in range(self.length)
         ])
-        precision = kw.get('precision', 0.001)
-        assert(precision > 0)
-        assert(abs(1-sum(letters_dist)) < precision)
-        space = []
-        for i in range(self.length):
-            N = 1.0/precision
-            let = ffi.string(self._c_letters_ka[i])
-            space += [let] * int(N * length * letters_dist[i])
-        if 'hp_prob' in kw:
-            assert(kw['hp_prob'] > 0 and kw['hp_prob'] < 1)
-            cutoff = kw['hp_prob'] * N
-            cur_len = 0
-            ret = ''
-            while cur_len < length:
-                let = random.sample(space, 1)[0]
-                cur_len += 1
-                while random.randint(0, N) < cutoff and cur_len < length:
-                    let += let
-                    cur_len += 1
-                ret += let
-            return ret
-        else:
-            return ''.join(random.sample(space, length))
+        for idx, prob in enumerate(cummulative_dist):
+            cummulative_dist[idx] = cummulative_dist[idx-1] + prob if idx else prob
+        return ''.join(self.letters[bisect_left(cummulative_dist, random.randint(0, 1000)/1000.0)] for _ in range(length))
 
     def randseq(self, length, **kw):
         """Generates a random :class:`Sequence` of the specified length from
@@ -271,7 +246,7 @@ class Sequence(object):
                 Default is 5.
             len_mean (Optional[float]): The mean of the normal distribution of
                 read lengths. Default is 100.
-            len_var (Optional[float]): The variance of the normal
+            len_sd (Optional[float]): The standard deviation of the normal
                 distribution or read lengths. Default is 1.
 
         Yields:
@@ -280,12 +255,12 @@ class Sequence(object):
         subst_probs = kw['subst_probs']
         go_prob, ge_prob = kw.get('go_prob', 0), kw.get('ge_prob', 0)
         coverage = kw.get('coverage', 5)
-        len_mean, len_var = kw.get('len_mean', 100), kw.get('len_var', 1)
+        len_mean, len_sd = kw.get('len_mean', 100), kw.get('len_sd', 1)
         N = self.length
         num = int(1.0 * N * coverage/len_mean)
-        indicator = ProgressIndicator(
-            'generating %d random reads' % (num + 2), num + 2
-        )
+        msg = 'generating %d random reads with length ~ ' +  \
+            '(mean=%.2f, s.d.=%.2f) for a %d nucl. long genome'
+        indicator = ProgressIndicator(msg % (num + 2, float(len_mean), float(len_sd), N), num + 2)
         indicator.start()
 
         # include a read that reaches the begenning:
@@ -295,7 +270,7 @@ class Sequence(object):
 
         for i in range(num):
             # minimum read leangth is 10, and max is N-1
-            length = max(10, min(N-1, int(random.gauss(len_mean, len_var))))
+            length = max(10, min(N-1, int(random.gauss(len_mean, len_sd))))
             start = random.randint(0, N-length)
             read = ''.join([self[k] for k in range(start, start + length)])
             read = Sequence(read, self.alphabet)
