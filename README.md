@@ -11,38 +11,35 @@ make clean tests
 
 ## To Do
 
-* Improvements:
-    * The alignment problem in the condensed alphabet seems ill-defined as it
-      currently stands. A clear example of this is the fact that we currently
-      don't have a way to properly align `AAAAAA` and `AAACCC`: our best option
-      is `A6--` and `A3C3`. A possible complicated formulation is to allow
-      single letters to be matched to multiple letters in an alignment:
-      this requires allowing nonstandard choices in the DP table. There is a
-      way of doing this while maintaining polynomial time complexity (at most
-      cubic) but the implementation is not trivial.
-    * An overlap graph must satisfy two consistency criteria:
-      * it is a DAG, and
-      * for any vertex *u* in it, any pair of outgoing (incoming) neighbors of
-        *u* are adjacent.
-
-      Assembly overlap graphs are DAG (or close to it) but
-      they rarely satisfy the second. The second criteria can be used to find
-      missing edges by brute force overlap alignment (this matches the typical
-      case of left-out-vertices in simulations). The difficulty is to find a way
-      to recover necessary edges for a full layout path without trying to
-      recover *all* missing edges.
-    * Stop ignoring sequence pairs that are
-      mostly overlapping. These are currently ignored since we may get the
-      direction wrong on a heavy edge.
-
-* Low priority:
-    * Support [Hirschberg](https://en.wikipedia.org/wiki/Hirschberg\'s_algorithm) -style
-      linear space optimization in `libalign`.
-    * Add an ungapped seed expansion phase.
-    * Adapt Karlin-Altschul statistics (references:
-      [[1]](http://www.pnas.org/content/87/6/2264.full.pdf),
-      [[2]](https://publications.mpi-cbg.de/Altschul_1990_5424.pdf),
-      [[3]](http://www.jstor.org/stable/1427732?seq=1#page_scan_tab_contents), and
-      chap. 7-9 [[4]](https://books.google.ca/books?id=uZvlBwAAQBAJ)) to the
-      problem of finding overlaps.
-    * Make it work with Python 3.
+* Merge the functionality of ad hoc scripts: `num_seeds.py`, `spectra.py`,
+  `prepare.py` and `rw.py`.
+* Missing docs:
+  * p-value calculation for words which discards potentially repetitive
+    structures.
+  * p-value calculation for shift distributions based on 2d representation.
+  * improved algorithm for condensing seeds.
+* Allow the same algorithm to be used for aligning noisy long reads against a
+  reference genome; the current scheme (using `bwa`) does not seem accurate
+  enough. Additionally:
+  * We are currently setting the end position of a read as the sum of its length
+    and its start position. This is clearly inaccurate due to high indel rates.
+  * The idea is this: the starting segments for extension can be null (e.g. a
+    global alignment problem can be solved by starting with a null segment
+    starting at `(0,0)` and allowing arbitrarily many falls in the score. This
+    can be applied to the overlap alignment problem by introducing many null
+    segments and trying to extend all of them with a reasonable `max_new_mins`.
+    This can be further sped up using the hint given by shift distribution which
+    is very strong and accurate for aligning reads against a reference genome.
+* Stop cheating with reverse complements.
+* Once we have a robust way of aligning reads against a reference genome we can
+  judge whether *all* seeds are necessary for seed extension or those very close
+  to the shift mode.
+* Make it work with Python 3.
+* The alignment problem in the condensed alphabet seems ill-defined as it
+  currently stands. A clear example of this is the fact that we currently
+  don't have a way to properly align `AAAAAA` and `AAACCC`: our best option
+  is `A6--` and `A3C3`. A possible complicated formulation is to allow
+  single letters to be matched to multiple letters in an alignment:
+  this requires allowing nonstandard choices in the DP table. There is a
+  way of doing this while maintaining polynomial time complexity (at most
+  cubic) but the implementation is not trivial.
