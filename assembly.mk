@@ -1,5 +1,5 @@
 # one of assembly or hp_assembly
-MODE = assembly
+MODE = hp_assembly
 ASSEMBLY_TEST = align.tests.$(MODE)
 TRUE_GRAPH = true_overlap.$(MODE)
 ASSEMBLED_GRAPH = overlap.$(MODE)
