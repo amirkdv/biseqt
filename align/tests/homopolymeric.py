@@ -6,9 +6,9 @@ from ..homopolymeric import HpCondenser
 
 
 params = {
-    'go_prob': 0.15,        # gap open probability
-    'ge_prob': 0.2,         # gap extend probability
-    'subst_probs': [[0.94 if k==i else 0.02 for k in range(4)] for i in range(4)],
+    'go_prob': 0.1,        # gap open probability
+    'ge_prob': 0.15,         # gap extend probability
+    'subst_probs': [[0.97 if k==i else 0.01 for k in range(4)] for i in range(4)],
     'type': pw.OVERLAP, # type of alignments
     # -------- Hp configuration ----------
     'hp_maxlen': 5,
@@ -37,27 +37,24 @@ Tr = HpCondenser(A, maxlen=params['hp_maxlen'])
 
 # ================================
 from Bio import SeqIO
-L = 2000
-# lookup = 'R439521d0' # 17
-lookup_S = 'Re56ec0ac' # 258
-# lookup_T = 'R178004ff' # 145
-lookup_T = 'Re4f889d4' # 32
-offset = 0 # 1300
-# with open('chr1.fa') as f:
-#     S = ''.join(l.strip() for l in f.readlines()).upper()
+lookup_S = 'R8139da7f'
+lookup_T = 'R12c42542'
+# + R12c42542 217456-221530 #97                        +--[2706.00]-->                             R8139da7f 217322-231365 #83
 for rec in SeqIO.parse('leishmania/reads.annotated.fa', 'fasta'):
     if lookup_S in rec.name:
         S = str(rec.seq).upper()
         assert(set(S) == set('ACGT'))
+        break
+    continue
     if lookup_T in rec.name:
-    # if lookup in rec.name:
         T = str(rec.seq).upper()
         assert(set(T) == set('ACGT'))
-        # S_idx = int(rec.name.split('_')[1][1:])
-        # break
 
-S = seq.Sequence(S, A)
-T = seq.Sequence(T, A)
+#print len(S)
+#raise
+S = seq.Sequence(S[:6000], A)
+#T = seq.Sequence(T[1368:], A)
+T = seq.Sequence(str(SeqIO.parse('leishmania/genome.fa', 'fasta').next().seq).upper()[216391:216391+6000].replace('N', 'A'), A)
 # S = seq.Sequence(S[S_idx+offset:S_idx+offset+L].replace('N', ''), A)
 # T = seq.Sequence(T[offset:offset+L].replace('N', 'A'), A)
 #====================================
@@ -84,6 +81,7 @@ with pw.AlignProblem(S=S_d, T=T_d, params=C_d, align_type=params['type']) as P:
     P.solve(print_dp_table=params['show_dp'])
     transcript_d = P.traceback()
     print transcript_d
+    transcript_d.pretty_print(S_d, T_d)
     # transcript_d.pretty_print(S_d, T_d)
 
     print
