@@ -3,6 +3,7 @@
 import sys
 import re
 import sqlite3
+from math import sqrt, erf, log
 from Bio import SeqIO
 from collections import namedtuple
 from . import pw, seq, ProgressIndicator, CffiObject, ffi, lib
@@ -177,16 +178,24 @@ class Index(object):
                               -- potential homology to sequence with ID 'id'.
         );
 
+    All attributes listed below are keyword arguments to the constructor.
+
     Attributes:
         tuplesdb (tuplesDB): The tuples database.
-        wordlen (int): Length of tuples.
+        wordlen (int): Length of tuples, default is 10.
         min_seeds_for_homology (int): Minimum number of seeds between two
-            sequences that makes them "potential homologs"; default is 1.
+            sequences that makes them "potential homologs", default is 1.
+        max_word_log_pvalue (float): Maximum allowed pvalue for an observed word
+            for it to be considered as a seed; default is -5. This blocks words
+            that appear "unusually often" (as compared against a null
+            hypothesis of random distribution) from being considered as seeds
+            since they tend to belong to repeat regions.
     """
-    def __init__(self, tuplesdb, wordlen, min_seeds_for_homology=1):
+    def __init__(self, tuplesdb, **kwargs):
         self.tuplesdb = tuplesdb
-        self.wordlen = wordlen
-        self.min_seeds_for_homology = min_seeds_for_homology
+        self.wordlen = kwargs.get('wordlen', 10)
+        self.min_seeds_for_homology = kwargs.get('min_seeds_for_homology', 1)
+        self.max_word_log_pvalue = kwargs.get('max_word_log_pvalue', -5)
         self.tuples_table = 'tuples_%d' % self.wordlen
         self.seeds_table = 'seeds_%d' % self.wordlen
         self.potential_homologs_table = 'potential_homologs_%d' % self.wordlen
@@ -281,13 +290,27 @@ class Index(object):
         )
         indicator.start()
 
+        normal_pvalue = lambda mu, sd, x: 0.5 * (1 - erf((x - mu) / (sd * sqrt(2))))
+        # Normal approximation (mean and standard deviation) of a binomial distribution
+        B2N = lambda n, p: (n*p, sqrt(n * p * (1-p)))
+        prob_word = lambda length: 0.25 ** length
+
+        cursor.execute('select count(*) from %s' % self.tuples_table)
+        N = int(cursor.next()[0]) # total number of words
+        cursor.execute('select sum(length(seq)) from seq')
+        L = int(cursor.next()[0]) # total sequence length
+        mu, sd = B2N(L, prob_word(self.wordlen)) # approximating normal distribution of word counts
+
         cursor.execute('SELECT tuple, hits from %s' % self.tuples_table)
         for tup, hits in cursor:
             # report progess:
             indicator.progress()
 
             # hits contains multiple entries of the form: "@<seqid>:<idx>".
-            assert(hits[0] == '@')
+            pvalue = N * normal_pvalue(mu, sd, hits.count('@'))
+            if not pvalue or log(pvalue) < self.max_word_log_pvalue:
+                continue
+
             hits = [tuple(hit.split(':')) for hit in hits[1:].split('@')]
             hits = [(hit[0], int(hit[1])) for hit in hits]
             for S_hit_idx in range(len(hits)):
@@ -344,6 +367,7 @@ class Index(object):
 
         indicator.finish()
 
+    # FIXME document the p-value calculation
     def index(self):
         """Scans all sequences in the ``seq`` table and records all observed
         tuples in ``tuples_N`` table. Then scans all the observed hits to
