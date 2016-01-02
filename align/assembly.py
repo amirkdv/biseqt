@@ -456,6 +456,11 @@ class OverlapBuilder(object):
                 indicator.progress()
                 vs = vs.union([S_name, T_name])
 
+                # used to profile false/true positive/negatives.
+                cheat_overlaps = not (S_max_idx < T_min_idx or T_max_idx < S_min_idx)
+                # if not cheat_overlaps:
+                #     continue
+
                 # do they have any seeds in common?
                 _t = time.clock()
                 seeds = self.index.seeds(S_id, T_id)
@@ -550,16 +555,20 @@ class OverlapBuilder(object):
                 cur += data[idx]
             yield cur
 
+    # TODO document the formula
     def _shift_log_pvalue(self, S_len, T_len, shift, num):
         L = self.shift_rolling_sum_width
         log_pvalue = -log(S_len) - log(T_len) + log(L) + 0.5 * log(
-            0.5*((S_len-abs(shift))**2 + (T_len-abs(shift))**2)
+            (S_len - abs(shift))**2 + (T_len - abs(shift))**2
         )
-        # we have num observations each with the same p-value
-        # we are testing S_len+T_len simultaneous hypotheses;
-        # apply a Bonferroni correction:
+        # 1- we have num observations (each a seed) with the same probability
+        #    of being matched by the null hypothesis
+        # 2- we are testing S_len+T_len simultaneous hypotheses;
+        #    apply a Bonferroni correction:
         return log(S_len + T_len) + num * log_pvalue
 
+    # FIXME return a best shift so we can sort them in order (the order dies
+    # when we do maximal seeds)
     def overlap_by_seed_shift_distribution(self, seeds, S_id, T_id):
         """Decides whether the shift distribution of seeds for a given sequence
         pair is "indicative" enough of an overlap or lack thereof:
@@ -592,6 +601,7 @@ class OverlapBuilder(object):
             None|Segment|list[Segment]: Corresponding to scenarios described above.
 
         """
+        # FIXME suspicious of all S_idx, T_idx calculations, double check.
         S_len, T_len = self.seqinfo[S_id]['length'], self.seqinfo[T_id]['length']
         shift_range = range(-T_len, S_len)
         shift_coverage = {shift:0 for shift in shift_range}
@@ -604,9 +614,6 @@ class OverlapBuilder(object):
         mode_idx, mode = max(enumerate(shift_distrib), key=lambda x: x[1])
         mode_shift = shift_range[min(mode_idx, len(shift_range)-1)]
         log_pvalue = self._shift_log_pvalue(S_len, T_len, mode_shift, mode)
-
-        # print
-        # print log_pvalue
 
         if log_pvalue > self.upper_log_pvalue_cutoff:
             # definitely not overlapping:
@@ -622,7 +629,8 @@ class OverlapBuilder(object):
                 return tuples.Segment(S_id=S_id, T_id=T_id, tx=tx)
 
         # Only return those seeds that have a shift close to the mode:
-        seeds = [seed for seed in seeds if abs(seed.tx.S_idx - seed.tx.T_idx - mode_shift) < 0.5 * self.shift_rolling_sum_width]
+        # FIXME should we return only some of the seeds?
+        # seeds = [seed for seed in seeds if abs(seed.tx.S_idx - seed.tx.T_idx - mode_shift) < 10 * self.shift_rolling_sum_width]
         return sorted(seeds, key=lambda x: abs(seed.tx.S_idx - seed.tx.T_idx - mode_shift))
 
     def overlap_by_seed_extension(self, seeds, S_id, T_id):
@@ -652,9 +660,9 @@ class OverlapBuilder(object):
             )
         if self.hp_condenser:
             # condense the sequences and their seeds:
-            S_d = self.hp_condenser.condense_sequence(S)
-            T_d = self.hp_condenser.condense_sequence(T)
-            seeds = (self.hp_condenser.condense_seed(S_d, T_d, s) for s in seeds)
+            S = self.hp_condenser.condense_sequence(S)
+            T = self.hp_condenser.condense_sequence(T)
+            seeds = (self.hp_condenser.condense_seed(S, T, s) for s in seeds)
             seeds = filter(lambda x: x, seeds)
 
         return self.extend(S, T, seeds)
