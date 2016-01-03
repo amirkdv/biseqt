@@ -153,7 +153,6 @@ void free_dp_table(align_dp_cell** P, int row_cnt, int col_cnt);
 align_dp_cell* solve(align_dp_cell** P, align_problem* def);
 align_dp_cell* find_optimal(align_dp_cell** P, align_problem* def);
 transcript* traceback(align_dp_cell** P, align_problem* def, align_dp_cell* end);
-int* idxseq_from_charseq(sequence_alphabet* alphabet, char* sequence);
 // So that we can free memory directly from python
 void free(void *);
 size_t strlen(const char*);

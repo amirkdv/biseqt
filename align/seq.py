@@ -111,9 +111,9 @@ class Sequence(object):
         self.alphabet = alphabet
         self.length = len(string)/alphabet.letter_length
         self.c_charseq = ffi.new('char[]', string)
-        self.c_idxseq = lib.idxseq_from_charseq(
-            alphabet.c_obj, self.c_charseq
-        )
+        # build the sequence as an int array of positions in alphabet
+        let_pos = {let: idx for idx, let in enumerate(self.alphabet.letters)}
+        self.c_idxseq = ffi.new('int[]', [let_pos[k] for k in string])
 
     def __repr__(self):
         N, L = self.length, self.alphabet.letter_length

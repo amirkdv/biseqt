@@ -698,41 +698,6 @@ segment* extend(segment** segs, int num_segs, int* S, int* T, int S_len, int T_l
 }
 
 /**
- * Translates a given sequence to integer indices of each letter
- * in the corresponding alphabet. This is the array that has to be provided
- * to all other functions, e.g solve().
- *
- * @param alphabet The alphabet over which the sequence is defined.
- * @param sequence The sequence as a single string, potentially having multiple
- *   characters per letter.
- */
-int* idxseq_from_charseq(sequence_alphabet* alphabet, char* sequence) {
-  int i,j, cur_idx, length = strlen(sequence) / alphabet->letter_length;
-  int* idx_seq = malloc(length * sizeof(int));
-  char* cur = malloc(alphabet->letter_length);
-  for (i = 0; i < length; i++) {
-    cur_idx = -1;
-    snprintf(cur,
-      alphabet->letter_length + 1,
-      "%s", sequence + i*(alphabet->letter_length)
-    );
-    // TODO Would it make things better if the following was cached somehow?
-    for (j = 0; j < alphabet->length; j++) {
-      if (strcmp(alphabet->letters[j], cur) == 0) {
-        cur_idx = j;
-        break;
-      }
-    }
-    if (cur_idx == -1) {
-      printf("Invalid letter: %s\n", cur);
-    }
-    idx_seq[i] = cur_idx;
-  }
-  free(cur);
-  return idx_seq;
-}
-
-/**
  * Helper method for debugging purposes. Only works on system with procfs.
  */
 void _print_mem_usage() {
