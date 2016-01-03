@@ -71,15 +71,15 @@ class HpCondenser(object):
             seq.Sequence: The translated sequence in condensed alphabet.
         """
         assert(sequence.alphabet.letters == self.src_alphabet.letters)
-        condensed = ''
+        condensed = []
         hp_positions = []
         for char, num, pos in hp_tokenize(str(sequence)):
-            condensed += self._condense(char, num)
+            condensed += [self._condense_hp_stretch(char, num)]
             hp_positions += [pos]
         hp_positions += [len(sequence)]
         return HpCondensedSequence(condensed, self.dst_alphabet, hp_positions)
 
-    def _condense(self, char, num):
+    def _condense_hp_stretch(self, char, num):
         return char + str(min(num, self.maxlen)).rjust(self.letlen - 1, '0')
 
     def condense_align_params(self, align_params, hp_gap_score=0):

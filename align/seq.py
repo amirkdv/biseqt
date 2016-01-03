@@ -106,14 +106,30 @@ class Sequence(object):
             operations involving alignments; this is an array containing the
             indices of each letter in the sequence in the alphabet.
     """
-    def __init__(self, string, alphabet):
-        assert(len(string) % alphabet.letter_length == 0)
+    def __init__(self, letlist, alphabet):
+        """Initializes the sequence object: translates all letters to integers
+        corresponding to the position of each letter in the alphabet.
+
+        Args:
+            letlist(str|list): The contents of the sequence as a sequence of
+                letters. In the special case where the alphabet letter length is
+                1 a string will also be accepted.
+            alphabet(seq.Alphabet): The alphabet to which this sequence belongs.
+        """
+        if not isinstance(letlist, list) and not isinstance(letlist, str):
+            raise ValueError('`letlist` must be a list of letters.')
+        if isinstance(letlist, str):
+            if alphabet.letter_length != 1:
+                msg = '`letlist` can only be a string is the alphabet' + \
+                    'letter length is 1 (it is %d).' % alphabet.letter_length
+                raise ValueError(msg)
+            letlist = list(letlist)
         self.alphabet = alphabet
-        self.length = len(string)/alphabet.letter_length
-        self.c_charseq = ffi.new('char[]', string)
+        self.length = len(letlist)
+        self.c_charseq = ffi.new('char[]', ''.join(letlist))
         # build the sequence as an int array of positions in alphabet
-        let_pos = {let: idx for idx, let in enumerate(self.alphabet.letters)}
-        self.c_idxseq = ffi.new('int[]', [let_pos[k] for k in string])
+        let_pos = {let: pos for pos, let in enumerate(alphabet.letters)}
+        self.c_idxseq = ffi.new('int[]', [let_pos[let] for let in letlist])
 
     def __repr__(self):
         N, L = self.length, self.alphabet.letter_length
