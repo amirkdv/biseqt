@@ -22,7 +22,7 @@ params = {
     'upper_log_pvalue_cutoff': 0, # -800,
     # ------------- HP / Index ----------------
     'min_seeds_for_homology': 1, # minimum number of seeds for two reads to be considered.
-    'max_word_log_pvalue': -5, # maximum p-value allowed for a word to be considered a seed
+    'min_word_log_pvalue': -5, # minimum p-value allowed for a word to be considered a seed
     'hp_gap_score': -0.5,   # HpCondenser Hp gap score
     'hp_maxlen': 5,         # HpCondenser maxlen for seed extension
     # ---------------- simulations ------------------

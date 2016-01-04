@@ -159,17 +159,16 @@ class Index(object):
         wordlen (int): Length of tuples, default is 10.
         min_seeds_for_homology (int): Minimum number of seeds between two
             sequences that makes them "potential homologs", default is 1.
-        max_word_log_pvalue (float): Maximum allowed pvalue for an observed word
+        min_word_log_pvalue (float): Minimum allowed pvalue for an observed word
             for it to be considered as a seed; default is -5. This blocks words
-            that appear "unusually often" (as compared against a null
-            hypothesis of random distribution) from being considered as seeds
-            since they tend to belong to repeat regions.
+            that appear "unusually often" (and therefore potentially belong to
+            a repeat region), see :func:`index_seeds`.
     """
     def __init__(self, tuplesdb, **kwargs):
         self.tuplesdb = tuplesdb
         self.wordlen = kwargs.get('wordlen', 10)
         self.min_seeds_for_homology = kwargs.get('min_seeds_for_homology', 1)
-        self.max_word_log_pvalue = kwargs.get('max_word_log_pvalue', -5)
+        self.min_word_log_pvalue = kwargs.get('min_word_log_pvalue', -5)
         self.tuples_table = 'tuples_%d' % self.wordlen
         self.seeds_table = 'seeds_%d' % self.wordlen
         self.potential_homologs_table = 'potential_homologs_%d' % self.wordlen
@@ -251,24 +250,29 @@ class Index(object):
             tup = sum(digits[x]*(4**i) for x,i in zip(tup,reversed(range(len(tup)))))
             yield (tup, idx)
 
-    # FIXME document the p-value calculation
     def index(self):
-        """Scans all sequences in the ``seq`` table and records all observed
-        tuples in ``tuples_N`` table. Then scans all the observed hits to
-        populate the ``seeds_N`` table used by :func:`seeds`. Each "seed"
-        record is a 4-tuple ``(S_id, T_id, S_idx, T_idx)`` where the first two
-        entries are ID's of sequences (as per the ``seq`` table) and the last
-        two entries are integers corresponding to the starting position of the
-        seed in the sequence pair.
-
-        Finally, the contents of the ``seeds_N`` table is scanned to populate
-        ``potential_homologs_N`` for every sequence in the database.
+        """Populates all index tables, in order: ``tuples_N``, ``seeds_N``, and
+        ``potential_homologs_N`` by calling :func:`index_tuples`,
+        :func:`index_seeds`, and :func:`index_potential_homologs`.
         """
         self.index_tuples()
         self.index_seeds()
         self.index_potential_homologs()
 
     def index_tuples(self):
+        """Scans all sequences in the ``seq`` table and records all observed
+        k-mers (where k is :attr:`wordlen`). Each entry in the ``tuples_N``
+        table records all occurences of a given word (which is represented as
+        a decimal integer as per the output of :func:`tup_scan`). For example::
+
+            tuple | hits
+            9     | @1:5533@2:1436
+
+        means the word represented by 9 (which, with word length 5, is
+        ``AAAGC``) appears in sequence 1 (integer ID as per the ``seq``
+        table) at position 5533 (starting at 0) and in sequence 2 at position
+        1436.
+        """
         hit_ins_q = """
             INSERT OR REPLACE INTO %s (tuple, hits)
             SELECT ?, IFNULL( (SELECT hits FROM %s WHERE tuple = ?), "") || ?
@@ -299,6 +303,51 @@ class Index(object):
             conn.commit()
 
     def index_seeds(self):
+        """Finds all *non-repetitive* (described below) *seeds*
+        between all pairs of sequences in ``seq``. A seed is an exactly matching
+        segments of length equal to :attr:`wordlen`. This
+        function assumes :func:`index_tuples` has been successfully called. For
+        example given the following record in ``tuples_N``::
+
+            tuple | hits
+            9     | @1:5533@2:1436
+
+        this function adds the following record to ``seeds_N``::
+
+            S_id | T_id | S_idx | T_idx
+            1    | 2    | 5533  | 1436
+
+        Seeds are considered *repetitive* if they are suspected to the belong
+        to a repeat region, calculated as follows.
+
+        Given a database of sequences with total length (i.e sum of
+        lengths) :math:`L`, a :math:`k`-mer occuring at :math:`n` places in the
+        entire database is repetitive if the natural logarithm of the
+        probability of :math:`n` occurences according to a random null
+        hypothesis is below :attr:`min_word_log_pvalue` (i.e a high number of
+        occurences implies a small p-value and potentially a repetitive
+        structure). The random null hypothesis for :math:`X`, the
+        random variable corresponding to the number of occurences of any
+        :math:`k`-mer in a sequence of length :math:`L`, is known to be
+        approximately binomial, that is:
+
+            :math:`X \sim B(L, |\Sigma|^{-k})`
+
+        where :math:`\Sigma` is the alphabet. For large :math:`L` the binomial
+        can be approximated by a normal distribution:
+
+            :math:`B(L, p_k) \\simeq \\mathcal{N}(Lp_k, \\sqrt{Lp_k(1-p_k)})`
+
+        This function uses the above approximation to calculate p-values: a
+        word occuring at :math:`n` positions in the database has p-value given
+        by
+
+            :math:`\\frac{N}{2}\\left[ 1 - \\mathrm{erf}\\left( \\frac{n-\mu}{\\sigma\\sqrt{2}} \\right) \\right]`
+
+        where :math:`\\mu,\\sigma` are the parameters of the approximating
+        normal distribution described above and :math:`N`, the total number of
+        tuples, is a Bonferroni correction term.
+        """
         # Normal approximation (mean and standard deviation) of a binomial distribution
         B2N = lambda n, p: (n*p, sqrt(n * p * (1-p)))
         prob_word = lambda length: 0.25 ** length
@@ -334,7 +383,7 @@ class Index(object):
         for tup, hits in cursor:
             indicator.progress()
             pvalue = N * normal_pvalue(mu, sd, hits.count('@'))
-            if not pvalue or log(pvalue) < self.max_word_log_pvalue:
+            if not pvalue or log(pvalue) < self.min_word_log_pvalue:
                 continue
 
             hits = [tuple(hit.split(':')) for hit in hits[1:].split('@')]
