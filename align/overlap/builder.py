@@ -3,7 +3,7 @@ import sys
 from math import log
 import time
 from .. import tuples, pw, homopolymeric, ProgressIndicator, lib, ffi
-from . import OverlapGraph
+from . import OverlapGraph, SeedExtensionParams, extend_segments
 
 class OverlapBuilder(object):
     """Provided a :class:`align.tuples.Index` builds an overlap graph of all
@@ -15,8 +15,9 @@ class OverlapBuilder(object):
         C = align.AlignParams(
             ... # snip
         )
-        G = overlap.OverlapBuilder(I, C).build()
-        G.save(path)
+        G = overlap.OverlapBuilder(I, align_params=C, window=50,
+            max_new_mins=10, min_overlap_score=400)
+        G.build().save(path)
 
     All arguments to the constructor become class attributes with the same
     name.
@@ -38,15 +39,9 @@ class OverlapBuilder(object):
             all alignments will be performed in condensed alphabet.
             Consequently, all other arguments are interpretted in the condensed
             alphabet.
-        drop_threshold (float): What constitutes a drop in the
-            score from one window to the next, default is 0. This means that
-            if the overall score does not strictly increase (or the score of
-            the new window is not positive) we drop the seed.
         window (int): The size of the rolling window.
-        max_succ_drops (int): Maximum number of "drops" until the
-            segment is dropped, default is 3.
         min_overlap_score (float): The minimum required score for an alignment
-            to be reported; default is :attr:`drop_threshold`.
+            to be reported.
         min_margin (int): The minimum margin required for the direction of an
             overlap to be reliable; default is :attr:`window`.
         shift_rolling_sum_width (int): The width of the rolling sum used to
@@ -55,16 +50,17 @@ class OverlapBuilder(object):
             random walk data for all tried extensions to 'scores.txt';
             default is False.
     """
-    def __init__(self, index, align_params, **kwargs):
+    def __init__(self, index, **kwargs):
         self.hp_condenser = kwargs.get('hp_condenser', None)
-        self.index, self.align_params = index, align_params
-        self.window = kwargs['window']
-        self.min_overlap_score = kwargs['min_overlap_score']
+        self.index = index
+
+        self.seed_ext_params = {k:kwargs[k] for k in ['window', 'min_overlap_score', 'max_new_mins', 'align_params']}
+        self.seed_ext_params = SeedExtensionParams(**self.seed_ext_params)
+
         self.shift_rolling_sum_width = kwargs['shift_rolling_sum_width']
         self.lower_log_pvalue_cutoff = kwargs['lower_log_pvalue_cutoff']
         self.upper_log_pvalue_cutoff = kwargs['upper_log_pvalue_cutoff']
         self.min_margin = kwargs['min_margin']
-        self.max_new_mins = kwargs['max_new_mins']
         self.rw_collect = bool(kwargs.get('rw_collect', False))
         self.seqinfo = self.index.tuplesdb.seqinfo()
 
@@ -315,7 +311,7 @@ class OverlapBuilder(object):
         T = self.index.tuplesdb.loadseq(T_id)
         # Calculate the score of each seed; FIXME do we need this?
         for seed in seeds:
-            seed.tx.score = self.align_params.score(
+            seed.tx.score = self.seed_ext_params.align_params.score(
                 S, T, seed.tx.opseq,
                 S_min_idx=seed.tx.S_idx, T_min_idx=seed.tx.T_idx
             )
@@ -326,29 +322,4 @@ class OverlapBuilder(object):
             seeds = (self.hp_condenser.condense_seed(S, T, s) for s in seeds)
             seeds = filter(lambda x: x, seeds)
 
-        return self.extend(S, T, seeds)
-
-    # FIXME merge the rw.py script in here
-    def extend(self, S, T, segments):
-        """Wraps :c:func:`extend()`: given two sequences and a number of
-        matching segments returns the first fully extended segment.
-
-        Args:
-            S (seq.Sequence): The "from" sequence.
-            T (seq.Sequence): The "to" sequence.
-            segments (List[pw.Segment]): The starting segments. If called
-                from :func:`build`, these are seeds but no assumption is made.
-
-        Returns:
-            pw.Segment: A segment corresponding to an overlap alignment.
-        """
-        if not segments:
-            return None
-
-        segs = ffi.new('segment* []', [seg.c_obj for seg in segments])
-        res = lib.extend(
-            segs, len(segs),
-            S.c_idxseq, T.c_idxseq, len(S), len(T), self.align_params.c_obj,
-            self.window, self.max_new_mins, self.min_overlap_score, int(self.rw_collect)
-        )
-        return pw.Segment(c_obj=res) if res != ffi.NULL else None
+        return extend_segments(S, T, seeds, self.seed_ext_params)
