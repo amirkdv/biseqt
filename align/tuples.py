@@ -8,33 +8,6 @@ from Bio import SeqIO
 from collections import namedtuple
 from . import pw, seq, ProgressIndicator, CffiObject, ffi, lib
 
-
-class Segment(CffiObject):
-    """Wraps a C ``segment``: represents an aligned pair of substrings in
-    two sequences.
-
-    Attributes:
-        S_id (int): The id of the "from" sequence as found in ``seq``.
-        T_id (int): The id of the "to" sequence as found in ``seq``.
-        tx (align.pw.Transcript): The alignment transctipt.
-    """
-    def __init__(self, **kw):
-        if 'c_obj' in kw:
-            self.c_obj = kw['c_obj']
-            self.tx = pw.Transcript(c_obj=kw['c_obj'].tx)
-        else:
-            self.tx = kw['tx']
-            self.c_obj = ffi.new('segment*', {
-                'S_id': kw['S_id'],
-                'T_id': kw['T_id'],
-                'tx': kw['tx'].c_obj,
-            })
-
-    def __repr__(self):
-        return 'Segment(S_id=%d,T_id=%d,tx=%s)' \
-            % (self.S_id, self.T_id, self.tx)
-
-
 class TuplesDB(object):
     """Wraps an SQLite database containing tuple indices for sequences. For
     all indexing and querying refer to :class:`Index`. For now,
@@ -150,7 +123,7 @@ class TuplesDB(object):
 
 class Index(object):
     """The main responsibility of an Index is to respond to :func:`seeds`
-    with a list of :class:`Segment` s given two sequence IDs.
+    with a list of :class:`align.pw.Segment` s given two sequence IDs.
     This is done by recording all "tuples" observed in all sequences
     in the database during :func:`index`. Each index is uniquely defined by
     its :attr:`tuplesdb` and its :attr:`wordlen`. Each such index operates
@@ -493,13 +466,13 @@ class Index(object):
 
     def seeds(self, S_id, T_id):
         """Given two sequence ids, finds all exactly matching segments
-        (see :class:`Segment`) of length :attr:`wordlen` between the two.
-        Segments are not necessarily in maximal form. For purposes of seed
+        (see :class:`align.pw.Segment`) of length :attr:`wordlen` between the
+        two. Segments are not necessarily in maximal form. For purposes of seed
         extension, however, we prefer to not have too many segments that are
         part of a one bigger segments (especially if they do not belong to an
-        actual overlap alignment). This can be worked out by using :func:`maximal_seeds`
-        which reduces any set of seeds into maximal, necessarily non-overlapping
-        segments.
+        actual overlap alignment). This can be worked out by using
+        :func:`maximal_seeds` which reduces any set of seeds into maximal,
+        necessarily non-overlapping segments.
 
         Args:
             S_id (int): The database ID of the "from" sequence.
@@ -527,7 +500,7 @@ class Index(object):
                 tx = pw.Transcript(
                     S_idx=S_idx, T_idx=T_idx, score=0, opseq='M'*self.wordlen
                 )
-                seeds += [Segment(S_id=S_id, T_id=T_id, tx=tx)]
+                seeds += [pw.Segment(S_id=S_id, T_id=T_id, tx=tx)]
 
         return seeds
 
@@ -539,12 +512,12 @@ class Index(object):
         direction by an exact match.
 
         Args:
-            list[Segment]: Exactly matching segments, potentially overlapping.
+            list[pw.Segment]: Exactly matching segments, potentially overlapping.
             S_id (int): The database ID of the "from" sequence.
             T_id (int): The database ID of the "to" sequence.
 
         Returns
-            list[Segment]: Maximal segments, guaranteed to not overlap.
+            list[pw.Segment]: Maximal segments, guaranteed to not overlap.
         """
         seeds.sort(key=lambda s: s.tx.S_idx)
         # merge overlapping tuples:
@@ -563,7 +536,7 @@ class Index(object):
                         score=0,
                         opseq=seeds[cand].tx.opseq + 'M'*shift_S
                     )
-                    seeds[idx] = Segment(S_id=S_id, T_id=T_id, tx=tx)
+                    seeds[idx] = pw.Segment(S_id=S_id, T_id=T_id, tx=tx)
                     seeds.pop(cand)
                 else:
                     cand += 1

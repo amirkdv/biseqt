@@ -468,7 +468,7 @@ class OverlapBuilder(object):
                 _t = time.clock()
                 overlap = self.overlap_by_seed_shift_distribution(seeds, S_id, T_id)
                 process_time_spent['p-values'] += 1000 * (time.clock() - _t)
-                if isinstance(overlap, tuples.Segment):
+                if isinstance(overlap, pw.Segment):
                     # FIXME some of these are later discarded because of margins,
                     # we then get things like "10 out of 9 edges were decided by shift distribution"
                     num_shift_decided += 1
@@ -576,7 +576,7 @@ class OverlapBuilder(object):
           distribution.
 
           * If the ratio is large enough, the pair of reads are considered
-            overlapping. A single :class:`Segment <align.tuples.Segment>`
+            overlapping. A single :class:`Segment <align.pw.Segment>`
             corresponding to an overlap alignment is returned by pretending
             that the mode shift is accurate and the overlapping parts of
             the sequences are exactly matching. The fact that these returned
@@ -620,10 +620,10 @@ class OverlapBuilder(object):
             # definitely overlapping; fake the transcripts:
             if mode_shift >= 0:
                 tx = pw.Transcript(S_idx=mode_shift, T_idx=0, score=overlap_length, opseq='M'*overlap_length)
-                return tuples.Segment(S_id=S_id, T_id=T_id, tx=tx)
+                return pw.Segment(S_id=S_id, T_id=T_id, tx=tx)
             else:
                 tx = pw.Transcript(S_idx=0, T_idx=-mode_shift, score=overlap_length, opseq='M'*overlap_length)
-                return tuples.Segment(S_id=S_id, T_id=T_id, tx=tx)
+                return pw.Segment(S_id=S_id, T_id=T_id, tx=tx)
 
         # Only return those seeds that have a shift close to the mode:
         # FIXME should we return only some of the seeds?
@@ -672,11 +672,11 @@ class OverlapBuilder(object):
         Args:
             S (seq.Sequence): The "from" sequence.
             T (seq.Sequence): The "to" sequence.
-            segments (List[tuples.Segment]): The starting segments. If called
+            segments (List[pw.Segment]): The starting segments. If called
                 from :func:`build`, these are seeds but no assumption is made.
 
         Returns:
-            tuples.Segment: A segment corresponding to an overlap alignment.
+            pw.Segment: A segment corresponding to an overlap alignment.
         """
         if not segments:
             return None
@@ -687,4 +687,4 @@ class OverlapBuilder(object):
             S.c_idxseq, T.c_idxseq, len(S), len(T), self.align_params.c_obj,
             self.window, self.max_new_mins, self.min_overlap_score, int(self.rw_collect)
         )
-        return tuples.Segment(c_obj=res) if res != ffi.NULL else None
+        return pw.Segment(c_obj=res) if res != ffi.NULL else None

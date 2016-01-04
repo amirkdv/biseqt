@@ -1,5 +1,5 @@
 from math import log10, floor
-from . import seq, pw, hp_tokenize, tuples
+from . import seq, pw, hp_tokenize
 from bisect import bisect_left, bisect_right
 
 class HpCondensedSequence(seq.Sequence):
@@ -164,7 +164,7 @@ class HpCondenser(object):
                 alphabet.
             T (HpCondensedSequence): The "to" sequence in the condensed
                 alphabet.
-            seed (tuples.Segment): The seed to be translated.
+            seed (pw.Segment): The seed to be translated.
         """
         S_idx = bisect_right(S.hp_positions, seed.tx.S_idx)
         T_idx = bisect_right(T.hp_positions, seed.tx.T_idx)
@@ -193,7 +193,7 @@ class HpCondenser(object):
         length = S_end - S_idx
         if not length:
             return None
-        return tuples.Segment(S_id=seed.S_id, T_id=seed.T_id,
+        return pw.Segment(S_id=seed.S_id, T_id=seed.T_id,
             tx=pw.Transcript(
                 S_idx=S_idx, T_idx=T_idx, score=seed.tx.score, opseq=length*'M'
             )
