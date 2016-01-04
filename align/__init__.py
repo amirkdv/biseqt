@@ -3,6 +3,7 @@
 import cffi
 import os
 import sys
+import re
 
 ffi = cffi.FFI()
 lib = ffi.dlopen(os.path.join(os.path.dirname(__file__), 'libalign.so'))
@@ -25,24 +26,14 @@ class CffiObject(object):
 
 
 def hp_tokenize(string):
-    """Generator for homopolymeric substrings in a given sequences. Each value
-    is a (char, num) tuple, e.g. ``("A", 3)`` means ``AAA``.
+    """Generates (yields) homopolymeric stretches of the given sequences in
+    order in tuples of the form ``(char, num, pos)``. For example::
+
+        hp_tokenize('AAACCG') #=> [('A', 3, 0), ('C', 2, 3), ('G', 1, 5)]
     """
-    counter = 0
-    assert(len(string))
-    cur_char = string[0]
-    pos = 0 # the starting position of the current h.p. stretch
-    for idx, char in enumerate(string):
-        if char == cur_char:
-            continue
-        else:
-            # char is the first letter of the next h.p. stretch
-            yield cur_char, idx-pos, pos
-            pos = idx
-            cur_char = char
-    # left overs:
-    if pos <= len(string):
-        yield cur_char, len(string) - pos, pos
+    for match in re.finditer(r'(.)\1*', string):
+        match, pos = match.group(0), match.start()
+        yield match[0], len(match), pos
 
 
 class ProgressIndicator(object):
