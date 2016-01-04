@@ -299,45 +299,40 @@ class Index(object):
             conn.commit()
 
     def index_seeds(self):
+        # Normal approximation (mean and standard deviation) of a binomial distribution
+        B2N = lambda n, p: (n*p, sqrt(n * p * (1-p)))
+        prob_word = lambda length: 0.25 ** length
         with sqlite3.connect(self.tuplesdb.db) as conn:
             c = conn.cursor()
+            c.execute('select count(*) from %s' % self.tuples_table)
+            N = int(c.next()[0]) # total number of words
+            c.execute('select sum(length(seq)) from seq')
+            L = int(c.next()[0]) # total sequence length of all reads
+            mu, sd = B2N(L, prob_word(self.wordlen)) # approximating normal distribution of word counts
+
             q = """
                 INSERT INTO %s (S_id, T_id, S_idx, T_idx)
                 VALUES (?, ?, ?, ?)
             """ % self.seeds_table
-            conn.cursor().executemany(q, self._give_seeds(c))
+            conn.cursor().executemany(q, self._give_seeds(c, N, mu, sd))
+
+            sys.stderr.write('Creating SQL index on %s'  % self.seeds_table)
+            c.execute("""
+                CREATE INDEX seeds_ids ON %s (S_id, T_id)
+            """ % self.seeds_table)
+            sys.stderr.write('.\n')
             conn.commit()
 
     # Helper for index(): yields data values to be inserted in the seeds index.
-    def _give_seeds(self, cursor):
-        # count the total number of tuples so we can report percentage
-        # progress:
-        cursor.execute('SELECT count(*) FROM %s' % self.tuples_table)
-        for row in cursor:
-            num_tuples = int(row[0])
-            break
+    def _give_seeds(self, cursor, N, mu, sd):
+        normal_pvalue = lambda mu, sd, x: 0.5 * (1 - erf((x - mu) / (sd * sqrt(2))))
         indicator = ProgressIndicator(
-            'Indexing %d observed %d-mers' % (num_tuples, self.wordlen), num_tuples
+            'Indexing %d observed %d-mers' % (N, self.wordlen), N
         )
         indicator.start()
-
-        normal_pvalue = lambda mu, sd, x: 0.5 * (1 - erf((x - mu) / (sd * sqrt(2))))
-        # Normal approximation (mean and standard deviation) of a binomial distribution
-        B2N = lambda n, p: (n*p, sqrt(n * p * (1-p)))
-        prob_word = lambda length: 0.25 ** length
-
-        cursor.execute('select count(*) from %s' % self.tuples_table)
-        N = int(cursor.next()[0]) # total number of words
-        cursor.execute('select sum(length(seq)) from seq')
-        L = int(cursor.next()[0]) # total sequence length
-        mu, sd = B2N(L, prob_word(self.wordlen)) # approximating normal distribution of word counts
-
         cursor.execute('SELECT tuple, hits from %s' % self.tuples_table)
         for tup, hits in cursor:
-            # report progess:
             indicator.progress()
-
-            # hits contains multiple entries of the form: "@<seqid>:<idx>".
             pvalue = N * normal_pvalue(mu, sd, hits.count('@'))
             if not pvalue or log(pvalue) < self.max_word_log_pvalue:
                 continue
@@ -354,11 +349,6 @@ class Index(object):
                     yield (S_hit[0], T_hit[0], S_hit[1], T_hit[1])
 
         indicator.finish()
-        sys.stderr.write('Creating SQL index on %s'  % self.seeds_table)
-        cursor.execute("""
-            CREATE INDEX seeds_ids ON %s (S_id, T_id)
-        """ % self.seeds_table)
-        sys.stderr.write('.\n')
 
     def num_potential_homolog_pairs(self, cursor=None):
         """Returns the number of potential homolog pairs in the database.
