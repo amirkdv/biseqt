@@ -21,7 +21,7 @@ $(REFERENCE): $(GENOME)
 
 # annotate all reads with their actual position in the genome
 $(ANNOTATED_READS): $(REFERENCE) $(READS)
-	bwa index $(REFERENCE)
+	bwa index $(REFERENCE) 2>&1 | sed 's/^/|  /' >&2
 	READS=$(READS) DB=$(REFERENCE) python prepare.py $@
 
 $(ASSEMBLY_DB):
