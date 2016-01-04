@@ -507,7 +507,7 @@ class Segment(CffiObject):
     def __init__(self, **kw):
         if 'c_obj' in kw:
             self.c_obj = kw['c_obj']
-            self.tx = pw.Transcript(c_obj=kw['c_obj'].tx)
+            self.tx = Transcript(c_obj=kw['c_obj'].tx)
         else:
             self.tx = kw['tx']
             self.c_obj = ffi.new('segment*', {

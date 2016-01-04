@@ -113,21 +113,21 @@ def overlap_graph_by_known_order(db):
             S_name = '%s %d-%d #%d' % (S_info['name'], S_min_idx, S_max_idx, S_id)
             T_name = '%s %d-%d #%d' % (T_info['name'], T_min_idx, T_max_idx, T_id)
             vs = vs.union(set([S_name, T_name]))
-            overlap = min(S_max_idx, T_max_idx) - max(S_min_idx, T_min_idx)
-            if overlap > 0:
+            overlap_len = min(S_max_idx, T_max_idx) - max(S_min_idx, T_min_idx)
+            if overlap_len > 0:
                 if S_min_idx < T_min_idx:
                     es += [(S_name, T_name)]
-                    ws += [overlap]
+                    ws += [overlap_len]
                 elif S_min_idx > T_min_idx:
                     es += [(T_name, S_name)]
-                    ws += [overlap]
+                    ws += [overlap_len]
                 # if start is equal, edge goes from shorter read to longer read
                 elif S_max_idx < T_max_idx:
                     es += [(S_name, T_name)]
-                    ws += [overlap]
+                    ws += [overlap_len]
                 elif S_max_idx > T_max_idx:
                     es += [(T_name, S_name)]
-                    ws += [overlap]
+                    ws += [overlap_len]
                 # if start and end is equal, reads are identical, ignore.
 
     G = overlap.OverlapGraph()
