@@ -17,7 +17,6 @@ make clean tests
   * p-value calculation for words which discards potentially repetitive
     structures.
   * p-value calculation for shift distributions based on 2d representation.
-  * improved algorithm for condensing seeds.
 * Allow the same algorithm to be used for aligning noisy long reads against a
   reference genome; the current scheme (using `bwa`) does not seem accurate
   enough. Additionally:

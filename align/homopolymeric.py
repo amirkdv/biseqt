@@ -146,12 +146,25 @@ class HpCondenser(object):
             max_diversion=align_params.max_diversion
         )
 
-    # FIXME docs:
-    # 1- S and T are now required to be HpCondensedSequence and not the original sequences,
-    # 2- seeds are shortened with more accuracy (way fewer seeds are dropped),
-    #    document behaviour.
+    # TODO does this apply to arbitrary segments or does it require them
+    # to be exactly matching (i.e seeds).
     def condense_seed(self, S, T, seed):
-        """
+        """Transform the given seed to those that apply to the condensed
+        sequences. This requires updating the coordinates (start position) and
+        the transcript. The transcripts are only modified in their length (the
+        score is left as is and note that the entire opseq is necessarily M's).
+
+        Before translation, the seed may be shortened, if necessary, on both
+        ends to ensure that its beginning and end land on the boundary of
+        homopolymeric stretches (otherwise they are meaningless in the condensed
+        alphabet).
+
+        Args:
+            S (HpCondensedSequence): The "from" sequence in the condensed
+                alphabet.
+            T (HpCondensedSequence): The "to" sequence in the condensed
+                alphabet.
+            seed (tuples.Segment): The seed to be translated.
         """
         S_idx = bisect_right(S.hp_positions, seed.tx.S_idx)
         T_idx = bisect_right(T.hp_positions, seed.tx.T_idx)
