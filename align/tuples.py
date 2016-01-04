@@ -386,8 +386,8 @@ class Index(object):
             SELECT ?, IFNULL( (SELECT hits FROM %s WHERE tuple = ?), "") || ?
         """ % (self.tuples_table, self.tuples_table)
         with sqlite3.connect(self.tuplesdb.db) as conn:
-            # We need multiple cursors: one two read from the seq table
-            # (seq_c), one two read/write from/to the tuples table (tuples_c),
+            # We need multiple cursors: one to read from the seq table
+            # (seq_c), one to read/write from/to the tuples table (tuples_c),
             # one to read/write from/to the seeds table (seeds_c), and one
             # to write to the seeds cache table (potential_homologs_c)
             tuples_c = conn.cursor()
@@ -452,31 +452,27 @@ class Index(object):
         """
         with sqlite3.connect(self.tuplesdb.db) as conn:
             c = conn.cursor()
-            sys.stderr.write('Verifying consistency of database:')
+            sys.stderr.write('Verifying database consistency at %s:' % self.tuplesdb.db)
             # potential homologs should have at most a single row per sequence.
-            potential_homologs_c.execute("""
-                SELECT COUNT(*) FROM %s
-            """ % self.potential_homologs_table)
-            for row in potential_homologs_c:
+            c.execute('SELECT COUNT(*) FROM %s' % self.potential_homologs_table)
+            for row in c:
                 num_records = row[0]
-            potential_homologs_c.execute("""
+            c.execute("""
                 SELECT COUNT(*) FROM (SELECT DISTINCT id FROM %s)
             """ % self.potential_homologs_table)
-            for row in potential_homologs_c:
+            for row in c:
                 assert(num_records == row[0])
 
-            seeds_c.execute("""
-                SELECT COUNT(*) FROM %s
-            """ % self.seeds_table)
-            for row in seeds_c:
+            c.execute('SELECT COUNT(*) FROM %s' % self.seeds_table)
+            for row in c:
                 num_records = row[0]
-            potential_homologs_c.execute("""
+            c.execute("""
                 SELECT COUNT(*) FROM (SELECT DISTINCT S_id,T_id,S_idx,T_idx FROM %s)
             """ % self.seeds_table)
-            for row in seeds_c:
+            for row in c:
                 assert(num_records == row[0])
 
-            sys.stderr.write('looks good!\n')
+            sys.stderr.write(' looks good!\n')
 
     def potential_homologs(self, seqid):
         """Given a sequence ID, returns a list of sequence IDs, all integers
