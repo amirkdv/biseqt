@@ -13,6 +13,14 @@ $(READS):
 $(DB): $(READS)
 	python -c 'import align.tests.hp_assembly as T; T.create_db("$@", "$(READS)")'
 
+WORDLEN = $(shell echo $$WORDLEN)
+word_pvalues.$(WORDLEN).png:
+	python -c 'from align import tuples, seq; \
+		A = seq.Alphabet("ACGT"); \
+		B = tuples.TuplesDB("$(DB)", alphabet=A); \
+		I = tuples.Index(tuplesdb=B, wordlen=$(WORDLEN)); \
+		I.plot_pvalues("$@");'
+
 $(ASSEMBLED_GRAPH).gml:
 	python -c 'import align.tests.hp_assembly as T; T.overlap_by_seed_extension("$(DB)", "$@")'
 	$(MAKE) -f assembly.mk diff SUMMARY_ONLY=True

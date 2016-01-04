@@ -6,6 +6,7 @@ import sqlite3
 from math import sqrt, erf, log
 from Bio import SeqIO
 from collections import namedtuple
+from matplotlib import pyplot as plt
 from . import pw, seq, ProgressIndicator, CffiObject, ffi, lib
 
 class TuplesDB(object):
@@ -348,22 +349,13 @@ class Index(object):
         normal distribution described above and :math:`N`, the total number of
         tuples, is a Bonferroni correction term.
         """
-        # Normal approximation (mean and standard deviation) of a binomial distribution
-        B2N = lambda n, p: (n*p, sqrt(n * p * (1-p)))
-        prob_word = lambda length: 0.25 ** length
         with sqlite3.connect(self.tuplesdb.db) as conn:
             c = conn.cursor()
-            c.execute('select count(*) from %s' % self.tuples_table)
-            N = int(c.next()[0]) # total number of words
-            c.execute('select sum(length(seq)) from seq')
-            L = int(c.next()[0]) # total sequence length of all reads
-            mu, sd = B2N(L, prob_word(self.wordlen)) # approximating normal distribution of word counts
-
             q = """
                 INSERT INTO %s (S_id, T_id, S_idx, T_idx)
                 VALUES (?, ?, ?, ?)
             """ % self.seeds_table
-            conn.cursor().executemany(q, self._give_seeds(c, N, mu, sd))
+            conn.cursor().executemany(q, self._give_seeds(c))
 
             sys.stderr.write('Creating SQL index on %s'  % self.seeds_table)
             c.execute("""
@@ -372,9 +364,24 @@ class Index(object):
             sys.stderr.write('.\n')
             conn.commit()
 
+    def _word_pvalue_calculator(self, cursor):
+        # Normal approximation (mean and standard deviation) of a binomial distribution
+        B2N = lambda n, p: (n*p, sqrt(n * p * (1-p)))
+        prob_word = lambda length: (1.0/self.tuplesdb.alphabet.length) ** length
+        cursor.execute('select count(*) from %s' % self.tuples_table)
+        N = int(cursor.next()[0]) # total number of words
+        cursor.execute('select sum(length(seq)) from seq')
+        L = int(cursor.next()[0]) # total sequence length of all reads
+        mu, sd = B2N(L, prob_word(self.wordlen)) # approximating normal distribution of word counts
+
+        pvalue_calculator = lambda x: N * 0.5 * (1 - erf((x - mu) / (sd * sqrt(2))))
+        return pvalue_calculator
+
     # Helper for index(): yields data values to be inserted in the seeds index.
-    def _give_seeds(self, cursor, N, mu, sd):
-        normal_pvalue = lambda mu, sd, x: 0.5 * (1 - erf((x - mu) / (sd * sqrt(2))))
+    def _give_seeds(self, cursor):
+        pvalue_calc = self._word_pvalue_calculator(cursor)
+        cursor.execute('select count(*) from %s' % self.tuples_table)
+        N = int(cursor.next()[0]) # total number of words
         indicator = ProgressIndicator(
             'Indexing %d observed %d-mers' % (N, self.wordlen), N
         )
@@ -382,7 +389,7 @@ class Index(object):
         cursor.execute('SELECT tuple, hits from %s' % self.tuples_table)
         for tup, hits in cursor:
             indicator.progress()
-            pvalue = N * normal_pvalue(mu, sd, hits.count('@'))
+            pvalue = pvalue_calc(hits.count('@'))
             if not pvalue or log(pvalue) < self.min_word_log_pvalue:
                 continue
 
@@ -547,6 +554,26 @@ class Index(object):
                 seeds += [pw.Segment(S_id=S_id, T_id=T_id, tx=tx)]
 
         return seeds
+
+    def plot_pvalues(self, path=None, num_bins=500):
+        if path is None:
+            path = 'word_pvalues.%d.png' % self.wordlen
+        with sqlite3.connect(self.tuplesdb.db) as conn:
+            c = conn.cursor()
+            calc = self._word_pvalue_calculator(c)
+            c.execute('select hits from %s' % self.tuples_table)
+            log_pvalues = []
+            for row in c:
+                pvalue = calc(row[0].count('@'))
+                if pvalue:
+                    log_pvalues += [log(pvalue)]
+
+
+            plt.grid(True)
+            plt.hist(log_pvalues, num_bins, normed=True, histtype='step', cumulative=True, color='k')
+            plt.xlabel('Corrected log(p-value) of %d-words' % self.wordlen)
+            plt.ylabel('Cumulative distribution')
+            plt.savefig(path, dpi=300)
 
     @classmethod
     def maximal_seeds(cls, seeds, S_id, T_id):
