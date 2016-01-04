@@ -251,6 +251,63 @@ class Index(object):
             tup = sum(digits[x]*(4**i) for x,i in zip(tup,reversed(range(len(tup)))))
             yield (tup, idx)
 
+    # FIXME document the p-value calculation
+    def index(self):
+        """Scans all sequences in the ``seq`` table and records all observed
+        tuples in ``tuples_N`` table. Then scans all the observed hits to
+        populate the ``seeds_N`` table used by :func:`seeds`. Each "seed"
+        record is a 4-tuple ``(S_id, T_id, S_idx, T_idx)`` where the first two
+        entries are ID's of sequences (as per the ``seq`` table) and the last
+        two entries are integers corresponding to the starting position of the
+        seed in the sequence pair.
+
+        Finally, the contents of the ``seeds_N`` table is scanned to populate
+        ``potential_homologs_N`` for every sequence in the database.
+        """
+        self.index_tuples()
+        self.index_seeds()
+        self.index_potential_homologs()
+
+    def index_tuples(self):
+        hit_ins_q = """
+            INSERT OR REPLACE INTO %s (tuple, hits)
+            SELECT ?, IFNULL( (SELECT hits FROM %s WHERE tuple = ?), "") || ?
+        """ % (self.tuples_table, self.tuples_table)
+        with sqlite3.connect(self.tuplesdb.db) as conn:
+            seq_c = conn.cursor() # to load sequences from the seq table.
+            c = conn.cursor()     # to write words to the tuples table.
+
+            # count the total number so we can report percentage progress:
+            seq_c.execute('SELECT count(*) FROM seq')
+            num_seqs = int(seq_c.next()[0])
+            msg = 'Scanning %d sequences for %d-mers' \
+                % (num_seqs, self.wordlen)
+            indicator = ProgressIndicator(msg, num_seqs)
+            indicator.start()
+
+            # populate the tuples table:
+            def _give_tuple(string):
+                for s, idx in self.tup_scan(string):
+                    yield (s, s, '@%s:%d' % (seqid, idx))
+
+            seq_c.execute('SELECT id, seq FROM seq')
+            for seqid, seqstr in seq_c:
+                c.executemany(hit_ins_q, _give_tuple(seqstr))
+                indicator.progress()
+
+            indicator.finish()
+            conn.commit()
+
+    def index_seeds(self):
+        with sqlite3.connect(self.tuplesdb.db) as conn:
+            c = conn.cursor()
+            q = """
+                INSERT INTO %s (S_id, T_id, S_idx, T_idx)
+                VALUES (?, ?, ?, ?)
+            """ % self.seeds_table
+            conn.cursor().executemany(q, self._give_seeds(c))
+            conn.commit()
+
     # Helper for index(): yields data values to be inserted in the seeds index.
     def _give_seeds(self, cursor):
         # count the total number of tuples so we can report percentage
@@ -317,64 +374,6 @@ class Index(object):
             cursor.execute(cnt_q)
         for row in cursor:
             return row[0]
-
-    # FIXME document the p-value calculation
-    def index(self):
-        """Scans all sequences in the ``seq`` table and records all observed
-        tuples in ``tuples_N`` table. Then scans all the observed hits to
-        populate the ``seeds_N`` table used by :func:`seeds`. Each "seed"
-        record is a 4-tuple ``(S_id, T_id, S_idx, T_idx)`` where the first two
-        entries are ID's of sequences (as per the ``seq`` table) and the last
-        two entries are integers corresponding to the starting position of the
-        seed in the sequence pair.
-
-        Finally, the contents of the ``seeds_N`` table is scanned to populate
-        ``potential_homologs_N`` for every sequence in the database.
-        """
-        hit_ins_q = """
-            INSERT OR REPLACE INTO %s (tuple, hits)
-            SELECT ?, IFNULL( (SELECT hits FROM %s WHERE tuple = ?), "") || ?
-        """ % (self.tuples_table, self.tuples_table)
-        with sqlite3.connect(self.tuplesdb.db) as conn:
-            # We need multiple cursors: one to read from the seq table
-            # (seq_c), one to read/write from/to the tuples table (tuples_c),
-            # one to read/write from/to the seeds table (seeds_c), and one
-            # to write to the seeds cache table (potential_homologs_c)
-            tuples_c = conn.cursor()
-            seq_c = conn.cursor()
-            seeds_c = conn.cursor()
-            potential_homologs_c = conn.cursor()
-
-            # count the total number so we can report percentage progress:
-            seq_c.execute('SELECT count(*) FROM seq')
-            for row in seq_c:
-                num_seqs = int(row[0])
-                break
-
-            msg = 'Scanning %d sequences for %d-mers' \
-                % (num_seqs, self.wordlen)
-            indicator = ProgressIndicator(msg, num_seqs)
-            indicator.start()
-
-            # populate the tuples table:
-            def _give_tuple(string):
-                for s, idx in self.tup_scan(string):
-                    yield (s, s, '@%s:%d' % (seqid, idx))
-
-            seq_c.execute('SELECT id, seq FROM seq')
-            for seqid, seqstr in seq_c:
-                tuples_c.executemany(hit_ins_q, _give_tuple(seqstr))
-                indicator.progress()
-
-            indicator.finish()
-
-            # populate the seeds table:
-            seed_ins_q = """
-                INSERT INTO %s (S_id, T_id, S_idx, T_idx)
-                VALUES (?, ?, ?, ?)
-            """ % self.seeds_table
-            seeds_c.executemany(seed_ins_q, self._give_seeds(tuples_c))
-            self.index_potential_homologs()
 
     # Helper for index_potential_homolgs(): yields data values for the potential
     # homologs index.
