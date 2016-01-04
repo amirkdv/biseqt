@@ -1,7 +1,7 @@
-align.assembly module
+align.overlap package
 =====================
 
-.. automodule:: align.assembly
+.. automodule:: align.overlap
     :members:
     :undoc-members:
     :show-inheritance:

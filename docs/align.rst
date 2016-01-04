@@ -1,12 +1,18 @@
 align package
 =============
 
+Subpackages
+-----------
+
+.. toctree::
+
+    align.overlap
+
 Submodules
 ----------
 
 .. toctree::
 
-   align.assembly
    align.homopolymeric
    align.pw
    align.seq

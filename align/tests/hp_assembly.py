@@ -3,7 +3,7 @@ import sys
 import os
 import igraph
 
-from .. import pw, tuples, seq, assembly, homopolymeric
+from .. import pw, tuples, seq, overlap, homopolymeric
 
 params = {
     'show_params': False,   # print a summary of parameters
@@ -85,8 +85,8 @@ def overlap_by_seed_extension(db, path):
     Idx = tuples.Index(tuplesdb=B, **params)
     show_params()
     # FIXME:
-    G = assembly.OverlapBuilder(Idx, C_d, hp_condenser=Tr, **params).build()
-    #G = assembly.OverlapBuilder(Idx, C, **params).build()
+    G = overlap.OverlapBuilder(Idx, C_d, hp_condenser=Tr, **params).build()
+    #G = overlap.OverlapBuilder(Idx, C, **params).build()
     G.save(path)
 
 def overlap_graph_by_known_order(db):
@@ -130,7 +130,7 @@ def overlap_graph_by_known_order(db):
                     ws += [overlap]
                 # if start and end is equal, reads are identical, ignore.
 
-    G = assembly.OverlapGraph()
+    G = overlap.OverlapGraph()
     G.iG.add_vertices(list(vs))
     es = [(G.iG.vs.find(name=u), G.iG.vs.find(name=v)) for u,v in es]
     G.iG.add_edges(es)
