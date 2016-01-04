@@ -12,7 +12,6 @@ clean:
 	rm -rf build dist env
 	rm -f align/libalign.so core
 	rm -rf docs/$(DOCS_OUT)
-	make -f assembly.mk clean
 
 tests: align/libalign.so
 	python -m align.tests.homopolymeric
