@@ -2,11 +2,10 @@ READS = leishmania/reads.fa
 ANNOTATED_READS = leishmania/reads.annotated.fa
 GENOME = leishmania/genome.fa
 REFERENCE = leishmania/reference.fa
-MODE = hp_assembly
-ASSEMBLY_DB = genome.leishmania.$(MODE).db
-ASSEMBLED_GRAPH = leishmania.$(MODE)
+ASSEMBLY_DB = genome.leishmania.db
+ASSEMBLED_GRAPH = leishmania
 TRUE_GRAPH = leishmania_true
-ASSEMBLY_OPTS = MODE=$(MODE) DB=$(ASSEMBLY_DB) READS=$(ANNOTATED_READS) ASSEMBLED_GRAPH=$(ASSEMBLED_GRAPH) TRUE_GRAPH=$(TRUE_GRAPH)
+ASSEMBLY_OPTS = DB=$(ASSEMBLY_DB) READS=$(ANNOTATED_READS) ASSEMBLED_GRAPH=$(ASSEMBLED_GRAPH) TRUE_GRAPH=$(TRUE_GRAPH)
 
 $(GENOME):
 	wget http://www.cs.mcgill.ca/~blanchem/561/pacbio/GCA_000227135.2_ASM22713v2_genomic.fna -O $@
@@ -26,7 +25,7 @@ $(ANNOTATED_READS): $(REFERENCE) $(READS)
 	READS=$(READS) DB=$(REFERENCE) python prepare.py $@
 
 $(ASSEMBLY_DB):
-	python -c 'import align.tests.$(MODE) as A; A.create_db("$@", "$(ANNOTATED_READS)")'
+	python -c 'import align.tests.hp_assembly as A; A.create_db("$@", "$(ANNOTATED_READS)")'
 
 ASSEMBLY_TARGET = leishmania.gml
 assembly:

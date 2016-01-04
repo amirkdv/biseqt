@@ -1,10 +1,7 @@
-# one of assembly or hp_assembly
-MODE = hp_assembly
-ASSEMBLY_TEST = align.tests.$(MODE)
-TRUE_GRAPH = true_overlap.$(MODE)
-ASSEMBLED_GRAPH = overlap.$(MODE)
-DB = genome.$(MODE).db
-READS = reads.$(MODE).fa
+TRUE_GRAPH = true_overlap
+ASSEMBLED_GRAPH = overlap
+DB = genome.db
+READS = reads.fa
 
 clean:
 	rm -f $(ASSEMBLED_GRAPH).gml $(ASSEMBLED_GRAPH).dag.gml $(ASSEMBLED_GRAPH).layout.gml
@@ -12,12 +9,12 @@ clean:
 	rm -f $(TRUE_GRAPH).gml $(TRUE_GRAPH).layout.gml layout.diff.$(ASSEMBLED_GRAPH).svg
 
 $(READS):
-	python -c 'import $(ASSEMBLY_TEST) as T; T.create_example("$@", "$(READS)");'
+	python -c 'import align.tests.hp_assembly as T; T.create_example("$@", "$(READS)");'
 $(DB): $(READS)
-	python -c 'import $(ASSEMBLY_TEST) as T; T.create_db("$@", "$(READS)")'
+	python -c 'import align.tests.hp_assembly as T; T.create_db("$@", "$(READS)")'
 
 $(ASSEMBLED_GRAPH).gml:
-	python -c 'import $(ASSEMBLY_TEST) as T; T.overlap_by_seed_extension("$(DB)", "$@")'
+	python -c 'import align.tests.hp_assembly as T; T.overlap_by_seed_extension("$(DB)", "$@")'
 	$(MAKE) -f assembly.mk diff SUMMARY_ONLY=True
 
 SUMMARY_ONLY = False
@@ -33,7 +30,7 @@ $(ASSEMBLED_GRAPH).dag.gml: $(ASSEMBLED_GRAPH).gml
 		G.break_cycles(method="$(FAS_METHOD)"); G.save("$@")'
 
 $(TRUE_GRAPH).gml:
-	python -c 'import $(ASSEMBLY_TEST) as A; \
+	python -c 'import align.tests.hp_assembly as A; \
 		A.overlap_graph_by_known_order("$(DB)").save("$@")'
 
 $(ASSEMBLED_GRAPH).svg:
