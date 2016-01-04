@@ -85,7 +85,7 @@ def overlap_by_seed_extension(db, path):
     Idx = tuples.Index(tuplesdb=B, **params)
     show_params()
     # FIXME:
-    G = overlap.OverlapBuilder(Idx, C_d, hp_condenser=Tr, **params).build()
+    G = overlap.OverlapBuilder(Idx, align_params=C_d, hp_condenser=Tr, **params).build()
     #G = overlap.OverlapBuilder(Idx, C, **params).build()
     G.save(path)
 

@@ -1,9 +1,8 @@
 import re
 import sys
-from math import log
 import time
 from .. import tuples, pw, homopolymeric, ProgressIndicator, lib, ffi
-from . import OverlapGraph, SeedExtensionParams, extend_segments
+from . import OverlapGraph, SeedExtensionParams, extend_segments, analyze_shifts
 
 class OverlapBuilder(object):
     """Provided a :class:`align.tuples.Index` builds an overlap graph of all
@@ -197,56 +196,14 @@ class OverlapBuilder(object):
         G.iG.es['weight'] = ws
         return G
 
-    # Helper method for overlap_by_seed_shift_distribution
-    def _rolling_sum(self, data):
-        if len(data) < self.shift_rolling_sum_width:
-            return
-        cur = 0
-        for idx in range(0, len(data)):
-            if idx >= self.shift_rolling_sum_width:
-                cur -= data[idx - self.shift_rolling_sum_width]
-            if idx < len(data):
-                cur += data[idx]
-            yield cur
-
-    # TODO document the formula
-    def _shift_log_pvalue(self, S_len, T_len, shift, num):
-        L = self.shift_rolling_sum_width
-        log_pvalue = -log(S_len) - log(T_len) + log(L) + 0.5 * log(
-            (S_len - abs(shift))**2 + (T_len - abs(shift))**2
-        )
-        # 1- we have num observations (each a seed) with the same probability
-        #    of being matched by the null hypothesis
-        # 2- we are testing S_len+T_len simultaneous hypotheses;
-        #    apply a Bonferroni correction:
-        return log(S_len + T_len) + num * log_pvalue
-
     # FIXME return a best shift so we can sort them in order (the order dies
     # when we do maximal seeds)
     # FIXME docs are out of date
     def overlap_by_seed_shift_distribution(self, seeds, S_id, T_id):
         """Decides whether the shift distribution of seeds for a given sequence
-        pair is "indicative" enough of an overlap or lack thereof:
-
-        * Find the shift distribution by using a rolling sum with window length
-          :attr:`shift_rolling_sum_width`.
-        * (*out of date*) Find the ratio of the mode frequency of shifts over
-          the uniform frequency (which is 1 over the range of possible shifts).
-          This ratio is taken as a measure of "peakedness" of the shift
-          distribution.
-
-          * If the ratio is large enough, the pair of reads are considered
-            overlapping. A single :class:`Segment <align.pw.Segment>`
-            corresponding to an overlap alignment is returned by pretending
-            that the mode shift is accurate and the overlapping parts of
-            the sequences are exactly matching. The fact that these returned
-            segments are inaccurate has no effect since :func:`build` performs
-            no further processing of overlap segments (at least for now).
-          * If the ratio is small enough, the pair of reads are considered
-            non-overlapping and ``None`` is returned.
-          * If the ratio is neither small or large enough, the seeds within
-            radius :attr:`shift_rolling_sum_width` of the mode shift are
-            returned for further processing.
+        pair is "indicative" enough of an overlap or lack thereof.
+        See :func:`discovery.analyze_shifts`, :attr:`upper_log_pvalue_cutoff`,
+        and :attr:`lower_log_pvalue_cutoff`.
 
         Args:
             seeds (list[Segment]): Exactly matching seeds as returned by
@@ -258,19 +215,8 @@ class OverlapBuilder(object):
             None|Segment|list[Segment]: Corresponding to scenarios described above.
 
         """
-        # FIXME suspicious of all S_idx, T_idx calculations, double check.
         S_len, T_len = self.seqinfo[S_id]['length'], self.seqinfo[T_id]['length']
-        shift_range = range(-T_len, S_len)
-        shift_coverage = {shift:0 for shift in shift_range}
-        for seed in seeds:
-            # all seeds are the same length at this stage (and they
-            # are potentially overlapping):
-            shift_coverage[seed.tx.S_idx - seed.tx.T_idx] += 1
-
-        shift_distrib = [x for x in self._rolling_sum([x[1] for x in sorted(shift_coverage.items())])]
-        mode_idx, mode = max(enumerate(shift_distrib), key=lambda x: x[1])
-        mode_shift = shift_range[min(mode_idx, len(shift_range)-1)]
-        log_pvalue = self._shift_log_pvalue(S_len, T_len, mode_shift, mode)
+        mode_shift, log_pvalue = analyze_shifts(seeds, S_len, T_len, self.shift_rolling_sum_width)
 
         if log_pvalue > self.upper_log_pvalue_cutoff:
             # definitely not overlapping:
@@ -288,7 +234,7 @@ class OverlapBuilder(object):
         # Only return those seeds that have a shift close to the mode:
         # FIXME should we return only some of the seeds?
         # seeds = [seed for seed in seeds if abs(seed.tx.S_idx - seed.tx.T_idx - mode_shift) < 10 * self.shift_rolling_sum_width]
-        return sorted(seeds, key=lambda x: abs(seed.tx.S_idx - seed.tx.T_idx - mode_shift))
+        return sorted(seeds, key=lambda x: abs(x.tx.S_idx - x.tx.T_idx - mode_shift))
 
     def overlap_by_seed_extension(self, seeds, S_id, T_id):
         """Tries to find a seed among given seeds that extends to a full overlap alignment by consecutive
