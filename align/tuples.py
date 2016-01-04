@@ -318,29 +318,6 @@ class Index(object):
         for row in cursor:
             return row[0]
 
-    # Helper for index(): yields data values for the potential homologs index.
-    # Note that for each sequence id (which is an integer as per the seq table),
-    # only potential homologs with greater sequence IDs are reported to avoid
-    # duplicates.
-    def _give_potential_homologs(self, cursor):
-        num_total = self.num_potential_homolog_pairs(cursor)
-        msg = 'Indexing potentially homologous pairs of sequences with at least %d seeds' % self.min_seeds_for_homology
-        indicator = ProgressIndicator(msg, num_total)
-        indicator.start()
-        cursor.execute(self.potential_homologs_q)
-        for row in cursor:
-            if int(row[2]) < self.min_seeds_for_homology:
-                continue;
-            if row[0] < row[1]:
-                yield (row[0], row[0], str(row[1]) + ',')
-            elif row[0] > row[1]:
-                yield (row[1], row[1], str(row[0]) + ',')
-            else:
-                raise RuntimeError("This shouldn't have happened, row=%s", str(row))
-            indicator.progress()
-
-        indicator.finish()
-
     # FIXME document the p-value calculation
     def index(self):
         """Scans all sequences in the ``seq`` table and records all observed
@@ -397,13 +374,42 @@ class Index(object):
                 VALUES (?, ?, ?, ?)
             """ % self.seeds_table
             seeds_c.executemany(seed_ins_q, self._give_seeds(tuples_c))
+            self.index_potential_homologs()
 
+    # Helper for index_potential_homolgs(): yields data values for the potential
+    # homologs index.
+    #
+    # Note that for each sequence id (which is an integer as per the seq table),
+    # only potential homologs with greater sequence IDs are reported to avoid
+    # duplicates.
+    def _give_potential_homologs(self, cursor):
+        num_total = self.num_potential_homolog_pairs(cursor)
+        msg = 'Indexing potentially homologous pairs of sequences with at least %d seeds' % self.min_seeds_for_homology
+        indicator = ProgressIndicator(msg, num_total)
+        indicator.start()
+        cursor.execute(self.potential_homologs_q)
+        for row in cursor:
+            if int(row[2]) < self.min_seeds_for_homology:
+                continue;
+            if row[0] < row[1]:
+                yield (row[0], row[0], str(row[1]) + ',')
+            elif row[0] > row[1]:
+                yield (row[1], row[1], str(row[0]) + ',')
+            else:
+                raise RuntimeError("This shouldn't have happened, row=%s", str(row))
+            indicator.progress()
+
+        indicator.finish()
+
+    def index_potential_homologs(self):
+        with sqlite3.connect(self.tuplesdb.db) as conn:
+            c = conn.cursor()
             # populate the seeds cache table:
-            seed_cache_ins_q = """
+            q = """
                 INSERT OR REPLACE INTO %s (id, homologs)
                 SELECT ?, IFNULL( (SELECT homologs FROM %s WHERE id = ?), "") || ?
             """ % (self.potential_homologs_table, self.potential_homologs_table)
-            potential_homologs_c.executemany(seed_cache_ins_q, self._give_potential_homologs(seeds_c))
+            conn.cursor().executemany(q, self._give_potential_homologs(c))
 
     def verify(self):
         """Verifies the database contents to make sure:
