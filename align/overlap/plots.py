@@ -9,8 +9,7 @@ def plot_num_seeds_discrimination(path, index, true_overlaps, num_bins=500):
     seqinfo = index.tuplesdb.seqinfo()
     ids = seqinfo.keys()
     msg = 'Counting the number of seeds for all pairs of sequences'
-    indicator = ProgressIndicator(msg,
-        len(ids) * (len(ids)-1) / 2.0, percentage=False)
+    indicator = ProgressIndicator(msg, len(ids) * (len(ids)-1) / 2.0)
     indicator.start()
     pos = []
     neg = []
@@ -41,7 +40,7 @@ def plot_num_seeds_discrimination(path, index, true_overlaps, num_bins=500):
     plt.ylim(-0.1, 1.2)
     plt.axvline(x=0, ymin=-0.1, ymax=1.2, color='k')
     plt.axhline(y=0, xmin=-100, xmax=xmax, color='k')
-    plt.xticks([i*1000 for i in range(int(xmax/1000) + 1)], rotation='vertical')
+    plt.xticks([i*100 for i in range(int(xmax/100) + 1)], rotation='vertical')
     plt.yticks([i*0.1 for i in range(11)], rotation='vertical')
     plt.tick_params(axis='x', labelsize=8, direction='vertical')
     plt.xlabel('Number of matching %d-mers' % index.wordlen)
