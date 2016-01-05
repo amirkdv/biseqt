@@ -11,7 +11,6 @@ make clean tests
 
 ## To Do
 
-* Merge the functionality of ad hoc scripts: `num_seeds.py`, `prepare.py`, and `rw.py`.
 * Allow the same algorithm to be used for aligning noisy long reads against a
   reference genome; the current scheme (using `bwa`) does not seem accurate
   enough. Additionally:

@@ -47,8 +47,55 @@ def extend_segments(S, T, segments, params, rw_collect=False):
     return pw.Segment(c_obj=res) if res != ffi.NULL else None
 
 # FIXME docs
+def plot_num_seeds_discrimination(path, index, true_overlaps, num_bins=500):
+    plt.clf()
+    seqinfo = index.tuplesdb.seqinfo()
+    ids = seqinfo.keys()
+    msg = 'Counting the number of seeds for all pairs of sequences'
+    indicator = ProgressIndicator(msg,
+        len(ids) * (len(ids)-1) / 2.0, percentage=False)
+    indicator.start()
+    pos = []
+    neg = []
+    for S_id_idx in range(len(ids)):
+        for T_id_idx in range(S_id_idx+1, len(ids)):
+            indicator.progress()
+            S_id, T_id = ids[S_id_idx], ids[T_id_idx]
+            count = len(index.seeds(S_id, T_id))
+            if count == 0:
+                continue
+            if set([S_id,T_id]) in true_overlaps:
+                pos += [count]
+            else:
+                neg += [count]
+
+    indicator.finish()
+
+    n_neg, bins_neg, hist_neg = plt.hist(neg, num_bins, color='red',
+        histtype='step', cumulative=True, normed=True, label='Non-overlapping reads')
+    n_pos, bins_pos, hist_pos = plt.hist(pos, num_bins, color='green',
+        histtype='step', cumulative=True, normed=True, label='Overlapping reads')
+    xmax = max(
+        bins_neg[len(filter(lambda x: n_neg[x]<0.999, range(len(bins_neg)-1)))],
+        bins_pos[len(filter(lambda x: n_pos[x]<0.999, range(len(bins_pos)-1)))]
+    )
+    plt.grid(True)
+    plt.xlim(-xmax/10, xmax)
+    plt.ylim(-0.1, 1.2)
+    plt.axvline(x=0, ymin=-0.1, ymax=1.2, color='k')
+    plt.axhline(y=0, xmin=-100, xmax=xmax, color='k')
+    plt.xticks([i*1000 for i in range(int(xmax/1000) + 1)], rotation='vertical')
+    plt.yticks([i*0.1 for i in range(11)], rotation='vertical')
+    plt.tick_params(axis='x', labelsize=8, direction='vertical')
+    plt.xlabel('Number of matching %d-mers' % index.wordlen)
+    plt.ylabel('Proportion of read-pairs (cumulative)')
+    plt.legend(loc='right')
+    plt.savefig(path)
+
+# FIXME docs
 def plot_seed_extension_rws(path, seqinfo, max_rws=225, draw_type='-+',
     logfile='scores.txt', true_overlaps=[]):
+
     with open(logfile) as f:
         data = [l.strip().split() for l in f.readlines() if l.strip()[-1] in draw_type]
 
@@ -61,24 +108,27 @@ def plot_seed_extension_rws(path, seqinfo, max_rws=225, draw_type='-+',
     plt.clf()
     fig = plt.figure(figsize=(5*dim,5*dim))
     for idx, datum in enumerate(data):
+        indicator.progress()
         S_tok, T_tok = datum[0][1:-1].split(',')
         S_id, S_idx = [int(i) for i in S_tok.split(':')]
         T_id, T_idx = [int(i) for i in T_tok.split(':')]
         S_start, T_start = seqinfo[S_id]['start'], seqinfo[T_id]['start']
         ax = fig.add_subplot(dim, dim, idx+1)
-        if set([S_id, T_id]) in true_overlaps:
-            color = 'green'
-            true_shift = T_start - S_start
-            ax.set_title('%d, %d (%d)' % (S_id, T_id, true_shift))
+        ax.set_title('%d, %d' % (S_id, T_id))
+        if true_overlaps:
+            if set([S_id, T_id]) in true_overlaps:
+                color = 'green'
+                true_shift = T_start - S_start
+                ax.set_title('%d, %d (%d)' % (S_id, T_id, true_shift))
+            else:
+                color = 'red'
         else:
-            ax.set_title('%d, %d' % (S_id, T_id))
-            color = 'red'
+            color = 'k'
 
         xs = [x*50 for x in range(len(datum[1]))]
         label = ' '.join([str(S_idx - T_idx), datum[2]])
         ax.plot(xs, datum[1], color=color, label=label)
         ax.legend()
-        indicator.progress()
 
     indicator.finish()
     plt.savefig(path)
@@ -184,7 +234,7 @@ def plot_shift_signifiance_discrimination(path, index, rolling_sum_width,
     neg_pvalues = []
     msg = 'Finding most significant shift for all pairs of sequences'
     indicator = ProgressIndicator(msg,
-        len(seqinfo) * (len(seqinfo)-1) / 2.0, percentage=False)
+        len(ids) * (len(ids)-1) / 2.0, percentage=False)
     indicator.start()
     for S_id_idx in range(len(ids)):
         for T_id_idx in range(S_id_idx+1, len(ids)):

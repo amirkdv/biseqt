@@ -27,7 +27,10 @@ seeds-$(WORDLEN):
 rw.$(WORDLEN).png:
 	python -c 'from align.tests import hp_assembly as T; T.plot_rw("$(DB)", "$@", "$(TRUE_GRAPH).gml");'
 
-.PHONY: seeds-$(WORDLEN) shift_pvalues.$(WORDLEN).png word_pvalues.$(WORDLEN).png rw.$(WORDLEN).png
+num_seeds.$(WORDLEN).png:
+	python -c 'from align.tests import hp_assembly as T; T.plot_num_seeds("$(DB)", "$@", "$(TRUE_GRAPH).gml");'
+
+.PHONY: seeds-$(WORDLEN) shift_pvalues.$(WORDLEN).png word_pvalues.$(WORDLEN).png rw.$(WORDLEN).png num_seeds.$(WORDLEN).png
 
 $(ASSEMBLED_GRAPH).gml:
 	python -c 'import align.tests.hp_assembly as T; T.build_overlap_graph("$(DB)", "$@")'

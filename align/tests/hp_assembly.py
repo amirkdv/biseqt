@@ -99,6 +99,14 @@ def plot_shift_pvalues(db, path, true_path):
         num_bins=500
     )
 
+def plot_num_seeds(db, path, true_path):
+    B = tuples.TuplesDB(db, alphabet=A)
+    Idx = tuples.Index(tuplesdb=B, **params)
+    G = igraph.read(true_path)
+    db_id = lambda vid: int(G.vs[vid]['name'].split('#')[1])
+    true_overlaps = [set([db_id(u), db_id(v)]) for u, v in G.get_edgelist()]
+    overlap.plot_num_seeds_discrimination(path, Idx, true_overlaps)
+
 def plot_seeds(db, path, true_path):
     B = tuples.TuplesDB(db, alphabet=A)
     Idx = tuples.Index(tuplesdb=B, **params)
