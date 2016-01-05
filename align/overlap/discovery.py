@@ -44,7 +44,39 @@ def extend_segments(S, T, segments, params, rw_collect=False):
     )
     return pw.Segment(c_obj=res) if res != ffi.NULL else None
 
-def analyze_shifts(seeds, S_len, T_len, rolling_sum_width):
+
+# FIXME docs
+ShiftWindow = namedtuple('ShiftWindow', ['S_len', 'T_len', 'width', 'shift'])
+
+# FIXME docs
+def rolling_sum(data, width):
+    if len(data) < width:
+        return
+    cur = 0
+    for idx in range(len(data)):
+        if idx >= width:
+            cur -= data[idx - width]
+        if idx < len(data):
+            cur += data[idx]
+        yield cur
+
+# FIXME docs
+def shift_window_significance(shift_window, num):
+    diag_len_squared = (shift_window.S_len - abs(shift_window.shift))**2 + \
+        (shift_window.T_len - abs(shift_window.shift))**2
+    log_pvalue = - log(shift_window.S_len) - log(shift_window.T_len) \
+        + log(shift_window.width) \
+        + 0.5 * log(diag_len_squared)
+    # we have num observations (each a seed) with the same probability
+    # of being matched by the null hypothesis:
+    log_pvalue *= num
+    # we are testing S_len+T_len simultaneous hypotheses; apply a Bonferroni
+    # correction:
+    log_pvalue += log(shift_window.S_len + shift_window.T_len)
+    return log_pvalue
+
+# FIXME find the strip with max number of shifts *per unit area*.
+def most_signitifcant_shift(S_len, T_len, seeds, rolling_sum_width):
     """Builds a smoothed distribution (via a rolling sum of known width) of
     shifts for the provided seeds of a pair of sequences of known lengths and
     returns the shift with most number of seeds and its p-value.
@@ -88,26 +120,6 @@ def analyze_shifts(seeds, S_len, T_len, rolling_sum_width):
         (mode_shift, log_pvalue): A tuple of the form ``(int, float)``.
 
     """
-    def window_log_pvalue(shift, num):
-        log_pvalue = -log(S_len) - log(T_len) + log(rolling_sum_width) \
-            + 0.5 * log( (S_len - abs(shift))**2 + (T_len - abs(shift))**2 )
-        # 1- we have num observations (each a seed) with the same probability
-        #    of being matched by the null hypothesis
-        # 2- we are testing S_len+T_len simultaneous hypotheses;
-        #    apply a Bonferroni correction:
-        return log(S_len + T_len) + num * log_pvalue
-
-    def rolling_sum(data):
-        if len(data) < rolling_sum_width:
-            return
-        cur = 0
-        for idx in range(0, len(data)):
-            if idx >= rolling_sum_width:
-                cur -= data[idx - rolling_sum_width]
-            if idx < len(data):
-                cur += data[idx]
-            yield cur
-
     shift_range = range(-T_len, S_len)
     shift_coverage = {shift:0 for shift in shift_range}
     for seed in seeds:
@@ -115,9 +127,13 @@ def analyze_shifts(seeds, S_len, T_len, rolling_sum_width):
         # are potentially overlapping):
         shift_coverage[seed.tx.S_idx - seed.tx.T_idx] += 1
 
-    shift_distrib = [x for x in rolling_sum([x[1] for x in sorted(shift_coverage.items())])]
+    shift_coverage = [x[1] for x in sorted(shift_coverage.items())]
+    shift_distrib = rolling_sum(shift_coverage, rolling_sum_width)
     mode_idx, mode = max(enumerate(shift_distrib), key=lambda x: x[1])
-    mode_shift = shift_range[min(mode_idx, len(shift_range)-1)]
-    log_pvalue = window_log_pvalue(mode_shift, mode)
+    most_dense_window = ShiftWindow(S_len=S_len, T_len=T_len,
+        width=rolling_sum_width,
+        shift=shift_range[min(mode_idx, len(shift_range)-1)]
+    )
+    log_pvalue = shift_window_significance(most_dense_window, mode)
 
-    return (mode_shift, log_pvalue)
+    return (most_dense_window.shift, log_pvalue)
