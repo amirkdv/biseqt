@@ -15,11 +15,7 @@ $(DB): $(READS)
 
 WORDLEN = $(shell echo $$WORDLEN)
 word_pvalues.$(WORDLEN).png:
-	python -c 'from align import tuples, seq; \
-		A = seq.Alphabet("ACGT"); \
-		B = tuples.TuplesDB("$(DB)", alphabet=A); \
-		I = tuples.Index(tuplesdb=B, wordlen=$(WORDLEN)); \
-		I.plot_pvalues("$@");'
+	python -c 'from align.tests import hp_assembly as T; T.plot_word_pvalues("$(DB)", "$@");'
 
 $(ASSEMBLED_GRAPH).gml:
 	python -c 'import align.tests.hp_assembly as T; T.overlap_by_seed_extension("$(DB)", "$@")'

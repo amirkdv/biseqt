@@ -555,7 +555,7 @@ class Index(object):
 
         return seeds
 
-    def plot_pvalues(self, path=None, num_bins=500):
+    def plot_word_pvalues(self, path=None, num_bins=500):
         if path is None:
             path = 'word_pvalues.%d.png' % self.wordlen
         with sqlite3.connect(self.tuplesdb.db) as conn:
