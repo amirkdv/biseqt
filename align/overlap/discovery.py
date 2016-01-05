@@ -4,9 +4,9 @@ import os.path
 from .. import pw, lib, ffi
 
 # TODO make this a C struct so the C code cleans up.
+# FIXME the documentation formatting is weird
 class SeedExtensionParams(namedtuple('SeedExtensionParams',
-    ['window', 'min_overlap_score', 'min_margin', 'max_new_mins', 'align_params'])):
-    # FIXME incorporate min_margin and fixup OverlapBuilder.build()
+    ['window', 'min_overlap_score', 'max_new_mins', 'align_params'])):
     """Represents the set of tuning parameters for seed extension.
 
     Attributes:
@@ -18,7 +18,11 @@ class SeedExtensionParams(namedtuple('SeedExtensionParams',
         align_params (pw.AlignParams): The alignment parameters for the
             rolling alignment.
     """
-    pass
+
+# FIXME docs
+OverlapDiscoveryParams = namedtuple('OverlapDiscoveryParams', [
+    'hp_condenser', 'seed_ext_params', 'shift_rolling_sum_width'
+])
 
 def extend_segments(S, T, segments, params, rw_collect=False):
     """Wraps :c:func:`extend()`: given two sequences and a number of
@@ -56,6 +60,7 @@ def rolling_sum(data, width):
             cur -= data[idx - width]
         if idx < len(data):
             cur += data[idx]
+        # FIXME yield the corresponding indices so we can double check
         yield cur
 
 # FIXME docs
@@ -76,6 +81,7 @@ class ShiftWindow(namedtuple('ShiftWindow', ['S_len', 'T_len', 'width', 'shift']
         return log_pvalue
 
 # FIXME find the strip with max number of shifts *per unit area*.
+# FIXME make some of these keyword arguments
 def most_signifcant_shift(S_len, T_len, seeds, rolling_sum_width):
     """Builds a smoothed distribution (via a rolling sum of known width) of
     shifts for the provided seeds of a pair of sequences of known lengths and
@@ -136,3 +142,59 @@ def most_signifcant_shift(S_len, T_len, seeds, rolling_sum_width):
     )
 
     return most_dense_window.shift, most_dense_window.significance(mode)
+
+# FIXME docs
+def _satisfies_min_margin(overlap, S_tx_len, T_tx_len, min_margin):
+    lmargin = abs(overlap.tx.S_idx - overlap.tx.T_idx)
+    rmargin = abs(overlap.tx.S_idx + S_tx_len - (overlap.tx.T_idx + T_tx_len))
+    if lmargin < min_margin:
+        return False
+    if lmargin == 0 and rmargin < min_margin:
+        return False
+    return True
+
+# FIXME docs
+def discover_overlap(S_id, T_id, rw_collect=False, **kwargs):
+    """
+    Args:
+        S_id (int):
+        T_id (int):
+
+    Keyword Args:
+        rw_collect (Optional[bool]):
+        index (tuples.Index):
+        params (OverlapDiscoveryParams):
+    """
+    index, params = kwargs['index'], kwargs['params']
+    seqinfo = index.tuplesdb.seqinfo()
+    S_len, T_len = seqinfo[S_id]['length'], seqinfo[T_id]['length']
+    seeds = index.seeds(S_id, T_id)
+
+    if not seeds:
+        return None
+
+    # TODO is there any use to the significance value itself?
+    best_shift, _ = most_signifcant_shift(S_len, T_len, seeds,
+        params.shift_rolling_sum_width)
+
+    seeds = sorted(seeds, key=lambda x: abs(x.tx.S_idx - x.tx.T_idx - best_shift))
+    # TODO do we need this? It kills the "quick" decisions:
+    # FIXME why is this a class method and not a module method?
+    # seeds = tuples.Index.maximal_seeds(seeds, S_id, T_id)
+
+    S = index.tuplesdb.loadseq(S_id)
+    T = index.tuplesdb.loadseq(T_id)
+    if params.hp_condenser:
+        # condense the sequences and their seeds; order is conserved:
+        S = params.hp_condenser.condense_sequence(S)
+        T = params.hp_condenser.condense_sequence(T)
+        seeds = (params.hp_condenser.condense_seed(S, T, s) for s in seeds)
+        seeds = filter(lambda x: x, seeds)
+
+
+    overlap = extend_segments(S, T, seeds, params.seed_ext_params, rw_collect=rw_collect)
+    if not overlap:
+        return None
+
+    assert(overlap.tx.T_idx * overlap.tx.S_idx == 0)
+    return overlap

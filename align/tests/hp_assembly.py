@@ -77,7 +77,7 @@ def true_overlaps(true_path):
     db_id = lambda vid: int(G.vs[vid]['name'].split('#')[1])
     return [set([db_id(u), db_id(v)]) for u, v in G.get_edgelist()]
 
-def create_db(db, reads='reads.fa'):
+def create_db(db, reads):
     B = tuples.TuplesDB(db, alphabet=A)
     Idx = tuples.Index(tuplesdb=B, **params)
     B.initdb()
@@ -133,7 +133,7 @@ def build_overlap_graph(db, path, true_path):
     Idx = tuples.Index(tuplesdb=B, **params)
     show_params()
     # FIXME:
-    G = overlap.OverlapBuilder(Idx, true_overlaps=true_overlaps(true_path),
+    G = overlap.OverlapBuilder(index=Idx, true_overlaps=true_overlaps(true_path),
         align_params=C_d, hp_condenser=Tr, **params).build()
     # G = overlap.OverlapBuilder(Idx, true_overlaps=true_overlaps(true_path)
     #     align_params=C, **params).build()

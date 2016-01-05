@@ -3,17 +3,9 @@ import sys
 import time
 from collections import namedtuple
 from .. import tuples, pw, homopolymeric, ProgressIndicator, lib, ffi
-from . import OverlapGraph, SeedExtensionParams, extend_segments, most_signifcant_shift
+from . import OverlapGraph, SeedExtensionParams, OverlapDiscoveryParams, extend_segments, most_signifcant_shift, discover_overlap
 
-# FIXME these two should be in the same place as SeedExtensionParams in discovery.
-ShiftSignificanceParams = namedtuple('ShiftSignificanceParams',
-    ['rolling_sum_width', 'significance_cutoff'])
-
-# FIXME
-OverlapDiscoveryParams = namedtuple('OverlapDiscoveryParams',
-    ['hp_condenser', 'seed_ext_params', 'shift_sig_params']
-)
-
+# FIXME this should be merged into graph.py as a stand alone function
 class OverlapBuilder(object):
     """Provided a :class:`align.tuples.Index` builds an overlap graph of all
     the sequences. All sequences must have already been indexed in the
@@ -59,19 +51,20 @@ class OverlapBuilder(object):
             random walk data for all tried extensions to 'scores.txt';
             default is False.
     """
-    def __init__(self, index, **kwargs):
-        self.hp_condenser = kwargs.get('hp_condenser', None)
-        self.index = index
+    def __init__(self, **kwargs):
+        self.index, self.min_margin = kwargs['index'], kwargs['min_margin']
+        names = ['window', 'min_overlap_score', 'max_new_mins', 'align_params']
+        seed_ext_params = SeedExtensionParams(**{k:kwargs[k] for k in names})
+        hp_condenser = kwargs.get('hp_condenser', None)
+        overlap_discover_args = {
 
-        self.seed_ext_params = {k:kwargs[k] for k in ['window', 'min_overlap_score', 'max_new_mins', 'align_params']}
-        self.seed_ext_params = SeedExtensionParams(**self.seed_ext_params)
-
-        self.shift_rolling_sum_width = kwargs['shift_rolling_sum_width']
-        self.lower_log_pvalue_cutoff = kwargs['lower_log_pvalue_cutoff']
-        self.upper_log_pvalue_cutoff = kwargs['upper_log_pvalue_cutoff']
-        self.min_margin = kwargs['min_margin']
+        }
+        self.params = OverlapDiscoveryParams(
+            hp_condenser=hp_condenser,
+            seed_ext_params=seed_ext_params,
+            shift_rolling_sum_width=kwargs['shift_rolling_sum_width']
+        )
         self.rw_collect = bool(kwargs.get('rw_collect', False))
-        self.seqinfo = self.index.tuplesdb.seqinfo()
 
     def build(self, true_overlaps=[]):
         """Builds a weighted, directed graph by using tuple methods. The
@@ -92,14 +85,10 @@ class OverlapBuilder(object):
             align.overlap.OverlapGraph: The overlap graph, potentially containing
                 cycles.
         """
-        process_time_spent = {
-            'extension': {'t.p.': 0, 'f.p.': 0, 't.n.': 0, 'f.n.': 0},
-            'p-values': 0,
-            'seeds': 0
-        }
         vs = set()
         es, ws = [], []
-        seqids = self.seqinfo.keys()
+        seqinfo = self.index.tuplesdb.seqinfo()
+        seqids = seqinfo.keys()
         msg = 'Extending seeds on potentially homologous sequences'
         indicator = ProgressIndicator(msg,
             self.index.num_potential_homolog_pairs(), percentage=False)
@@ -108,58 +97,19 @@ class OverlapBuilder(object):
         for S_id in seqids:
             for T_id in self.index.potential_homologs(S_id):
                 indicator.progress()
-                S_name = '%s %d' % (self.seqinfo[S_id]['name'], S_id)
-                T_name = '%s %d' % (self.seqinfo[T_id]['name'], T_id)
+                S_name = '%s %d' % (seqinfo[S_id]['name'], S_id)
+                T_name = '%s %d' % (seqinfo[T_id]['name'], T_id)
                 vs = vs.union([S_name, T_name])
 
-                # used to profile false/true positive/negatives.
-                cheat_overlaps = set([S_id, T_id]) in true_overlaps
-                # if not cheat_overlaps:
-                #     continue
-
-                # do they have any seeds in common?
-                _t = time.clock()
-                seeds = self.index.seeds(S_id, T_id)
-                process_time_spent['seeds'] += 1000 * (time.clock() - _t)
-
-                if not seeds:
-                    continue
-
-                # do the seeds obviously (statistically) indicate an overlap?
-                _t = time.clock()
-                overlap = self.overlap_by_seed_shift_distribution(seeds, S_id, T_id)
-                process_time_spent['p-values'] += 1000 * (time.clock() - _t)
-                if isinstance(overlap, pw.Segment):
-                    # FIXME some of these are later discarded because of margins,
-                    # we then get things like "10 out of 9 edges were decided by shift distribution"
-                    num_shift_decided += 1
-                if isinstance(overlap, list):
-                    seeds = overlap
-                    _t = time.clock()
-                    seeds = tuples.Index.maximal_seeds(seeds, S_id, T_id)
-
-                    process_time_spent['seeds'] += 1000 * (time.clock() - _t)
-                    _t = time.clock()
-                    overlap = self.overlap_by_seed_extension(seeds, S_id, T_id)
-                    t_extension = 1000 * (time.clock() - _t)
-                    if overlap:
-                        if cheat_overlaps:
-                            process_time_spent['extension']['t.p.'] += t_extension
-                        else:
-                            process_time_spent['extension']['f.p.'] += t_extension
-                    else:
-                        if cheat_overlaps:
-                            process_time_spent['extension']['f.n.'] += t_extension
-                        else:
-                            process_time_spent['extension']['t.n.'] += t_extension
-
-
+                # FIXME OverlapDiscoveryParams does not exist here yet
+                overlap = discover_overlap(S_id, T_id, index=self.index,
+                    params=self.params, rw_collect=self.rw_collect)
                 if not overlap:
                     continue
 
-                S_len = lib.tx_seq_len(overlap.tx.c_obj, 'S')
-                T_len = lib.tx_seq_len(overlap.tx.c_obj, 'T')
-                assert(overlap.tx.T_idx * overlap.tx.S_idx == 0)
+                S_tx_len = lib.tx_seq_len(overlap.tx.c_obj, 'S')
+                T_tx_len = lib.tx_seq_len(overlap.tx.c_obj, 'T')
+
                 lmargin = abs(overlap.tx.S_idx - overlap.tx.T_idx)
                 rmargin = abs(overlap.tx.S_idx + S_len - (overlap.tx.T_idx + T_len))
                 if lmargin < self.min_margin or \
@@ -167,9 +117,9 @@ class OverlapBuilder(object):
                     # end points are too close, ignore
                     continue
                 if overlap.tx.S_idx == 0 and overlap.tx.T_idx == 0:
-                    if S_len < T_len:
+                    if S_tx_len < T_tx_len:
                         es += [(S_name, T_name)]
-                    elif S_len > T_len:
+                    elif S_tx_len > T_tx_len:
                         es += [(T_name, S_name)]
                 elif overlap.tx.T_idx == 0:
                     es += [(S_name, T_name)]
@@ -197,76 +147,3 @@ class OverlapBuilder(object):
         sys.stderr.write('* %d out of %d edges where chosen by shift distribution\n' % (num_shift_decided, G.iG.ecount()))
         G.iG.es['weight'] = ws
         return G
-
-    # FIXME return a best shift so we can sort them in order (the order dies
-    # when we do maximal seeds)
-    # FIXME docs are out of date
-    def overlap_by_seed_shift_distribution(self, seeds, S_id, T_id):
-        """Decides whether the shift distribution of seeds for a given sequence
-        pair is "indicative" enough of an overlap or lack thereof.
-
-        Args:
-            seeds (list[Segment]): Exactly matching seeds as returned by
-                :attr:`index`.
-            S_id (int): The database ID of the "from" sequence.
-            T_id (int): The database ID of the "to" sequence.
-
-        Returns:
-            None|Segment|list[Segment]: Corresponding to scenarios described above.
-
-        """
-        S_len, T_len = self.seqinfo[S_id]['length'], self.seqinfo[T_id]['length']
-        mode_shift, log_pvalue = most_signifcant_shift(S_len, T_len,
-            seeds, self.shift_rolling_sum_width)
-
-        if log_pvalue > self.upper_log_pvalue_cutoff:
-            # definitely not overlapping:
-            return None
-        overlap_length = min(S_len, T_len + mode_shift) - max(0, mode_shift) if mode_shift < min(S_len,T_len) else 0
-        if log_pvalue < self.lower_log_pvalue_cutoff:
-            # definitely overlapping; fake the transcripts:
-            if mode_shift >= 0:
-                tx = pw.Transcript(S_idx=mode_shift, T_idx=0, score=overlap_length, opseq='M'*overlap_length)
-                return pw.Segment(S_id=S_id, T_id=T_id, tx=tx)
-            else:
-                tx = pw.Transcript(S_idx=0, T_idx=-mode_shift, score=overlap_length, opseq='M'*overlap_length)
-                return pw.Segment(S_id=S_id, T_id=T_id, tx=tx)
-
-        # Only return those seeds that have a shift close to the mode:
-        # FIXME should we return only some of the seeds?
-        # seeds = [seed for seed in seeds if abs(seed.tx.S_idx - seed.tx.T_idx - mode_shift) < 10 * self.shift_rolling_sum_width]
-        return sorted(seeds, key=lambda x: abs(x.tx.S_idx - x.tx.T_idx - mode_shift))
-
-    def overlap_by_seed_extension(self, seeds, S_id, T_id):
-        """Tries to find a seed among given seeds that extends to a full overlap alignment by consecutive
-        start/end-anchored overlap alignments in a moving window along the two
-        reads:
-
-          * If any such seed is found, the fully extended segment is returned.
-          * If no such seeds are found, ``None`` is returned.
-
-        Args:
-            seeds (list[Segment]): Exactly matching seeds as returned by
-                :attr:`index`.
-            S_id (int): The database ID of the "from" sequence.
-            T_id (int): The database ID of the "to" sequence.
-
-        Returns:
-            Segment|None: Depending on whether any seed successfully extends to boundaries.
-        """
-        S = self.index.tuplesdb.loadseq(S_id)
-        T = self.index.tuplesdb.loadseq(T_id)
-        # Calculate the score of each seed; FIXME do we need this?
-        for seed in seeds:
-            seed.tx.score = self.seed_ext_params.align_params.score(
-                S, T, seed.tx.opseq,
-                S_min_idx=seed.tx.S_idx, T_min_idx=seed.tx.T_idx
-            )
-        if self.hp_condenser:
-            # condense the sequences and their seeds:
-            S = self.hp_condenser.condense_sequence(S)
-            T = self.hp_condenser.condense_sequence(T)
-            seeds = (self.hp_condenser.condense_seed(S, T, s) for s in seeds)
-            seeds = filter(lambda x: x, seeds)
-
-        return extend_segments(S, T, seeds, self.seed_ext_params, rw_collect=self.rw_collect)

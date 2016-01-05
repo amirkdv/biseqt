@@ -30,6 +30,8 @@ class TuplesDB(object):
     def __init__(self, db, alphabet=None):
         assert isinstance(alphabet, seq.Alphabet)
         self.alphabet, self.db = alphabet, db
+        # populate the seqinfo cache
+        self.seqinfo(use_cache=False)
 
     def initdb(self):
         """Initializes the database: creates the required tables and
@@ -71,6 +73,9 @@ class TuplesDB(object):
             q = "INSERT INTO seq (name, description, seq) VALUES (?,?,?)"
             c.executemany(q, give_seq())
 
+        # update the seqinfo cache
+        self.seqinfo(use_cache=False)
+
     def loadseq(self, seqid):
         """Loads a sequence given its internal numeric seqid.
 
@@ -86,7 +91,8 @@ class TuplesDB(object):
             for row in c:
                 return seq.Sequence(str(row[0]), self.alphabet)
 
-    def seqinfo(self):
+    # FIXME revise format of metadata
+    def seqinfo(self, use_cache=True):
         """Return a dict of metadata about all sequences keyed by sequence ids
         as found in the ``seq`` table. The output looks like this::
 
@@ -98,17 +104,22 @@ class TuplesDB(object):
         Returns:
             dict: Metadata dicts in a dict keyed by sequence ID.
         """
+        if use_cache:
+            return self._seqinfo
+
+        self._seqinfo = {}
         with sqlite3.connect(self.db) as conn:
             c = conn.cursor()
             c.execute("SELECT id, name, LENGTH(seq) FROM seq")
-            seqs = {}
             for row in c:
-                seqs[row[0]] = {}
-                # see seq.make_sequencing_fixture()
-                seqs[row[0]]['name'], seqs[row[0]]['start'] = row[1].split('_')
-                seqs[row[0]]['start'] = int(seqs[row[0]]['start'][1:])
-                seqs[row[0]]['length'] = row[2]
-            return seqs
+                length = row[2]
+                name, start = row[1].split('_')
+                start = int(start[1:])
+                self._seqinfo[row[0]] = {
+                    'name': name, 'start': start, 'length': length
+                }
+
+        return self._seqinfo
 
     def seqids(self):
         """Returns a list of all seqids found in the ``seq`` table.
