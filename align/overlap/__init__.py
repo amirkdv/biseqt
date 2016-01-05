@@ -2,11 +2,13 @@
 
 from .graph import OverlapGraph
 
-from .discovery import SeedExtensionParams, extend_segments
-from .discovery import most_signitifcant_shift, plot_shift_signifiance_discrimination, plot_all_seeds
+from .discovery import SeedExtensionParams, extend_segments, most_signitifcant_shift
+from .discovery import plot_shift_signifiance_discrimination, plot_all_seeds, plot_seed_extension_rws
 
 from .builder import OverlapBuilder
 
 __all__ = ['OverlapGraph', 'OverlapBuilder', 'SeedExtensionParams',
-    'extend_segments', 'most_signitifcant_shift', 'plot_shift_signifiance_discrimination', 'plot_all_seeds'
+    'extend_segments', 'most_signitifcant_shift',
+    'plot_shift_signifiance_discrimination', 'plot_all_seeds',
+    'plot_seed_extension_rws'
 ]

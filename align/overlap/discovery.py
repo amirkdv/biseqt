@@ -1,6 +1,6 @@
 from collections import namedtuple
 from matplotlib import pyplot as plt
-from math import log
+from math import log, sqrt, ceil
 import os.path
 from .. import pw, lib, ffi, ProgressIndicator
 
@@ -45,6 +45,43 @@ def extend_segments(S, T, segments, params, rw_collect=False):
         params.window, params.max_new_mins, params.min_overlap_score, int(bool(rw_collect))
     )
     return pw.Segment(c_obj=res) if res != ffi.NULL else None
+
+# FIXME docs
+def plot_seed_extension_rws(path, seqinfo, max_rws=225, draw_type='-+',
+    logfile='scores.txt', true_overlaps=[]):
+    with open(logfile) as f:
+        data = [l.strip().split() for l in f.readlines() if l.strip()[-1] in draw_type]
+
+    data = data[:max_rws]
+    data = [[d[0], eval(d[1]), d[2]] for d in data]
+    indicator = ProgressIndicator('plotting score random walks', len(data))
+    indicator.start()
+    dim = ceil(sqrt(len(data)))
+
+    plt.clf()
+    fig = plt.figure(figsize=(5*dim,5*dim))
+    for idx, datum in enumerate(data):
+        S_tok, T_tok = datum[0][1:-1].split(',')
+        S_id, S_idx = [int(i) for i in S_tok.split(':')]
+        T_id, T_idx = [int(i) for i in T_tok.split(':')]
+        S_start, T_start = seqinfo[S_id]['start'], seqinfo[T_id]['start']
+        ax = fig.add_subplot(dim, dim, idx+1)
+        if set([S_id, T_id]) in true_overlaps:
+            color = 'green'
+            true_shift = T_start - S_start
+            ax.set_title('%d, %d (%d)' % (S_id, T_id, true_shift))
+        else:
+            ax.set_title('%d, %d' % (S_id, T_id))
+            color = 'red'
+
+        xs = [x*50 for x in range(len(datum[1]))]
+        label = ' '.join([str(S_idx - T_idx), datum[2]])
+        ax.plot(xs, datum[1], color=color, label=label)
+        ax.legend()
+        indicator.progress()
+
+    indicator.finish()
+    plt.savefig(path)
 
 
 # FIXME docs

@@ -267,4 +267,4 @@ class OverlapBuilder(object):
             seeds = (self.hp_condenser.condense_seed(S, T, s) for s in seeds)
             seeds = filter(lambda x: x, seeds)
 
-        return extend_segments(S, T, seeds, self.seed_ext_params)
+        return extend_segments(S, T, seeds, self.seed_ext_params, rw_collect=self.rw_collect)

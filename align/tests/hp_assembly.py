@@ -112,7 +112,17 @@ def plot_seeds(db, path, true_path):
         true_overlaps=true_overlaps
     )
 
-def overlap_by_seed_extension(db, path):
+def plot_rw(db, path, true_path):
+    B = tuples.TuplesDB(db, alphabet=A)
+    G = igraph.read(true_path)
+    db_id = lambda vid: int(G.vs[vid]['name'].split('#')[1])
+    true_overlaps = [set([db_id(u), db_id(v)]) for u, v in G.get_edgelist()]
+    overlap.plot_seed_extension_rws(
+        path, B.seqinfo(), max_rws=225, draw_type='-+',
+        logfile='scores.txt', true_overlaps=true_overlaps
+    )
+
+def build_overlap_graph(db, path):
     B = tuples.TuplesDB(db, alphabet=A)
     Idx = tuples.Index(tuplesdb=B, **params)
     show_params()
