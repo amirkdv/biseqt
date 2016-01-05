@@ -1,5 +1,5 @@
 from .. import ProgressIndicator
-from .discovery import most_signitifcant_shift
+from .discovery import most_signifcant_shift
 from math import sqrt, ceil
 from matplotlib import pyplot as plt
 
@@ -109,7 +109,7 @@ def plot_shift_signifiance_discrimination(path, index, rolling_sum_width,
             if not seeds:
                 continue
             S_len, T_len = seqinfo[S_id]['length'], seqinfo[T_id]['length']
-            _, log_pvalue = most_signitifcant_shift(S_len, T_len,
+            _, log_pvalue = most_signifcant_shift(S_len, T_len,
                 seeds, rolling_sum_width)
             if set([S_id, T_id]) in true_overlaps:
                 pos_pvalues += [log_pvalue]
@@ -156,7 +156,7 @@ def plot_all_seeds(index, rolling_sum_width, basedir='', true_overlaps=[]):
             seeds = index.seeds(S_id, T_id)
             if not seeds:
                 continue
-            best_shift, log_pvalue = most_signitifcant_shift(S_len, T_len,
+            best_shift, log_pvalue = most_signifcant_shift(S_len, T_len,
                 seeds, rolling_sum_width)
             label = 'Most significant shift = %d\nlog(p-value)=%.2f' % (best_shift, log_pvalue)
             overlay = [(best_shift, '#333333', label)]

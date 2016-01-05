@@ -1,8 +1,18 @@
 import re
 import sys
 import time
+from collections import namedtuple
 from .. import tuples, pw, homopolymeric, ProgressIndicator, lib, ffi
-from . import OverlapGraph, SeedExtensionParams, extend_segments, most_signitifcant_shift
+from . import OverlapGraph, SeedExtensionParams, extend_segments, most_signifcant_shift
+
+# FIXME these two should be in the same place as SeedExtensionParams in discovery.
+ShiftSignificanceParams = namedtuple('ShiftSignificanceParams',
+    ['rolling_sum_width', 'significance_cutoff'])
+
+# FIXME
+OverlapDiscoveryParams = namedtuple('OverlapDiscoveryParams',
+    ['hp_condenser', 'seed_ext_params', 'shift_sig_params']
+)
 
 class OverlapBuilder(object):
     """Provided a :class:`align.tuples.Index` builds an overlap graph of all
@@ -206,7 +216,7 @@ class OverlapBuilder(object):
 
         """
         S_len, T_len = self.seqinfo[S_id]['length'], self.seqinfo[T_id]['length']
-        mode_shift, log_pvalue = most_signitifcant_shift(S_len, T_len,
+        mode_shift, log_pvalue = most_signifcant_shift(S_len, T_len,
             seeds, self.shift_rolling_sum_width)
 
         if log_pvalue > self.upper_log_pvalue_cutoff:

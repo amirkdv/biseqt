@@ -5,7 +5,8 @@ from .. import pw, lib, ffi
 
 # TODO make this a C struct so the C code cleans up.
 class SeedExtensionParams(namedtuple('SeedExtensionParams',
-    ['window', 'min_overlap_score', 'max_new_mins', 'align_params'])):
+    ['window', 'min_overlap_score', 'min_margin', 'max_new_mins', 'align_params'])):
+    # FIXME incorporate min_margin and fixup OverlapBuilder.build()
     """Represents the set of tuning parameters for seed extension.
 
     Attributes:
@@ -75,7 +76,7 @@ class ShiftWindow(namedtuple('ShiftWindow', ['S_len', 'T_len', 'width', 'shift']
         return log_pvalue
 
 # FIXME find the strip with max number of shifts *per unit area*.
-def most_signitifcant_shift(S_len, T_len, seeds, rolling_sum_width):
+def most_signifcant_shift(S_len, T_len, seeds, rolling_sum_width):
     """Builds a smoothed distribution (via a rolling sum of known width) of
     shifts for the provided seeds of a pair of sequences of known lengths and
     returns the shift with most number of seeds and its p-value.
