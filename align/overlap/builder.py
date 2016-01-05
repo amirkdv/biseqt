@@ -63,7 +63,7 @@ class OverlapBuilder(object):
         self.rw_collect = bool(kwargs.get('rw_collect', False))
         self.seqinfo = self.index.tuplesdb.seqinfo()
 
-    def build(self):
+    def build(self, true_overlaps=[]):
         """Builds a weighted, directed graph by using tuple methods. The
         process has 3 steps:
 
@@ -97,27 +97,19 @@ class OverlapBuilder(object):
         indicator.start()
         for S_id in seqids:
             for T_id in self.index.potential_homologs(S_id):
-                S_info, T_info = self.seqinfo[S_id], self.seqinfo[T_id]
-                S_min_idx, T_min_idx = S_info['start'], T_info['start']
-                S_max_idx = S_info['start'] + S_info['length']
-                T_max_idx = T_info['start'] + T_info['length']
-                S_name = '%s %d-%d #%d' \
-                    % (S_info['name'], S_min_idx, S_max_idx, S_id)
-                T_name = '%s %d-%d #%d' \
-                    % (T_info['name'], T_min_idx, T_max_idx, T_id)
-
                 indicator.progress()
+                S_name = '%s %d' % (self.seqinfo[S_id]['name'], S_id)
+                T_name = '%s %d' % (self.seqinfo[T_id]['name'], T_id)
                 vs = vs.union([S_name, T_name])
 
                 # used to profile false/true positive/negatives.
-                cheat_overlaps = not (S_max_idx < T_min_idx or T_max_idx < S_min_idx)
+                cheat_overlaps = set([S_id, T_id]) in true_overlaps
                 # if not cheat_overlaps:
                 #     continue
 
                 # do they have any seeds in common?
                 _t = time.clock()
                 seeds = self.index.seeds(S_id, T_id)
-                true_shift = T_min_idx - S_min_idx
                 process_time_spent['seeds'] += 1000 * (time.clock() - _t)
 
                 if not seeds:

@@ -33,7 +33,7 @@ num_seeds.$(WORDLEN).png:
 .PHONY: seeds-$(WORDLEN) shift_pvalues.$(WORDLEN).png word_pvalues.$(WORDLEN).png rw.$(WORDLEN).png num_seeds.$(WORDLEN).png
 
 $(ASSEMBLED_GRAPH).gml:
-	python -c 'import align.tests.hp_assembly as T; T.build_overlap_graph("$(DB)", "$@")'
+	python -c 'import align.tests.hp_assembly as T; T.build_overlap_graph("$(DB)", "$@", "$(TRUE_GRAPH).gml")'
 	$(MAKE) -f assembly.mk diff SUMMARY_ONLY=True
 
 SUMMARY_ONLY = False

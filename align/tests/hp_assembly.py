@@ -72,6 +72,11 @@ def create_example(db, reads='reads.fa'):
         #hp_prob=params['hp_prob']
     )
 
+def true_overlaps(true_path):
+    G = igraph.read(true_path)
+    db_id = lambda vid: int(G.vs[vid]['name'].split('#')[1])
+    return [set([db_id(u), db_id(v)]) for u, v in G.get_edgelist()]
+
 def create_db(db, reads='reads.fa'):
     B = tuples.TuplesDB(db, alphabet=A)
     Idx = tuples.Index(tuplesdb=B, **params)
@@ -90,22 +95,18 @@ def plot_shift_pvalues(db, path, true_path):
     Idx = tuples.Index(tuplesdb=B, **params)
     G = igraph.read(true_path)
     db_id = lambda vid: int(G.vs[vid]['name'].split('#')[1])
-    true_overlaps = [set([db_id(u), db_id(v)]) for u, v in G.get_edgelist()]
     overlap.plot_shift_signifiance_discrimination(
         path,
         Idx,
         params['shift_rolling_sum_width'],
-        true_overlaps,
+        true_overlaps(true_path),
         num_bins=500
     )
 
 def plot_num_seeds(db, path, true_path):
     B = tuples.TuplesDB(db, alphabet=A)
     Idx = tuples.Index(tuplesdb=B, **params)
-    G = igraph.read(true_path)
-    db_id = lambda vid: int(G.vs[vid]['name'].split('#')[1])
-    true_overlaps = [set([db_id(u), db_id(v)]) for u, v in G.get_edgelist()]
-    overlap.plot_num_seeds_discrimination(path, Idx, true_overlaps)
+    overlap.plot_num_seeds_discrimination(path, Idx, true_overlaps(true_path))
 
 def plot_seeds(db, path, true_path):
     B = tuples.TuplesDB(db, alphabet=A)
@@ -122,21 +123,20 @@ def plot_seeds(db, path, true_path):
 
 def plot_rw(db, path, true_path):
     B = tuples.TuplesDB(db, alphabet=A)
-    G = igraph.read(true_path)
-    db_id = lambda vid: int(G.vs[vid]['name'].split('#')[1])
-    true_overlaps = [set([db_id(u), db_id(v)]) for u, v in G.get_edgelist()]
     overlap.plot_seed_extension_rws(
         path, B.seqinfo(), max_rws=225, draw_type='-+',
-        logfile='scores.txt', true_overlaps=true_overlaps
+        logfile='scores.txt', true_overlaps=true_overlaps(true_path)
     )
 
-def build_overlap_graph(db, path):
+def build_overlap_graph(db, path, true_path):
     B = tuples.TuplesDB(db, alphabet=A)
     Idx = tuples.Index(tuplesdb=B, **params)
     show_params()
     # FIXME:
-    G = overlap.OverlapBuilder(Idx, align_params=C_d, hp_condenser=Tr, **params).build()
-    #G = overlap.OverlapBuilder(Idx, C, **params).build()
+    G = overlap.OverlapBuilder(Idx, true_overlaps=true_overlaps(true_path),
+        align_params=C_d, hp_condenser=Tr, **params).build()
+    # G = overlap.OverlapBuilder(Idx, true_overlaps=true_overlaps(true_path)
+    #     align_params=C, **params).build()
     G.save(path)
 
 def overlap_graph_by_known_order(db):
