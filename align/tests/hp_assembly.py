@@ -3,7 +3,7 @@ import sys
 import os
 import igraph
 
-from .. import pw, tuples, seq, overlap, homopolymeric
+from .. import pw, tuples, seq, overlap, homopolymeric, overlap
 
 params = {
     'show_params': False,   # print a summary of parameters
@@ -79,6 +79,38 @@ def create_db(db, reads='reads.fa'):
     B.populate(reads);
     Idx.initdb()
     Idx.index()
+
+def plot_word_pvalues(db, path):
+    B = tuples.TuplesDB(db, alphabet=A)
+    Idx = tuples.Index(tuplesdb=B, **params)
+    Idx.plot_word_pvalues(path)
+
+def plot_shift_pvalues(db, path, true_path):
+    B = tuples.TuplesDB(db, alphabet=A)
+    Idx = tuples.Index(tuplesdb=B, **params)
+    G = igraph.read(true_path)
+    db_id = lambda vid: int(G.vs[vid]['name'].split('#')[1])
+    true_overlaps = [set([db_id(u), db_id(v)]) for u, v in G.get_edgelist()]
+    overlap.plot_shift_signifiance_discrimination(
+        path,
+        Idx,
+        params['shift_rolling_sum_width'],
+        true_overlaps,
+        num_bins=500
+    )
+
+def plot_seeds(db, path, true_path):
+    B = tuples.TuplesDB(db, alphabet=A)
+    Idx = tuples.Index(tuplesdb=B, **params)
+    G = igraph.read(true_path)
+    db_id = lambda vid: int(G.vs[vid]['name'].split('#')[1])
+    true_overlaps = [set([db_id(u), db_id(v)]) for u, v in G.get_edgelist()]
+    overlap.plot_all_seeds(
+        Idx,
+        params['shift_rolling_sum_width'],
+        basedir=path,
+        true_overlaps=true_overlaps
+    )
 
 def overlap_by_seed_extension(db, path):
     B = tuples.TuplesDB(db, alphabet=A)

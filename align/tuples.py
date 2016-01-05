@@ -568,7 +568,6 @@ class Index(object):
                 if pvalue:
                     log_pvalues += [log(pvalue)]
 
-
             plt.grid(True)
             plt.hist(log_pvalues, num_bins, normed=True, histtype='step', cumulative=True, color='k')
             plt.xlabel('Corrected log(p-value) of %d-words' % self.wordlen)
