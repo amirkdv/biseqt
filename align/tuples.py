@@ -1,6 +1,7 @@
 """Provides tools for *k*-mer analysis."""
 
 import sys
+import os.path
 import re
 import sqlite3
 from math import sqrt, erf, log
@@ -104,6 +105,10 @@ class TuplesDB(object):
         Returns:
             dict: Metadata dicts in a dict keyed by sequence ID.
         """
+        if not os.path.exists(self.db):
+            # initdb() has not been called for this path.
+            return None
+
         if use_cache:
             return self._seqinfo
 
