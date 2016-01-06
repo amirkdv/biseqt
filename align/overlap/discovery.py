@@ -1,7 +1,9 @@
 from collections import namedtuple
 from math import log
 import os.path
+import sys
 from .. import pw, lib, ffi, ProgressIndicator
+from . import OverlapGraph
 
 # TODO make this a C struct so the C code cleans up.
 # FIXME the documentation formatting is weird
@@ -200,6 +202,23 @@ def discover_overlap(S_id, T_id, rw_collect=False, **kwargs):
     return overlap
 
 # FIXME docs
+def overlap_direction(overlap, S_tx_len=None, T_tx_len=None):
+    if S_tx_len is None:
+        S_tx_len = lib.tx_seq_len(overlap.tx.c_obj, 'S')
+    if T_tx_len is None:
+        T_tx_len = lib.tx_seq_len(overlap.tx.c_obj, 'T')
+
+    assert(overlap.tx.S_idx * overlap.tx.T_idx == 0)
+
+    if overlap.tx.S_idx == 0 and overlap.tx.T_idx == 0:
+        # Edge case: the two sequences align with no gap at (0,0):
+        return '+' if S_tx_len < T_tx_len else '-'
+        # TODO what to do with the case where S_tx_len = T_tx_len?
+    else:
+        # We know exactly one of `overlap.tx.{S_idx,T_idx}` is zero:
+        return '+' if overlap.tx.T_idx == 0 else '-'
+
+# FIXME docs
 def build_overlap_graph(**kwargs):
     """
     Keyword Args:
@@ -266,20 +285,8 @@ def build_overlap_graph(**kwargs):
                 # end points are too close, ignore
                 continue
 
-            if overlap.tx.S_idx == 0 and overlap.tx.T_idx == 0:
-                # Edge case: the two sequences align with no gap at (0,0):
-                if S_tx_len < T_tx_len:
-                    es += [(S_name, T_name)]
-                elif S_tx_len > T_tx_len:
-                    es += [(T_name, S_name)]
-                # TODO what to do with the case where S_tx_len = T_tx_len?
-            elif overlap.tx.T_idx == 0:
-                es += [(S_name, T_name)]
-            elif overlap.tx.S_idx == 0:
-                es += [(T_name, S_name)]
-            else:
-                raise RuntimeError("This should not have happened")
-
+            d = overlap_direction(overlap, S_tx_len=S_tx_len, T_tx_len=T_tx_len)
+            es += [(S_name, T_name)] if d == '+' else [(T_name, S_name)]
             ws += [overlap.tx.score]
 
     indicator.finish()
@@ -288,6 +295,5 @@ def build_overlap_graph(**kwargs):
     G.iG.add_vertices(list(vs))
     es = [(G.iG.vs.find(name=u), G.iG.vs.find(name=v)) for u, v in es]
     G.iG.add_edges(es)
-    sys.stderr.write('* %d out of %d edges where chosen by shift distribution\n' % (num_shift_decided, G.iG.ecount()))
     G.iG.es['weight'] = ws
     return G

@@ -134,9 +134,9 @@ def build_overlap_graph(db, path, true_path):
     show_params()
     # FIXME:
     G = overlap.build_overlap_graph(index=Idx, true_overlaps=true_overlaps(true_path),
-        align_params=C_d, hp_condenser=Tr, **params).build()
+        align_params=C_d, hp_condenser=Tr, **params)
     # G = overlap.build_overlap_graph(Idx, true_overlaps=true_overlaps(true_path)
-    #     align_params=C, **params).build()
+    #     align_params=C, **params)
     G.save(path)
 
 def overlap_graph_by_known_order(db):
