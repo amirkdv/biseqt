@@ -2,7 +2,7 @@
 import sys
 import os
 import igraph
-from .. import pw, tuples, seq, overlap, homopolymeric, overlap
+from .. import pw, tuples, seq, overlap, homopolymeric, overlap, assembly
 
 params = {
     'show_params': False,   # print a summary of parameters
@@ -44,6 +44,17 @@ C = pw.AlignParams(
     ge_score=ge_score
 )
 C_d = Tr.condense_align_params(C, hp_gap_score=params['hp_gap_score'])
+od_params = overlap.OverlapDiscoveryParams(
+    seed_ext_params=overlap.SeedExtensionParams(
+        window=params['window'],
+        min_overlap_score=params['min_overlap_score'],
+        max_new_mins=params['max_new_mins'],
+        align_params=C_d,
+        #align_params=C
+    ),
+    shift_rolling_sum_width=params['shift_rolling_sum_width'],
+    hp_condenser=Tr,
+)
 subst_scores_d = C_d.subst_scores
 db_id = lambda G, vid: int(G.vs[vid]['name'].split('#')[1])
 
@@ -76,13 +87,15 @@ def true_overlaps(true_path):
     G = igraph.read(true_path)
     return [set([db_id(G, u), db_id(G, v)]) for u, v in G.get_edgelist()]
 
-def create_db(db, reads):
-    B = tuples.TuplesDB(db, alphabet=A)
-    Idx = tuples.Index(tuplesdb=B, **params)
-    B.initdb()
-    B.populate(reads);
-    Idx.initdb()
-    Idx.index()
+def create_denovo_db(db, reads):
+    assembler = assembly.DeNovoAssembler(db=db, alphabet=A, **params)
+    assembler.initialize(reads)
+
+def build_denovo_overlap_graph(db, path, true_path):
+    assembler = assembly.DeNovoAssembler(db=db, alphabet=A, **params)
+    show_params()
+    G = assembler.overlap_graph(od_params, min_margin=params['min_margin'], rw_collect=params['rw_collect'])
+    G.save(path)
 
 def plot_word_pvalues(db, path):
     B = tuples.TuplesDB(db, alphabet=A)
@@ -124,17 +137,6 @@ def plot_rw(db, path, true_path):
         path, B.seqinfo(), max_rws=225, draw_type='-+',
         logfile='scores.txt', true_overlaps=true_overlaps(true_path)
     )
-
-def build_overlap_graph(db, path, true_path):
-    B = tuples.TuplesDB(db, alphabet=A)
-    Idx = tuples.Index(tuplesdb=B, **params)
-    show_params()
-    # FIXME:
-    G = overlap.build_overlap_graph(index=Idx, true_overlaps=true_overlaps(true_path),
-        align_params=C_d, hp_condenser=Tr, **params)
-    # G = overlap.build_overlap_graph(Idx, true_overlaps=true_overlaps(true_path)
-    #     align_params=C, **params)
-    G.save(path)
 
 def overlap_graph_by_known_order(db):
     """Builds the *correct* weighted, directed graph by using hints left in

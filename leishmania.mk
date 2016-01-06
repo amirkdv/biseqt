@@ -24,9 +24,6 @@ $(ANNOTATED_READS): $(REFERENCE) $(READS)
 	bwa index $(REFERENCE) 2>&1 | sed 's/^/|  /' >&2
 	READS=$(READS) DB=$(REFERENCE) python prepare.py $@
 
-$(ASSEMBLY_DB):
-	python -c 'import align.tests.hp_assembly as A; A.create_db("$@", "$(ANNOTATED_READS)")'
-
 ASSEMBLY_TARGET = leishmania.gml
 assembly:
 	$(MAKE) -f assembly.mk $(ASSEMBLY_TARGET) $(ASSEMBLY_OPTS)

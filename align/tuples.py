@@ -10,6 +10,9 @@ from collections import namedtuple
 from matplotlib import pyplot as plt
 from . import pw, seq, ProgressIndicator, CffiObject, ffi, lib
 
+READ_TYPE = 0
+REFERENCE_TYPE = 1
+
 class TuplesDB(object):
     """Wraps an SQLite database containing tuple indices for sequences. For
     all indexing and querying refer to :class:`Index`. For now,
@@ -21,7 +24,7 @@ class TuplesDB(object):
         CREATE TABLE seq (
           'id' integer PRIMARY KEY ASC,
           'name' text,
-          'description' text,
+          'type' integer,
           'seq' text
         );
 
@@ -46,13 +49,13 @@ class TuplesDB(object):
                 CREATE TABLE seq (
                   'id' integer PRIMARY KEY ASC,
                   'name' text,
-                  'description' text,
+                  'type' text,
                   'seq' text
                 );
             """
             c.execute(q)
 
-    def populate(self, fasta_src):
+    def populate(self, fasta_src, seq_type):
         """Given a FASTA source file, loads all the sequences (up to a limit,
         if specified) into the ``seq`` table.
 
@@ -63,14 +66,12 @@ class TuplesDB(object):
         """
         sys.stderr.write('Loading sequences from: %s\n' % fasta_src)
 
-        def give_seq():
-            for idx, seq in enumerate(SeqIO.parse(fasta_src, "fasta")):
-                yield (str(seq.id), str(seq.description), str(seq.seq))
+        recs = ((str(s.id), str(s.seq), seq_type) for s in SeqIO.parse(fasta_src, 'fasta'))
 
         with sqlite3.connect(self.db) as conn:
             c = conn.cursor()
-            q = "INSERT INTO seq (name, description, seq) VALUES (?,?,?)"
-            c.executemany(q, give_seq())
+            q = 'INSERT INTO seq (name, seq, type) VALUES (?,?,?)'
+            c.executemany(q, recs)
 
         # update the seqinfo cache
         self.seqinfo(use_cache=False)
@@ -113,13 +114,10 @@ class TuplesDB(object):
         self._seqinfo = {}
         with sqlite3.connect(self.db) as conn:
             c = conn.cursor()
-            c.execute("SELECT id, name, LENGTH(seq) FROM seq")
+            c.execute("SELECT id, name, LENGTH(seq), type FROM seq")
             for row in c:
-                length = row[2]
-                name, start = row[1].split('_')
-                start = int(start[1:])
                 self._seqinfo[row[0]] = {
-                    'name': name, 'start': start, 'length': length
+                    'name': row[1], 'length': row[2], 'type': row[3]
                 }
 
         return self._seqinfo
