@@ -133,9 +133,9 @@ def build_overlap_graph(db, path, true_path):
     Idx = tuples.Index(tuplesdb=B, **params)
     show_params()
     # FIXME:
-    G = overlap.OverlapBuilder(index=Idx, true_overlaps=true_overlaps(true_path),
+    G = overlap.build_overlap_graph(index=Idx, true_overlaps=true_overlaps(true_path),
         align_params=C_d, hp_condenser=Tr, **params).build()
-    # G = overlap.OverlapBuilder(Idx, true_overlaps=true_overlaps(true_path)
+    # G = overlap.build_overlap_graph(Idx, true_overlaps=true_overlaps(true_path)
     #     align_params=C, **params).build()
     G.save(path)
 

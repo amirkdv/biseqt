@@ -1,7 +1,7 @@
 from collections import namedtuple
 from math import log
 import os.path
-from .. import pw, lib, ffi
+from .. import pw, lib, ffi, ProgressIndicator
 
 # TODO make this a C struct so the C code cleans up.
 # FIXME the documentation formatting is weird
@@ -198,3 +198,96 @@ def discover_overlap(S_id, T_id, rw_collect=False, **kwargs):
 
     assert(overlap.tx.T_idx * overlap.tx.S_idx == 0)
     return overlap
+
+# FIXME docs
+def build_overlap_graph(**kwargs):
+    """
+    Keyword Args:
+        index (tuples.Index): A tuples index that responds to
+            :func:`seeds() <align.tuples.Index.seeds>`.
+        align_params (pw.AlignParams): The alignment parameters for the
+            rolling alignment.
+        hp_condenser (homopolymeric.HpCondenser): If specified,
+            all alignments will be performed in condensed alphabet.
+            Consequently, all other arguments are interpretted in the condensed
+            alphabet.
+        window (int): The size of the rolling window.
+        min_overlap_score (float): The minimum required score for an alignment
+            to be reported.
+        min_margin (int): The minimum margin required for the direction of an
+            overlap to be reliable; default is :attr:`window`.
+        shift_rolling_sum_width (int): The width of the rolling sum used to
+            find the mode of the shifts distribution.
+        rw_collect (Optional[bool]): Whether to ask libalign to dump score
+            random walk data for all tried extensions to 'scores.txt';
+            default is False.
+    Return:
+        overlap.OverlapGraph:
+    """
+    index, min_margin = kwargs['index'], kwargs['min_margin']
+    names = ['window', 'min_overlap_score', 'max_new_mins', 'align_params']
+    seed_ext_params = SeedExtensionParams(**{k:kwargs[k] for k in names})
+    hp_condenser = kwargs.get('hp_condenser', None)
+    od_params = OverlapDiscoveryParams(
+        hp_condenser=hp_condenser,
+        seed_ext_params=seed_ext_params,
+        shift_rolling_sum_width=kwargs['shift_rolling_sum_width']
+    )
+    rw_collect = bool(kwargs.get('rw_collect', False))
+
+    vs = set()
+    es, ws = [], []
+    seqinfo = index.tuplesdb.seqinfo()
+    seqids = seqinfo.keys()
+    msg = 'Extending seeds on potentially homologous sequences'
+    indicator = ProgressIndicator(msg,
+        index.num_potential_homolog_pairs(), percentage=False)
+    num_shift_decided = 0
+    indicator.start()
+    for S_id in seqids:
+        for T_id in index.potential_homologs(S_id):
+            indicator.progress()
+            S_name = '%s %d' % (seqinfo[S_id]['name'], S_id)
+            T_name = '%s %d' % (seqinfo[T_id]['name'], T_id)
+            vs = vs.union([S_name, T_name])
+
+            overlap = discover_overlap(S_id, T_id, index=index,
+                params=od_params, rw_collect=rw_collect)
+            if not overlap:
+                continue
+
+            S_tx_len = lib.tx_seq_len(overlap.tx.c_obj, 'S')
+            T_tx_len = lib.tx_seq_len(overlap.tx.c_obj, 'T')
+
+            lmargin = abs(overlap.tx.S_idx - overlap.tx.T_idx)
+            rmargin = abs(overlap.tx.S_idx + S_tx_len - (overlap.tx.T_idx + T_tx_len))
+            if lmargin < min_margin or \
+                (lmargin == 0 and rmargin < min_margin):
+                # end points are too close, ignore
+                continue
+
+            if overlap.tx.S_idx == 0 and overlap.tx.T_idx == 0:
+                # Edge case: the two sequences align with no gap at (0,0):
+                if S_tx_len < T_tx_len:
+                    es += [(S_name, T_name)]
+                elif S_tx_len > T_tx_len:
+                    es += [(T_name, S_name)]
+                # TODO what to do with the case where S_tx_len = T_tx_len?
+            elif overlap.tx.T_idx == 0:
+                es += [(S_name, T_name)]
+            elif overlap.tx.S_idx == 0:
+                es += [(T_name, S_name)]
+            else:
+                raise RuntimeError("This should not have happened")
+
+            ws += [overlap.tx.score]
+
+    indicator.finish()
+
+    G = OverlapGraph()
+    G.iG.add_vertices(list(vs))
+    es = [(G.iG.vs.find(name=u), G.iG.vs.find(name=v)) for u, v in es]
+    G.iG.add_edges(es)
+    sys.stderr.write('* %d out of %d edges where chosen by shift distribution\n' % (num_shift_decided, G.iG.ecount()))
+    G.iG.es['weight'] = ws
+    return G
