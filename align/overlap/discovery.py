@@ -2,7 +2,7 @@ from collections import namedtuple
 from math import log
 import os.path
 import sys
-from .. import pw, lib, ffi, ProgressIndicator
+from .. import pw, tuples, lib, ffi, ProgressIndicator
 from . import OverlapGraph
 
 # TODO make this a C struct so the C code cleans up.
@@ -147,6 +147,7 @@ def most_signifcant_shift(S_len, T_len, seeds, rolling_sum_width):
 
 # FIXME docs
 def _satisfies_min_margin(overlap, S_tx_len, T_tx_len, min_margin):
+    assert(overlap.tx.S_idx * overlap.tx.T_idx == 0)
     lmargin = abs(overlap.tx.S_idx - overlap.tx.T_idx)
     rmargin = abs(overlap.tx.S_idx + S_tx_len - (overlap.tx.T_idx + T_tx_len))
     if lmargin < min_margin:
@@ -179,10 +180,8 @@ def discover_overlap(S_id, T_id, rw_collect=False, **kwargs):
     best_shift, _ = most_signifcant_shift(S_len, T_len, seeds,
         params.shift_rolling_sum_width)
 
+    seeds = tuples.maximal_seeds(seeds, S_id, T_id)
     seeds = sorted(seeds, key=lambda x: abs(x.tx.S_idx - x.tx.T_idx - best_shift))
-    # TODO do we need this? It kills the "quick" decisions:
-    # FIXME why is this a class method and not a module method?
-    # seeds = tuples.Index.maximal_seeds(seeds, S_id, T_id)
 
     S = index.tuplesdb.loadseq(S_id)
     T = index.tuplesdb.loadseq(T_id)
@@ -193,7 +192,6 @@ def discover_overlap(S_id, T_id, rw_collect=False, **kwargs):
         seeds = (params.hp_condenser.condense_seed(S, T, s) for s in seeds)
         seeds = filter(lambda x: x, seeds)
 
-
     overlap = extend_segments(S, T, seeds, params.seed_ext_params, rw_collect=rw_collect)
     if not overlap:
         return None
@@ -202,12 +200,7 @@ def discover_overlap(S_id, T_id, rw_collect=False, **kwargs):
     return overlap
 
 # FIXME docs
-def overlap_direction(overlap, S_tx_len=None, T_tx_len=None):
-    if S_tx_len is None:
-        S_tx_len = lib.tx_seq_len(overlap.tx.c_obj, 'S')
-    if T_tx_len is None:
-        T_tx_len = lib.tx_seq_len(overlap.tx.c_obj, 'T')
-
+def overlap_direction(overlap, S_tx_len, T_tx_len):
     assert(overlap.tx.S_idx * overlap.tx.T_idx == 0)
 
     if overlap.tx.S_idx == 0 and overlap.tx.T_idx == 0:
@@ -266,8 +259,8 @@ def build_overlap_graph(**kwargs):
     for S_id in seqids:
         for T_id in index.potential_homologs(S_id):
             indicator.progress()
-            S_name = '%s %d' % (seqinfo[S_id]['name'], S_id)
-            T_name = '%s %d' % (seqinfo[T_id]['name'], T_id)
+            S_name = '%s #%d' % (seqinfo[S_id]['name'], S_id)
+            T_name = '%s #%d' % (seqinfo[T_id]['name'], T_id)
             vs = vs.union([S_name, T_name])
 
             overlap = discover_overlap(S_id, T_id, index=index,
@@ -278,15 +271,14 @@ def build_overlap_graph(**kwargs):
             S_tx_len = lib.tx_seq_len(overlap.tx.c_obj, 'S')
             T_tx_len = lib.tx_seq_len(overlap.tx.c_obj, 'T')
 
-            lmargin = abs(overlap.tx.S_idx - overlap.tx.T_idx)
-            rmargin = abs(overlap.tx.S_idx + S_tx_len - (overlap.tx.T_idx + T_tx_len))
-            if lmargin < min_margin or \
-                (lmargin == 0 and rmargin < min_margin):
-                # end points are too close, ignore
+            if not _satisfies_min_margin(overlap, S_tx_len, T_tx_len, min_margin):
                 continue
 
-            d = overlap_direction(overlap, S_tx_len=S_tx_len, T_tx_len=T_tx_len)
-            es += [(S_name, T_name)] if d == '+' else [(T_name, S_name)]
+            if overlap_direction(overlap, S_tx_len, T_tx_len) == '+':
+                es += [(S_name, T_name)]
+            else:
+                es += [(T_name, S_name)]
+
             ws += [overlap.tx.score]
 
     indicator.finish()

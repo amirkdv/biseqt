@@ -590,41 +590,41 @@ class Index(object):
             plt.ylabel('Cumulative distribution')
             plt.savefig(path, dpi=300)
 
-    @classmethod
-    def maximal_seeds(cls, seeds, S_id, T_id):
-        """Given a list of exactly matching segments, reduces them into a list
-        of *maximal* exactly matching segments in increasing order of ``S_idx``.
-        A segment is in its maximal form if it cannot be extended in either
-        direction by an exact match.
 
-        Args:
-            list[pw.Segment]: Exactly matching segments, potentially overlapping.
-            S_id (int): The database ID of the "from" sequence.
-            T_id (int): The database ID of the "to" sequence.
+def maximal_seeds(seeds, S_id, T_id):
+    """Given a list of exactly matching segments, reduces them into a list
+    of *maximal* exactly matching segments in increasing order of ``S_idx``.
+    A segment is in its maximal form if it cannot be extended in either
+    direction by an exact match.
 
-        Returns
-            list[pw.Segment]: Maximal segments, guaranteed to not overlap.
-        """
-        seeds.sort(key=lambda s: s.tx.S_idx)
-        # merge overlapping tuples:
-        idx = 0
-        while idx < len(seeds):
-            cand = idx + 1
-            while cand < len(seeds):
-                shift_S = seeds[cand].tx.S_idx - seeds[idx].tx.S_idx
-                shift_T = seeds[cand].tx.T_idx - seeds[idx].tx.T_idx
-                # we know the transcripts are all M's.
-                if shift_S == shift_T and shift_S > 0 and \
-                   shift_S < lib.strlen(seeds[idx].tx.opseq):
-                    tx = pw.Transcript(
-                        S_idx=seeds[idx].tx.S_idx,
-                        T_idx=seeds[idx].tx.T_idx,
-                        score=0,
-                        opseq=seeds[cand].tx.opseq + 'M'*shift_S
-                    )
-                    seeds[idx] = pw.Segment(S_id=S_id, T_id=T_id, tx=tx)
-                    seeds.pop(cand)
-                else:
-                    cand += 1
-            idx += 1
-        return seeds
+    Args:
+        list[pw.Segment]: Exactly matching segments, potentially overlapping.
+        S_id (int): The database ID of the "from" sequence.
+        T_id (int): The database ID of the "to" sequence.
+
+    Returns
+        list[pw.Segment]: Maximal segments, guaranteed to not overlap.
+    """
+    seeds.sort(key=lambda s: s.tx.S_idx)
+    # merge overlapping tuples:
+    idx = 0
+    while idx < len(seeds):
+        cand = idx + 1
+        while cand < len(seeds):
+            shift_S = seeds[cand].tx.S_idx - seeds[idx].tx.S_idx
+            shift_T = seeds[cand].tx.T_idx - seeds[idx].tx.T_idx
+            # we know the transcripts are all M's.
+            if shift_S == shift_T and shift_S > 0 and \
+               shift_S < lib.strlen(seeds[idx].tx.opseq):
+                tx = pw.Transcript(
+                    S_idx=seeds[idx].tx.S_idx,
+                    T_idx=seeds[idx].tx.T_idx,
+                    score=0,
+                    opseq=seeds[cand].tx.opseq + 'M'*shift_S
+                )
+                seeds[idx] = pw.Segment(S_id=S_id, T_id=T_id, tx=tx)
+                seeds.pop(cand)
+            else:
+                cand += 1
+        idx += 1
+    return seeds

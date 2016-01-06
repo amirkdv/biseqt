@@ -46,6 +46,7 @@ C = pw.AlignParams(
 )
 C_d = Tr.condense_align_params(C, hp_gap_score=params['hp_gap_score'])
 subst_scores_d = C_d.subst_scores
+db_id = lambda G, vid: int(G.vs[vid]['name'].split('#')[1])
 
 def show_params():
     if not params['show_params']:
@@ -74,8 +75,7 @@ def create_example(db, reads='reads.fa'):
 
 def true_overlaps(true_path):
     G = igraph.read(true_path)
-    db_id = lambda vid: int(G.vs[vid]['name'].split('#')[1])
-    return [set([db_id(u), db_id(v)]) for u, v in G.get_edgelist()]
+    return [set([db_id(G, u), db_id(G, v)]) for u, v in G.get_edgelist()]
 
 def create_db(db, reads):
     B = tuples.TuplesDB(db, alphabet=A)
@@ -94,7 +94,6 @@ def plot_shift_pvalues(db, path, true_path):
     B = tuples.TuplesDB(db, alphabet=A)
     Idx = tuples.Index(tuplesdb=B, **params)
     G = igraph.read(true_path)
-    db_id = lambda vid: int(G.vs[vid]['name'].split('#')[1])
     overlap.plot_shift_signifiance_discrimination(
         path,
         Idx,
@@ -112,8 +111,7 @@ def plot_seeds(db, path, true_path):
     B = tuples.TuplesDB(db, alphabet=A)
     Idx = tuples.Index(tuplesdb=B, **params)
     G = igraph.read(true_path)
-    db_id = lambda vid: int(G.vs[vid]['name'].split('#')[1])
-    true_overlaps = [set([db_id(u), db_id(v)]) for u, v in G.get_edgelist()]
+    true_overlaps = [set([db_id(G, u), db_id(G, v)]) for u, v in G.get_edgelist()]
     overlap.plot_all_seeds(
         Idx,
         params['shift_rolling_sum_width'],
@@ -157,25 +155,27 @@ def overlap_graph_by_known_order(db):
     for sid_idx in range(len(seqids)):
         for tid_idx in range(sid_idx + 1, len(seqids)):
             S_id, T_id = seqids[sid_idx], seqids[tid_idx]
-            S_info, T_info = seqinfo[S_id], seqinfo[T_id]
-            S_min_idx, S_max_idx = S_info['start'], S_info['start'] + S_info['length']
-            T_min_idx, T_max_idx = T_info['start'], T_info['start'] + T_info['length']
-            S_name = '%s %d-%d #%d' % (S_info['name'], S_min_idx, S_max_idx, S_id)
-            T_name = '%s %d-%d #%d' % (T_info['name'], T_min_idx, T_max_idx, T_id)
+            S_start, T_start = seqinfo[S_id]['start'], seqinfo[T_id]['start']
+            S_end = S_start + seqinfo[S_id]['length']
+            T_end = T_start + seqinfo[T_id]['length']
+            S_name = '%s #%d' % (seqinfo[S_id]['name'], S_id)
+            T_name = '%s #%d' % (seqinfo[T_id]['name'], T_id)
+
             vs = vs.union(set([S_name, T_name]))
-            overlap_len = min(S_max_idx, T_max_idx) - max(S_min_idx, T_min_idx)
+            overlap_len = min(S_end, T_end) - max(S_start, T_start)
+            # FIXME use overlap.overlap_direction
             if overlap_len > 0:
-                if S_min_idx < T_min_idx:
+                if S_start < T_start:
                     es += [(S_name, T_name)]
                     ws += [overlap_len]
-                elif S_min_idx > T_min_idx:
+                elif S_start > T_start:
                     es += [(T_name, S_name)]
                     ws += [overlap_len]
                 # if start is equal, edge goes from shorter read to longer read
-                elif S_max_idx < T_max_idx:
+                elif S_end < T_end:
                     es += [(S_name, T_name)]
                     ws += [overlap_len]
-                elif S_max_idx > T_max_idx:
+                elif S_end > T_end:
                     es += [(T_name, S_name)]
                     ws += [overlap_len]
                 # if start and end is equal, reads are identical, ignore.
