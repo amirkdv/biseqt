@@ -2,7 +2,6 @@
 import sys
 import os
 import igraph
-
 from .. import pw, tuples, seq, overlap, homopolymeric, overlap
 
 params = {
@@ -18,8 +17,8 @@ params = {
     'max_new_mins': 5,       # how many consecutive drops are allowed.
     'min_overlap_score': 500,# minimum score required for an overlap to be reported.
     'shift_rolling_sum_width': 100,
-    'lower_log_pvalue_cutoff': -200, # -10000,
-    'upper_log_pvalue_cutoff': 0, # -800,
+    'lower_log_pvalue_cutoff': -200, # FIXME
+    'upper_log_pvalue_cutoff': 0, # FIXME
     # ------------- HP / Index ----------------
     'min_seeds_for_homology': 1, # minimum number of seeds for two reads to be considered.
     'min_word_log_pvalue': -5, # minimum p-value allowed for a word to be considered a seed

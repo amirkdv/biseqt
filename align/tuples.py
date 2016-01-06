@@ -52,7 +52,7 @@ class TuplesDB(object):
             """
             c.execute(q)
 
-    def populate(self, fasta_src, lim=-1):
+    def populate(self, fasta_src):
         """Given a FASTA source file, loads all the sequences (up to a limit,
         if specified) into the ``seq`` table.
 
@@ -65,10 +65,8 @@ class TuplesDB(object):
 
         def give_seq():
             for idx, seq in enumerate(SeqIO.parse(fasta_src, "fasta")):
-                if lim < 0 or idx < lim:
-                    yield (str(seq.id), str(seq.description), str(seq.seq))
-                else:
-                    break
+                yield (str(seq.id), str(seq.description), str(seq.seq))
+
         with sqlite3.connect(self.db) as conn:
             c = conn.cursor()
             q = "INSERT INTO seq (name, description, seq) VALUES (?,?,?)"
