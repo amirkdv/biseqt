@@ -6,7 +6,7 @@ from matplotlib import pyplot as plt
 # FIXME docs
 def plot_num_seeds_discrimination(path, index, true_overlaps, num_bins=500):
     plt.clf()
-    seqinfo = index.tuplesdb.seqinfo()
+    seqinfo = index.seqdb.seqinfo()
     ids = seqinfo.keys()
     msg = 'Counting the number of seeds for all pairs of sequences'
     indicator = ProgressIndicator(msg, len(ids) * (len(ids)-1) / 2.0)
@@ -50,7 +50,7 @@ def plot_num_seeds_discrimination(path, index, true_overlaps, num_bins=500):
 
 # FIXME docs
 def plot_seed_extension_rws(path, seqinfo, max_rws=225, draw_type='-+',
-    logfile='scores.txt', true_overlaps=[]):
+    logfile='scores.txt', true_shifts={}):
 
     with open(logfile) as f:
         data = [l.strip().split() for l in f.readlines() if l.strip()[-1] in draw_type]
@@ -70,12 +70,13 @@ def plot_seed_extension_rws(path, seqinfo, max_rws=225, draw_type='-+',
         T_id, T_idx = [int(i) for i in T_tok.split(':')]
         S_start, T_start = seqinfo[S_id]['start'], seqinfo[T_id]['start']
         ax = fig.add_subplot(dim, dim, idx+1)
-        ax.set_title('%d, %d' % (S_id, T_id))
+        ax.set_title('Sequences %d vs %d' % (S_id, T_id))
         if true_overlaps:
-            if set([S_id, T_id]) in true_overlaps:
+            edge = tuple(sorted((S_id, T_id)))
+            if edge in true_shifts:
                 color = 'green'
-                true_shift = T_start - S_start
-                ax.set_title('%d, %d (%d)' % (S_id, T_id, true_shift))
+                ax.set_title(ax.get_title() +
+                    ' (true shift = %d)' % (true_shifts[edge]))
             else:
                 color = 'red'
         else:
@@ -93,7 +94,7 @@ def plot_seed_extension_rws(path, seqinfo, max_rws=225, draw_type='-+',
 # FIXME docs
 def plot_shift_signifiance_discrimination(path, index, rolling_sum_width,
     true_overlaps, num_bins=500):
-    seqinfo = index.tuplesdb.seqinfo()
+    seqinfo = index.seqdb.seqinfo()
     ids = seqinfo.keys()
     pos_pvalues = []
     neg_pvalues = []
@@ -142,7 +143,7 @@ def plot_shift_signifiance_discrimination(path, index, rolling_sum_width,
     plt.savefig(path, dpi=300)
 
 def plot_all_seeds(index, rolling_sum_width, basedir='', true_overlaps=[]):
-    seqinfo = index.tuplesdb.seqinfo()
+    seqinfo = index.seqdb.seqinfo()
     ids = seqinfo.keys()
     indicator = ProgressIndicator('Plotting all seeds',
         len(ids) * (len(ids) - 1) / 2.0, percentage=False)

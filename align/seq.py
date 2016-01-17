@@ -1,8 +1,10 @@
 import random
 import sys
-from uuid import uuid4
+from hashlib import sha1
 from bisect import bisect_left
 from Bio import SeqIO, Seq, SeqRecord
+import os.path
+import sqlite3
 from . import ffi, lib, CffiObject, ProgressIndicator
 
 
@@ -301,6 +303,140 @@ class Sequence(object):
         indicator.finish()
 
 
+READ = 0
+REFERENCE = 1
+
+class SeqDB(object):
+    """Wraps an SQLite database containing sequences and potentiall word indices
+    (see :class:`align.words.Index`) or assembly data structures. The sequences
+    are stored in a ``seq`` table with the following schema:
+
+    .. code-block:: sql
+
+        CREATE TABLE seq (
+              'id'   INTEGER PRIMARY KEY ASC,
+              'name' VARCHAR(40), -- content address (SHA1)
+              'type' INTEGER,     -- READ or REFERENCE (module constants)
+              'seq'  TEXT         -- the contents of the sequence
+            );
+
+    Attributes:
+        db (string): Path to the SQLite datbase.
+        alphabet (Alphabet): The alphabet for sequences in the database.
+    """
+    def __init__(self, db, alphabet=None):
+        assert isinstance(alphabet, Alphabet)
+        self.alphabet, self.db = alphabet, db
+        # populate the seqinfo cache
+        self.seqinfo(use_cache=False)
+
+    def initdb(self):
+        """Initializes the database: creates the required tables and
+        fails if any of them already exists."""
+        sys.stderr.write('Initializing sequence DB at: %s\n' % self.db)
+        with sqlite3.connect(self.db) as conn:
+            c = conn.cursor()
+            sys.stderr.write("Turning off SQLite's journaling for performance: do not trust the contents of the database after a crash.\n")
+            c.execute('PRAGMA journal_mode = OFF;')
+            q = """
+                CREATE TABLE seq (
+                  'id'   INTEGER PRIMARY KEY ASC,
+                  'name' VARCHAR(40), -- content address (SHA1)
+                  'type' INTEGER,     -- READ or REFERENCE (module constants)
+                  'orig' TEXT,        -- original sequence identifier
+                  'seq'  TEXT         -- the contents of the sequence
+                );
+            """
+            c.execute(q)
+
+    def populate(self, fasta_src, seq_type):
+        """Given a FASTA source file, loads all the sequences into the database.
+
+        Args:
+            fasta_src(str): Path to FASTA source.
+            seq_type(int): One of the READ or REFERENCE module constants
+                indicating the type of the provided sequences.
+        """
+        sys.stderr.write('Loading sequences from: %s\n' % fasta_src)
+
+        # only insert a sequence if it does not already exist.
+        q = """
+            INSERT INTO seq (name, type, orig, seq) VALUES (?, ?, ?, ?)
+        """
+        name = lambda x: sha1(str(x)).hexdigest()
+        give_rec = lambda r: (name(r.seq), seq_type, r.id, str(r.seq))
+        recs = (give_rec(rec) for rec in SeqIO.parse(fasta_src, 'fasta'))
+
+        with sqlite3.connect(self.db) as conn:
+            c = conn.cursor()
+            c.executemany(q, recs)
+
+        # update the seqinfo cache
+        self.seqinfo(use_cache=False)
+
+    def loadseq(self, seqid):
+        """Loads a sequence given its internal numeric seqid.
+
+        Args:
+            seqid (int): Sequence ID as found in the ``seq`` table.
+
+        Returns:
+            Sequence
+        """
+        with sqlite3.connect(self.db) as conn:
+            c = conn.cursor()
+            c.execute('SELECT seq FROM seq WHERE id = ?', (seqid,))
+            for row in c:
+                return Sequence(str(row[0]), self.alphabet)
+
+    # FIXME docs
+    def seqinfo(self, use_cache=True):
+        """Return a dict of metadata about all sequences keyed by sequence ids
+        as found in the ``seq`` table. The output looks like this::
+
+            A = Alphabet('ACGT')
+            T = SeqDB('genome.db', alphabet=A)
+            info = T.seqinfo()
+            info[12] #=> {'start': 17, 'length': 479, 'name': u'R12'}
+
+        Returns:
+            dict: Metadata dicts in a dict keyed by sequence ID.
+        """
+        if not os.path.exists(self.db):
+            # initdb() has not been called for this path.
+            return None
+
+        if use_cache and self._seqinfo is not None:
+            return self._seqinfo
+
+        self._seqinfo = {}
+        with sqlite3.connect(self.db) as conn:
+            c = conn.cursor()
+            c.execute("SELECT id, name, type, orig, LENGTH(seq) FROM seq")
+            for row in c:
+                self._seqinfo[row[0]] = {
+                    'name': row[1],
+                    'type': row[2],
+                    'orig': row[3],
+                    'length': row[4],
+                }
+
+        return self._seqinfo
+
+    # FIXME docs
+    def seqids(self, seq_type='both'):
+        """Returns a list of all seqids found in the ``seq`` table.
+
+        Returns:
+            List[int]
+        """
+        condition = 'WHERE type = %d' % int(seq_type) if seq_type != 'both' else ''
+        with sqlite3.connect(self.db) as conn:
+            c = conn.cursor()
+            c.execute('SELECT id FROM seq ' + condition)
+            return [row[0] for row in c]
+
+# FIXME this should become a method in SeqDB
 def make_sequencing_fixture(genome_file, reads_file, genome_length=1000, **kw):
     """Helper method for tests. Generates a random genome and a random sequence
     of reads from it.

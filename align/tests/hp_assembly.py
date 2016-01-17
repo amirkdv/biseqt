@@ -2,7 +2,8 @@
 import sys
 import os
 import igraph
-from .. import pw, tuples, seq, overlap, homopolymeric, overlap, assembly
+from .. import pw, words, seq, overlap, homopolymeric, overlap, mapping, ProgressIndicator
+from ..mapping import Mapping
 
 params = {
     'show_params': False,   # print a summary of parameters
@@ -83,28 +84,40 @@ def create_example(db, reads='reads.fa'):
         #hp_prob=params['hp_prob']
     )
 
+def map_reads(db, reference, reads):
+    B = words.SeqDB(db, alphabet=A)
+    M = assembly.BwaMappingAssembler(B)
+    M.initialize(reference, reads)
+    M.save(M.mappings(num_reads=os.environ.get('NUM_READS', -1)))
+
 def true_overlaps(true_path):
     G = igraph.read(true_path)
     return [set([db_id(G, u), db_id(G, v)]) for u, v in G.get_edgelist()]
 
 def create_denovo_db(db, reads):
-    assembler = assembly.DeNovoAssembler(db=db, alphabet=A, **params)
-    assembler.initialize(reads)
+    B = seq.SeqDB(db, alphabet=A)
+    B.initdb()
+    B.populate(reads, seq_type=seq.READ)
+
+    Idx = words.Index(seqdb=B, **params)
+    Idx.initdb()
+    Idx.index()
 
 def build_denovo_overlap_graph(db, path, true_path):
-    assembler = assembly.DeNovoAssembler(db=db, alphabet=A, **params)
+    B = seq.SeqDB(db, alphabet=A)
+    Idx = words.Index(seqdb=B, **params)
     show_params()
-    G = assembler.overlap_graph(od_params, min_margin=params['min_margin'], rw_collect=params['rw_collect'])
+    G = overlap.discovery.overlap_graph(Idx, od_params, min_margin=params['min_margin'], rw_collect=params['rw_collect'])
     G.save(path)
 
 def plot_word_pvalues(db, path):
-    B = tuples.TuplesDB(db, alphabet=A)
-    Idx = tuples.Index(tuplesdb=B, **params)
-    Idx.plot_word_pvalues(path)
+    B = seq.SeqDB(db, alphabet=A)
+    Idx = words.Index(seqdb=B, **params)
+    words.plot_word_pvalues(Idx, path)
 
 def plot_shift_pvalues(db, path, true_path):
-    B = tuples.TuplesDB(db, alphabet=A)
-    Idx = tuples.Index(tuplesdb=B, **params)
+    B = seq.SeqDB(db, alphabet=A)
+    Idx = words.Index(seqdb=B, **params)
     G = igraph.read(true_path)
     overlap.plot_shift_signifiance_discrimination(
         path,
@@ -115,13 +128,13 @@ def plot_shift_pvalues(db, path, true_path):
     )
 
 def plot_num_seeds(db, path, true_path):
-    B = tuples.TuplesDB(db, alphabet=A)
-    Idx = tuples.Index(tuplesdb=B, **params)
+    B = seq.SeqDB(db, alphabet=A)
+    Idx = words.Index(seqdb=B, **params)
     overlap.plot_num_seeds_discrimination(path, Idx, true_overlaps(true_path))
 
 def plot_seeds(db, path, true_path):
-    B = tuples.TuplesDB(db, alphabet=A)
-    Idx = tuples.Index(tuplesdb=B, **params)
+    B = seq.SeqDB(db, alphabet=A)
+    Idx = words.Index(seqdb=B, **params)
     G = igraph.read(true_path)
     true_overlaps = [set([db_id(G, u), db_id(G, v)]) for u, v in G.get_edgelist()]
     overlap.plot_all_seeds(
@@ -132,55 +145,51 @@ def plot_seeds(db, path, true_path):
     )
 
 def plot_rw(db, path, true_path):
-    B = tuples.TuplesDB(db, alphabet=A)
+    B = seq.SeqDB(db, alphabet=A)
     overlap.plot_seed_extension_rws(
         path, B.seqinfo(), max_rws=225, draw_type='-+',
         logfile='scores.txt', true_overlaps=true_overlaps(true_path)
     )
 
-def overlap_graph_by_known_order(db):
-    """Builds the *correct* weighted, directed graph by using hints left in
-    reads databse by ``seq.make_sequencing_fixture()``.
-
-    Args:
-        tuplesdb (tuples.TuplesDB): The tuples database.
-
-    Returns:
-        networkx.DiGraph
-    """
-    B = tuples.TuplesDB(db, alphabet=A)
+def build_true_overlap_graph(db, mappings):
+    B = seq.SeqDB(db, alphabet=A)
     seqinfo = B.seqinfo()
+    indicator = ProgressIndicator(
+        'Building true overlap graph from mappings at %s' % mappings,
+        len(seqinfo)*(len(seqinfo) - 1)/2.0,
+    )
+    indicator.start()
     seqids = seqinfo.keys()
+    with open(mappings) as f:
+        mappings = eval(f.read())
     vs = set()
     es, ws = [], []
     for sid_idx in range(len(seqids)):
         for tid_idx in range(sid_idx + 1, len(seqids)):
+            indicator.progress()
             S_id, T_id = seqids[sid_idx], seqids[tid_idx]
-            S_start, T_start = seqinfo[S_id]['start'], seqinfo[T_id]['start']
-            S_end = S_start + seqinfo[S_id]['length']
-            T_end = T_start + seqinfo[T_id]['length']
-            S_name = '%s #%d' % (seqinfo[S_id]['name'], S_id)
-            T_name = '%s #%d' % (seqinfo[T_id]['name'], T_id)
+            S_name, T_name = seqinfo[S_id]['name'], seqinfo[T_id]['name']
+            S_start, S_end = mappings[S_name].ref_from, mappings[S_name].ref_to
+            T_start, T_end = mappings[T_name].ref_from, mappings[T_name].ref_to
+
+            if mappings[S_name].strand == '-':
+                S_start, S_end = S_end, S_start
+            if mappings[T_name].strand == '-':
+                T_start, T_end = T_end, T_start
+
+            S_name = '%s #%d' % (S_name, S_id)
+            T_name = '%s #%d' % (T_name, T_id)
 
             vs = vs.union(set([S_name, T_name]))
             overlap_len = min(S_end, T_end) - max(S_start, T_start)
-            # FIXME use overlap.overlap_direction
             if overlap_len > 0:
-                if S_start < T_start:
+                if S_start < T_start or (S_start == T_start and S_end < T_end):
                     es += [(S_name, T_name)]
-                    ws += [overlap_len]
-                elif S_start > T_start:
+                else:
                     es += [(T_name, S_name)]
-                    ws += [overlap_len]
-                # if start is equal, edge goes from shorter read to longer read
-                elif S_end < T_end:
-                    es += [(S_name, T_name)]
-                    ws += [overlap_len]
-                elif S_end > T_end:
-                    es += [(T_name, S_name)]
-                    ws += [overlap_len]
-                # if start and end is equal, reads are identical, ignore.
+                ws += [overlap_len]
 
+    indicator.finish()
     G = overlap.OverlapGraph()
     G.iG.add_vertices(list(vs))
     es = [(G.iG.vs.find(name=u), G.iG.vs.find(name=v)) for u,v in es]

@@ -2,6 +2,7 @@ TRUE_GRAPH = true_overlap
 ASSEMBLED_GRAPH = overlap
 DB = genome.db
 READS = reads.fa
+MAPPINGS =
 
 clean:
 	rm -f $(ASSEMBLED_GRAPH).gml $(ASSEMBLED_GRAPH).dag.gml $(ASSEMBLED_GRAPH).layout.gml
@@ -50,7 +51,7 @@ $(ASSEMBLED_GRAPH).dag.gml: $(ASSEMBLED_GRAPH).gml
 
 $(TRUE_GRAPH).gml:
 	python -c 'import align.tests.hp_assembly as A; \
-		A.overlap_graph_by_known_order("$(DB)").save("$@")'
+		A.build_true_overlap_graph("$(DB)", "$(MAPPINGS)").save("$@")'
 
 $(ASSEMBLED_GRAPH).svg:
 	python -c 'import align.overlap as O, igraph as ig; \

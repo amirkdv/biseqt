@@ -10,143 +10,20 @@ from collections import namedtuple
 from matplotlib import pyplot as plt
 from . import pw, seq, ProgressIndicator, CffiObject, ffi, lib
 
-READ_TYPE = 0
-REFERENCE_TYPE = 1
-
-class TuplesDB(object):
-    """Wraps an SQLite database containing tuple indices for sequences. For
-    all indexing and querying refer to :class:`Index`. For now,
-    only one word length is allowed. The sequences are stored in a ``seq``
-    table with the following schema:
-
-    .. code-block:: sql
-
-        CREATE TABLE seq (
-          'id' integer PRIMARY KEY ASC,
-          'name' text,
-          'type' integer,
-          'seq' text
-        );
-
-    Attributes:
-        db (string): Path to the SQLite datbase.
-    """
-    def __init__(self, db, alphabet=None):
-        assert isinstance(alphabet, seq.Alphabet)
-        self.alphabet, self.db = alphabet, db
-        # populate the seqinfo cache
-        self.seqinfo(use_cache=False)
-
-    def initdb(self):
-        """Initializes the database: creates the required tables and
-        fails if any of them already exists."""
-        sys.stderr.write('Initializing tuples DB at: %s\n' % self.db)
-        with sqlite3.connect(self.db) as conn:
-            c = conn.cursor()
-            sys.stderr.write("Turning off SQLite's journaling for performance: do not trust the contents of the database after a crash.\n")
-            c.execute('PRAGMA journal_mode = OFF;')
-            q = """
-                CREATE TABLE seq (
-                  'id' integer PRIMARY KEY ASC,
-                  'name' text,
-                  'type' text,
-                  'seq' text
-                );
-            """
-            c.execute(q)
-
-    def populate(self, fasta_src, seq_type):
-        """Given a FASTA source file, loads all the sequences (up to a limit,
-        if specified) into the ``seq`` table.
-
-        Args:
-            fasta_src(str): Path to FASTA source.
-            lim (Optional[int]): If positive, will be the number of sequences
-                loaded from FASTA source, default is -1.
-        """
-        sys.stderr.write('Loading sequences from: %s\n' % fasta_src)
-
-        recs = ((str(s.id), str(s.seq), seq_type) for s in SeqIO.parse(fasta_src, 'fasta'))
-
-        with sqlite3.connect(self.db) as conn:
-            c = conn.cursor()
-            q = 'INSERT INTO seq (name, seq, type) VALUES (?,?,?)'
-            c.executemany(q, recs)
-
-        # update the seqinfo cache
-        self.seqinfo(use_cache=False)
-
-    def loadseq(self, seqid):
-        """Loads a sequence given its internal numeric seqid.
-
-        Args:
-            seqid (int): Sequence ID as found in the ``seq`` table.
-
-        Returns:
-            seq.Sequence
-        """
-        with sqlite3.connect(self.db) as conn:
-            c = conn.cursor()
-            c.execute('SELECT seq FROM seq WHERE id = ?', (seqid,))
-            for row in c:
-                return seq.Sequence(str(row[0]), self.alphabet)
-
-    # FIXME revise format of metadata
-    def seqinfo(self, use_cache=True):
-        """Return a dict of metadata about all sequences keyed by sequence ids
-        as found in the ``seq`` table. The output looks like this::
-
-            A = seq.Alphabet('ACGT')
-            T = tuples.TuplesDB('genome.db', alphabet=A)
-            info = T.seqinfo()
-            info[12] #=> {'start': 17, 'length': 479, 'name': u'R12'}
-
-        Returns:
-            dict: Metadata dicts in a dict keyed by sequence ID.
-        """
-        if not os.path.exists(self.db):
-            # initdb() has not been called for this path.
-            return None
-
-        if use_cache:
-            return self._seqinfo
-
-        self._seqinfo = {}
-        with sqlite3.connect(self.db) as conn:
-            c = conn.cursor()
-            c.execute("SELECT id, name, LENGTH(seq), type FROM seq")
-            for row in c:
-                self._seqinfo[row[0]] = {
-                    'name': row[1], 'length': row[2], 'type': row[3]
-                }
-
-        return self._seqinfo
-
-    def seqids(self):
-        """Returns a list of all seqids found in the ``seq`` table.
-
-        Returns:
-            List[int]
-        """
-        with sqlite3.connect(self.db) as conn:
-            c = conn.cursor()
-            c.execute('SELECT id FROM seq')
-            return [row[0] for row in c]
-
 
 class Index(object):
     """The main responsibility of an Index is to respond to :func:`seeds`
     with a list of :class:`align.pw.Segment` s given two sequence IDs.
-    This is done by recording all "tuples" observed in all sequences
+    This is done by recording all "words" observed in all sequences
     in the database during :func:`index`. Each index is uniquely defined by
-    its :attr:`tuplesdb` and its :attr:`wordlen`. Each such index operates
+    its :attr:`seqdb` and its :attr:`wordlen`. Each such index operates
     using 3 database tables with the following schema (replace `N`
     with :attr:`wordlen`). All tables are populated, in the order presented
     below, by :func:`index`.
 
     .. code-block:: sql
 
-        CREATE TABLE tuples_N (
+        CREATE TABLE words_N (
           'tuple' integer, -- decimal represetnation of N-tuple taken as a number
                            -- in base L (see tup_scan()).
           'hits'  varchar, -- '@' delimited string of hits with format (@<id>:<idx>)*
@@ -168,8 +45,8 @@ class Index(object):
     All attributes listed below are keyword arguments to the constructor.
 
     Attributes:
-        tuplesdb (tuplesDB): The tuples database.
-        wordlen (int): Length of tuples, default is 10.
+        seqdb (SeqDB): The sequence database.
+        wordlen (int): Length of words, default is 10.
         min_seeds_for_homology (int): Minimum number of seeds between two
             sequences that makes them "potential homologs", default is 1.
         min_word_log_pvalue (float): Minimum allowed pvalue for an observed word
@@ -177,12 +54,12 @@ class Index(object):
             that appear "unusually often" (and therefore potentially belong to
             a repeat region), see :func:`index_seeds`.
     """
-    def __init__(self, tuplesdb, **kwargs):
-        self.tuplesdb = tuplesdb
+    def __init__(self, seqdb, **kwargs):
+        self.seqdb = seqdb
         self.wordlen = kwargs.get('wordlen', 10)
         self.min_seeds_for_homology = kwargs.get('min_seeds_for_homology', 1)
         self.min_word_log_pvalue = kwargs.get('min_word_log_pvalue', -5)
-        self.tuples_table = 'tuples_%d' % self.wordlen
+        self.words_table = 'words_%d' % self.wordlen
         self.seeds_table = 'seeds_%d' % self.wordlen
         self.potential_homologs_table = 'potential_homologs_%d' % self.wordlen
         self.potential_homologs_q = """
@@ -195,14 +72,14 @@ class Index(object):
     def initdb(self):
         """Initializes the database: creates the required tables and
         fails if any of them already exists."""
-        with sqlite3.connect(self.tuplesdb.db) as conn:
+        with sqlite3.connect(self.seqdb.db) as conn:
             c = conn.cursor()
             q = """
                 CREATE TABLE %s (
                   'tuple' integer primary key,
                   'hits'  varchar
                 );
-            """ % (self.tuples_table)
+            """ % (self.words_table)
             c.execute(q)
             q = """
                 CREATE TABLE %s (
@@ -222,20 +99,20 @@ class Index(object):
             """ % (self.potential_homologs_table)
             c.execute(q)
         sys.stderr.write('Initialized index tables %s, %s, %s.\n'
-            % (self.tuples_table, self.seeds_table, self.potential_homologs_table)
+            % (self.words_table, self.seeds_table, self.potential_homologs_table)
         )
 
     def tup_scan(self, string):
-        """A generator for ``(word, idx)`` tuples to scan through any given
+        """A generator for ``(word, idx)`` words to scan through any given
         string. Each k-mer is translated to an integer in the following way: let
-        the alphabet (which is accessed through :attr:`tuplesdb`) has length
+        the alphabet (which is accessed through :attr:`seqdb`) has length
         :math:`L` and the letters in the alphabet are :math:`l_0,\ldots,l_{L-1}`.
         Letter :math:`l_i` is replaced by the digit :math:`i` and the resulting
         sequence of digits is interpreted in base :math:`L` and reported in its
         equivalent decimal (base 10) representation. Note that:
 
             * This conversion reduces the required disk space by roughly a third
-              and allows for more efficient searching and indexing of the tuples
+              and allows for more efficient searching and indexing of the words
               table.
             * Having a letter representing zero is OK as long as all represented
               words have the same length which is true here (otherwise ``ACCT``
@@ -257,24 +134,24 @@ class Index(object):
         Yields:
             tuple: A string of length :attr:`wordlen` and a starting position.
         """
-        digits = {let:idx for idx,let in enumerate(self.tuplesdb.alphabet.letters)}
+        digits = {let:idx for idx,let in enumerate(self.seqdb.alphabet.letters)}
         for idx in range(len(string) - self.wordlen + 1):
             tup = string[idx:idx + self.wordlen]
             tup = sum(digits[x]*(4**i) for x,i in zip(tup,reversed(range(len(tup)))))
             yield (tup, idx)
 
     def index(self):
-        """Populates all index tables, in order: ``tuples_N``, ``seeds_N``, and
-        ``potential_homologs_N`` by calling :func:`index_tuples`,
+        """Populates all index tables, in order: ``words_N``, ``seeds_N``, and
+        ``potential_homologs_N`` by calling :func:`index_words`,
         :func:`index_seeds`, and :func:`index_potential_homologs`.
         """
-        self.index_tuples()
+        self.index_words()
         self.index_seeds()
         self.index_potential_homologs()
 
-    def index_tuples(self):
+    def index_words(self):
         """Scans all sequences in the ``seq`` table and records all observed
-        k-mers (where k is :attr:`wordlen`). Each entry in the ``tuples_N``
+        k-mers (where k is :attr:`wordlen`). Each entry in the ``words_N``
         table records all occurences of a given word (which is represented as
         a decimal integer as per the output of :func:`tup_scan`). For example::
 
@@ -289,10 +166,10 @@ class Index(object):
         hit_ins_q = """
             INSERT OR REPLACE INTO %s (tuple, hits)
             SELECT ?, IFNULL( (SELECT hits FROM %s WHERE tuple = ?), "") || ?
-        """ % (self.tuples_table, self.tuples_table)
-        with sqlite3.connect(self.tuplesdb.db) as conn:
+        """ % (self.words_table, self.words_table)
+        with sqlite3.connect(self.seqdb.db) as conn:
             seq_c = conn.cursor() # to load sequences from the seq table.
-            c = conn.cursor()     # to write words to the tuples table.
+            c = conn.cursor()     # to write words to the words table.
 
             # count the total number so we can report percentage progress:
             seq_c.execute('SELECT count(*) FROM seq')
@@ -302,7 +179,7 @@ class Index(object):
             indicator = ProgressIndicator(msg, num_seqs)
             indicator.start()
 
-            # populate the tuples table:
+            # populate the words table:
             def _give_tuple(string):
                 for s, idx in self.tup_scan(string):
                     yield (s, s, '@%s:%d' % (seqid, idx))
@@ -319,8 +196,8 @@ class Index(object):
         """Finds all *non-repetitive* (described below) *seeds*
         between all pairs of sequences in ``seq``. A seed is an exactly matching
         segments of length equal to :attr:`wordlen`. This
-        function assumes :func:`index_tuples` has been successfully called. For
-        example given the following record in ``tuples_N``::
+        function assumes :func:`index_words` has been successfully called. For
+        example given the following record in ``words_N``::
 
             tuple | hits
             9     | @1:5533@2:1436
@@ -359,9 +236,9 @@ class Index(object):
 
         where :math:`\\mu,\\sigma` are the parameters of the approximating
         normal distribution described above and :math:`N`, the total number of
-        tuples, is a Bonferroni correction term.
+        words, is a Bonferroni correction term.
         """
-        with sqlite3.connect(self.tuplesdb.db) as conn:
+        with sqlite3.connect(self.seqdb.db) as conn:
             c = conn.cursor()
             q = """
                 INSERT INTO %s (S_id, T_id, S_idx, T_idx)
@@ -376,11 +253,11 @@ class Index(object):
             sys.stderr.write('.\n')
             conn.commit()
 
-    def _word_pvalue_calculator(self, cursor):
+    def word_pvalue_calculator(self, cursor):
         # Normal approximation (mean and standard deviation) of a binomial distribution
         B2N = lambda n, p: (n*p, sqrt(n * p * (1-p)))
-        prob_word = lambda length: (1.0/self.tuplesdb.alphabet.length) ** length
-        cursor.execute('select count(*) from %s' % self.tuples_table)
+        prob_word = lambda length: (1.0/self.seqdb.alphabet.length) ** length
+        cursor.execute('select count(*) from %s' % self.words_table)
         N = int(cursor.next()[0]) # total number of words
         cursor.execute('select sum(length(seq)) from seq')
         L = int(cursor.next()[0]) # total sequence length of all reads
@@ -391,14 +268,14 @@ class Index(object):
 
     # Helper for index(): yields data values to be inserted in the seeds index.
     def _give_seeds(self, cursor):
-        pvalue_calc = self._word_pvalue_calculator(cursor)
-        cursor.execute('select count(*) from %s' % self.tuples_table)
+        pvalue_calc = self.word_pvalue_calculator(cursor)
+        cursor.execute('select count(*) from %s' % self.words_table)
         N = int(cursor.next()[0]) # total number of words
         indicator = ProgressIndicator(
             'Indexing %d observed %d-mers' % (N, self.wordlen), N
         )
         indicator.start()
-        cursor.execute('SELECT tuple, hits from %s' % self.tuples_table)
+        cursor.execute('SELECT tuple, hits from %s' % self.words_table)
         for tup, hits in cursor:
             indicator.progress()
             pvalue = pvalue_calc(hits.count('@'))
@@ -425,7 +302,7 @@ class Index(object):
         """
         cnt_q = 'SELECT COUNT(*) FROM (%s)' % self.potential_homologs_q
         if cursor is None:
-            with sqlite3.connect(self.tuplesdb.db) as conn:
+            with sqlite3.connect(self.seqdb.db) as conn:
                 cursor = conn.cursor()
                 cursor.execute(cnt_q)
         else:
@@ -459,7 +336,7 @@ class Index(object):
         indicator.finish()
 
     def index_potential_homologs(self):
-        with sqlite3.connect(self.tuplesdb.db) as conn:
+        with sqlite3.connect(self.seqdb.db) as conn:
             c = conn.cursor()
             # populate the seeds cache table:
             q = """
@@ -486,9 +363,9 @@ class Index(object):
                 * Having the constraints in place while we are munging seeds
                   cripples performance.
         """
-        with sqlite3.connect(self.tuplesdb.db) as conn:
+        with sqlite3.connect(self.seqdb.db) as conn:
             c = conn.cursor()
-            sys.stderr.write('Verifying database consistency at %s:' % self.tuplesdb.db)
+            sys.stderr.write('Verifying database consistency at %s:' % self.seqdb.db)
             # potential homologs should have at most a single row per sequence.
             c.execute('SELECT COUNT(*) FROM %s' % self.potential_homologs_table)
             for row in c:
@@ -519,7 +396,7 @@ class Index(object):
         q = """
             SELECT homologs FROM %s WHERE id = ?
         """ % self.potential_homologs_table
-        with sqlite3.connect(self.tuplesdb.db) as conn:
+        with sqlite3.connect(self.seqdb.db) as conn:
             c = conn.cursor()
             c.execute(q, (seqid,))
             for row in c:
@@ -550,7 +427,7 @@ class Index(object):
             WHERE (S_id = ? AND T_id = ? ) OR (S_id = ? AND T_id = ?)
         """ % (self.seeds_table)
         seeds = []
-        with sqlite3.connect(self.tuplesdb.db) as conn:
+        with sqlite3.connect(self.seqdb.db) as conn:
             c = conn.cursor()
             c.execute(q, (S_id, T_id, T_id, S_id))
             for row in c:
@@ -567,24 +444,25 @@ class Index(object):
 
         return seeds
 
-    def plot_word_pvalues(self, path=None, num_bins=500):
-        if path is None:
-            path = 'word_pvalues.%d.png' % self.wordlen
-        with sqlite3.connect(self.tuplesdb.db) as conn:
-            c = conn.cursor()
-            calc = self._word_pvalue_calculator(c)
-            c.execute('select hits from %s' % self.tuples_table)
-            log_pvalues = []
-            for row in c:
-                pvalue = calc(row[0].count('@'))
-                if pvalue:
-                    log_pvalues += [log(pvalue)]
 
-            plt.grid(True)
-            plt.hist(log_pvalues, num_bins, normed=True, histtype='step', cumulative=True, color='k')
-            plt.xlabel('Corrected log(p-value) of %d-words' % self.wordlen)
-            plt.ylabel('Cumulative distribution')
-            plt.savefig(path, dpi=300)
+def plot_word_pvalues(index, path=None, num_bins=500):
+    if path is None:
+        path = 'word_pvalues.%d.png' % index.wordlen
+    with sqlite3.connect(index.seqdb.db) as conn:
+        c = conn.cursor()
+        calc = index.word_pvalue_calculator(c)
+        c.execute('select hits from %s' % index.words_table)
+        log_pvalues = []
+        for row in c:
+            pvalue = calc(row[0].count('@'))
+            if pvalue:
+                log_pvalues += [log(pvalue)]
+
+        plt.grid(True)
+        plt.hist(log_pvalues, num_bins, normed=True, histtype='step', cumulative=True, color='k')
+        plt.xlabel('Corrected log(p-value) of %d-words' % index.wordlen)
+        plt.ylabel('Cumulative distribution')
+        plt.savefig(path, dpi=300)
 
 
 def maximal_seeds(seeds, S_id, T_id):
@@ -602,7 +480,7 @@ def maximal_seeds(seeds, S_id, T_id):
         list[pw.Segment]: Maximal segments, guaranteed to not overlap.
     """
     seeds.sort(key=lambda s: s.tx.S_idx)
-    # merge overlapping tuples:
+    # merge overlapping seeds:
     idx = 0
     while idx < len(seeds):
         cand = idx + 1
