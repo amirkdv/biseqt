@@ -32,6 +32,158 @@ OVERLAP = lib.OVERLAP
 START_ANCHORED_OVERLAP = lib.START_ANCHORED_OVERLAP
 END_ANCHORED_OVERLAP = lib.END_ANCHORED_OVERLAP
 
+class OverlapParams(CffiObject): # FIXME
+    def __init__(self, alphabet=None, subst=[],
+                 go_score=0, ge_score=0, max_diversion=-1, content_dependent_gap_scores=None):
+        self.alphabet = alphabet
+        # each row in the substitution matrix must be "owned" by an object that
+        # is kept alive.
+        L = self.alphabet.length
+        self._c_subst_rows_ka = [
+            ffi.new('double[]', subst_scores[i]) for i in range(L)
+        ]
+        self._c_subst_full_ka = ffi.new('double *[]', self._c_subst_rows_ka)
+        kw = {
+            'alphabet': self.alphabet.c_obj,
+            'subst_scores': self._c_subst_full_ka,
+            'gap_open_score': go_score,
+            'gap_extend_score': ge_score,
+            'max_diversion': max_diversion,
+        }
+        if content_dependent_gap_scores:
+            self._c_gaps_ka = ffi.new('double []', content_dependent_gap_scores)
+            kw['content_dependent_gap_scores'] = self._c_gaps_ka;
+        else:
+            self._c_gaps_ka = ffi.NULL
+        self.c_obj = ffi.new('align_params*', kw)
+
+    @classmethod
+    def subst_scores_from_probs(cls, alphabet, **kw):
+        """Converts a substitution probability matrix to a substitution score
+        matrix using a null-hypothesis letters distribution. The scores are
+        natural logs of odds ratios:
+
+            :math:`S(a_i,a_j) = \log[(1-g)\Pr(a_j|a_i)] - \log[\Pr(a_j)]`
+
+        where :math:`S(a_i,a_j)` is the substitution score of letter
+        :math:`a_i` to letter :math:`a_j` and :math:`g` is the gap probability.
+
+        Args:
+            alphabet(seq.Alphabet): the underlying alphabet, needed since
+                probabilities are in order of letter index in alphabet.
+
+        Keyword Args:
+            subst_probs(List[List[float]]): As in
+                :func:`align.seq.Sequence.mutate`.
+            letter_dist(Optional[List[float]]): Probability distributions of
+                each letter of the alphabet in the null (random) hypothesis,
+                default is uniform.
+
+        Returns:
+            List[List[float]]: Substitution score matrix for given alphabet,
+                as expected by :func:`AlignParams`.
+
+        Note:
+            Only a linear gap model is supported for translating probabilities
+            to scores. This is because under an affine model where the
+            probability of opening a gap differs from that of extending a gap,
+            the substitution probabilities also become context-dependent (see
+            where :math:`g` appears in the formula above) which is not
+            supported by ``libalign``.
+        """
+        L = alphabet.length
+        subst_probs = kw['subst_probs']
+        letter_dist = kw.get('letter_dist', [1.0/L for k in range(L)])
+        gap_prob = kw.get('gap_prob', 0)
+        subst_scores = [[0 for _ in range(L)] for _ in range(L)]
+        for i in range(L):
+            assert(abs(1 - sum([subst_probs[i][j] for j in range(L)])) < 0.001)
+            for j in range(L):
+                assert(subst_probs[i][j] > 0)
+                assert(letter_dist[i] * letter_dist[j] != 0)
+                subst_scores[i][j] = log(1-gap_prob) + \
+                    log(subst_probs[i][j]) - log(letter_dist[j])
+        return subst_scores
+
+    @classmethod
+    def gap_scores_from_probs(cls, go_prob, ge_prob):
+        """Converts gap open/extend probabilities to gap open/extend scores
+        in an affine gap penalty scheme. The probabilites are taken to mean the
+        following:
+
+            * The gap open probability :math:`g_o` is the probability of a
+              single indel following a substitution/match or an indel of a
+              different kind.
+            * The gap extend probability :math:`g_e` is the probability of a
+              single indel following an indel of the same kind.
+
+        Note:
+            In the above sense the score (log likelihood) of a gap of
+            length :math:`n \\ge 1` is :math:`\log g_o + (n-1)\log g_e`.
+            This differs by the 1 offset from textbook definitions of the
+            affine gap penalty (and from what ``libalign`` expects). The two
+            are equivalent since the above gap penalty function can be
+            rewritten as :math:`\log {g_o \over g_e} + n \log g_e`.
+            These are precisely the scores this function returns.
+
+            Consequently, to ensure that the gap open score is not positive,
+            we require that the gap open probability be less than the gap
+            extend probability.
+
+            To enforce a linear gap model, naturally, pass identical values for
+            ``go_prob`` and ``ge_prob``. This translates to a gap open
+            score of 0.
+
+        """
+        return log(go_prob/ge_prob), log(ge_prob)
+
+    def __getattr__(self, name):
+        if name == 'subst_scores':
+            idx = range(self.alphabet.length)
+            return [[self.c_obj.subst_scores[i][j] for j in idx] for i in idx]
+        else:
+            return super(AlignParams, self).__getattr__(name)
+
+    def score(self, S, T, opseq, S_min_idx=0, T_min_idx=0):
+        """Calculates the score for an arbitray opseq over given sequences.
+        Opseqs are allowed to be partial alignments (i.e finishing before
+        reaching the end of frame)::
+
+            C = AlignParams(...)
+            C.score('ACCTT', 'AGCTTA', 'MSMMMD')
+
+        Args:
+            S (seq.Sequence): The "from" sequence of alignment.
+            T (seq.Sequence): The "to" sequence of alignment.
+            opseq  (str): The edit transcript of the form ``(M|S|I|D)+``.
+
+        Keyword Args:
+            S_min_idx(Optional[int]): The starting position of the opseq in
+                ``S``, default is 0.
+            T_min_idx(Optiona[int]): The starting position of the opseq in
+                ``T``, default is 0.
+        """
+        score = 0.0
+        i, j = S_min_idx, T_min_idx
+        for op, num, _ in hp_tokenize(opseq):
+            if op in 'MS':
+                for k in range(num):
+                    S_let_idx = S.c_idxseq[i + k]
+                    T_let_idx = T.c_idxseq[j + k]
+                    score += self.subst_scores[S_let_idx][T_let_idx]
+                i, j = i + num, j + num
+            elif op in 'ID':
+                score += self.gap_open_score + self.gap_extend_score * num
+                if op == 'I':
+                    j = j + num
+                else:
+                    i = i + num
+            else:
+                raise ValueError('Invalid edit operation: %c' % op)
+        return score
+
+
+
 
 class AlignParams(CffiObject):
     """Wraps the C struct ``align_params``, see ``libalign.h``.
