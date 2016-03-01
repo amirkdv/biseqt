@@ -44,32 +44,29 @@ C = pw.AlignParams(
     go_score=go_score,
     ge_score=ge_score
 )
-C_d = Tr.condense_align_params(C, hp_gap_score=params['hp_gap_score'])
 od_params = overlap.OverlapDiscoveryParams(
     seed_ext_params=overlap.SeedExtensionParams(
         window=params['window'],
         min_overlap_score=params['min_overlap_score'],
         max_new_mins=params['max_new_mins'],
-        align_params=C_d,
-        #align_params=C
+        align_params=C
     ),
     shift_rolling_sum_width=params['shift_rolling_sum_width'],
     hp_condenser=Tr,
 )
-subst_scores_d = C_d.subst_scores
 db_id = lambda G, vid: int(G.vs[vid]['name'].split('#')[1])
 
 def show_params():
-    if not params['show_params']:
-        return
-    print 'Substitution probabilities:'
-    print 'Substitution scores:'
-    for i in subst_scores_d:
+    print 'Substitution probs:'
+    for i in params['subst_probs']:
         print [round(f,2) for f in i]
-    print 'Pr(go) = %.2f, Pr(ge) = %.2f +----> Score(go)=%.2f, Score(ge)=%.2f' % \
+    print '\nSubstitution scores:'
+    for i in subst_scores:
+        print [round(f,2) for f in i]
+    print '\nGap probs\n  go = %.2f, ge = %.2f\n\nGap scores\n  go=%.2f, ge=%.2f' % \
         (params['go_prob'], params['ge_prob'], go_score, ge_score)
 
-    print 'max_new_mins = %d, window = %d' % \
+    print '\nmax_new_mins = %d, window = %d' % \
         (params['max_new_mins'], params['window'])
 
 def create_example(db, reads='reads.fa'):
@@ -106,7 +103,8 @@ def create_denovo_db(db, reads):
 def build_denovo_overlap_graph(db, path, true_path):
     B = seq.SeqDB(db, alphabet=A)
     Idx = words.Index(seqdb=B, **params)
-    show_params()
+    if params['show_params']:
+        show_params()
     G = overlap.discovery.overlap_graph(Idx, od_params, min_margin=params['min_margin'], rw_collect=params['rw_collect'])
     G.save(path)
 
@@ -132,16 +130,19 @@ def plot_num_seeds(db, path, true_path):
     Idx = words.Index(seqdb=B, **params)
     overlap.plot_num_seeds_discrimination(path, Idx, true_overlaps(true_path))
 
-def plot_seeds(db, path, true_path):
+def plot_seeds(db, path, true_path, mappings):
     B = seq.SeqDB(db, alphabet=A)
     Idx = words.Index(seqdb=B, **params)
     G = igraph.read(true_path)
     true_overlaps = [set([db_id(G, u), db_id(G, v)]) for u, v in G.get_edgelist()]
+    with open(mappings) as f:
+        mappings = eval(f.read())
     overlap.plot_all_seeds(
         Idx,
         params['shift_rolling_sum_width'],
         basedir=path,
-        true_overlaps=true_overlaps
+        true_overlaps=true_overlaps,
+        mappings=mappings
     )
 
 def plot_rw(db, path, true_path):
