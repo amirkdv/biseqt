@@ -1,7 +1,8 @@
-from .. import ProgressIndicator
 from .discovery import most_signifcant_shift
+import os.path
 from math import sqrt, ceil
 from matplotlib import pyplot as plt
+from .. import ProgressIndicator
 
 # FIXME docs
 def plot_num_seeds_discrimination(path, index, true_overlaps, num_bins=500):
@@ -142,7 +143,7 @@ def plot_shift_signifiance_discrimination(path, index, rolling_sum_width,
     plt.tight_layout()
     plt.savefig(path, dpi=300)
 
-def plot_all_seeds(index, rolling_sum_width, basedir='', true_overlaps=[]):
+def plot_all_seeds(index, rolling_sum_width, basedir='', true_overlaps=[], mappings={}):
     seqinfo = index.seqdb.seqinfo()
     ids = seqinfo.keys()
     indicator = ProgressIndicator('Plotting all seeds',
@@ -152,7 +153,9 @@ def plot_all_seeds(index, rolling_sum_width, basedir='', true_overlaps=[]):
         for T_id_idx in range(S_id_idx+1, len(ids)):
             indicator.progress()
             S_id, T_id = ids[S_id_idx], ids[T_id_idx]
-            S_start, T_start = seqinfo[S_id]['start'], seqinfo[T_id]['start']
+            S_name, T_name = seqinfo[S_id]['name'], seqinfo[T_id]['name']
+            S_start = mappings[S_name].ref_from if mappings[S_name].strand == '+' else mappings[S_name].ref_to
+            T_start = mappings[T_name].ref_from if mappings[T_name].strand == '+' else mappings[T_name].ref_to
             S_len, T_len = seqinfo[S_id]['length'], seqinfo[T_id]['length']
             seeds = index.seeds(S_id, T_id)
             if not seeds:

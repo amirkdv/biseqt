@@ -23,7 +23,7 @@ shift_pvalues.$(WORDLEN).png:
 
 seeds-$(WORDLEN):
 	mkdir -p "$@"
-	python -c 'from align.tests import hp_assembly as T; T.plot_seeds("$(DB)", "$@", "$(TRUE_GRAPH).gml");'
+	python -c 'from align.tests import hp_assembly as T; T.plot_seeds("$(DB)", "$@", "$(TRUE_GRAPH).gml", "$(MAPPINGS)");'
 
 rw.$(WORDLEN).png:
 	python -c 'from align.tests import hp_assembly as T; T.plot_rw("$(DB)", "$@", "$(TRUE_GRAPH).gml");'
