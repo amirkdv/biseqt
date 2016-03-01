@@ -4,8 +4,8 @@ REFERENCE = leishmania/reference.fa
 ASSEMBLY_DB = genome.leishmania.db
 ASSEMBLED_GRAPH = leishmania
 TRUE_GRAPH = leishmania_true
-BWA_MAPPINGS = leishmania/bwa.mappings.txt
-ASSEMBLY_OPTS = DB=$(ASSEMBLY_DB) READS=$(READS) ASSEMBLED_GRAPH=$(ASSEMBLED_GRAPH) TRUE_GRAPH=$(TRUE_GRAPH) MAPPINGS=$(BWA_MAPPINGS)
+MAPPINGS = leishmania/bwa.mappings.txt
+ASSEMBLY_OPTS = DB=$(ASSEMBLY_DB) READS=$(READS) ASSEMBLED_GRAPH=$(ASSEMBLED_GRAPH) TRUE_GRAPH=$(TRUE_GRAPH) MAPPINGS=$(MAPPINGS)
 
 $(GENOME):
 	wget http://www.cs.mcgill.ca/~blanchem/561/pacbio/GCA_000227135.2_ASM22713v2_genomic.fna -O $@
@@ -19,7 +19,7 @@ $(REFERENCE): $(GENOME)
 		rec = I.parse("$(GENOME)", "fasta").next(); \
 		I.write([R.SeqRecord(rec.seq, id=rec.id)], "$@", "fasta")'
 
-$(BWA_MAPPINGS): $(REFERENCE) $(READS)
+$(MAPPINGS): $(REFERENCE) $(READS)
 	python -c 'from align.mapping import BwaReadMapper as M, save_mappings; \
 		save_mappings("$@", M(read_src="$(READS)", ref_src="$(REFERENCE)").mappings());'
 
