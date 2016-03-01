@@ -65,25 +65,41 @@ class BwaReadMapper(ReadMapper):
         indicator = self.indicator()
         indicator.start()
         for rec in SeqIO.parse(self.read_src, 'fasta'):
+            indicator.progress()
             bwa_mem_opts = [
                 '-A', '1',
                 '-B', '2',
                 '-O', '3',
                 '-E', '1',
             ]
+            lastz_opts = [
+                '--ambiguous=n',
+                '--format=softsam',
+                '--gap=3,1',
+                '--match=1,2',
+                '--chain', # NOTE
+            ]
             read_len = len(rec.seq)
             with NamedTemporaryFile(suffix='.fasta') as tmp:
                 tmp.write('>%s\n%s\n' % (rec.id, str(rec.seq)))
                 tmp.flush() # flush to disk, a subprocess will be accessing it
 
-                cmd = ['bwa', 'mem'] + bwa_mem_opts + [self.ref_src, tmp.name]
+                cmd = ['/home/amir/lastz-distrib/bin/lastz'] + lastz_opts + [self.ref_src, tmp.name]
+                #cmd = ['bwa', 'mem'] + bwa_mem_opts + [self.ref_src, tmp.name]
                 proc = Popen(cmd, stdout=PIPE, stderr=PIPE)
                 out, err = proc.communicate()
+                #print '\n', out
                 if proc.returncode != 0:
                     raise RuntimeError('`bwa mem` exited with code %d' % proc.returncode)
 
-            out = out.strip().split('\n')[1]
-            read, flag, ref, start, quality, cigar = out.strip().split()[:6]
+            # FIXME why does this get silently ignored?
+            # cf https://www.python.org/dev/peps/pep-0479/
+            try:
+                aln = (l for l in out.strip().split('\n') if l[0] != '@').next()
+            except StopIteration:
+                continue
+            # cf. SAM spec: https://samtools.github.io/hts-specs/SAMv1.pdf
+            read, flag, ref, start, quality, cigar = aln.strip().split()[:6]
             start, flag = int(start), int(flag)
             if flag == 4:
                 # Segment unmapped
@@ -119,7 +135,6 @@ class BwaReadMapper(ReadMapper):
                 ref_from=int(start),
                 ref_to=end,
             )
-            indicator.progress()
 
         indicator.finish()
 
