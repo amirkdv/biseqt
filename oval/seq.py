@@ -132,6 +132,8 @@ class Sequence(object):
         self.length = len(letlist)
         self.c_charseq = ffi.new('char[]', ''.join(letlist))
         # build the sequence as an int array of positions in alphabet
+        # FIXME stop doing this, int's take up more room than char's and we
+        # don't have h.p. condensed letters anymore.
         let_pos = {let: pos for pos, let in enumerate(alphabet.letters)}
         self.c_idxseq = ffi.new('int[]', [let_pos[let] for let in letlist])
 
@@ -193,7 +195,7 @@ class Sequence(object):
 
         Returns:
             tuple: The mutant (a :class:`Sequence`)and corresponding transcript
-                (an :class:`align.pw.Transcript`).
+                (an :class:`oval.pw.Transcript`).
         """
         subst_probs = kw['subst_probs']
         go_prob, ge_prob = kw.get('go_prob', 0), kw.get('ge_prob', 0)
@@ -310,7 +312,7 @@ REFERENCE = 1
 
 class SeqDB(object):
     """Wraps an SQLite database containing sequences and potentiall word indices
-    (see :class:`align.words.Index`) or assembly data structures. The sequences
+    (see :class:`oval.words.Index`) or assembly data structures. The sequences
     are stored in a ``seq`` table with the following schema:
 
     .. code-block:: sql

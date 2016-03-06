@@ -10,16 +10,16 @@ with open(path.join(here, 'README.md')) as f:
     long_description = f.read()
 
 setup(
-    name='align.py',
+    name='oval',
     version='0.0.1',
-    description='A sequence alignment library',
+    description='Oval is an overlap alignment search tool',
     long_description=long_description,
-    url='https://github.com/amirkdv/align.py',
+    url='https://github.com/amirkdv/oval',
     author='Amir Kadivar',
     author_email='amir@amirkdv.ca',
     #license='MIT',
-    #keywords='sequence DNA alignment fragment assembly k-mer homopoylmeric',
-    packages=['align'],
+    #keywords='sequence DNA overlap alignment fragment assembly',
+    packages=['oval'],
     setup_requires=[
         'cffi',
         'biopython',

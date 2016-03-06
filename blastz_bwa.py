@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-from align.mapping import Mapping
+from oval.mapping import Mapping
 import sqlite3
 from matplotlib import pyplot as plt
 

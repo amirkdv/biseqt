@@ -5,7 +5,7 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "libalign.h"
+#include "liboval.h"
 
 /**
  * Given an alignment problem definition, creates and initializes the dynamic

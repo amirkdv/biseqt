@@ -11,7 +11,7 @@ The following can be generated randomly by the `seq` module:
 
 ## Pairwise alignments
 
-The core dynamic programming algorithm is implemented [in C](https://github.com/amirkdv/align.py/blob/master/align/libalign.c)
+The core dynamic programming algorithm is implemented [in C](https://github.com/amirkdv/oval.py/blob/master/align/liboval.c)
 and interfaced using [cffi](https://cffi.readthedocs.org/en/latest/). The
 following are supported by `libalign` (the C implementaion) and exposed to
 Python by the `pw` module:

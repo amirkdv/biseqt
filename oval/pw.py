@@ -74,7 +74,7 @@ class OverlapParams(CffiObject): # FIXME
 
         Keyword Args:
             subst_probs(List[List[float]]): As in
-                :func:`align.seq.Sequence.mutate`.
+                :func:`oval.seq.Sequence.mutate`.
             letter_dist(Optional[List[float]]): Probability distributions of
                 each letter of the alphabet in the null (random) hypothesis,
                 default is uniform.
@@ -186,7 +186,7 @@ class OverlapParams(CffiObject): # FIXME
 
 
 class AlignParams(CffiObject):
-    """Wraps the C struct ``align_params``, see ``libalign.h``.
+    """Wraps the C struct ``align_params``, see ``liboval.h``.
 
     Attributes:
         alphabet (Alphabet): alphabet used to represent the sequences.
@@ -237,7 +237,7 @@ class AlignParams(CffiObject):
 
         Keyword Args:
             subst_probs(List[List[float]]): As in
-                :func:`align.seq.Sequence.mutate`.
+                :func:`oval.seq.Sequence.mutate`.
             letter_dist(Optional[List[float]]): Probability distributions of
                 each letter of the alphabet in the null (random) hypothesis,
                 default is uniform.
@@ -352,10 +352,10 @@ class AlignProblem(CffiObject):
 
         A = seq.Alphabet('ACGT')
         S, T = A.randseq(100), A.randseq(100)
-        C = align.AlignParams(
+        C = oval.AlignParams(
             ... # snip
         )
-        with align.AlignProblem(S, T, C, align_type=align.GLOBAL) as P:
+        with oval.AlignProblem(S, T, C, align_type=oval.GLOBAL) as P:
             score = P.solve()
             transcript = P.traceback()
 
@@ -406,7 +406,7 @@ class AlignProblem(CffiObject):
     def __enter__(self):
         self.c_dp_table = lib.init_dp_table(self.c_obj)
         if self.c_dp_table == -1:
-            raise('Got -1 from align.define().')
+            raise('Got -1 from oval.define().')
         self.c_dp_row_cnt = self.S_max_idx - self.S_min_idx + 1
         self.c_dp_col_cnt = self.T_max_idx - self.T_min_idx + 1
         return self
@@ -429,7 +429,7 @@ class AlignProblem(CffiObject):
         )
 
     def solve(self, print_dp_table=False):
-        """Wraps :c:func:`libalign.solve() <solve()>`: populates the DP table
+        """Wraps :c:func:`liboval.solve() <solve()>`: populates the DP table
         and returns the optimal score.
 
         Args:
@@ -454,7 +454,7 @@ class AlignProblem(CffiObject):
         """Traces back any optimal alignment found via ``solve()``.
 
         Returns:
-            align.pw.Transcript: The transcript corresponding to the alignment.
+            oval.pw.Transcript: The transcript corresponding to the alignment.
         """
         if self.opt is None:
             return None
@@ -653,7 +653,7 @@ class Segment(CffiObject):
     Attributes:
         S_id (int): The id of the "from" sequence as found in ``seq``.
         T_id (int): The id of the "to" sequence as found in ``seq``.
-        tx (align.pw.Transcript): The alignment transctipt.
+        tx (oval.pw.Transcript): The alignment transctipt.
     """
     def __init__(self, **kw):
         if 'c_obj' in kw:

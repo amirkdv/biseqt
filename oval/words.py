@@ -13,7 +13,7 @@ from . import pw, seq, ProgressIndicator, CffiObject, ffi, lib
 
 class Index(object):
     """The main responsibility of an Index is to respond to :func:`seeds`
-    with a list of :class:`align.pw.Segment` s given two sequence IDs.
+    with a list of :class:`oval.pw.Segment` s given two sequence IDs.
     This is done by recording all "words" observed in all sequences
     in the database during :func:`index`. Each index is uniquely defined by
     its :attr:`seqdb` and its :attr:`wordlen`. Each such index operates
@@ -428,7 +428,7 @@ class Index(object):
 
     def seeds(self, S_id, T_id):
         """Given two sequence ids, finds all exactly matching segments
-        (see :class:`align.pw.Segment`) of length :attr:`wordlen` between the
+        (see :class:`oval.pw.Segment`) of length :attr:`wordlen` between the
         two. Segments are not necessarily in maximal form. For purposes of seed
         extension, however, we prefer to not have too many segments that are
         part of a one bigger segments (especially if they do not belong to an
