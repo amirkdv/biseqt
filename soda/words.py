@@ -27,19 +27,21 @@ class Index(object):
           'tuple' integer, -- decimal represetnation of N-tuple taken as a number
                            -- in base L (see tup_scan()).
           'hits'  varchar, -- '@' delimited string of hits with format (@<id>:<idx>)*
-          UNIQUE(tuple)
         )
         CREATE TABLE seeds_N (
-          -- each record corresponds to a single exactly matching segment
+          -- each record corresponds to a single exactly matching segment pair
           'S_id' integer REFERENCES seq(id),
           'T_id' integer REFERENCES seq(id),
           'S_idx' integer, -- starting position of seed in S
           'T_idx' integer, -- starting position of seed in T
         );
-        CREATE TABLE potential_homologs_N (
-          'id' integer REFERENCES seq(id),
-          'homologs' varchar, -- comma separated list of sequence IDs, with
-                              -- potential homology to sequence with ID 'id'.
+        CREATE TABLE scores_N (
+          -- each record corresponds to a single shift for a read pair
+          'S_id' integer REFERENCES seq(id),
+          'T_id' integer REFERENCES seq(id),
+          'shift' integer, -- shift of seed (S_idx - T_idx)
+          'score' real, -- score of shift (log p-value)
+          PRIMARY KEY (S_id, T_id, shift)
         );
 
     All attributes listed below are keyword arguments to the constructor.
@@ -59,15 +61,9 @@ class Index(object):
         self.wordlen = kwargs.get('wordlen', 10)
         self.min_seeds_for_homology = kwargs.get('min_seeds_for_homology', 1)
         self.min_word_log_pvalue = kwargs.get('min_word_log_pvalue', -5)
-        self.words_table = 'words_%d' % self.wordlen
-        self.seeds_table = 'seeds_%d' % self.wordlen
-        self.potential_homologs_table = 'potential_homologs_%d' % self.wordlen
-        self.potential_homologs_q = """
-            SELECT S_id, T_id, COUNT(*) AS count
-            FROM %s
-            GROUP BY S_id, T_id
-            HAVING count > %d
-        """ % (self.seeds_table, self.min_seeds_for_homology)
+        self.t_words = 'words_%d' % self.wordlen
+        self.t_seeds = 'seeds_%d' % self.wordlen
+        self.t_scores = 'scores_%d' % self.wordlen
 
     def initdb(self):
         """Initializes the database: creates the required tables and
@@ -79,7 +75,7 @@ class Index(object):
                   'tuple' integer primary key,
                   'hits'  varchar
                 );
-            """ % (self.words_table)
+            """ % (self.t_words)
             c.execute(q)
             q = """
                 CREATE TABLE %s (
@@ -88,15 +84,17 @@ class Index(object):
                   'S_idx' integer,
                   'T_idx' integer
                 );
-            """ % (self.seeds_table)
+            """ % (self.t_seeds)
             c.execute(q)
             q = """
                 CREATE TABLE %s (
-                  'id' integer REFERENCES seq(id),
-                  'homologs' varchar,
-                  UNIQUE(id)
+                  'S_id' integer REFERENCES seq(id),
+                  'T_id' integer REFERENCES seq(id),
+                  'shift' integer, -- shift of seed (S_idx - T_idx)
+                  'score' real, --  = -log(p-value)
+                  PRIMARY KEY (S_id, T_id, shift)
                 );
-            """ % (self.potential_homologs_table)
+            """ % (self.t_scores)
             c.execute(q)
         sys.stderr.write('Initialized index tables %s, %s, %s.\n'
             % (self.words_table, self.seeds_table, self.potential_homologs_table)
@@ -147,7 +145,6 @@ class Index(object):
         """
         self.index_words()
         self.index_seeds()
-        self.index_potential_homologs()
 
     def index_words(self):
         """Scans all sequences in the ``seq`` table and records all observed
@@ -253,22 +250,30 @@ class Index(object):
             sys.stderr.write('.\n')
             conn.commit()
 
-    def word_pvalue_calculator(self, cursor):
+    def word_pvalue_calculator(self, num_words):
         # Normal approximation (mean and standard deviation) of a binomial distribution
         B2N = lambda n, p: (n*p, sqrt(n * p * (1-p)))
         prob_word = lambda length: (1.0/self.seqdb.alphabet.length) ** length
         cursor.execute('select count(*) from %s' % self.words_table)
-        N = int(cursor.next()[0]) # total number of words
         cursor.execute('select sum(length(seq)) from seq')
         L = int(cursor.next()[0]) # total sequence length of all reads
         mu, sd = B2N(L, prob_word(self.wordlen)) # approximating normal distribution of word counts
 
-        pvalue_calculator = lambda x: N * 0.5 * (1 - erf((x - mu) / (sd * sqrt(2))))
+        pvalue_calculator = lambda x: num_words * 0.5 * (1 - erf((x - mu) / (sd * sqrt(2))))
         return pvalue_calculator
+
+    def band_radius(self, lengths, gap_prob, sensitivity=0.9):
+        return 2*sqrt(gap_prob*min(lengths))*erfinv(sensitivity)
+
+    def seed_pvalue_contribution(self, lengths, shift, gap_prob=0.1):
+        r = band_radius(lengths, gap_prob)
+        A = 2 * r * sqrt(sum(l - abs(shift)**2 for l in lengths))
+        return r, sum(log(l) for l in lengths) - log(A), log(sum(lengths))
+        FIXME
 
     # Helper for index(): yields data values to be inserted in the seeds index.
     def _give_seeds(self, cursor):
-        pvalue_calc = self.word_pvalue_calculator(cursor)
+        word_pvalue_calc = self.word_pvalue_calculator(cursor)
         cursor.execute('select count(*) from %s' % self.words_table)
         N = int(cursor.next()[0]) # total number of words
         indicator = ProgressIndicator(
@@ -278,7 +283,7 @@ class Index(object):
         cursor.execute('SELECT tuple, hits from %s' % self.words_table)
         for tup, hits in cursor:
             indicator.progress()
-            pvalue = pvalue_calc(hits.count('@'))
+            pvalue = word_pvalue_calc(hits.count('@'))
             if not pvalue or log(pvalue) < self.min_word_log_pvalue:
                 continue
 
@@ -291,6 +296,23 @@ class Index(object):
                     if S_hit[0] == T_hit[0]:
                         continue
 
+                    shift = S_hit[1] - T_hit[1]
+                    lengths = [
+                        self.seqinfo[S_hit[0]]['length'],
+                        self.seqinfo[T_hit[0]]['length']
+                    ]
+                    r, s, s0 = seed_pvalue_contribution(lengths, shift)
+                    FIXME # self.guesses = O(n^2) array of best observed shifts and their scores
+                    q = """SELECT shift, score FROM scores
+                        WHERE S_id = ? AND T_id = ? AND shift BETWEEN ? AND ?
+                    """ FIXME correct index? currently PK(S_id, T_id, shift)
+                    othercursor.execute(q, (S_hit[0], T_hit[0], shift + r, shift - r))
+                    update_recs = (score + s if score > 0 else s0 for shift, score in othercursor)
+                    q = """UPDATE scores SET score = ?
+                        WHERE S_id = %d AND T_id = %d AND shift = %d
+                    """ % (S_hit[0], T_hit[0], shift)
+                    anothercursor.executemany(q, update_recs)
+
                     yield (S_hit[0], T_hit[0], S_hit[1], T_hit[1])
 
         indicator.finish()
@@ -300,7 +322,7 @@ class Index(object):
         Provide a specific cursor object to access the SQLite database if
         accessing this function through a transaction.
         """
-        cnt_q = 'SELECT COUNT(*) FROM (%s)' % self.potential_homologs_q
+        cnt_q = 'SELECT COUNT(*) FROM scores WHERE score > ?'
         if cursor is None:
             with sqlite3.connect(self.seqdb.db) as conn:
                 cursor = conn.cursor()

@@ -7,6 +7,8 @@ import os.path
 import sqlite3
 from . import ffi, lib, CffiObject, ProgressIndicator
 
+from itertools import chain
+
 
 class Alphabet(CffiObject):
     """Wraps a C ``sequence_alphabet*``.
@@ -365,7 +367,10 @@ class SeqDB(object):
         """
         name = lambda x: sha1(str(x)).hexdigest()
         give_rec = lambda r: (name(r.seq), seq_type, r.id, str(r.seq))
-        recs = (give_rec(rec) for rec in SeqIO.parse(fasta_src, 'fasta'))
+        recs = chain(
+            (give_rec(rec) for rec in SeqIO.parse(fasta_src, 'fasta')),
+            (give_rec(rec.reverse_complement()) for rec in SeqIO.parse(fasta_src, 'fasta'))
+        )
 
         with sqlite3.connect(self.db) as conn:
             c = conn.cursor()
