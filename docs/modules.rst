@@ -4,5 +4,5 @@ align
 .. toctree::
    :maxdepth: 4
 
-   align
-   align.libalign.rst
+   oval
+   oval.liboval.rst

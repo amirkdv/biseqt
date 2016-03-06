@@ -1,7 +1,7 @@
-align.tuples module
+oval.mapping module
 ===================
 
-.. automodule:: align.tuples
+.. automodule:: oval.mapping
     :members:
     :undoc-members:
     :show-inheritance:

@@ -1,7 +1,7 @@
-align.pw module
+oval.seq module
 ===============
 
-.. automodule:: align.pw
+.. automodule:: oval.seq
     :members:
     :undoc-members:
     :show-inheritance:
