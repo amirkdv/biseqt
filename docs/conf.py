@@ -46,7 +46,8 @@ sys.path.insert(0, os.path.abspath('..'))
 # Add any Sphinx extension module names here, as strings. They can be
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
 # ones.
-sys.path.append('/var/shelf/book01/projects/align.py/env/local/lib/python2.7/site-packages/breathe')
+
+# sys.path.append('/var/shelf/book01/projects/align.py/env/local/lib/python2.7/site-packages/breathe')
 extensions = [
     'sphinx.ext.autodoc',
     'sphinx.ext.napoleon',
@@ -56,8 +57,8 @@ extensions = [
 ]
 
 # Breathe configuration
-breathe_projects = {"align.py": "doxygen"}
-breathe_default_project = "align.py"
+breathe_projects = {"oval": "doxygen"}
+breathe_default_project = "oval"
 breathe_domain_by_extension = {"h": "c", "c": "c"}
 breathe_default_members = ('members', 'undoc-members')
 
