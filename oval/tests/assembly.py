@@ -20,21 +20,17 @@ params = {
     'shift_rolling_sum_width': 100,
     'lower_log_pvalue_cutoff': -200, # FIXME
     'upper_log_pvalue_cutoff': 0, # FIXME
-    # ------------- HP / Index ----------------
+    # ------------- Index ----------------
     'min_seeds_for_homology': 1, # minimum number of seeds for two reads to be considered.
     'min_word_log_pvalue': -5, # minimum p-value allowed for a word to be considered a seed
-    'hp_gap_score': -0.5,   # HpCondenser Hp gap score
-    'hp_maxlen': 5,         # HpCondenser maxlen for seed extension
     # ---------------- simulations ------------------
     'genome_length': 70000, # length of randomly generated genome
     'coverage': 10,          # coverage of random sequencing reads
     'read_len_mean': 2000,  # average length of sequencing read
     'read_len_sd':  200,    # variance of sequencing read length
-    'hp_prob': 0.15,        # Parameter for geometric distributions of hp stretches
 }
 
 A = seq.Alphabet('ACGT')
-Tr = homopolymeric.HpCondenser(A, maxlen=params['hp_maxlen'])
 
 go_score, ge_score = pw.AlignParams.gap_scores_from_probs(params['go_prob'], params['ge_prob'])
 subst_scores = pw.AlignParams.subst_scores_from_probs(A, **params)
@@ -52,7 +48,6 @@ od_params = overlap.OverlapDiscoveryParams(
         align_params=C
     ),
     shift_rolling_sum_width=params['shift_rolling_sum_width'],
-    hp_condenser=Tr,
 )
 db_id = lambda G, vid: int(G.vs[vid]['name'].split('#')[1])
 
@@ -78,7 +73,6 @@ def create_example(db, reads='reads.fa'):
         subst_probs=params['subst_probs'],
         ge_prob=params['ge_prob'],
         go_prob=params['go_prob'],
-        #hp_prob=params['hp_prob']
     )
 
 def map_reads(db, reference, reads):

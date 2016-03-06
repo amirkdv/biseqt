@@ -70,9 +70,6 @@ class Alphabet(CffiObject):
             letters_dist(Optional[dict]): The probability distribution of
                 letters as a list of probabilities in order of letters in
                 :attr:`c_obj.letters`. Default is uniform.
-            hp_prob(Optional[float]): If specified each randomly generated
-                letter is stretched to a homopolymeric region with length
-                according to a geometric distribution with this parameter.
         Returns:
             str: A random string.
         """
@@ -222,10 +219,6 @@ class Sequence(object):
                 )
                 continue
             else:
-                # TODO use an hp specific go_prob if given, then we'd have
-                # to check also if S[k-1] == S[k]
-                # with probability go_prob start a gap unless previous op was
-                # a gap itself.
                 go_cutoff = go_prob * N / 2.0
                 if str(op) not in 'ID' and random.randint(0, N) < go_cutoff:
                     op, k = 'D', k + 1

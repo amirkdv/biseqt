@@ -15,11 +15,9 @@ clean:
 	rm -rf docs/$(DOCS_OUT)
 
 tests: oval/liboval.so
-	python -m oval.tests.homopolymeric
-	python -m oval.tests.oval
+	python -m oval.tests.pw
 	make -f assembly.mk clean
-	make -f assembly.mk genome.assembly.db    overlap.assembly.layout.pdf    layout.diff.assembly.pdf
-	make -f assembly.mk genome.hp_assembly.db overlap.hp_assembly.layout.pdf layout.diff.hp_assembly.pdf MODE=hp_assembly
+	make -f assembly.mk genome.assembly.db overlap.assembly.layout.pdf layout.diff.assembly.pdf
 
 loc:
 	find oval -type f -regex '.*\(\.py\|\.c\|\.h\)' | xargs wc -l
@@ -32,7 +30,7 @@ env:
 
 DOCS_EXCLUDE = oval/tests
 DOCS_OUT = _build
-docs: oval/liboval.so docs/docs.rst docs/doxygen
+docs: oval/lib/liboval.so docs/docs.rst docs/doxygen
 	sphinx-apidoc -e -o $@ oval/ $(DOCS_EXCLUDE)
 	cd $@ && sphinx-build -b html . $(DOCS_OUT)
 	cd $@ && sphinx-build -b latex . $(DOCS_OUT)

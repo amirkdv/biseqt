@@ -22,7 +22,6 @@ import sys
 from termcolor import colored
 from contextlib import contextmanager
 from . import ffi, lib, seq, CffiObject
-from . import hp_tokenize
 
 GLOBAL = lib.GLOBAL
 LOCAL = lib.LOCAL
@@ -31,6 +30,18 @@ END_ANCHORED = lib.END_ANCHORED
 OVERLAP = lib.OVERLAP
 START_ANCHORED_OVERLAP = lib.START_ANCHORED_OVERLAP
 END_ANCHORED_OVERLAP = lib.END_ANCHORED_OVERLAP
+
+def hp_tokenize(string):
+    """Generates (yields) homopolymeric stretches of the given sequences in
+    order in tuples of the form ``(char, num, pos)``. For example::
+
+        hp_tokenize('AAACCG') #=> [('A', 3, 0), ('C', 2, 3), ('G', 1, 5)]
+    """
+    for match in re.finditer(r'(.)\1*', string):
+        match, pos = match.group(0), match.start()
+        yield match[0], len(match), pos
+
+
 
 class OverlapParams(CffiObject): # FIXME
     def __init__(self, alphabet=None, subst=[],

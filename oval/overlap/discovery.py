@@ -23,7 +23,7 @@ class SeedExtensionParams(namedtuple('SeedExtensionParams',
 
 # FIXME docs
 OverlapDiscoveryParams = namedtuple('OverlapDiscoveryParams', [
-    'hp_condenser', 'seed_ext_params', 'shift_rolling_sum_width'
+    'seed_ext_params', 'shift_rolling_sum_width'
 ])
 
 def extend_segments(S, T, segments, params, rw_collect=False):
@@ -174,12 +174,6 @@ def discover_overlap(S_id, T_id, rw_collect=False, **kwargs):
 
     S = index.seqdb.loadseq(S_id)
     T = index.seqdb.loadseq(T_id)
-    if params.hp_condenser:
-        # condense the sequences and their seeds; order is conserved:
-        S = params.hp_condenser.condense_sequence(S)
-        T = params.hp_condenser.condense_sequence(T)
-        seeds = (params.hp_condenser.condense_seed(S, T, s) for s in seeds)
-        seeds = filter(lambda x: x, seeds)
 
     seg = extend_segments(S, T, seeds, params.seed_ext_params, rw_collect=rw_collect)
     if not seg:

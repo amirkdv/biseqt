@@ -10,31 +10,31 @@ clean:
 	rm -f $(TRUE_GRAPH).gml $(TRUE_GRAPH).layout.gml layout.diff.$(ASSEMBLED_GRAPH).svg
 
 $(READS):
-	python -c 'import oval.tests.hp_assembly as T; T.create_example("$@", "$(READS)");'
+	python -c 'import oval.tests.assembly as T; T.create_example("$@", "$(READS)");'
 $(DB): $(READS)
-	python -c 'import oval.tests.hp_assembly as T; T.create_denovo_db("$@", "$(READS)")'
+	python -c 'import oval.tests.assembly as T; T.create_denovo_db("$@", "$(READS)")'
 
 WORDLEN = $(shell echo $$WORDLEN)
 word_pvalues.$(WORDLEN).png:
-	python -c 'from oval.tests import hp_assembly as T; T.plot_word_pvalues("$(DB)", "$@");'
+	python -c 'from oval.tests import assembly as T; T.plot_word_pvalues("$(DB)", "$@");'
 
 shift_pvalues.$(WORDLEN).png:
-	python -c 'from oval.tests import hp_assembly as T; T.plot_shift_pvalues("$(DB)", "$@", "$(TRUE_GRAPH).gml");'
+	python -c 'from oval.tests import assembly as T; T.plot_shift_pvalues("$(DB)", "$@", "$(TRUE_GRAPH).gml");'
 
 seeds-$(WORDLEN):
 	mkdir -p "$@"
-	python -c 'from oval.tests import hp_assembly as T; T.plot_seeds("$(DB)", "$@", "$(TRUE_GRAPH).gml", "$(MAPPINGS)");'
+	python -c 'from oval.tests import assembly as T; T.plot_seeds("$(DB)", "$@", "$(TRUE_GRAPH).gml", "$(MAPPINGS)");'
 
 rw.$(WORDLEN).png:
-	python -c 'from oval.tests import hp_assembly as T; T.plot_rw("$(DB)", "$@", "$(TRUE_GRAPH).gml");'
+	python -c 'from oval.tests import assembly as T; T.plot_rw("$(DB)", "$@", "$(TRUE_GRAPH).gml");'
 
 num_seeds.$(WORDLEN).png:
-	python -c 'from oval.tests import hp_assembly as T; T.plot_num_seeds("$(DB)", "$@", "$(TRUE_GRAPH).gml");'
+	python -c 'from oval.tests import assembly as T; T.plot_num_seeds("$(DB)", "$@", "$(TRUE_GRAPH).gml");'
 
 .PHONY: seeds-$(WORDLEN) shift_pvalues.$(WORDLEN).png word_pvalues.$(WORDLEN).png rw.$(WORDLEN).png num_seeds.$(WORDLEN).png
 
 $(ASSEMBLED_GRAPH).gml:
-	python -c 'import oval.tests.hp_assembly as T; T.build_denovo_overlap_graph("$(DB)", "$@", "$(TRUE_GRAPH).gml")'
+	python -c 'import oval.tests.assembly as T; T.build_denovo_overlap_graph("$(DB)", "$@", "$(TRUE_GRAPH).gml")'
 	$(MAKE) -f assembly.mk diff SUMMARY_ONLY=True
 
 SUMMARY_ONLY = False
@@ -50,7 +50,7 @@ $(ASSEMBLED_GRAPH).dag.gml: $(ASSEMBLED_GRAPH).gml
 		G.break_cycles(method="$(FAS_METHOD)"); G.save("$@")'
 
 $(TRUE_GRAPH).gml:
-	python -c 'import oval.tests.hp_assembly as A; \
+	python -c 'import oval.tests.assembly as A; \
 		A.build_true_overlap_graph("$(DB)", "$(MAPPINGS)").save("$@")'
 
 $(ASSEMBLED_GRAPH).svg:

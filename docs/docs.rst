@@ -15,7 +15,7 @@ Pairwise alignments
 -------------------
 
 The core dynamic programming algorithm is implemented `in
-C <https://github.com/amirkdv/align.py/blob/master/align/libalign.c>`__
+C <https://github.com/amirkdv/oval.py/blob/master/align/liboval.c>`__
 and interfaced using `cffi <https://cffi.readthedocs.org/en/latest/>`__.
 The following are supported by ``libalign`` (the C implementaion) and
 exposed to Python by the ``pw`` module:
@@ -111,90 +111,6 @@ index provided by ``tuples.Index`` can be used to index all *k*-mers of
 a set of sequences (for given *k*) and to find maximal exactly-matching
 "seeds".
 
-Alphabet translation
---------------------
-
-To deal the high rates of homopolymeric errors in certain sequencing
-methods, ``homopolymeric.HpCondenser`` can be used to translate (aka
-"condense") sequences into a new alphabet where each homopolymeric
-substring is translated to a single letter(e.g ``AACCC`` becomes
-``A2C3``).
-
-Alignment in condensed alphabet
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-The machinery in ``libalign`` is capable of aligning sequences in
-alphabets with letters longer than a single character. The only
-requirement is that all letters in an alphabet have the same length (to
-avoid a book-keeping mess). This leads to a `caveat <#a-caveat>`__
-discussed below. Aside from the caveat, the following operations are
-supported:
-
--  "Condensing" transcripts into transcripts for condensed sequences and
-   "expanding" transcripts for condensed sequences back into one for the
-   original sequences.
--  "Condensing" alignment parameters into corresponding parameters in
-   the condensed alphabet,
--  "Condensing" a seed (see the section on
-   `assembly <#genome-assembly>`__ below) into a seed in the condensed
-   alphabet.
-
-Content dependent gap scores
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-When aligning sequences in the condensed alphabet the usual
-linear/affine gap penalty which only takes into consideration the length
-of a gap has undesirable consequences. For example, the sequences
-``A2C7T3`` and ``A1T4`` can get a positive score despiting have a
-7-character long gap. To overcome this, ``libalign`` allows specifying
-gap scores that are *content-dependent* in that the extension score of
-gaps may depend on the content that is inserted or deleted.
-
-Score translation
-^^^^^^^^^^^^^^^^^
-
-To get a set of parameters for alignment in the condensed alphabet there
-are two options:
-
--  Convert *scores* in the source alphabet directly into scores in the
-   condensed alphabet. Additionally scores for homopolymeric indels must
-   be provided.
--  Convert *probability parameters* for substitution and indels into
-   corresponding probabilities in the condensed alphabet and converting
-   those into scores as usual. Additionally homopolymeric indel
-   probabilities must be provided. The translation formula is the
-   following when the length of letters are identical:
-
-   .. math:: \Pr(x_i \rightarrow y_i) = \Pr(x \rightarrow y)^i(1-g_h)^{i-1}
-
-   where :math:`g_h` is the homopolymeric gap probability (only a linear
-   model is supported). When the length of letters differ, say
-   :math:`i<j`, we have the following where :math:`\pi(\cdot)` is the
-   integer partition function:
-
-   .. math:: \Pr(x_i \rightarrow y_j) = \pi(i)\Pr(x \rightarrow y)^i(1-g_h)^{i-1}g_h^{|i-j|}
-
-*Note*: These calculations here may have serious errors. In fact, the
-calculated probabilities as described above don't necessarily add up to
-1! Returned probability matrix is normalized in each row to make sure
-the output is not terribly wrong.
-
-A Caveat
-~~~~~~~~
-
-Condensing a sequence requires specifying a whole number ``maxlen``:
-homopolymeric substrings longer than ``maxlen`` are considered to have
-only ``maxlen`` characters. This is needed to ensure constant letter
-length across the condensed alphabet (which is required by
-``libalign``).
-
-Due to this, if source alphabet sequences contain homopolymeric
-substrings that are longer than the specified ``maxlen``, the condensing
-process is lossy (expanding a condensed sequence does not necessarily
-give its original sequence). However, if the original sequence is
-available, expanding an alignment transcript can be done losslessly to
-match the original sequence.
-
 Genome assembly
 ---------------
 
@@ -254,38 +170,3 @@ algorithm (presumably something similar to what is dicussed
 `here <http://citeseerx.ist.psu.edu/viewdoc/summary?doi=10.1.1.31.5137>`__)
 and a suboptimal, but fast, algorithm relying on the `Eades
 heuristic <http://www.sciencedirect.com/science/article/pii/002001909390079O>`__.
-
-Assembly in condensed alphabet
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-The assembly line can be modified in two places to use condensed
-alphabets:
-
--  *Indexing*: The sequence of reads can be indexed in the condensed
-   alphabet. For example, if we are indexing 5-mers the read
-   ``AAACCGTG`` gives only one tuple ``A3C2G1T1G1`` (which is 5 letters
-   in the condensed alphabet). Typically, we may want to set the
-   ``maxlen`` of the translator used for indexing to a very low number
-   such that we do not miss seeds due to indels in long homopolymeric
-   stretches. For example, if ``maxlen`` is set to 1 then the above
-   example yields the tuple ``A1C1G1T1G1``.
--  *Seed extension*: This phase too can be performed in the condensed
-   alphabet (and the translator may be a different one than the one for
-   indexing, i.e have a different ``maxlen``). This has the added
-   benefit of allowing us to lower the penalty of homopolymeric indels.
-
-Condensing seeds
-^^^^^^^^^^^^^^^^
-
-Performing homopolymeric compression during indexing has the upside that
-seeds found in this stage are immediately consumbale for seed extension.
-However, this is not compatible with usage of shift distributions to
-quickly rule in/out overlapping reads since the coordinates of h.p.
-condensed seeds yield a different shift than the true shift in the
-original alphabet.
-
-Therefore, it is desirable to perform indexing in the original alphabet
-and to proceed to seed extension in the condensed alphabet. This is
-allowed since an ``HpCondenser`` can "condense" seeds in the original
-alphabet into seeds in the condensed alphabet. This, however, raises
-some non-trivial caveats discussed in the API docs.

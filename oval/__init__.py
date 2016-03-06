@@ -25,18 +25,6 @@ class CffiObject(object):
         return getattr(self.c_obj, name)
 
 
-# FIXME this should be moved to seq.py
-def hp_tokenize(string):
-    """Generates (yields) homopolymeric stretches of the given sequences in
-    order in tuples of the form ``(char, num, pos)``. For example::
-
-        hp_tokenize('AAACCG') #=> [('A', 3, 0), ('C', 2, 3), ('G', 1, 5)]
-    """
-    for match in re.finditer(r'(.)\1*', string):
-        match, pos = match.group(0), match.start()
-        yield match[0], len(match), pos
-
-
 class ProgressIndicator(object):
     def __init__(self, msg, num_total, percentage=True):
         self.msg, self.num_total = msg, int(num_total)
