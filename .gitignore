@@ -16,10 +16,8 @@ build/
 dist/
 env/
 
-docs/_build/*
-!docs/_build/_static/
+docs/_build
 docs/_templates
-docs/_static
 docs/doxygen
 latex/
 html/
