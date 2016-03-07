@@ -1,6 +1,6 @@
 dependencies:
   override:
-    - python setup.py develop
+    - python setup.py install
 
 test:
   override:
