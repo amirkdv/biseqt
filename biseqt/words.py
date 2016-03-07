@@ -269,7 +269,6 @@ class Index(object):
         r = band_radius(lengths, gap_prob)
         A = 2 * r * sqrt(sum(l - abs(shift)**2 for l in lengths))
         return r, sum(log(l) for l in lengths) - log(A), log(sum(lengths))
-        FIXME
 
     # Helper for index(): yields data values to be inserted in the seeds index.
     def _give_seeds(self, cursor):
@@ -302,10 +301,10 @@ class Index(object):
                         self.seqinfo[T_hit[0]]['length']
                     ]
                     r, s, s0 = seed_pvalue_contribution(lengths, shift)
-                    FIXME # self.guesses = O(n^2) array of best observed shifts and their scores
+                    # FIXME self.guesses = O(n^2) array of best observed shifts and their scores
                     q = """SELECT shift, score FROM scores
                         WHERE S_id = ? AND T_id = ? AND shift BETWEEN ? AND ?
-                    """ FIXME correct index? currently PK(S_id, T_id, shift)
+                    """ # FIXME correct index? currently PK(S_id, T_id, shift)
                     othercursor.execute(q, (S_hit[0], T_hit[0], shift + r, shift - r))
                     update_recs = (score + s if score > 0 else s0 for shift, score in othercursor)
                     q = """UPDATE scores SET score = ?

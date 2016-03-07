@@ -14,6 +14,7 @@ clean:
 	rm -rf build dist env
 	rm -f biseqt/pwlib/pwlib.so core
 	rm -rf docs/$(DOCS_OUT)
+	rm -rf docs/doxygen
 
 tests: $(LIBDIR)/pwlib.so
 	python -m biseqt.tests.pw
@@ -31,6 +32,7 @@ env:
 
 DOCS_EXCLUDE = biseqt/tests
 DOCS_OUT = _build
+# in RTD docs/doxygen is built by docs/conf.py
 docs: $(LIBDIR)/pwlib.so docs/docs.rst docs/doxygen
 	sphinx-apidoc -e -o $@ biseqt/ $(DOCS_EXCLUDE)
 	cd $@ && sphinx-build -b html . $(DOCS_OUT)
