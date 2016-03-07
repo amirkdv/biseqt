@@ -13,7 +13,7 @@ clean:
 	@find . -regextype posix-extended -regex '.*.(pyc|swp|egg|egg-info)' | grep -v '^./.git' | tee /dev/stderr  | while read f; do rm -rf $$f; done
 	rm -rf build dist env
 	rm -f biseqt/pwlib/pwlib.so core
-	rm -rf docs/$(DOCS_OUT)
+	find docs/$(DOCS_OUT) -maxdepth 1 -mindepth 1 | grep -v _static | xargs rm -rf
 	rm -rf docs/doxygen
 
 tests: $(LIBDIR)/pwlib.so

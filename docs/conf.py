@@ -14,7 +14,6 @@
 
 import sys
 import os
-import shlex
 import subprocess
 
 # Mock dependencies that require arbitrary C binaries.
@@ -32,6 +31,10 @@ if os.environ.get('READTHEDOCS', None) == 'True':
     subprocess.call('cd .. && pip install breathe && doxygen docs/doxygen.conf', shell=True)
     MOCK_MODULES = ['cffi', 'igraph', 'numpy', 'termcolor', 'Bio', 'Bio.SeqIO']
     sys.modules.update((mod_name, Mock()) for mod_name in MOCK_MODULES)
+else:
+    def setup(app):
+        app.add_stylesheet('theme_hacks.css')
+
 
 # If extensions (or modules to document with autodoc) are in another directory,
 # add these directories to sys.path here. If the directory is relative to the
