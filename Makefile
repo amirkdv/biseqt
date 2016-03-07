@@ -12,7 +12,7 @@ $(LIBDIR)/pwlib.so: $(CFILES) $(LIBDIR)/pwlib.h
 clean:
 	@find . -regextype posix-extended -regex '.*.(pyc|swp|egg|egg-info)' | grep -v '^./.git' | tee /dev/stderr  | while read f; do rm -rf $$f; done
 	rm -rf build dist env
-	rm -f biseqt/lib/libbiseqt.so core
+	rm -f biseqt/pwlib/pwlib.so core
 	rm -rf docs/$(DOCS_OUT)
 
 tests: $(LIBDIR)/pwlib.so
