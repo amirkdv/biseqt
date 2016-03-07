@@ -3,24 +3,25 @@ GCC = gcc -shared -Wall -fPIC -std=c99 -g
 # To get coredumps:
 # 	$ ulimit -c unlimited
 # To debug coredump:
-# 	$ gdb oval/liboval.so core
-LIBDIR = oval/lib
-$(LIBDIR)/liboval.so: $(LIBDIR)/pw.c $(LIBDIR)/overlap.c $(LIBDIR)/liboval.h
-	$(GCC) $(LIBDIR)/pw.c $(LIBDIR)/overlap.c -o $@
+# 	$ gdb biseqt/libbiseqt.so core
+LIBDIR = biseqt/pwlib
+CFILES = $(LIBDIR)/stdpw.c $(LIBDIR)/bandedpw.c $(LIBDIR)/seedext.c
+$(LIBDIR)/pwlib.so: $(CFILES) $(LIBDIR)/pwlib.h
+	$(GCC) $(CFILES) -o $@
 
 clean:
 	@find . -regextype posix-extended -regex '.*.(pyc|swp|egg|egg-info)' | grep -v '^./.git' | tee /dev/stderr  | while read f; do rm -rf $$f; done
 	rm -rf build dist env
-	rm -f oval/lib/liboval.so core
+	rm -f biseqt/lib/libbiseqt.so core
 	rm -rf docs/$(DOCS_OUT)
 
-tests: oval/liboval.so
-	python -m oval.tests.pw
-	make -f assembly.mk clean
-	make -f assembly.mk genome.assembly.db overlap.assembly.layout.pdf layout.diff.assembly.pdf
+tests: $(LIBDIR)/pwlib.so
+	python -m biseqt.tests.pw
+	# make -f assembly.mk clean
+	# make -f assembly.mk genome.assembly.db overlap.assembly.layout.pdf layout.diff.assembly.pdf
 
 loc:
-	find oval -type f -regex '.*\(\.py\|\.c\|\.h\)' | xargs wc -l
+	find biseqt -type f -regex '.*\(\.py\|\.c\|\.h\)' | xargs wc -l
 
 CAIRO=$(shell python -c 'import site, os.path; print filter(lambda e:os.path.isdir(e + "/cairo"), site.getsitepackages())[0] + "/cairo"')
 env:
@@ -28,10 +29,10 @@ env:
 	. env/bin/activate && python setup.py install
 	ln -s "$(CAIRO)" env/lib/python2.7/cairo
 
-DOCS_EXCLUDE = oval/tests
+DOCS_EXCLUDE = biseqt/tests
 DOCS_OUT = _build
-docs: oval/lib/liboval.so docs/docs.rst docs/doxygen
-	sphinx-apidoc -e -o $@ oval/ $(DOCS_EXCLUDE)
+docs: $(LIBDIR)/pwlib.so docs/docs.rst docs/doxygen
+	sphinx-apidoc -e -o $@ biseqt/ $(DOCS_EXCLUDE)
 	cd $@ && sphinx-build -b html . $(DOCS_OUT)
 	cd $@ && sphinx-build -b latex . $(DOCS_OUT)
 	@echo "Find the docs at file://`readlink -f $@/$(DOCS_OUT)/index.html`"

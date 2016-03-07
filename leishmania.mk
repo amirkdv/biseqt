@@ -20,7 +20,7 @@ $(REFERENCE): $(GENOME)
 		I.write([R.SeqRecord(rec.seq, id=rec.id)], "$@", "fasta")'
 
 $(MAPPINGS): $(REFERENCE) $(READS)
-	python -c 'from oval.mapping import BwaReadMapper as M, save_mappings; \
+	python -c 'from biseqt.mapping import BwaReadMapper as M, save_mappings; \
 		save_mappings("$@", M(read_src="$(READS)", ref_src="$(REFERENCE)").mappings());'
 
 ASSEMBLY_TARGET = leishmania.gml

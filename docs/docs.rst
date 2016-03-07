@@ -14,11 +14,10 @@ The following can be generated randomly by the ``seq`` module:
 Pairwise alignments
 -------------------
 
-The core dynamic programming algorithm is implemented `in
-C <https://github.com/amirkdv/oval.py/blob/master/align/liboval.c>`__
-and interfaced using `cffi <https://cffi.readthedocs.org/en/latest/>`__.
-The following are supported by ``libalign`` (the C implementaion) and
-exposed to Python by the ``pw`` module:
+The core dynamic programming algorithm is implemented in C. and
+interfaced using `cffi <https://cffi.readthedocs.org/en/latest/>`__. The
+following are supported by ``pwlib`` (the C implementaion) and exposed
+to Python by the ``pw`` module:
 
 -  *Global* alignments, i.e Needleman-Wunsch.
 -  *Local* alignments, i.e Smith-Waterman.
@@ -78,8 +77,8 @@ length :math:`n \ge 1` is:
 .. math:: \log g_o + (n-1)\log g_e
 
 This differs by the 1 offset from textbook definitions of the affine gap
-penalty (and from what ``libalign`` expects). The two are equivalent
-since the above gap penalty function can be rewritten as:
+penalty (and from what ``biseqt`` expects). The two are equivalent since
+the above gap penalty function can be rewritten as:
 
 .. math:: \log {g_o \over g_e} + n \log g_e
 
@@ -113,6 +112,8 @@ a set of sequences (for given *k*) and to find maximal exactly-matching
 
 Genome assembly
 ---------------
+
+*FIXME* (out of date)
 
 Overlap and layout graphs (i.e OLC minus consensus) can be calculated by
 methods provided by ``assembly.OverlapBuilder``. All graph algorithms
@@ -162,8 +163,8 @@ the cycle breaking algorithm, the latter being the hardest to get rid
 of.
 
 Regardless, cycle breaking is delegated to
-``igraph.Graph.feedback_arc_set`` which finds a set of edges the removal
-of which gives an acyclic graph. It supports (see
+``igraph.Graph.feedback_arc_set`` which finds a set of edges the
+rembiseqt of which gives an acyclic graph. It supports (see
 `docs <http://igraph.org/python/doc/igraph.GraphBase-class.html#feedback_arc_set>`__)
 an optimal, but slow (exponential complexity), integer programming
 algorithm (presumably something similar to what is dicussed

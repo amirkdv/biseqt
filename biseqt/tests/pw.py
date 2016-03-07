@@ -31,8 +31,8 @@ print 'Pr(go) = %.2f, Pr(ge) = %.2f +----> Score(go)=%.2f, Score(ge)=%.2f' % \
 S = A.randseq(params['length'])
 T, m_opseq = S.mutate(**params)
 C = pw.AlignParams(subst_scores=subst_scores, alphabet=A,
-    go_score=go_score, ge_score=ge_score, max_diversion=params['band'])
-with pw.AlignProblem(S, T, C, align_type=params['type']) as P:
+    go_score=go_score, ge_score=ge_score)
+with pw.AlignProblem(S, T, C, band_radius=params['band'], align_type=params['type']) as P:
     score = P.solve(print_dp_table=params['show_dp'])
     transcript = P.traceback()
 

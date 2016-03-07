@@ -1,7 +1,7 @@
-oval.mapping module
+biseqt.words module
 ===================
 
-.. automodule:: oval.mapping
+.. automodule:: biseqt.words
     :members:
     :undoc-members:
     :show-inheritance:

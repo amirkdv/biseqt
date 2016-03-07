@@ -1,8 +1,8 @@
-align
-=====
+``biseqt``
+==========
 
 .. toctree::
    :maxdepth: 4
 
-   oval
-   oval.liboval.rst
+   biseqt
+   biseqt.pwlib.rst

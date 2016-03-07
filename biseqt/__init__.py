@@ -6,8 +6,8 @@ import sys
 import re
 
 ffi = cffi.FFI()
-lib = ffi.dlopen(os.path.join(os.path.dirname(__file__), 'lib', 'liboval.so'))
-with open(os.path.join(os.path.dirname(__file__), 'lib', 'liboval.h')) as f:
+lib = ffi.dlopen(os.path.join(os.path.dirname(__file__), 'pwlib', 'pwlib.so'))
+with open(os.path.join(os.path.dirname(__file__), 'pwlib', 'pwlib.h')) as f:
     ffi.cdef(f.read())
 
 class CffiObject(object):

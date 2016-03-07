@@ -11,9 +11,9 @@ The following can be generated randomly by the `seq` module:
 
 ## Pairwise alignments
 
-The core dynamic programming algorithm is implemented [in C](https://github.com/amirkdv/oval.py/blob/master/align/liboval.c)
+The core dynamic programming algorithm is implemented in C.
 and interfaced using [cffi](https://cffi.readthedocs.org/en/latest/). The
-following are supported by `libalign` (the C implementaion) and exposed to
+following are supported by `pwlib` (the C implementaion) and exposed to
 Python by the `pw` module:
 
 * *Global* alignments, i.e Needleman-Wunsch.
@@ -65,7 +65,7 @@ Note that in the above sense the score (log likelihood) of a gap of
 length $n \ge 1$ is:
 $$\log g_o + (n-1)\log g_e$$
 This differs by the 1 offset from textbook definitions of the
-affine gap penalty (and from what `libalign` expects). The two are
+affine gap penalty (and from what `biseqt` expects). The two are
 equivalent since the above gap penalty function can be rewritten as:
 $$\log {g_o \over g_e} + n \log g_e$$
 
@@ -95,12 +95,13 @@ of sequences (for given *k*) and to find maximal exactly-matching "seeds".
 
 ## Genome assembly
 
+*FIXME* (out of date)
+
 Overlap and layout graphs (i.e OLC minus consensus) can be calculated by methods
 provided by `assembly.OverlapBuilder`. All graph algorithms are delegated to
 [igraph](http://igraph.org/python/).
 Overlap graphs are represented by `assembly.OverlapGraph` (which wraps an
-igraph directed graph).
-The weighted overlap graph is built as follows:
+igraph directed graph). The weighted overlap graph is built as follows:
 
 * For any pair of potentially overlapping reads, find the *shift*
   distribution of all seeds using a rolling sum window. The *shift* of a
@@ -136,7 +137,7 @@ ignored altogether. The first and third case are delegated to the cycle breaking
 algorithm, the latter being the hardest to get rid of.
 
 Regardless, cycle breaking is delegated to `igraph.Graph.feedback_arc_set` which
-finds a set of edges the removal of which gives an acyclic graph.
+finds a set of edges the rembiseqt of which gives an acyclic graph.
 It supports (see [docs](http://igraph.org/python/doc/igraph.GraphBase-class.html#feedback_arc_set))
 an optimal, but slow (exponential complexity), integer programming algorithm
 (presumably something similar to what is dicussed [here](http://citeseerx.ist.psu.edu/viewdoc/summary?doi=10.1.1.31.5137))

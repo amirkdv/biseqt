@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #
-# align.py documentation build configuration file, created by
+# biseqt documentation build configuration file, created by
 # sphinx-quickstart on Sun Nov  8 14:22:42 2015.
 #
 # This file is execfile()d with the current directory set to its
@@ -47,7 +47,7 @@ sys.path.insert(0, os.path.abspath('..'))
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
 # ones.
 
-# sys.path.append('/var/shelf/book01/projects/align.py/env/local/lib/python2.7/site-packages/breathe')
+# sys.path.append('/var/shelf/book01/projects/biseqt/env/local/lib/python2.7/site-packages/breathe')
 extensions = [
     'sphinx.ext.autodoc',
     'sphinx.ext.napoleon',
@@ -57,8 +57,8 @@ extensions = [
 ]
 
 # Breathe configuration
-breathe_projects = {"oval": "doxygen"}
-breathe_default_project = "oval"
+breathe_projects = {"biseqt": "doxygen"}
+breathe_default_project = "biseqt"
 breathe_domain_by_extension = {"h": "c", "c": "c"}
 breathe_default_members = ('members', 'undoc-members')
 
@@ -77,7 +77,7 @@ source_suffix = '.rst'
 master_doc = 'index'
 
 # General information about the project.
-project = u'align.py'
+project = u'biseqt'
 copyright = u'2015, Amir Kadivar'
 author = u'Amir Kadivar'
 
@@ -202,10 +202,10 @@ html_theme = 'sphinx_rtd_theme'
 # If true, links to the reST sources are added to the pages.
 #html_show_sourcelink = True
 
-# If true, "Created using Sphinx" is shown in the HTML align.pyter. Default is True.
+# If true, "Created using Sphinx" is shown in the HTML footer. Default is True.
 #html_show_sphinx = True
 
-# If true, "(C) Copyright ..." is shown in the HTML align.pyter. Default is True.
+# If true, "(C) Copyright ..." is shown in the HTML footer. Default is True.
 #html_show_copyright = True
 
 # If true, an OpenSearch description file will be output, and all pages will
@@ -231,7 +231,7 @@ html_theme = 'sphinx_rtd_theme'
 #html_search_scorer = 'scorer.js'
 
 # Output file base name for HTML help builder.
-htmlhelp_basename = 'align.pydoc'
+htmlhelp_basename = 'pydoc'
 
 # -- Options for LaTeX output ---------------------------------------------
 
@@ -253,7 +253,7 @@ latex_elements = {
 # (source start file, target name, title,
 #  author, documentclass [howto, manual, or own class]).
 latex_documents = [
-  (master_doc, 'align.py.tex', u'align.py Documentation',
+  (master_doc, 'biseqt.tex', u'biseqt Documentation',
    u'Amir Kadivar', 'manual'),
 ]
 
@@ -283,7 +283,7 @@ latex_documents = [
 # One entry per manual page. List of tuples
 # (source start file, name, description, authors, manual section).
 man_pages = [
-    (master_doc, 'align.py', u'align.py Documentation',
+    (master_doc, 'biseqt', u'biseqt Documentation',
      [author], 1)
 ]
 
@@ -297,8 +297,8 @@ man_pages = [
 # (source start file, target name, title, author,
 #  dir menu entry, description, category)
 texinfo_documents = [
-  (master_doc, 'align.py', u'align.py Documentation',
-   author, 'align.py', 'One line description of project.',
+  (master_doc, 'biseqt', u'biseqt Documentation',
+   author, 'Amir Kadivar', 'BiSeqt is a biological sequence alignment tool.',
    'Miscellaneous'),
 ]
 
@@ -308,8 +308,8 @@ texinfo_documents = [
 # If false, no module index is generated.
 #texinfo_domain_indices = True
 
-# How to display URL addresses: 'align.pytnote', 'no', or 'inline'.
-#texinfo_show_urls = 'align.pytnote'
+# How to display URL addresses: 'footnote', 'no', or 'inline'.
+#texinfo_show_urls = 'footnote'
 
 # If true, do not generate a @detailmenu in the "Top" node's menu.
 #texinfo_no_detailmenu = False

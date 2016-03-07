@@ -1,7 +1,7 @@
-oval.words module
+biseqt.seq module
 =================
 
-.. automodule:: oval.words
+.. automodule:: biseqt.seq
     :members:
     :undoc-members:
     :show-inheritance:

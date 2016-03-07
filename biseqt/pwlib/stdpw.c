@@ -5,7 +5,7 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "liboval.h"
+#include "pwlib.h"
 
 /**
  * Given an alignment problem definition, creates and initializes the dynamic
@@ -18,10 +18,10 @@
  *
  * @return pointer to the `malloc` ed dynamic programming table.
  */
-align_dp_cell** init_dp_table(align_problem* def) {
+dpcell** init_dp_table(alndef* def) {
   int n = def->S_max_idx - def->S_min_idx;
   int m = def->T_max_idx - def->T_min_idx;
-  align_dp_cell** P = malloc((n+1) * sizeof(align_dp_cell *));
+  dpcell** P = malloc((n+1) * sizeof(dpcell *));
   if (P == NULL) {
     printf("Failed to allocate memory (`init_dp_table()`).\n");
     return NULL;
@@ -29,13 +29,13 @@ align_dp_cell** init_dp_table(align_problem* def) {
   // We need an additional row/col in the beginning. Table indices are therefore
   // exactly one ahead of subproblem indices.
   for (int i = 0; i < n+1; i++) {
-    P[i] = malloc((m+1) * sizeof(align_dp_cell));
+    P[i] = malloc((m+1) * sizeof(dpcell));
     if (P[i] == NULL) {
       printf("Failed to allocate memory (`init_dp_table()`).\n");
       return NULL;
     }
     for (int j = 0; j < m+1; j++) {
-      P[i][j] = (align_dp_cell) {i, j, 0, NULL};
+      P[i][j] = (dpcell) {i, j, 0, NULL};
     }
   }
   return P;
@@ -43,13 +43,13 @@ align_dp_cell** init_dp_table(align_problem* def) {
 
 /**
  * Frees the allocated memory for a given alignment problem so that we can reuse
- * the same ::align_problem over and over.
+ * the same ::alndef over and over.
  *
  * @param P the dynamic programming table.
  * @param row_cnt the number of rows in the table.
  * @param col_cnt the number of columns in the table.
  */
-void free_dp_table(align_dp_cell** P, int row_cnt, int col_cnt) {
+void free_dp_table(dpcell** P, int row_cnt, int col_cnt) {
   if (P == NULL) {
     return;
   }
@@ -84,21 +84,21 @@ void free_dp_table(align_dp_cell** P, int row_cnt, int col_cnt) {
  * @param def The alignment problem definition.
  * @return The optimal cell of the DP table for the alignment to *end* at.
  */
-align_dp_cell* solve(align_dp_cell** P, align_problem* def) {
+dpcell* std_solve(dpcell** P, alndef* def) {
   int n = def->S_max_idx - def->S_min_idx;
   int m = def->T_max_idx - def->T_min_idx;
   double max_score, prev_score, max_prev_score, del_score, ins_score;
   int num_choices, max_prev_choice_idx, num_max_scores;
   int i,j,k;
   int *max_score_alts = NULL;
-  align_choice *alts = NULL;
+  alnchoice *alts = NULL;
   int s,t;
 
   // Base case
   P[0][0].num_choices = 1;
-  P[0][0].choices = malloc(sizeof(align_choice));
+  P[0][0].choices = malloc(sizeof(alnchoice));
   if (P[0][0].choices == NULL) {
-    printf("Failed to allocate memory (`solve()`).\n");
+    printf("Failed to allocate memory (`std_solve()`).\n");
     return NULL;
   }
   P[0][0].choices[0].op = 'B';
@@ -123,19 +123,19 @@ align_dp_cell* solve(align_dp_cell** P, align_problem* def) {
         free(max_score_alts);
       }
       // Allocate for all 4 possible choices (B,M/S,I,D)
-      alts = malloc(4 * sizeof(align_choice));
+      alts = malloc(4 * sizeof(alnchoice));
       if (alts == NULL) {
-        printf("Failed to allocate memory (`solve()`).\n");
+        printf("Failed to allocate memory (`std_solve()`).\n");
         return NULL;
       }
       // Build all the alternatives at cell (i,j)
       num_choices = 0;
-      if (def->type == LOCAL || // local alignments can start anywhere
-          def->type == END_ANCHORED || // end-anchored alignments can ...
+      if (def->std_type == LOCAL || // local alignments can start anywhere
+          def->std_type == END_ANCHORED || // end-anchored alignments can ...
           // Overlap alignments and end-anchored alignments can start anywhere
           // on either of the left or top edges:
-          (def->type == OVERLAP && (i == 0 || j == 0)) ||
-          (def->type == END_ANCHORED_OVERLAP && (i == 0 || j == 0))
+          (def->std_type == OVERLAP && (i == 0 || j == 0)) ||
+          (def->std_type == END_ANCHORED_OVERLAP && (i == 0 || j == 0))
         ) {
         alts[num_choices].op = 'B';
         alts[num_choices].score = 0;
@@ -160,9 +160,9 @@ align_dp_cell* solve(align_dp_cell** P, align_problem* def) {
       if (i > 0) {
         // Are there choices for (i-1,j) and are we inside the band?
         if (P[i-1][j].num_choices > 0 && (
-              def->params->max_diversion < 0 ||
+              def->bradius < 0 ||
               // diversion of all choices in the same cell are identical:
-              abs(P[i-1][j].choices[0].diversion - 1) <= def->params->max_diversion
+              abs(P[i-1][j].choices[0].diversion - 1) <= def->bradius
             )) {
           max_prev_choice_idx = 0;
           max_prev_score = -INT_MAX;
@@ -188,9 +188,9 @@ align_dp_cell* solve(align_dp_cell** P, align_problem* def) {
       if (j > 0) {
         // Are there choices for (i,j-1) and are we inside the band?
         if (P[i][j-1].num_choices > 0 && (
-              def->params->max_diversion < 0 ||
+              def->bradius < 0 ||
               // diversion of all choices in the same cell are identical:
-              abs(P[i][j-1].choices[0].diversion + 1) <= def->params->max_diversion
+              abs(P[i][j-1].choices[0].diversion + 1) <= def->bradius
             )) {
           max_prev_choice_idx = 0;
           max_prev_score = - INT_MAX;
@@ -241,7 +241,7 @@ align_dp_cell* solve(align_dp_cell** P, align_problem* def) {
       // indices of maximum choices in the `alts' array
       max_score_alts = malloc(num_choices * sizeof(int));
       if (max_score_alts == NULL) {
-        printf("Failed to allocate memory (`solve()`).\n");
+        printf("Failed to allocate memory (`std_solve()`).\n");
         return NULL;
       }
       num_max_scores = 0;
@@ -258,9 +258,9 @@ align_dp_cell* solve(align_dp_cell** P, align_problem* def) {
         }
       }
       P[i][j].num_choices = num_max_scores;
-      P[i][j].choices = malloc(num_max_scores * sizeof(align_choice));
+      P[i][j].choices = malloc(num_max_scores * sizeof(alnchoice));
       if (P[i][j].choices == NULL) {
-        printf("Failed to allocate memory (`solve()`).\n");
+        printf("Failed to allocate memory (`std_solve()`).\n");
         return NULL;
       }
       for (k = 0; k < num_max_scores; k++) {
@@ -289,13 +289,13 @@ align_dp_cell* solve(align_dp_cell** P, align_problem* def) {
  *
  * @return The optimal cell of the table for the alignment to *end* at.
  */
-align_dp_cell* find_optimal(align_dp_cell** P, align_problem* def) {
+dpcell* find_optimal(dpcell** P, alndef* def) {
   double max;
   int i,j;
   int row = -1, col = -1;
-  if (def->type == GLOBAL ||
-      def->type == END_ANCHORED ||
-      def->type == END_ANCHORED_OVERLAP) {
+  if (def->std_type == GLOBAL ||
+      def->std_type == END_ANCHORED ||
+      def->std_type == END_ANCHORED_OVERLAP) {
     // Global and end-anchored alignments must end at the bottom right corner
     row = def->S_max_idx - def->S_min_idx;
     col = def->T_max_idx - def->T_min_idx;
@@ -303,7 +303,7 @@ align_dp_cell* find_optimal(align_dp_cell** P, align_problem* def) {
       return NULL;
     }
   }
-  else if (def->type == OVERLAP || def->type == START_ANCHORED_OVERLAP) {
+  else if (def->std_type == OVERLAP || def->std_type == START_ANCHORED_OVERLAP) {
     // Overlap alignments (except end-anchored ones) can end anywhere on either
     // of the bottom or right edges; find the best:
     max = -INT_MAX;
@@ -325,7 +325,7 @@ align_dp_cell* find_optimal(align_dp_cell** P, align_problem* def) {
       }
     }
   }
-  else if (def->type == LOCAL || def->type == START_ANCHORED) {
+  else if (def->std_type == LOCAL || def->std_type == START_ANCHORED) {
     // Local and start-anchored alignments (except for overlap ones) can end
     // anywhere; find the best:
     max = P[0][0].choices[0].score;
@@ -363,14 +363,14 @@ align_dp_cell* find_optimal(align_dp_cell** P, align_problem* def) {
  *    and requires some sort of global state keeping to avoid convoluted
  *    recursions. I couldn't get it right in the first go; leave for later.
  */
-transcript* traceback(align_dp_cell** P, align_problem* def, align_dp_cell* end) {
+transcript* traceback(dpcell** P, alndef* def, dpcell* end) {
   char op, *opseq;
   transcript* tx = malloc(sizeof(transcript));
   int S_idx = end->row,
       T_idx = end->col,
       len = S_idx + T_idx + 1,
       pos = len - 1;
-  align_dp_cell cur = P[S_idx][T_idx];
+  dpcell cur = P[S_idx][T_idx];
   // We write ops to rev_opseq backwards starting from the end (position `len')
   char rev_opseq[len];
   while (1) {
@@ -437,265 +437,6 @@ int tx_seq_len(transcript* tx, char on) {
   return sum;
 }
 
-/**
- * Given a segment `seg`, extends it in the given direction by one window.
- *
- * @param res Extended segment to be populated here.
- * @param seg The original segment.
- * @param S The integer array for the "from" sequence containing indices of
- *   its letters in alphabet.
- * @param T The integer array for the "to" sequence containing indices of
- *   its letters in alphabet.
- * @param params Alignment parameters to be used over the window.
- * @param window The length of the extension alignment window.
- * @param forward Either of 0 or 1 indicating the direction of extension.
- *
- * @return -1 if an error occurs and 0 otherwise.
- */
-int extend_1d_once(segment* res, segment* seg,
-  int* S, int* T, align_params* params,
-  int window, int forward) {
-
-  align_problem def;
-  align_dp_cell **P, *opt;
-  align_type type;
-  transcript* tx;
-  int tx_opseq_len, seg_opseq_len;
-  char* opseq;
-  int failure = 0;
-
-  int S_len = tx_seq_len(seg->tx, 'S'),
-      T_len = tx_seq_len(seg->tx, 'T');
-  int S_min_idx, S_max_idx, T_min_idx, T_max_idx;
-  if (forward) {
-    S_min_idx = seg->tx->S_idx + S_len;
-    T_min_idx = seg->tx->T_idx + T_len;
-    S_max_idx = S_min_idx + window;
-    T_max_idx = T_min_idx + window;
-  } else {
-    S_max_idx = seg->tx->S_idx;
-    T_max_idx = seg->tx->T_idx;
-    S_min_idx = S_max_idx - window;
-    T_min_idx = T_max_idx - window;
-  }
-
-  type = forward ? START_ANCHORED_OVERLAP : END_ANCHORED_OVERLAP;
-  def = (align_problem) {
-    .S=S, .T=T, .type=type, .params=params,
-    .S_min_idx=S_min_idx, .S_max_idx=S_max_idx,
-    .T_min_idx=T_min_idx, .T_max_idx=T_max_idx,
-  };
-  P = init_dp_table(&def);
-  if (P == NULL) {
-    return -1;
-  }
-  opt = solve(P, &def);
-  if (opt == NULL) {
-    failure = 1;
-  }
-
-  tx = traceback(P, &def, opt);
-  if (tx == NULL) {
-    failure = 1;
-  }
-  free_dp_table(P, def.S_max_idx - def.S_min_idx + 1, def.T_max_idx - def.T_min_idx + 1);
-  if (failure) {
-    return -1;
-  }
-
-  // There is an alignment, return the corresponding extended segment:
-  seg_opseq_len = strlen(seg->tx->opseq);
-  tx_opseq_len = strlen(tx->opseq);
-  tx->score += seg->tx->score;
-  opseq = malloc(seg_opseq_len + tx_opseq_len + 1);
-  if (forward) {
-    tx->S_idx = seg->tx->S_idx;
-    tx->T_idx = seg->tx->T_idx;
-    strncpy(opseq, seg->tx->opseq, seg_opseq_len);
-    strncpy(opseq + seg_opseq_len, tx->opseq, tx_opseq_len);
-  } else {
-    strncpy(opseq, tx->opseq, tx_opseq_len);
-    strncpy(opseq + tx_opseq_len, seg->tx->opseq, seg_opseq_len);
-  }
-  // strncpy does not null-terminate:
-  opseq[seg_opseq_len + tx_opseq_len] = '\0';
-  tx->opseq = opseq;
-
-  res->S_id = seg->S_id;
-  res->T_id = seg->T_id;
-  res->tx = tx;
-  return 0;
-}
-
-/**
- * Given a segment fully extends it in one direction. A fully extended segment
- * (in one direction) is one that hits the boundary (beginning or end) of either
- * of the sequences.
- *
- * @param res Extended segment to be populated here.
- * @param seg The original segment.
- * @param S The integer array for the "from" sequence containing indices of
- *   its letters in alphabet.
- * @param T The integer array for the "to" sequence containing indices of
- *   its letters in alphabet.
- * @param S_len The length of the "from" sequence.
- * @param T_len The length of the "to" sequence.
- * @param params Alignment parameters to be used over the window.
- * @param window The length of the extension alignment window.
- * @param max_new_mins Maximum number of new minima observed in the score
- *    random walk until the segement is dropped (i.e -1 is returned).
- * @param forward Either of 0 or 1 indicating the direction of extension.
- * @param debug Whether to dump score random walks for all tried extensions. If
- *    truthy, each segment's score random walk is written as a line in a file
- *    "scores.txt" (The file is never truncated; all data is appended to it).
- *
- * @return 0 if the seed successfully extends to the boundary of either of
- *   the sequences and -1 otherwise.
- */
-int extend_1d(segment* res, segment* seg, int* S, int* T, int S_len, int T_len,
-  align_params* params, int window, int max_new_mins, int forward, int debug) {
-
-  FILE* f;
-  if (debug) {
-    f = fopen("scores.txt", "a");
-    if (f == NULL) {
-      printf("Failed to open file\n");
-      exit(1);
-    }
-    fprintf(f, "(%d:%d,%d:%d) [", seg->S_id, seg->tx->S_idx, seg->T_id, seg->tx->T_idx);
-  }
-
-  segment cur_seg = *seg;
-  double cur_min = seg->tx->score;
-  int num_mins = 0, retcode, actual_window;
-  int S_end, T_end, S_wiggle, T_wiggle, min_wiggle;
-  while (1) {
-    if (forward) {
-      S_end = cur_seg.tx->S_idx + tx_seq_len(cur_seg.tx, 'S');
-      T_end = cur_seg.tx->T_idx + tx_seq_len(cur_seg.tx, 'T');
-      S_wiggle = S_len - S_end;
-      T_wiggle = T_len - T_end;
-      min_wiggle = S_wiggle < T_wiggle ? S_wiggle : T_wiggle;
-    } else {
-      min_wiggle = cur_seg.tx->S_idx < cur_seg.tx->T_idx ?
-        cur_seg.tx->S_idx : cur_seg.tx->T_idx;
-    }
-
-    actual_window = window < min_wiggle ? window : min_wiggle;
-    if (actual_window == 0) {
-      // hit the end
-      *res = cur_seg;
-      if (debug) {
-        fprintf(f, "] +\n");
-        fclose(f);
-      }
-      return 0;
-    }
-
-    retcode = extend_1d_once(&cur_seg, &cur_seg, S, T, params, actual_window, forward);
-    if (retcode == -1) {
-      // No nonempty alignment found:
-      if (debug) {
-        fprintf(f, "] -\n");
-      }
-      return -1;
-    }
-    if (debug) {
-      fprintf(f, "%.2f,", cur_seg.tx->score);
-    }
-
-    if (cur_seg.tx->score < cur_min) {
-      num_mins +=1;
-      if (num_mins >= max_new_mins) {
-        if (debug) {
-          fprintf(f, "] -\n");
-          fclose(f);
-        }
-        return -1;
-      }
-    }
-  }
-  if (debug) {
-    fprintf(f, "] -\n");
-    fclose(f);
-  }
-  return -1;
-}
-
-/**
- * Given an array of segments tries to extend all in both directions and returns
- * a fully extended segment as soon as it finds one.
- *
- * @param segs The original segments.
- * @param num_segs The number of provided segments.
- * @param S The integer array for the "from" sequence containing indices of
- *   its letters in alphabet.
- * @param T The integer array for the "to" sequence containing indices of
- *   its letters in alphabet.
- * @param S_len The length of the "from" sequence.
- * @param T_len The length of the "to" sequence.
- * @param params Alignment parameters to be used over the window.
- * @param window The length of the extension alignment window.
- * @param max_new_mins Maximum number of new minima observed in the score
- *    random walk until the segement is dropped (i.e -1 is returned).
- * @param min_overlap_score The minimum overall score required for a fully
- *    extended segment to be reported as an overlap alignment.
- * @param debug Whether to dump score random walks for all tried extensions. If
- *    truthy, each segment's score random walk is written as a line in a file
- *    "scores.txt" (The file is never truncated; all data is appended to it).
- *
- * @return 0 if the seed successfully extends to the boundary of either of
- *   the sequences and -1 otherwise.
- */
-segment* extend(segment** segs, int num_segs, int* S, int* T, int S_len, int T_len,
-  align_params* params, int window, int max_new_mins, double min_overlap_score, int debug) {
-
-  segment fwd, bwd, *res;
-  transcript* tx;
-  char* opseq;
-  int fwd_tx_len, bwd_tx_len, seg_tx_len, retcode, overlap_score;
-  for (int i = 0; i < num_segs; i ++) {
-    retcode = extend_1d(&fwd, segs[i],
-        S, T, S_len, T_len, params,
-        window, max_new_mins, 1, debug);
-    if (retcode == -1) {
-      continue;
-    }
-    retcode = extend_1d(&bwd, segs[i],
-      S, T, S_len, T_len, params,
-      window, max_new_mins, 0, debug);
-    if (retcode == -1) {
-      continue;
-    }
-    overlap_score = bwd.tx->score + fwd.tx->score - segs[i]->tx->score;
-    if (overlap_score <= min_overlap_score) {
-      continue;
-    }
-    // Found a fully extending segment; return it:
-    fwd_tx_len = strlen(fwd.tx->opseq);
-    bwd_tx_len = strlen(bwd.tx->opseq);
-    seg_tx_len = strlen(segs[i]->tx->opseq);
-    opseq = malloc(fwd_tx_len + bwd_tx_len - seg_tx_len + 1);
-    strncpy(opseq, bwd.tx->opseq, bwd_tx_len - seg_tx_len);
-    strncpy(opseq + bwd_tx_len - seg_tx_len, fwd.tx->opseq, fwd_tx_len);
-    // strncpy does not null terminate:
-    opseq[fwd_tx_len + bwd_tx_len - seg_tx_len] = '\0';
-    // build the overall transcript
-    tx = malloc(sizeof(transcript));
-    tx->S_idx = bwd.tx->S_idx;
-    tx->T_idx = bwd.tx->T_idx;
-    tx->score = overlap_score;
-    tx->opseq = opseq;
-
-    // build the fully extended segment
-    res = malloc(sizeof(segment));
-    res->S_id = segs[i]->S_id;
-    res->T_id = segs[i]->T_id;
-    res->tx = tx;
-    return res;
-  }
-  return NULL;
-}
 
 /**
  * Helper method for debugging purposes. Only works on system with procfs.

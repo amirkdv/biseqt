@@ -10,47 +10,21 @@ from . import ffi, lib, CffiObject, ProgressIndicator
 from itertools import chain
 
 
-class Alphabet(CffiObject):
-    """Wraps a C ``sequence_alphabet*``.
-
-    Attributes:
-
-        c_obj (cffi.cdata): points to a ``sequence_alphabet`` struct.
+class Alphabet(object):
+    """A sequence alphabet.
 
     Args:
         letters (str|List[str]): The letters of the alphabet.
-
-    Raises:
-        AssertionError: If all the letters of the alphabet are not of the same
-            length.
     """
     def __init__(self, letters):
         if isinstance(letters, str):
             letters = [c for c in letters]
-        assert(len(set([len(s) for s in letters])) == 1)
-        # each letter string in the alphabet must be "owned" by an object
-        # that's kept alive.
-        self._c_letters_ka = [
-            ffi.new('char[]', letters[i]) for i in range(len(letters))
-        ]
-        self._c_alph_ka = ffi.new('char *[]', self._c_letters_ka)
-        self.c_obj = ffi.new('sequence_alphabet*', {
-            'length': len(letters),
-            'letter_length': len(letters[0]),
-            'letters': self._c_alph_ka
-        })
+        self.letters = letters
+        assert(len(set(len(l) for l in self.letters)) == 1)
+        self.letlen = len(letters[0])
 
     def __len__(self):
         return len(self.letters)
-
-    def __getattr__(self, name):
-        if name == 'letters':
-            N, L = self.length, self.letter_length
-            return [''.join([
-                self.c_obj.letters[i][j] for j in range(L)]) for i in range(N)
-            ]
-        else:
-            return super(Alphabet, self).__getattr__(name)
 
     def randstr(self, length, **kw):
         """Generates a random string of the specified length from this
@@ -69,12 +43,12 @@ class Alphabet(CffiObject):
         Keyword Args:
             letters_dist(Optional[dict]): The probability distribution of
                 letters as a list of probabilities in order of letters in
-                :attr:`c_obj.letters`. Default is uniform.
+                :attr:`letters`. Default is uniform.
         Returns:
             str: A random string.
         """
         cummulative_dist = kw.get('letters_dist', [
-            1.0/self.length for _ in range(self.length)
+            1.0/len(self.letters) for _ in range(len(self.letters))
         ])
         for idx, prob in enumerate(cummulative_dist):
             cummulative_dist[idx] = cummulative_dist[idx-1] + prob if idx else prob
@@ -102,7 +76,6 @@ class Sequence(object):
 
     Attributes:
         alphabet (seq.Alphabet): The alphabet this sequence belongs to.
-        c_charseq (cffi.cdata): Points to the underlying C ``char[]``.
         c_idxseq  (cffi.cdata): The C ``int*`` which is actually used for all
             operations involving alignments; this is an array containing the
             indices of each letter in the sequence in the alphabet.
@@ -119,23 +92,21 @@ class Sequence(object):
         """
         if not isinstance(letlist, list) and not isinstance(letlist, str):
             raise ValueError('`letlist` must be a list of letters.')
+        letlen = len(alphabet.letters[0])
         if isinstance(letlist, str):
-            if alphabet.letter_length != 1:
-                msg = '`letlist` can only be a string is the alphabet' + \
-                    'letter length is 1 (it is %d).' % alphabet.letter_length
+            if letlen != 1:
+                msg = '`letlist` can only be a string if the alphabet' + \
+                    'letter length is 1 (it is %d).' % alphabet.letlen
                 raise ValueError(msg)
-            letlist = list(letlist)
+        self.letlist = list(letlist)
+        self.length = len(self.letlist)
         self.alphabet = alphabet
-        self.length = len(letlist)
-        self.c_charseq = ffi.new('char[]', ''.join(letlist))
         # build the sequence as an int array of positions in alphabet
-        # FIXME stop doing this, int's take up more room than char's and we
-        # don't have h.p. condensed letters anymore.
         let_pos = {let: pos for pos, let in enumerate(alphabet.letters)}
         self.c_idxseq = ffi.new('int[]', [let_pos[let] for let in letlist])
 
     def __repr__(self):
-        N, L = self.length, self.alphabet.letter_length
+        N, L = self.length, self.alphabet.letlen
         return ''.join([self.__getitem__(i) for i in range(self.length)])
 
     def __len__(self):
@@ -154,9 +125,7 @@ class Sequence(object):
                 'Sequence indices must be integers not {}' % type(key).__name__
             )
 
-        min_idx = self.alphabet.letter_length * start
-        max_idx = self.alphabet.letter_length * finish
-        return ffi.string(self.c_charseq)[min_idx:max_idx]
+        return ''.join(self.letlist[start:finish])
 
     def mutate(self, **kw):
         """Returns a mutant of this sequence with specified probabilities. The
@@ -192,7 +161,7 @@ class Sequence(object):
 
         Returns:
             tuple: The mutant (a :class:`Sequence`)and corresponding transcript
-                (an :class:`oval.pw.Transcript`).
+                (an :class:`biseqt.pw.Transcript`).
         """
         subst_probs = kw['subst_probs']
         go_prob, ge_prob = kw.get('go_prob', 0), kw.get('ge_prob', 0)
@@ -305,7 +274,7 @@ REFERENCE = 1
 
 class SeqDB(object):
     """Wraps an SQLite database containing sequences and potentiall word indices
-    (see :class:`oval.words.Index`) or assembly data structures. The sequences
+    (see :class:`biseqt.words.Index`) or assembly data structures. The sequences
     are stored in a ``seq`` table with the following schema:
 
     .. code-block:: sql

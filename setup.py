@@ -10,16 +10,16 @@ with open(path.join(here, 'README.md')) as f:
     long_description = f.read()
 
 setup(
-    name='oval',
+    name='biseqt',
     version='0.0.1',
     description='Oval is an overlap alignment search tool',
     long_description=long_description,
-    url='https://github.com/amirkdv/oval',
+    url='https://github.com/amirkdv/biseqt',
     author='Amir Kadivar',
     author_email='amir@amirkdv.ca',
     #license='MIT',
     #keywords='sequence DNA overlap alignment fragment assembly',
-    packages=['oval'],
+    packages=['biseqt'],
     setup_requires=[
         'cffi',
         'biopython',

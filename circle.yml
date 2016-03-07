@@ -1,0 +1,7 @@
+dependencies:
+  override:
+    - python setup.py develop
+
+test:
+  override:
+    - make tests
