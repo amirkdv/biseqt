@@ -61,10 +61,8 @@ typedef struct {
 } alnparams;
 
 /**
- * Groups together all the information defining a pairwise alignment problem.
- * An pairwaise alignment problem is defined over a pair of sequences by
- * a "frame" on each sequence (the `(S|T)_(min|max)_idx` members), an alignment
- * type and a set of alignment parameters.
+ * Defines the skeleton of a pairwise alignment problem: two sequences and
+ * their start/end of frame positions.
  */
 typedef struct {
   int* S; /**< The "from" sequence as an array of integers.*/
@@ -73,17 +71,33 @@ typedef struct {
   int S_max_idx; /**< The closing index for the frame of S, exclusive.*/
   int T_min_idx; /**< The opening index for the frame of T, inclusive.*/
   int T_max_idx; /**< The closing index for the frame of T, exclusive.*/
-  int bradius; /**< The band radius. Modifies behavior of standard algorithms
-    only if positive in which case only diagonals within this distance of the
-    starting diagonal are populated. In banded algorithms band must be
-    positive.*/
-  int ctrdiag; /**< The center of band diagonal (only applies to overlap banded
-    alignments) with respect to the alignment frame.*/
-  alntype type; /**< The type of alignment algorithm.*/
-  std_alntype std_type; /**< The subtype of standard algorithms.*/
-  banded_alntype banded_type; /**< The subtype of banded algorithms.*/
+} alnframe;
+
+/**
+ * Groups together all information defining a standard pairwise alignment
+ * problem: a frame, alignment type, alignment parameters, and a band radius
+ * (optional).
+ */
+typedef struct {
+  alnframe *frame; /**< The skeleton of the DP table. */
   alnparams *params; /**< The parameters defining an optimal solution.*/
-} alndef;
+  std_alntype type; /**< The subtype of standard algorithms.*/
+  int bradius; /**< The band radius, only if positive. */
+} std_alnprob;
+
+/**
+ * Groups together all information defining a banded pairwise alignment
+ * problem: a frame, alignment type, alignment parameters, starting diagonal,
+ * and a band radius.
+ */
+typedef struct {
+  alnframe *frame; /**< The skeleton of the DP table. */
+  banded_alntype type; /**< The subtype of standard algorithms.*/
+  alnparams *params; /**< The parameters defining an optimal solution.*/
+  int bradius; /**< The band radius, only if positive. */
+  int ctrdiag; /**< The diagonal at the center of band (must be between `-|T|`
+    and `+|S|`. */
+} banded_alnprob;
 
 /**
  * The fundamental unit of solving standard pairwise alignment problems. Each
@@ -154,6 +168,8 @@ typedef struct segment {
 } segment;
 
 int tx_seq_len(transcript* tx, char on);
+
+// --------------------- Seed Extension -------------------- //
 int extend_1d_once(segment* res, segment* seg,
   int* S, int* T, alnparams* params,
   int window, int forward);
@@ -162,11 +178,20 @@ int extend_1d(segment* res, segment* seg,
   int window, int max_new_mins, int forward, int debug);
 segment* extend(segment** segs, int num_segs, int* S, int* T, int S_len, int T_len,
   alnparams* params, int window, int max_new_mins, double min_overlap_score, int debug);
-dpcell** init_dp_table(alndef* def);
-void free_dp_table(dpcell** P, int row_cnt, int col_cnt);
-dpcell* std_solve(dpcell** P, alndef* def);
-dpcell* find_optimal(dpcell** P, alndef* def);
-transcript* traceback(dpcell** P, alndef* def, dpcell* end);
-// So that we can free memory directly from python
-void free(void *);
+
+// ---------------------- Standard PW ---------------------- //
+dpcell** stdpw_init(std_alnprob* prob);
+void stdpw_free(dpcell** P, int row_cnt, int col_cnt);
+dpcell* stdpw_solve(dpcell** P, std_alnprob* prob);
+dpcell* stdpw_find_optimal(dpcell** P, std_alnprob* prob);
+transcript* stdpw_traceback(dpcell** P, std_alnprob* prob, dpcell* end);
+
+// ----------------------- Banded PW ----------------------- //
+dpcell** bandedpw_init(banded_alnprob* prob);
+void bandedpw_free(dpcell** P, int row_cnt, int col_cnt);
+dpcell* bandedpw_solve(dpcell** P, banded_alnprob* prob);
+dpcell* bandedpw_find_optimal(dpcell** P, banded_alnprob* prob);
+transcript* bandedpw_traceback(dpcell** P, banded_alnprob* prob, dpcell* end);
+
+// So that we can directly call these from python:
 size_t strlen(const char*);

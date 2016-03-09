@@ -11,16 +11,16 @@
  * Given an alignment problem definition, creates and initializes the dynamic
  * programming table.
  *
- * @param def
+ * @param prob
  *    Alignment problem definition. The only members that are relevant at this
  *    point is the corresponding frames of the two sequences which determine
  *    the size of the table).
  *
  * @return pointer to the `malloc` ed dynamic programming table.
  */
-dpcell** init_dp_table(alndef* def) {
-  int n = def->S_max_idx - def->S_min_idx;
-  int m = def->T_max_idx - def->T_min_idx;
+dpcell** stdpw_init(std_alnprob* prob) {
+  int n = prob->frame->S_max_idx - prob->frame->S_min_idx;
+  int m = prob->frame->T_max_idx - prob->frame->T_min_idx;
   dpcell** P = malloc((n+1) * sizeof(dpcell *));
   if (P == NULL) {
     printf("Failed to allocate memory (`init_dp_table()`).\n");
@@ -43,13 +43,13 @@ dpcell** init_dp_table(alndef* def) {
 
 /**
  * Frees the allocated memory for a given alignment problem so that we can reuse
- * the same ::alndef over and over.
+ * the same ::std_alnprob over and over.
  *
  * @param P the dynamic programming table.
  * @param row_cnt the number of rows in the table.
  * @param col_cnt the number of columns in the table.
  */
-void free_dp_table(dpcell** P, int row_cnt, int col_cnt) {
+void stdpw_free(dpcell** P, int row_cnt, int col_cnt) {
   if (P == NULL) {
     return;
   }
@@ -81,12 +81,12 @@ void free_dp_table(dpcell** P, int row_cnt, int col_cnt) {
  * - Global and start anchored alignments must start at the top left corner.
  *
  * @param P The dynamic programming table,
- * @param def The alignment problem definition.
+ * @param prob The alignment problem definition.
  * @return The optimal cell of the DP table for the alignment to *end* at.
  */
-dpcell* std_solve(dpcell** P, alndef* def) {
-  int n = def->S_max_idx - def->S_min_idx;
-  int m = def->T_max_idx - def->T_min_idx;
+dpcell* stdpw_solve(dpcell** P, std_alnprob* prob) {
+  int n = prob->frame->S_max_idx - prob->frame->S_min_idx;
+  int m = prob->frame->T_max_idx - prob->frame->T_min_idx;
   double max_score, prev_score, max_prev_score, del_score, ins_score;
   int num_choices, max_prev_choice_idx, num_max_scores;
   int i,j,k;
@@ -130,12 +130,12 @@ dpcell* std_solve(dpcell** P, alndef* def) {
       }
       // Build all the alternatives at cell (i,j)
       num_choices = 0;
-      if (def->std_type == LOCAL || // local alignments can start anywhere
-          def->std_type == END_ANCHORED || // end-anchored alignments can ...
+      if (prob->type == LOCAL || // local alignments can start anywhere
+          prob->type == END_ANCHORED || // end-anchored alignments can ...
           // Overlap alignments and end-anchored alignments can start anywhere
           // on either of the left or top edges:
-          (def->std_type == OVERLAP && (i == 0 || j == 0)) ||
-          (def->std_type == END_ANCHORED_OVERLAP && (i == 0 || j == 0))
+          (prob->type == OVERLAP && (i == 0 || j == 0)) ||
+          (prob->type == END_ANCHORED_OVERLAP && (i == 0 || j == 0))
         ) {
         alts[num_choices].op = 'B';
         alts[num_choices].score = 0;
@@ -145,31 +145,31 @@ dpcell* std_solve(dpcell** P, alndef* def) {
         num_choices++;
       }
       // the indices in the table are on ahead of the indices of letters:
-      s = def->S[def->S_min_idx + i - 1];
-      t = def->T[def->T_min_idx + j - 1];
+      s = prob->frame->S[prob->frame->S_min_idx + i - 1];
+      t = prob->frame->T[prob->frame->T_min_idx + j - 1];
 
-      if (def->params->content_dependent_gap_scores == NULL) {
-        del_score = def->params->gap_extend_score;
-        ins_score = def->params->gap_extend_score;
+      if (prob->params->content_dependent_gap_scores == NULL) {
+        del_score = prob->params->gap_extend_score;
+        ins_score = prob->params->gap_extend_score;
       } else {
         // the indices in the table are on ahead of the indices of letters:
-        del_score = def->params->content_dependent_gap_scores[s];
-        ins_score = def->params->content_dependent_gap_scores[t];
+        del_score = prob->params->content_dependent_gap_scores[s];
+        ins_score = prob->params->content_dependent_gap_scores[t];
       }
       // To (i-1,j)
       if (i > 0) {
         // Are there choices for (i-1,j) and are we inside the band?
         if (P[i-1][j].num_choices > 0 && (
-              def->bradius < 0 ||
+              prob->bradius < 0 ||
               // diversion of all choices in the same cell are identical:
-              abs(P[i-1][j].choices[0].diversion - 1) <= def->bradius
+              abs(P[i-1][j].choices[0].diversion - 1) <= prob->bradius
             )) {
           max_prev_choice_idx = 0;
           max_prev_score = -INT_MAX;
           for (k = 0; k < P[i-1][j].num_choices; k++) {
             prev_score = P[i-1][j].choices[k].score + del_score;
             if (P[i-1][j].choices[k].op != 'D') {
-              prev_score += def->params->gap_open_score;
+              prev_score += prob->params->gap_open_score;
             }
             if (prev_score > max_prev_score) {
               max_prev_score = prev_score;
@@ -188,16 +188,16 @@ dpcell* std_solve(dpcell** P, alndef* def) {
       if (j > 0) {
         // Are there choices for (i,j-1) and are we inside the band?
         if (P[i][j-1].num_choices > 0 && (
-              def->bradius < 0 ||
+              prob->bradius < 0 ||
               // diversion of all choices in the same cell are identical:
-              abs(P[i][j-1].choices[0].diversion + 1) <= def->bradius
+              abs(P[i][j-1].choices[0].diversion + 1) <= prob->bradius
             )) {
           max_prev_choice_idx = 0;
           max_prev_score = - INT_MAX;
           for (k = 0; k < P[i][j-1].num_choices; k++) {
             prev_score = P[i][j-1].choices[k].score + ins_score;
             if (P[i][j-1].choices[k].op != 'I') {
-              prev_score += def->params->gap_open_score;
+              prev_score += prob->params->gap_open_score;
             }
             if (prev_score > max_prev_score) {
               max_prev_score = prev_score;
@@ -227,7 +227,7 @@ dpcell* std_solve(dpcell** P, alndef* def) {
           alts[num_choices].score = P[i-1][j-1].choices[0].diversion;
           alts[num_choices].base = &(P[i-1][j-1].choices[0]);
           alts[num_choices].score = P[i-1][j-1].choices[0].score
-            + def->params->subst_scores[s][t];
+            + prob->params->subst_scores[s][t];
 
           num_choices++;
         }
@@ -270,7 +270,7 @@ dpcell* std_solve(dpcell** P, alndef* def) {
   }
   free(alts);
   free(max_score_alts);
-  return find_optimal(P, def);
+  return stdpw_find_optimal(P, prob);
 }
 
 /**
@@ -285,33 +285,33 @@ dpcell* std_solve(dpcell** P, alndef* def) {
  *   anywhere; the best is found.
  *
  * @param P  The *solved* (populated) dynamic programming table.
- * @param def The alignment problem definition.
+ * @param prob The alignment problem definition.
  *
  * @return The optimal cell of the table for the alignment to *end* at.
  */
-dpcell* find_optimal(dpcell** P, alndef* def) {
+dpcell* stdpw_find_optimal(dpcell** P, std_alnprob* prob) {
   double max;
   int i,j;
   int row = -1, col = -1;
-  if (def->std_type == GLOBAL ||
-      def->std_type == END_ANCHORED ||
-      def->std_type == END_ANCHORED_OVERLAP) {
+  if (prob->type == GLOBAL ||
+      prob->type == END_ANCHORED ||
+      prob->type == END_ANCHORED_OVERLAP) {
     // Global and end-anchored alignments must end at the bottom right corner
-    row = def->S_max_idx - def->S_min_idx;
-    col = def->T_max_idx - def->T_min_idx;
+    row = prob->frame->S_max_idx - prob->frame->S_min_idx;
+    col = prob->frame->T_max_idx - prob->frame->T_min_idx;
     if (P[row][col].num_choices == 0) {
       return NULL;
     }
   }
-  else if (def->std_type == OVERLAP || def->std_type == START_ANCHORED_OVERLAP) {
+  else if (prob->type == OVERLAP || prob->type == START_ANCHORED_OVERLAP) {
     // Overlap alignments (except end-anchored ones) can end anywhere on either
     // of the bottom or right edges; find the best:
     max = -INT_MAX;
-    for (i = 0; i < def->S_max_idx - def->S_min_idx + 1; i++){
-      for (j = 0; j < def->T_max_idx - def->T_min_idx + 1; j++) {
+    for (i = 0; i < prob->frame->S_max_idx - prob->frame->S_min_idx + 1; i++){
+      for (j = 0; j < prob->frame->T_max_idx - prob->frame->T_min_idx + 1; j++) {
         // Are we on the bottom row or the right column?
-        if (i != def->S_max_idx - def->S_min_idx &&
-            j != def->T_max_idx - def->T_min_idx) {
+        if (i != prob->frame->S_max_idx - prob->frame->S_min_idx &&
+            j != prob->frame->T_max_idx - prob->frame->T_min_idx) {
           continue;
         }
         if (P[i][j].num_choices == 0) {
@@ -325,12 +325,12 @@ dpcell* find_optimal(dpcell** P, alndef* def) {
       }
     }
   }
-  else if (def->std_type == LOCAL || def->std_type == START_ANCHORED) {
+  else if (prob->type == LOCAL || prob->type == START_ANCHORED) {
     // Local and start-anchored alignments (except for overlap ones) can end
     // anywhere; find the best:
     max = P[0][0].choices[0].score;
-    for (i = 0; i < def->S_max_idx - def->S_min_idx + 1; i++){
-      for (j = 0; j < def->T_max_idx - def->T_min_idx + 1; j++) {
+    for (i = 0; i < prob->frame->S_max_idx - prob->frame->S_min_idx + 1; i++){
+      for (j = 0; j < prob->frame->T_max_idx - prob->frame->T_min_idx + 1; j++) {
         if (P[i][j].num_choices == 0) {
           continue;
         }
@@ -354,7 +354,7 @@ dpcell* find_optimal(dpcell** P, alndef* def) {
  * alignment start cell).
  *
  * @param P The solved (i.e populated) alignment DP table.
- * @param def The alignment problem definition.
+ * @param prob The alignment problem definition.
  * @param end The desired ending point of alignment which becomes the starting
  *    point of traceback.
  *
@@ -363,7 +363,7 @@ dpcell* find_optimal(dpcell** P, alndef* def) {
  *    and requires some sort of global state keeping to avoid convoluted
  *    recursions. I couldn't get it right in the first go; leave for later.
  */
-transcript* traceback(dpcell** P, alndef* def, dpcell* end) {
+transcript* stdpw_traceback(dpcell** P, std_alnprob* prob, dpcell* end) {
   char op, *opseq;
   transcript* tx = malloc(sizeof(transcript));
   int S_idx = end->row,
@@ -407,8 +407,8 @@ transcript* traceback(dpcell** P, alndef* def, dpcell* end) {
   // strncpy does not null terminate:
   opseq[len] = '\0';
 
-  tx->S_idx = S_idx + def->S_min_idx;
-  tx->T_idx = T_idx + def->T_min_idx;
+  tx->S_idx = S_idx + prob->frame->S_min_idx;
+  tx->T_idx = T_idx + prob->frame->T_min_idx;
   tx->score = end->choices[0].score;
   tx->opseq = opseq;
   return tx;

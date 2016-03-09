@@ -26,7 +26,8 @@ int extend_1d_once(segment* res, segment* seg,
   int* S, int* T, alnparams* params,
   int window, int forward) {
 
-  alndef def;
+  std_alnprob prob;
+  alnframe frame;
   dpcell **P, *opt;
   alntype type;
   transcript* tx;
@@ -50,25 +51,28 @@ int extend_1d_once(segment* res, segment* seg,
   }
 
   type = forward ? START_ANCHORED_OVERLAP : END_ANCHORED_OVERLAP;
-  def = (alndef) {
-    .S=S, .T=T, .type=type, .params=params,
+  frame = (alnframe) {
+    .S=S, .T=T,
     .S_min_idx=S_min_idx, .S_max_idx=S_max_idx,
     .T_min_idx=T_min_idx, .T_max_idx=T_max_idx,
   };
-  P = init_dp_table(&def);
+  prob = (std_alnprob) {
+    .frame=&frame, .type=type, .params=params, .bradius=-1
+  };
+  P = stdpw_init(&prob);
   if (P == NULL) {
     return -1;
   }
-  opt = std_solve(P, &def);
+  opt = stdpw_solve(P, &prob);
   if (opt == NULL) {
     failure = 1;
   }
 
-  tx = traceback(P, &def, opt);
+  tx = stdpw_traceback(P, &prob, opt);
   if (tx == NULL) {
     failure = 1;
   }
-  free_dp_table(P, def.S_max_idx - def.S_min_idx + 1, def.T_max_idx - def.T_min_idx + 1);
+  stdpw_free(P, frame.S_max_idx - frame.S_min_idx + 1, frame.T_max_idx - frame.T_min_idx + 1);
   if (failure) {
     return -1;
   }

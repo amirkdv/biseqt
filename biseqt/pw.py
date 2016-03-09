@@ -204,6 +204,40 @@ class AlignParams(CffiObject):
         return score
 
 
+class AlignFrame(CffiObject):
+    """FIXME
+    Args:
+        S (seq.Sequence): The "from" sequence.
+        T (seq.Sequence): The "to" sequence.
+
+    Keyword Args:
+        S_min_idx (int): Starting position of frame for ``S``, default is 0.
+        T_min_idx (int): Starting position of frame for ``T``, default is 0.
+        S_max_idx (int): Ending position (non-inclusive) of the frame for
+            ``S``, default is the length of ``S``.
+        T_max_idx (int): Ending position (non-inclusive) of the frame for
+            ``T``, default is the length of ``T``.
+
+    """
+    def __init__(self, S, T, **kw):
+        assert(isinstance(S, seq.Sequence) and isinstance(T, seq.Sequence))
+        S_min_idx = kw.pop('S_min_idx', 0)
+        T_min_idx = kw.pop('T_min_idx', 0)
+        S_max_idx = kw.pop('S_max_idx', S.length)
+        T_max_idx = kw.pop('T_max_idx', T.length)
+        assert(S_max_idx <= S.length and T_max_idx <= T.length)
+
+        self.S, self.T, = S, T
+        self.c_obj = ffi.new('alnframe*', {
+            'S': S.c_idxseq,
+            'T': T.c_idxseq,
+            'S_min_idx': S_min_idx,
+            'S_max_idx': S_max_idx,
+            'T_min_idx': T_min_idx,
+            'T_max_idx': T_max_idx,
+        })
+
+
 class AlignProblem(CffiObject):
     """Wraps the C struct ``alndef`` and provides a context manager to
     solve and potentially traceback an alignment problem. Example::
@@ -222,17 +256,12 @@ class AlignProblem(CffiObject):
     All arguments (keyword and not) become attributes with identical names.
 
     Args:
-        S (seq.Sequence): The "from" sequence.
-        T (seq.Sequence): The "to" sequence.
+        frame (pw.AlignFrame): Alignment frame.
         params (pw.AlignParams): Alignment parameters.
 
     Keyword Args:
-        S_min_idx (int): Starting position of frame for ``S``, default is 0.
-        T_min_idx (int): Starting position of frame for ``T``, default is 0.
-        S_max_idx (int): Ending position (non-inclusive) of the frame for
-            ``S``, default is the length of ``S``.
-        T_max_idx (int): Ending position (non-inclusive) of the frame for
-            ``T``, default is the length of ``T``.
+        alntype: FIXME
+        bradius: FIXME
 
     Attributes:
         dp_table (List[List[float]]): The dynamic programming table built upon
@@ -241,42 +270,30 @@ class AlignProblem(CffiObject):
         c_dp_table (cffi.cdata): points to the underlying ``double **``
             dynamic programming table.
     """
-    def __init__(self, S, T, params, **kw):
-        align_type = kw.pop('align_type', GLOBAL)
-        S_min_idx = kw.pop('S_min_idx', 0)
-        T_min_idx = kw.pop('T_min_idx', 0)
-        S_max_idx = kw.pop('S_max_idx', S.length)
-        T_max_idx = kw.pop('T_max_idx', T.length)
-        band_radius = kw.pop('band_radius', -1)
-        assert(S_max_idx <= S.length)
-        assert(T_max_idx <= T.length)
+    def __init__(self, frame, params, **kw):
+        alntype = kw.pop('alntype', GLOBAL)
+        bradius = kw.pop('bradius', -1)
+        assert(isinstance(frame, AlignFrame))
 
-        self.S, self.T, self.params, self.align_type = S, T, params, align_type
-        self.c_obj = ffi.new('alndef*', {
-            'S': S.c_idxseq,
-            'T': T.c_idxseq,
-            'S_min_idx': S_min_idx,
-            'S_max_idx': S_max_idx,
-            'T_min_idx': T_min_idx,
-            'T_max_idx': T_max_idx,
-            'bradius': band_radius,
-            'type': align_type,
-            'std_type': align_type,
-            'banded_type': lib.GLOBAL, # FIXME
-            'params': params.c_obj
+        self.frame, self.params, self.alntype = frame, params, alntype
+        self.c_obj = ffi.new('std_alnprob*', {
+            'frame': frame.c_obj,
+            'params': params.c_obj,
+            'type': alntype,
+            'bradius': bradius,
         })
 
     def __enter__(self):
-        self.c_dp_table = lib.init_dp_table(self.c_obj)
+        self.c_dp_table = lib.stdpw_init(self.c_obj)
         if self.c_dp_table == -1:
             raise('Got -1 from pwlib.define().')
-        self.c_dp_row_cnt = self.S_max_idx - self.S_min_idx + 1
-        self.c_dp_col_cnt = self.T_max_idx - self.T_min_idx + 1
+        self.c_dp_row_cnt = self.frame.S_max_idx - self.frame.S_min_idx + 1
+        self.c_dp_col_cnt = self.frame.T_max_idx - self.frame.T_min_idx + 1
         return self
 
     def __exit__(self, *args):
         if self.c_dp_table not in [ffi.NULL, -1]:
-            lib.free_dp_table(
+            lib.stdpw_free(
                 self.c_dp_table, self.c_dp_row_cnt, self.c_dp_col_cnt
             )
 
@@ -288,7 +305,7 @@ class AlignProblem(CffiObject):
             P.score('MMMSSISSD') #=> 23.50
         """
         return self.params.score(
-            self.S, self.T, opseq, self.S_min_idx, self.T_min_idx
+            self.frame.S, self.frame.T, opseq, self.frame.S_min_idx, self.frame.T_min_idx
         )
 
     def solve(self, print_dp_table=False):
@@ -302,7 +319,7 @@ class AlignProblem(CffiObject):
             float|NoneType: Optimal alignment score or ``None`` if no alignment
                 found.
         """
-        self.opt = lib.std_solve(self.c_dp_table, self.c_obj)
+        self.opt = lib.stdpw_solve(self.c_dp_table, self.c_obj)
         if print_dp_table:
             mat = self.dp_table
             for i in range(len(mat)):
@@ -322,7 +339,7 @@ class AlignProblem(CffiObject):
         if self.opt is None:
             return None
 
-        transcript = lib.traceback(self.c_dp_table, self.c_obj, self.opt)
+        transcript = lib.stdpw_traceback(self.c_dp_table, self.c_obj, self.opt)
         if transcript == ffi.NULL:
             return None
         return Transcript(c_obj=transcript)

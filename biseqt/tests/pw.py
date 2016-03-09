@@ -5,9 +5,9 @@ params = {
     'length': 500,
     'go_prob': 0.1, # gap open score
     'ge_prob': 0.3, # gap extend score
-    'band':    -1, # band width if positive
+    'bradius':    -1, # band radius if positive
     'show_dp':  0, # whether to print the DP table
-    'type': pw.GLOBAL, # type of alignments
+    'alntype': pw.GLOBAL, # type of alignments
     'subst_probs': [[0.91 if k==i else 0.03 for k in range(4)] for i in range(4)]
 }
 A = seq.Alphabet('ACGT')
@@ -32,7 +32,8 @@ S = A.randseq(params['length'])
 T, m_opseq = S.mutate(**params)
 C = pw.AlignParams(subst_scores=subst_scores, alphabet=A,
     go_score=go_score, ge_score=ge_score)
-with pw.AlignProblem(S, T, C, band_radius=params['band'], align_type=params['type']) as P:
+F = pw.AlignFrame(S, T)
+with pw.AlignProblem(F, C, bradius=params['bradius'], alntype=params['alntype']) as P:
     score = P.solve(print_dp_table=params['show_dp'])
     transcript = P.traceback()
 
