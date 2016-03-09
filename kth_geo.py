@@ -24,9 +24,10 @@ while u[-1][w] < 1-e:
     u[-1][0] = 1 - sum(u[-1])
 
 plt.clf()
+plt.rc('text', usetex=1)
 plt.scatter(range(len(u)), [u[k][w] for k in range(len(u))], c='k', s=2)
-plt.axvline(x=len(u), ymin=0, ymax=1, color='r', label='{:.1e}'.format(e))
-plt.xlabel('# steps')
+plt.axvline(x=len(u), ymin=0, ymax=1, color='r', label='$u(n,w)\ge 1-({:.1e})$'.format(e))
+plt.xlabel('sub-alignment length')
 plt.ylabel('Pr[seed observed]')
 plt.xticks(list(plt.xticks()[0]) + [len(u)], rotation=90, fontsize=8)
 plt.grid(True)
