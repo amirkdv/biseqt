@@ -9,6 +9,8 @@ ffi = cffi.FFI()
 lib = ffi.dlopen(os.path.join(os.path.dirname(__file__), 'pwlib', 'pwlib.so'))
 with open(os.path.join(os.path.dirname(__file__), 'pwlib', 'pwlib.h')) as f:
     ffi.cdef(f.read())
+    # so we can call strlen from python:
+    ffi.cdef('size_t strlen(const char*);');
 
 class CffiObject(object):
     """Generic cffi wrapper for C structs, delegates all unknown attributes to

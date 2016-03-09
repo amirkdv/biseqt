@@ -192,6 +192,3 @@ void bandedpw_free(dpcell** P, int row_cnt, int col_cnt);
 dpcell* bandedpw_solve(dpcell** P, banded_alnprob* prob);
 dpcell* bandedpw_find_optimal(dpcell** P, banded_alnprob* prob);
 transcript* bandedpw_traceback(dpcell** P, banded_alnprob* prob, dpcell* end);
-
-// So that we can directly call these from python:
-size_t strlen(const char*);
