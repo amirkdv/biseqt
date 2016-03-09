@@ -31,8 +31,8 @@ OVERLAP = lib.OVERLAP
 START_ANCHORED_OVERLAP = lib.START_ANCHORED_OVERLAP
 END_ANCHORED_OVERLAP = lib.END_ANCHORED_OVERLAP
 
-STDPW = lib.STDPW
-BANDEDPW = lib.BANDEDPW
+B_GLOBAL = lib.GLOBAL
+B_OVERLAP = lib.B_OVERLAP
 
 def hp_tokenize(string):
     """Generates (yields) homopolymeric stretches of the given sequences in

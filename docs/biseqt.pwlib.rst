@@ -4,7 +4,6 @@ pwlib (C component)
 Constants
 ---------
 
-.. doxygenenum:: alntype
 .. doxygenenum:: banded_alntype
 .. doxygenenum:: std_alntype
 

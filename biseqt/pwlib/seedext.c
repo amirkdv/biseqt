@@ -28,8 +28,9 @@ int extend_1d_once(segment* res, segment* seg,
 
   std_alnprob prob;
   alnframe frame;
-  dpcell **P, *opt;
-  alntype type;
+  dpcell **P;
+  gridcoord opt;
+  std_alntype type;
   transcript* tx;
   int tx_opseq_len, seg_opseq_len;
   char* opseq;

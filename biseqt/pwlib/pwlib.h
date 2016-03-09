@@ -1,13 +1,4 @@
 /**
- * Possible alignment types. Each alignment type has its own subtypes defining
- * boundary conditions.
- */
-typedef enum {
-  STDPW, /**< Standard alignment algorithms, quadratic in time and space.*/
-  BANDEDPW, /**< Banded alignment algorithms, linear in time and space.*/
-} alntype;
-
-/**
  * Defines the boundary conditions (i.e where an alignment can start and
  * where it can end) on the dynamic programming table for standard alignments.
  *
@@ -155,7 +146,7 @@ typedef struct {
   int T_idx; /**< The starting position of the alignment along the "to"
     sequence. This is *not* relative to the start of alignment frame.*/
   double score; /**< The score of the alignment according to the
-    corresponding ::aln_params.*/
+    corresponding ::alnparams.*/
   char* opseq; /**< The sequence of edit operations, as in ::alnchoice
     that defines the alignment.*/
 } transcript;
