@@ -321,13 +321,13 @@ class AlignProblem(CffiObject):
         """
         self.opt = lib.stdpw_solve(self.c_dp_table, self.c_obj)
         if print_dp_table:
-            mat = self.dp_table
+            mat = self.c_dp_table
             for i in range(len(mat)):
                 print [round(f, 2) for f in mat[i]]
-        if self.opt == ffi.NULL:
+        if self.opt.row == -1 or self.opt.col == -1:
             self.opt = None
             return None
-        score = self.opt.choices[0].score
+        score = self.c_dp_table[self.opt.row][self.opt.col].choices[0].score
         return score
 
     def traceback(self):

@@ -13,8 +13,8 @@
  *
  * @param prob
  *    Alignment problem definition. The only members that are relevant at this
- *    point is the corresponding frames of the two sequences which determine
- *    the size of the table).
+ *    point are the corresponding frames of the two sequences which determine
+ *    the size of the table.
  *
  * @return pointer to the `malloc` ed dynamic programming table.
  */
@@ -35,7 +35,7 @@ dpcell** stdpw_init(std_alnprob* prob) {
       return NULL;
     }
     for (int j = 0; j < m+1; j++) {
-      P[i][j] = (dpcell) {i, j, 0, NULL};
+      P[i][j] = (dpcell) {.num_choices=0, .choices=NULL};
     }
   }
   return P;
@@ -82,9 +82,9 @@ void stdpw_free(dpcell** P, int row_cnt, int col_cnt) {
  *
  * @param P The dynamic programming table,
  * @param prob The alignment problem definition.
- * @return The optimal cell of the DP table for the alignment to *end* at.
+ * @return The optimal cell for the alignment to end at or {-1,-1} if error.
  */
-dpcell* stdpw_solve(dpcell** P, std_alnprob* prob) {
+gridcoord stdpw_solve(dpcell** P, std_alnprob* prob) {
   int n = prob->frame->S_max_idx - prob->frame->S_min_idx;
   int m = prob->frame->T_max_idx - prob->frame->T_min_idx;
   double max_score, prev_score, max_prev_score, del_score, ins_score;
@@ -99,7 +99,7 @@ dpcell* stdpw_solve(dpcell** P, std_alnprob* prob) {
   P[0][0].choices = malloc(sizeof(alnchoice));
   if (P[0][0].choices == NULL) {
     printf("Failed to allocate memory (`std_solve()`).\n");
-    return NULL;
+    return (gridcoord){-1, -1};
   }
   P[0][0].choices[0].op = 'B';
   P[0][0].choices[0].diversion = 0;
@@ -126,7 +126,7 @@ dpcell* stdpw_solve(dpcell** P, std_alnprob* prob) {
       alts = malloc(4 * sizeof(alnchoice));
       if (alts == NULL) {
         printf("Failed to allocate memory (`std_solve()`).\n");
-        return NULL;
+        return (gridcoord){-1, -1};
       }
       // Build all the alternatives at cell (i,j)
       num_choices = 0;
@@ -242,7 +242,7 @@ dpcell* stdpw_solve(dpcell** P, std_alnprob* prob) {
       max_score_alts = malloc(num_choices * sizeof(int));
       if (max_score_alts == NULL) {
         printf("Failed to allocate memory (`std_solve()`).\n");
-        return NULL;
+        return (gridcoord){-1, -1};
       }
       num_max_scores = 0;
       max_score = alts[0].score;
@@ -261,7 +261,7 @@ dpcell* stdpw_solve(dpcell** P, std_alnprob* prob) {
       P[i][j].choices = malloc(num_max_scores * sizeof(alnchoice));
       if (P[i][j].choices == NULL) {
         printf("Failed to allocate memory (`std_solve()`).\n");
-        return NULL;
+        return (gridcoord){-1, -1};
       }
       for (k = 0; k < num_max_scores; k++) {
         P[i][j].choices[k] = alts[max_score_alts[k]];
@@ -287,9 +287,9 @@ dpcell* stdpw_solve(dpcell** P, std_alnprob* prob) {
  * @param P  The *solved* (populated) dynamic programming table.
  * @param prob The alignment problem definition.
  *
- * @return The optimal cell of the table for the alignment to *end* at.
+ * @return The optimal cell for the alignment to end at or {-1,-1} if error.
  */
-dpcell* stdpw_find_optimal(dpcell** P, std_alnprob* prob) {
+gridcoord stdpw_find_optimal(dpcell** P, std_alnprob* prob) {
   double max;
   int i,j;
   int row = -1, col = -1;
@@ -300,7 +300,7 @@ dpcell* stdpw_find_optimal(dpcell** P, std_alnprob* prob) {
     row = prob->frame->S_max_idx - prob->frame->S_min_idx;
     col = prob->frame->T_max_idx - prob->frame->T_min_idx;
     if (P[row][col].num_choices == 0) {
-      return NULL;
+      return (gridcoord){-1, -1};
     }
   }
   else if (prob->type == OVERLAP || prob->type == START_ANCHORED_OVERLAP) {
@@ -343,9 +343,9 @@ dpcell* stdpw_find_optimal(dpcell** P, std_alnprob* prob) {
     }
   }
   if (row == -1 || col == -1 || P[row][col].num_choices == 0) {
-    return NULL;
+    return (gridcoord){-1, -1};
   }
-  return &(P[row][col]);
+  return (gridcoord) {.row=row, .col=col};
 }
 
 /**
@@ -363,11 +363,11 @@ dpcell* stdpw_find_optimal(dpcell** P, std_alnprob* prob) {
  *    and requires some sort of global state keeping to avoid convoluted
  *    recursions. I couldn't get it right in the first go; leave for later.
  */
-transcript* stdpw_traceback(dpcell** P, std_alnprob* prob, dpcell* end) {
+transcript* stdpw_traceback(dpcell** P, std_alnprob* prob, gridcoord end) {
   char op, *opseq;
   transcript* tx = malloc(sizeof(transcript));
-  int S_idx = end->row,
-      T_idx = end->col,
+  int S_idx = end.row,
+      T_idx = end.col,
       len = S_idx + T_idx + 1,
       pos = len - 1;
   dpcell cur = P[S_idx][T_idx];
@@ -409,7 +409,7 @@ transcript* stdpw_traceback(dpcell** P, std_alnprob* prob, dpcell* end) {
 
   tx->S_idx = S_idx + prob->frame->S_min_idx;
   tx->T_idx = T_idx + prob->frame->T_min_idx;
-  tx->score = end->choices[0].score;
+  tx->score = P[end.row][end.col].choices[0].score;
   tx->opseq = opseq;
   return tx;
 }

@@ -64,7 +64,7 @@ int extend_1d_once(segment* res, segment* seg,
     return -1;
   }
   opt = stdpw_solve(P, &prob);
-  if (opt == NULL) {
+  if (opt.row == -1 || opt.col == -1) {
     failure = 1;
   }
 

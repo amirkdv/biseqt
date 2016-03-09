@@ -44,7 +44,7 @@ typedef enum {
 
 /**
  * Groups together the parameters for a pairwise alignment algorithm used to
- * solve an ::align_problem.
+ * solve an alignment problem.
  */
 typedef struct {
   double **subst_scores; /**< The substitution score matrix, ordered the same
@@ -94,7 +94,7 @@ typedef struct {
   alnframe *frame; /**< The skeleton of the DP table. */
   banded_alntype type; /**< The subtype of standard algorithms.*/
   alnparams *params; /**< The parameters defining an optimal solution.*/
-  int bradius; /**< The band radius, only if positive. */
+  int bradius; /**< The band radius, inclusive. */
   int ctrdiag; /**< The diagonal at the center of band (must be between `-|T|`
     and `+|S|`. */
 } banded_alnprob;
@@ -128,14 +128,18 @@ typedef struct alnchoice {
 } alnchoice;
 
 /**
- * Each cell of the dynamic programming table.
- * @note The `row` and `col` of each cell corresponds to the position in the
- * DP table. Therefore, these are always one larger than the 0-starting
- * position of the subproblem in the "from" and "to" sequences.
+ * A pair of integers representing a position in an arbitrary table.
  */
 typedef struct {
-  int row; /**< Vertical position (row number) in the table.*/
-  int col; /**< horizontal position (col number) in the table.*/
+  int row; /**< Vertical position (row number).*/
+  int col; /**< horizontal position (col number).*/
+} gridcoord;
+
+/**
+ * A single cell of the dynamic programming table. Each cell has an array of
+ * optimal choices linking to choices in dependent cells.
+ */
+typedef struct {
   int num_choices; /**< The number of optimal scoring choices for the
     corresponding subproblem (i.e number of elements in choices).*/
   struct alnchoice *choices; /**< The optimal scoring choices. We need to
@@ -182,9 +186,9 @@ segment* extend(segment** segs, int num_segs, int* S, int* T, int S_len, int T_l
 // ---------------------- Standard PW ---------------------- //
 dpcell** stdpw_init(std_alnprob* prob);
 void stdpw_free(dpcell** P, int row_cnt, int col_cnt);
-dpcell* stdpw_solve(dpcell** P, std_alnprob* prob);
-dpcell* stdpw_find_optimal(dpcell** P, std_alnprob* prob);
-transcript* stdpw_traceback(dpcell** P, std_alnprob* prob, dpcell* end);
+gridcoord stdpw_solve(dpcell** P, std_alnprob* prob);
+gridcoord stdpw_find_optimal(dpcell** P, std_alnprob* prob);
+transcript* stdpw_traceback(dpcell** P, std_alnprob* prob, gridcoord end);
 
 // ----------------------- Banded PW ----------------------- //
 dpcell** bandedpw_init(banded_alnprob* prob);

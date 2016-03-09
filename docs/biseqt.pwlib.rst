@@ -17,6 +17,7 @@ Data Structures
 .. doxygenstruct:: alnparams
 .. doxygenstruct:: banded_alnprob
 .. doxygenstruct:: dpcell
+.. doxygenstruct:: gridcoord
 .. doxygenstruct:: segment
 .. doxygenstruct:: std_alnprob
 .. doxygenstruct:: transcript
