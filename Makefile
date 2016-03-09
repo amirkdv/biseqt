@@ -35,6 +35,7 @@ DOCS_OUT = _build
 # in RTD docs/doxygen is built by docs/conf.py
 docs: $(LIBDIR)/pwlib.so docs/docs.rst docs/doxygen
 	sphinx-apidoc -e -o $@ biseqt/ $(DOCS_EXCLUDE)
+	python docs/cdocs.py $(LIBDIR)/pwlib.h > docs/biseqt.pwlib.rst
 	cd $@ && sphinx-build -b html . $(DOCS_OUT)
 	cd $@ && sphinx-build -b latex . $(DOCS_OUT)
 	@echo "Find the docs at file://`readlink -f $@/$(DOCS_OUT)/index.html`"

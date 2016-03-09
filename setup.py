@@ -33,6 +33,7 @@ setup(
     ],
     extras_require={
         'DOCS': [
+            'pycparser', # used to generate C component docs index
             'sphinx',
             'sphinx.ext.napoleon',
             'sphinx.rdt.theme',
