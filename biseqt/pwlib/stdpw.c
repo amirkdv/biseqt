@@ -44,7 +44,6 @@ gridcoord stdpw_solve(dptable* T) {
     return (gridcoord){-1, -1};
   }
   P[0][0].choices[0].op = 'B';
-  P[0][0].choices[0].diversion = 0;
   P[0][0].choices[0].score = 0;
   P[0][0].choices[0].base = NULL;
 
@@ -81,7 +80,6 @@ gridcoord stdpw_solve(dptable* T) {
         ) {
         alts[num_choices].op = 'B';
         alts[num_choices].score = 0;
-        alts[num_choices].diversion = 0;
         alts[num_choices].base = NULL;
 
         num_choices++;
@@ -100,12 +98,7 @@ gridcoord stdpw_solve(dptable* T) {
       }
       // To (i-1,j)
       if (i > 0) {
-        // Are there choices for (i-1,j) and are we inside the band?
-        if (P[i-1][j].num_choices > 0 && (
-              prob->bradius < 0 ||
-              // diversion of all choices in the same cell are identical:
-              abs(P[i-1][j].choices[0].diversion - 1) <= prob->bradius
-            )) {
+        if (P[i-1][j].num_choices > 0) {
           max_prev_choice_idx = 0;
           max_prev_score = -INT_MAX;
           for (k = 0; k < P[i-1][j].num_choices; k++) {
@@ -119,7 +112,6 @@ gridcoord stdpw_solve(dptable* T) {
             }
           }
           alts[num_choices].op = 'D';
-          alts[num_choices].diversion = P[i-1][j].choices[0].diversion - 1;
           alts[num_choices].score = max_prev_score;
           alts[num_choices].base = &(P[i-1][j].choices[max_prev_choice_idx]);
 
@@ -129,11 +121,7 @@ gridcoord stdpw_solve(dptable* T) {
       // To (i,j-1)
       if (j > 0) {
         // Are there choices for (i,j-1) and are we inside the band?
-        if (P[i][j-1].num_choices > 0 && (
-              prob->bradius < 0 ||
-              // diversion of all choices in the same cell are identical:
-              abs(P[i][j-1].choices[0].diversion + 1) <= prob->bradius
-            )) {
+        if (P[i][j-1].num_choices > 0) {
           max_prev_choice_idx = 0;
           max_prev_score = - INT_MAX;
           for (k = 0; k < P[i][j-1].num_choices; k++) {
@@ -147,7 +135,6 @@ gridcoord stdpw_solve(dptable* T) {
             }
           }
           alts[num_choices].op = 'I';
-          alts[num_choices].diversion = P[i][j-1].choices[0].diversion - 1;
           alts[num_choices].score = max_prev_score;
           alts[num_choices].base = &(P[i][j-1].choices[max_prev_choice_idx]);
 
@@ -165,8 +152,6 @@ gridcoord stdpw_solve(dptable* T) {
           } else {
             alts[num_choices].op = 'S';
           }
-          alts[num_choices].diversion = P[i-1][j-1].choices[0].diversion;
-          alts[num_choices].score = P[i-1][j-1].choices[0].diversion;
           alts[num_choices].base = &(P[i-1][j-1].choices[0]);
           alts[num_choices].score = P[i-1][j-1].choices[0].score
             + prob->scores->subst_scores[s][t];

@@ -4,13 +4,9 @@
  * programming algorithm.
  *
  * First, the "standard" mode, in which time and space are quadratic in sequence
- * lengths. A form of "shallow" banded alignment is allowed in this mode which
- * reduces the time complexity only to linear in sequence length and linear in
- * band width.
- *
- * Second, the "banded" mode, in which both time and space complexity are linear
- * in sequence lengths (in fact, the shorter of the sequence lengths). This mode
- * is not well-posed for local alignments.
+ * lengths.  Second, the "banded" mode, in which both time and space complexity
+ * are linear in sequence lengths (in fact, the shorter of the sequence
+ * lengths). This mode is not well-posed for local alignments.
  *
  * @note Any of these alignments can be made banded using `bradius` of
  * ::alnscores. This, however, only reduces the time complexity but not the
@@ -96,7 +92,6 @@ typedef struct {
   alnframe *frame; /**< The skeleton of the DP table. */
   alnscores *scores; /**< The parameters defining an optimal solution.*/
   std_alntype type; /**< The subtype of standard algorithms.*/
-  int bradius; /**< The band radius, only if positive. */
 } std_alnprob;
 
 /**
@@ -132,9 +127,6 @@ typedef struct {
 typedef struct alnchoice {
   char op; /**< Either of `M` for match, `S` for substitution, `I`
     for insertion, and `D` for deletion. */
-  int diversion; /**< Only applies to standard algorithms; used to ignore
-    out-of-band positions in the dynamic programming table when performing
-    banded alignments.*/
   double score; /**< The overall score of the alignment corresponding to the
     chain of bases leading to here.*/
   struct alnchoice *base; /**< The choice for the consequent subproblem on

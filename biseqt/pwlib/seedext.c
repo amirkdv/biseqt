@@ -58,7 +58,7 @@ int extend_1d_once(segment* res, segment* seg,
     .T_min_idx=T_min_idx, .T_max_idx=T_max_idx,
   };
   prob = (std_alnprob) {
-    .frame=&frame, .type=type, .scores=scores, .bradius=-1
+    .frame=&frame, .type=type, .scores=scores
   };
   table = (dptable) {.mode=STD_MODE, .std_prob=&prob, .num_rows=-1, .num_cols=-1};
   if (dptable_init(&table) == -1) {

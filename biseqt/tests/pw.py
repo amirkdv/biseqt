@@ -5,7 +5,6 @@ params = {
     'length': 500,
     'go_prob': 0.1, # gap open score
     'ge_prob': 0.3, # gap extend score
-    'bradius':    -1, # band radius if positive
     'show_dp':  0, # whether to print the DP table
     'alntype': pw.GLOBAL, # type of alignments
     'subst_probs': [[0.91 if k==i else 0.03 for k in range(4)] for i in range(4)]
@@ -33,7 +32,7 @@ T, m_opseq = S.mutate(**params)
 C = pw.AlignScores(subst_scores=subst_scores, alphabet=A,
     go_score=go_score, ge_score=ge_score)
 F = pw.AlignFrame(S, T)
-with pw.AlignTable(F, C, bradius=params['bradius'], alntype=params['alntype']) as P:
+with pw.AlignTable(F, C, alntype=params['alntype']) as P:
     score = P.solve(print_dp_table=params['show_dp'])
     transcript = P.traceback()
 

@@ -269,7 +269,6 @@ class AlignTable(CffiObject):
 
     Keyword Args:
         alntype: FIXME
-        bradius: FIXME
 
     Attributes:
         dp_table (List[List[float]]): The dynamic programming table built upon
@@ -278,7 +277,6 @@ class AlignTable(CffiObject):
     """
     def __init__(self, frame, scores, **kw):
         alntype = kw.pop('alntype', GLOBAL)
-        bradius = kw.pop('bradius', -1)
         assert(isinstance(frame, AlignFrame))
 
         self.frame, self.scores, self.alntype = frame, scores, alntype
@@ -286,7 +284,6 @@ class AlignTable(CffiObject):
             'frame': frame.c_obj,
             'scores': scores.c_obj,
             'type': alntype,
-            'bradius': bradius,
         })
         self.c_obj = ffi.new('dptable*', {
             'mode': STD_MODE,
