@@ -45,15 +45,15 @@ def hp_tokenize(string):
         yield match[0], len(match), pos
 
 
-class AlignParams(CffiObject):
-    """Wraps the C struct ``alnparams``, see ``pwlib.h``.
+class AlignScores(CffiObject):
+    """Wraps the C struct ``alnscores``, see ``pwlib.h``.
 
     Attributes:
         alphabet (Alphabet): alphabet used to represent the sequences.
-        c_obj (cffi.cdata): points to the underlying C ``alnparams`` struct.
+        c_obj (cffi.cdata): points to the underlying C ``alnscores`` struct.
         subst_scores (List[List]): rebuilt from the C ``double**`` upon access.
 
-    Additionally all struct members of ``alnparams`` can be read (and not
+    Additionally all struct members of ``alnscores`` can be read (and not
     written) as usual attributes.
     """
     def __init__(self, alphabet=None, subst_scores=[],
@@ -76,7 +76,7 @@ class AlignParams(CffiObject):
             kw['content_dependent_gap_scores'] = self._c_gaps_ka;
         else:
             self._c_gaps_ka = ffi.NULL
-        self.c_obj = ffi.new('alnparams*', kw)
+        self.c_obj = ffi.new('alnscores*', kw)
 
     @classmethod
     def subst_scores_from_probs(cls, alphabet, **kw):
@@ -102,7 +102,7 @@ class AlignParams(CffiObject):
 
         Returns:
             List[List[float]]: Substitution score matrix for given alphabet,
-                as expected by :func:`AlignParams`.
+                as expected by :func:`AlignScores`.
 
         Note:
             Only a linear gap model is supported for translating probabilities
@@ -163,14 +163,14 @@ class AlignParams(CffiObject):
             idx = range(len(self.alphabet))
             return [[self.c_obj.subst_scores[i][j] for j in idx] for i in idx]
         else:
-            return super(AlignParams, self).__getattr__(name)
+            return super(AlignScores, self).__getattr__(name)
 
     def score(self, S, T, opseq, S_min_idx=0, T_min_idx=0):
         """Calculates the score for an arbitray opseq over given sequences.
         Opseqs are allowed to be partial alignments (i.e finishing before
         reaching the end of frame)::
 
-            C = AlignParams(...)
+            C = AlignScores(...)
             C.score('ACCTT', 'AGCTTA', 'MSMMMD')
 
         Args:
@@ -244,7 +244,7 @@ class AlignProblem(CffiObject):
 
         A = seq.Alphabet('ACGT')
         S, T = A.randseq(100), A.randseq(100)
-        C = biseqt.AlignParams(
+        C = biseqt.AlignScores(
             ... # snip
         )
         with biseqt.AlignProblem(S, T, C, align_type=biseqt.GLOBAL) as P:
@@ -257,7 +257,7 @@ class AlignProblem(CffiObject):
 
     Args:
         frame (pw.AlignFrame): Alignment frame.
-        params (pw.AlignParams): Alignment parameters.
+        scores (pw.AlignScores): Alignment parameters.
 
     Keyword Args:
         alntype: FIXME
@@ -270,15 +270,15 @@ class AlignProblem(CffiObject):
         c_dp_table (cffi.cdata): points to the underlying ``double **``
             dynamic programming table.
     """
-    def __init__(self, frame, params, **kw):
+    def __init__(self, frame, scores, **kw):
         alntype = kw.pop('alntype', GLOBAL)
         bradius = kw.pop('bradius', -1)
         assert(isinstance(frame, AlignFrame))
 
-        self.frame, self.params, self.alntype = frame, params, alntype
+        self.frame, self.scores, self.alntype = frame, scores, alntype
         self.c_obj = ffi.new('std_alnprob*', {
             'frame': frame.c_obj,
-            'params': params.c_obj,
+            'scores': scores.c_obj,
             'type': alntype,
             'bradius': bradius,
         })
@@ -286,7 +286,7 @@ class AlignProblem(CffiObject):
     def __enter__(self):
         self.c_dp_table = lib.stdpw_init(self.c_obj)
         if self.c_dp_table == -1:
-            raise('Got -1 from pwlib.define().')
+            raise('Got -1 from pwlib.stdpw_init().')
         self.c_dp_row_cnt = self.frame.S_max_idx - self.frame.S_min_idx + 1
         self.c_dp_col_cnt = self.frame.T_max_idx - self.frame.T_min_idx + 1
         return self
@@ -304,7 +304,7 @@ class AlignProblem(CffiObject):
             P = AlignProblem(...)
             P.score('MMMSSISSD') #=> 23.50
         """
-        return self.params.score(
+        return self.scores.score(
             self.frame.S, self.frame.T, opseq, self.frame.S_min_idx, self.frame.T_min_idx
         )
 

@@ -8,7 +8,7 @@ from . import OverlapGraph
 # TODO make this a C struct so the C code cleans up.
 # FIXME the documentation formatting is weird
 class SeedExtensionParams(namedtuple('SeedExtensionParams',
-    ['window', 'min_overlap_score', 'max_new_mins', 'align_params'])):
+    ['window', 'min_overlap_score', 'max_new_mins', 'align_scores'])):
     """Represents the set of tuning parameters for seed extension.
 
     Attributes:
@@ -17,7 +17,7 @@ class SeedExtensionParams(namedtuple('SeedExtensionParams',
             to be reported
         max_new_mins (int): Maximum number of new minima observed in the score
             random walk until a segement is dropped.
-        align_params (pw.AlignParams): The alignment parameters for the
+        align_scores (pw.AlignParams): The alignment parameters for the
             rolling alignment.
     """
 
@@ -47,7 +47,7 @@ def extend_segments(S, T, segments, params, rw_collect=False):
     segs = ffi.new('segment* []', [seg.c_obj for seg in segments])
     res = lib.extend(
         segs, len(segs),
-        S.c_idxseq, T.c_idxseq, len(S), len(T), params.align_params.c_obj,
+        S.c_idxseq, T.c_idxseq, len(S), len(T), params.align_scores.c_obj,
         params.window, params.max_new_mins, params.min_overlap_score, int(bool(rw_collect))
     )
     return pw.Segment(c_obj=res) if res != ffi.NULL else None

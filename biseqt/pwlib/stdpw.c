@@ -148,13 +148,13 @@ gridcoord stdpw_solve(dpcell** P, std_alnprob* prob) {
       s = prob->frame->S[prob->frame->S_min_idx + i - 1];
       t = prob->frame->T[prob->frame->T_min_idx + j - 1];
 
-      if (prob->params->content_dependent_gap_scores == NULL) {
-        del_score = prob->params->gap_extend_score;
-        ins_score = prob->params->gap_extend_score;
+      if (prob->scores->content_dependent_gap_scores == NULL) {
+        del_score = prob->scores->gap_extend_score;
+        ins_score = prob->scores->gap_extend_score;
       } else {
         // the indices in the table are on ahead of the indices of letters:
-        del_score = prob->params->content_dependent_gap_scores[s];
-        ins_score = prob->params->content_dependent_gap_scores[t];
+        del_score = prob->scores->content_dependent_gap_scores[s];
+        ins_score = prob->scores->content_dependent_gap_scores[t];
       }
       // To (i-1,j)
       if (i > 0) {
@@ -169,7 +169,7 @@ gridcoord stdpw_solve(dpcell** P, std_alnprob* prob) {
           for (k = 0; k < P[i-1][j].num_choices; k++) {
             prev_score = P[i-1][j].choices[k].score + del_score;
             if (P[i-1][j].choices[k].op != 'D') {
-              prev_score += prob->params->gap_open_score;
+              prev_score += prob->scores->gap_open_score;
             }
             if (prev_score > max_prev_score) {
               max_prev_score = prev_score;
@@ -197,7 +197,7 @@ gridcoord stdpw_solve(dpcell** P, std_alnprob* prob) {
           for (k = 0; k < P[i][j-1].num_choices; k++) {
             prev_score = P[i][j-1].choices[k].score + ins_score;
             if (P[i][j-1].choices[k].op != 'I') {
-              prev_score += prob->params->gap_open_score;
+              prev_score += prob->scores->gap_open_score;
             }
             if (prev_score > max_prev_score) {
               max_prev_score = prev_score;
@@ -227,7 +227,7 @@ gridcoord stdpw_solve(dpcell** P, std_alnprob* prob) {
           alts[num_choices].score = P[i-1][j-1].choices[0].diversion;
           alts[num_choices].base = &(P[i-1][j-1].choices[0]);
           alts[num_choices].score = P[i-1][j-1].choices[0].score
-            + prob->params->subst_scores[s][t];
+            + prob->scores->subst_scores[s][t];
 
           num_choices++;
         }

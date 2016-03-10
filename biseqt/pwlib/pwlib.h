@@ -3,7 +3,7 @@
  * where it can end) on the dynamic programming table for standard alignments.
  *
  * @note Any of these alignments can be made banded using `bradius` of
- * ::alnparams. This, however, only reduces the time complexity but not the
+ * ::alnscores. This, however, only reduces the time complexity but not the
  * memory complexity.
 */
 typedef enum {
@@ -49,7 +49,7 @@ typedef struct {
   double* content_dependent_gap_scores; /**< The gap extension scores based on
     what letter is inserted/deleted. If this is `NULL`, `gap_extend_score` will
     be in effect and all gaps of equal length are scored identically.*/
-} alnparams;
+} alnscores;
 
 /**
  * Defines the skeleton of a pairwise alignment problem: two sequences and
@@ -71,7 +71,7 @@ typedef struct {
  */
 typedef struct {
   alnframe *frame; /**< The skeleton of the DP table. */
-  alnparams *params; /**< The parameters defining an optimal solution.*/
+  alnscores *scores; /**< The parameters defining an optimal solution.*/
   std_alntype type; /**< The subtype of standard algorithms.*/
   int bradius; /**< The band radius, only if positive. */
 } std_alnprob;
@@ -84,7 +84,7 @@ typedef struct {
 typedef struct {
   alnframe *frame; /**< The skeleton of the DP table. */
   banded_alntype type; /**< The subtype of standard algorithms.*/
-  alnparams *params; /**< The parameters defining an optimal solution.*/
+  alnscores* scores; /**< The scores for various alignment moves..*/
   int bradius; /**< The band radius, inclusive. */
   int ctrdiag; /**< The diagonal at the center of band (must be between `-|T|`
     and `+|S|`. */
@@ -146,7 +146,7 @@ typedef struct {
   int T_idx; /**< The starting position of the alignment along the "to"
     sequence. This is *not* relative to the start of alignment frame.*/
   double score; /**< The score of the alignment according to the
-    corresponding ::alnparams.*/
+    corresponding ::alnscores.*/
   char* opseq; /**< The sequence of edit operations, as in ::alnchoice
     that defines the alignment.*/
 } transcript;
@@ -166,13 +166,13 @@ int tx_seq_len(transcript* tx, char on);
 
 // --------------------- Seed Extension -------------------- //
 int extend_1d_once(segment* res, segment* seg,
-  int* S, int* T, alnparams* params,
+  int* S, int* T, alnscores* scores,
   int window, int forward);
 int extend_1d(segment* res, segment* seg,
-  int* S, int* T, int S_len, int T_len, alnparams* params,
+  int* S, int* T, int S_len, int T_len, alnscores* scores,
   int window, int max_new_mins, int forward, int debug);
 segment* extend(segment** segs, int num_segs, int* S, int* T, int S_len, int T_len,
-  alnparams* params, int window, int max_new_mins, double min_overlap_score, int debug);
+  alnscores* scores, int window, int max_new_mins, double min_overlap_score, int debug);
 
 // ---------------------- Standard PW ---------------------- //
 dpcell** stdpw_init(std_alnprob* prob);

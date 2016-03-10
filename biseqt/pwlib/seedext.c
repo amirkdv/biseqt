@@ -16,14 +16,14 @@
  *   its letters in alphabet.
  * @param T The integer array for the "to" sequence containing indices of
  *   its letters in alphabet.
- * @param params Alignment parameters to be used over the window.
+ * @param scores Alignment parameters to be used over the window.
  * @param window The length of the extension alignment window.
  * @param forward Either of 0 or 1 indicating the direction of extension.
  *
  * @return -1 if an error occurs and 0 otherwise.
  */
 int extend_1d_once(segment* res, segment* seg,
-  int* S, int* T, alnparams* params,
+  int* S, int* T, alnscores* scores,
   int window, int forward) {
 
   std_alnprob prob;
@@ -58,7 +58,7 @@ int extend_1d_once(segment* res, segment* seg,
     .T_min_idx=T_min_idx, .T_max_idx=T_max_idx,
   };
   prob = (std_alnprob) {
-    .frame=&frame, .type=type, .params=params, .bradius=-1
+    .frame=&frame, .type=type, .scores=scores, .bradius=-1
   };
   P = stdpw_init(&prob);
   if (P == NULL) {
@@ -115,7 +115,7 @@ int extend_1d_once(segment* res, segment* seg,
  *   its letters in alphabet.
  * @param S_len The length of the "from" sequence.
  * @param T_len The length of the "to" sequence.
- * @param params Alignment parameters to be used over the window.
+ * @param scores Alignment parameters to be used over the window.
  * @param window The length of the extension alignment window.
  * @param max_new_mins Maximum number of new minima observed in the score
  *    random walk until the segement is dropped (i.e -1 is returned).
@@ -128,7 +128,7 @@ int extend_1d_once(segment* res, segment* seg,
  *   the sequences and -1 otherwise.
  */
 int extend_1d(segment* res, segment* seg, int* S, int* T, int S_len, int T_len,
-  alnparams* params, int window, int max_new_mins, int forward, int debug) {
+  alnscores* scores, int window, int max_new_mins, int forward, int debug) {
 
   FILE* f;
   if (debug) {
@@ -167,7 +167,7 @@ int extend_1d(segment* res, segment* seg, int* S, int* T, int S_len, int T_len,
       return 0;
     }
 
-    retcode = extend_1d_once(&cur_seg, &cur_seg, S, T, params, actual_window, forward);
+    retcode = extend_1d_once(&cur_seg, &cur_seg, S, T, scores, actual_window, forward);
     if (retcode == -1) {
       // No nonempty alignment found:
       if (debug) {
@@ -209,7 +209,7 @@ int extend_1d(segment* res, segment* seg, int* S, int* T, int S_len, int T_len,
  *   its letters in alphabet.
  * @param S_len The length of the "from" sequence.
  * @param T_len The length of the "to" sequence.
- * @param params Alignment parameters to be used over the window.
+ * @param scores Alignment parameters to be used over the window.
  * @param window The length of the extension alignment window.
  * @param max_new_mins Maximum number of new minima observed in the score
  *    random walk until the segement is dropped (i.e -1 is returned).
@@ -223,7 +223,7 @@ int extend_1d(segment* res, segment* seg, int* S, int* T, int S_len, int T_len,
  *   the sequences and -1 otherwise.
  */
 segment* extend(segment** segs, int num_segs, int* S, int* T, int S_len, int T_len,
-  alnparams* params, int window, int max_new_mins, double min_overlap_score, int debug) {
+  alnscores* scores, int window, int max_new_mins, double min_overlap_score, int debug) {
 
   segment fwd, bwd, *res;
   transcript* tx;
@@ -231,13 +231,13 @@ segment* extend(segment** segs, int num_segs, int* S, int* T, int S_len, int T_l
   int fwd_tx_len, bwd_tx_len, seg_tx_len, retcode, overlap_score;
   for (int i = 0; i < num_segs; i ++) {
     retcode = extend_1d(&fwd, segs[i],
-        S, T, S_len, T_len, params,
+        S, T, S_len, T_len, scores,
         window, max_new_mins, 1, debug);
     if (retcode == -1) {
       continue;
     }
     retcode = extend_1d(&bwd, segs[i],
-      S, T, S_len, T_len, params,
+      S, T, S_len, T_len, scores,
       window, max_new_mins, 0, debug);
     if (retcode == -1) {
       continue;

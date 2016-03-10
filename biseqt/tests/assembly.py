@@ -32,16 +32,16 @@ params = {
 
 A = seq.Alphabet('ACGT')
 
-go_score, ge_score = pw.AlignParams.gap_scores_from_probs(params['go_prob'], params['ge_prob'])
-subst_scores = pw.AlignParams.subst_scores_from_probs(A, **params)
-C = pw.AlignParams(
+go_score, ge_score = pw.AlignScores.gap_scores_from_probs(params['go_prob'], params['ge_prob'])
+subst_scores = pw.AlignScores.subst_scores_from_probs(A, **params)
+C = pw.AlignScores(
     alphabet=A,
     subst_scores=subst_scores,
     go_score=go_score,
     ge_score=ge_score
 )
-od_params = overlap.OverlapDiscoveryParams(
-    seed_ext_params=overlap.SeedExtensionParams(
+od_params = overlap.OverlapDiscoveryScores(
+    seed_ext_params=overlap.SeedExtensionScores(
         window=params['window'],
         min_overlap_score=params['min_overlap_score'],
         max_new_mins=params['max_new_mins'],
