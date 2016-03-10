@@ -36,25 +36,9 @@ gridcoord stdpw_solve(dptable* T) {
   alnchoice *alts = NULL;
   int s,t;
 
-  // Base case
-  P[0][0].num_choices = 1;
-  P[0][0].choices = malloc(sizeof(alnchoice));
-  if (P[0][0].choices == NULL) {
-    printf("Failed to allocate memory (`stdpw_solve()`).\n");
-    return (gridcoord){-1, -1};
-  }
-  P[0][0].choices[0].op = 'B';
-  P[0][0].choices[0].score = 0;
-  P[0][0].choices[0].base = NULL;
-
   // Populate the table
   for (i = 0; i < n; i++) {
     for (j = 0; j < m; j++) {
-      if (i == 0 && j == 0) {
-        // Already dealt with
-        continue;
-      }
-      // Sane default so we can "continue" when a cell is not worth pursuing
       P[i][j].num_choices = 0;
 
       if (alts != NULL) {
@@ -78,86 +62,68 @@ gridcoord stdpw_solve(dptable* T) {
           (prob->type == OVERLAP && (i == 0 || j == 0)) ||
           (prob->type == END_ANCHORED_OVERLAP && (i == 0 || j == 0))
         ) {
-        alts[num_choices].op = 'B';
-        alts[num_choices].score = 0;
-        alts[num_choices].base = NULL;
-
+        alts[num_choices] = (alnchoice) {.op='B', .base=NULL, .score=0};
         num_choices++;
       }
       // the indices in the table are on ahead of the indices of letters:
       s = prob->frame->S[prob->frame->S_min_idx + i - 1];
       t = prob->frame->T[prob->frame->T_min_idx + j - 1];
 
+      // choose the gap extend score:
       if (prob->scores->content_dependent_gap_scores == NULL) {
         del_score = prob->scores->gap_extend_score;
         ins_score = prob->scores->gap_extend_score;
       } else {
-        // the indices in the table are on ahead of the indices of letters:
         del_score = prob->scores->content_dependent_gap_scores[s];
         ins_score = prob->scores->content_dependent_gap_scores[t];
       }
       // To (i-1,j)
-      if (i > 0) {
-        if (P[i-1][j].num_choices > 0) {
-          max_prev_choice_idx = 0;
-          max_prev_score = -INT_MAX;
-          for (k = 0; k < P[i-1][j].num_choices; k++) {
-            prev_score = P[i-1][j].choices[k].score + del_score;
-            if (P[i-1][j].choices[k].op != 'D') {
-              prev_score += prob->scores->gap_open_score;
-            }
-            if (prev_score > max_prev_score) {
-              max_prev_score = prev_score;
-              max_prev_choice_idx = k;
-            }
+      if (i > 0 && P[i-1][j].num_choices > 0) {
+        max_prev_choice_idx = 0;
+        max_prev_score = -INT_MAX;
+        for (k = 0; k < P[i-1][j].num_choices; k++) {
+          prev_score = P[i-1][j].choices[k].score + del_score;
+          if (P[i-1][j].choices[k].op != 'D') {
+            prev_score += prob->scores->gap_open_score;
           }
-          alts[num_choices].op = 'D';
-          alts[num_choices].score = max_prev_score;
-          alts[num_choices].base = &(P[i-1][j].choices[max_prev_choice_idx]);
-
-          num_choices++;
+          if (prev_score > max_prev_score) {
+            max_prev_score = prev_score;
+            max_prev_choice_idx = k;
+          }
         }
+        alts[num_choices] = (alnchoice) {.op='D', .score=max_prev_score,
+          .base=&(P[i-1][j].choices[max_prev_choice_idx])};
+
+        num_choices++;
       }
       // To (i,j-1)
-      if (j > 0) {
-        // Are there choices for (i,j-1) and are we inside the band?
-        if (P[i][j-1].num_choices > 0) {
-          max_prev_choice_idx = 0;
-          max_prev_score = - INT_MAX;
-          for (k = 0; k < P[i][j-1].num_choices; k++) {
-            prev_score = P[i][j-1].choices[k].score + ins_score;
-            if (P[i][j-1].choices[k].op != 'I') {
-              prev_score += prob->scores->gap_open_score;
-            }
-            if (prev_score > max_prev_score) {
-              max_prev_score = prev_score;
-              max_prev_choice_idx = k;
-            }
+      if (j > 0 && P[i][j-1].num_choices > 0) {
+        max_prev_choice_idx = 0;
+        max_prev_score = - INT_MAX;
+        for (k = 0; k < P[i][j-1].num_choices; k++) {
+          prev_score = P[i][j-1].choices[k].score + ins_score;
+          if (P[i][j-1].choices[k].op != 'I') {
+            prev_score += prob->scores->gap_open_score;
           }
-          alts[num_choices].op = 'I';
-          alts[num_choices].score = max_prev_score;
-          alts[num_choices].base = &(P[i][j-1].choices[max_prev_choice_idx]);
-
-          num_choices++;
+          if (prev_score > max_prev_score) {
+            max_prev_score = prev_score;
+            max_prev_choice_idx = k;
+          }
         }
+        alts[num_choices] = (alnchoice) {.op='I', .score=max_prev_score,
+          .base=&(P[i][j-1].choices[max_prev_choice_idx])};
+
+        num_choices++;
       }
       // To (i-1,j-1)
-      if ((i > 0) && (j > 0)) {
-        // Are there choices for (i-1,j-1)? (We must be in band if (i-1,j-1) is:
-        if (P[i-1][j-1].num_choices > 0) {
-          // All choices to (i-1,j-1) have the same score as there is no
-          // gap open distinction, add the choice right away:
-          if (s == t) {
-            alts[num_choices].op = 'M';
-          } else {
-            alts[num_choices].op = 'S';
-          }
-          alts[num_choices].base = &(P[i-1][j-1].choices[0]);
-          alts[num_choices].score = P[i-1][j-1].choices[0].score
-            + prob->scores->subst_scores[s][t];
-
-          num_choices++;
-        }
+      if (i > 0 && j > 0 && P[i-1][j-1].num_choices > 0) {
+        // All choices to (i-1,j-1) have the same score:
+        alts[num_choices] = (alnchoice) {
+          .op=(s==t ? 'M' : 'S'),
+          .score=P[i-1][j-1].choices[0].score + prob->scores->subst_scores[s][t],
+          .base=&(P[i-1][j-1].choices[0])
+        };
+        num_choices++;
       }
 
       // ================== Find the best alternatives ==================
