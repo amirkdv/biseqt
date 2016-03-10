@@ -8,6 +8,29 @@
 #include "pwlib.h"
 
 /**
+ * Given an alignment ::transcript returns the length of its opseq on the
+ * "from" or "to" sequence.
+ *
+ * @param tx The transcript of interest.
+ * @param on A single character of either 'S' or 'T'.
+ * @return A non-negative integer corresponding to the length of the indicated
+ *   sequence that is covered by the transcript and -1 if an error occurs.
+ */
+int tx_seq_len(transcript* tx, char on) {
+  if (on != 'S' && on != 'T') {
+    return -1;
+  }
+  int sum = 0;
+  for (int i = 0; i < strlen(tx->opseq); i++) {
+    if ((on == 'S' && tx->opseq[i] != 'I') ||
+        (on == 'T' && tx->opseq[i] != 'D')) {
+      sum ++;
+    }
+  }
+  return sum;
+}
+
+/**
  * Given a segment `seg`, extends it in the given direction by one window.
  *
  * @param res Extended segment to be populated here.

@@ -191,28 +191,17 @@ typedef struct segment {
   transcript* tx; /**< The transcript of the local alignment. */
 } segment;
 
-// --------------------- General Utilities ----------------- //
 int dptable_init(dptable* T);
 void dptable_free(dptable* T);
 gridcoord dptable_solve(dptable* T);
-int tx_seq_len(transcript* tx, char on);
 
-// --------------------- Seed Extension -------------------- //
-int extend_1d_once(segment* res, segment* seg,
-  int* S, int* T, alnscores* scores,
-  int window, int forward);
-int extend_1d(segment* res, segment* seg,
-  int* S, int* T, int S_len, int T_len, alnscores* scores,
-  int window, int max_new_mins, int forward, int debug);
 segment* extend(segment** segs, int num_segs, int* S, int* T, int S_len, int T_len,
   alnscores* scores, int window, int max_new_mins, double min_overlap_score, int debug);
 
-// ---------------------- Standard PW ---------------------- //
 gridcoord stdpw_solve(dptable* T);
 gridcoord stdpw_find_optimal(dptable* T);
 transcript* stdpw_traceback(dptable* T, gridcoord end);
 
-// ----------------------- Banded PW ----------------------- //
 gridcoord bandedpw_solve(dptable* T);
 gridcoord bandedpw_find_optimal(dptable* T);
 transcript* bandedpw_traceback(dptable* T, dpcell* end);
