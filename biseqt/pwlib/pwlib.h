@@ -1,4 +1,27 @@
 /**
+ * Indicates which of the pairwise alignment algorithms should be used, cf.
+ * ::dptable.  There are two available variations of the standard dynamic
+ * programming algorithm.
+ *
+ * First, the "standard" mode, in which time and space are quadratic in sequence
+ * lengths. A form of "shallow" banded alignment is allowed in this mode which
+ * reduces the time complexity only to linear in sequence length and linear in
+ * band width.
+ *
+ * Second, the "banded" mode, in which both time and space complexity are linear
+ * in sequence lengths (in fact, the shorter of the sequence lengths). This mode
+ * is not well-posed for local alignments.
+ *
+ * @note Any of these alignments can be made banded using `bradius` of
+ * ::alnscores. This, however, only reduces the time complexity but not the
+ * memory complexity.
+*/
+typedef enum {
+  STD_MODE, /**< Standard alignment algorithm.*/
+  BANDED_MODE, /**< Banded alignment algorithm.*/
+} alnmode;
+
+/**
  * Defines the boundary conditions (i.e where an alignment can start and
  * where it can end) on the dynamic programming table for standard alignments.
  *
@@ -82,7 +105,7 @@ typedef struct {
  * and a band radius.
  */
 typedef struct {
-  alnframe *frame; /**< The skeleton of the DP table. */
+  alnframe* frame; /**< The skeleton of the DP table. */
   banded_alntype type; /**< The subtype of standard algorithms.*/
   alnscores* scores; /**< The scores for various alignment moves..*/
   int bradius; /**< The band radius, inclusive. */
@@ -138,6 +161,20 @@ typedef struct {
 } dpcell;
 
 /**
+ * The full dynamic programming table for a standard or banded alignment.
+ */
+typedef struct {
+  dpcell** cells; /**< The DP table in (i,j) or (d,a) coordinates. */
+  int num_rows; /**< The number of rows in P. */
+  int num_cols; /**< The number of rows in P. */
+  alnmode mode; /**< Indicates which of standard or overlap alignment this is. */
+  union {
+    std_alnprob* std_prob; /**< The alignment problem for standard algorithms. */
+    banded_alnprob* banded_prob; /**< The alignment problem for banded algorithms. */
+  };
+} dptable;
+
+/**
  * Represents a solution to an alignment problem.
  */
 typedef struct {
@@ -162,6 +199,10 @@ typedef struct segment {
   transcript* tx; /**< The transcript of the local alignment. */
 } segment;
 
+// --------------------- General Utilities ----------------- //
+int dptable_init(dptable* T);
+void dptable_free(dptable* T);
+gridcoord dptable_solve(dptable* T);
 int tx_seq_len(transcript* tx, char on);
 
 // --------------------- Seed Extension -------------------- //
@@ -175,15 +216,11 @@ segment* extend(segment** segs, int num_segs, int* S, int* T, int S_len, int T_l
   alnscores* scores, int window, int max_new_mins, double min_overlap_score, int debug);
 
 // ---------------------- Standard PW ---------------------- //
-dpcell** stdpw_init(std_alnprob* prob);
-void stdpw_free(dpcell** P, int row_cnt, int col_cnt);
-gridcoord stdpw_solve(dpcell** P, std_alnprob* prob);
-gridcoord stdpw_find_optimal(dpcell** P, std_alnprob* prob);
-transcript* stdpw_traceback(dpcell** P, std_alnprob* prob, gridcoord end);
+gridcoord stdpw_solve(dptable* T);
+gridcoord stdpw_find_optimal(dptable* T);
+transcript* stdpw_traceback(dptable* T, gridcoord end);
 
 // ----------------------- Banded PW ----------------------- //
-dpcell** bandedpw_init(banded_alnprob* prob);
-void bandedpw_free(dpcell** P, int row_cnt, int col_cnt);
-dpcell* bandedpw_solve(dpcell** P, banded_alnprob* prob);
-dpcell* bandedpw_find_optimal(dpcell** P, banded_alnprob* prob);
-transcript* bandedpw_traceback(dpcell** P, banded_alnprob* prob, dpcell* end);
+gridcoord bandedpw_solve(dptable* T);
+gridcoord bandedpw_find_optimal(dptable* T);
+transcript* bandedpw_traceback(dptable* T, dpcell* end);

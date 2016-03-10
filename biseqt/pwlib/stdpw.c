@@ -8,64 +8,6 @@
 #include "pwlib.h"
 
 /**
- * Given an alignment problem definition, creates and initializes the dynamic
- * programming table.
- *
- * @param prob
- *    Alignment problem definition. The only members that are relevant at this
- *    point are the corresponding frames of the two sequences which determine
- *    the size of the table.
- *
- * @return pointer to the `malloc` ed dynamic programming table.
- */
-dpcell** stdpw_init(std_alnprob* prob) {
-  int n = prob->frame->S_max_idx - prob->frame->S_min_idx;
-  int m = prob->frame->T_max_idx - prob->frame->T_min_idx;
-  dpcell** P = malloc((n+1) * sizeof(dpcell *));
-  if (P == NULL) {
-    printf("Failed to allocate memory (`init_dp_table()`).\n");
-    return NULL;
-  }
-  // We need an additional row/col in the beginning. Table indices are therefore
-  // exactly one ahead of subproblem indices.
-  for (int i = 0; i < n+1; i++) {
-    P[i] = malloc((m+1) * sizeof(dpcell));
-    if (P[i] == NULL) {
-      printf("Failed to allocate memory (`init_dp_table()`).\n");
-      return NULL;
-    }
-    for (int j = 0; j < m+1; j++) {
-      P[i][j] = (dpcell) {.num_choices=0, .choices=NULL};
-    }
-  }
-  return P;
-}
-
-/**
- * Frees the allocated memory for a given alignment problem so that we can reuse
- * the same ::std_alnprob over and over.
- *
- * @param P the dynamic programming table.
- * @param row_cnt the number of rows in the table.
- * @param col_cnt the number of columns in the table.
- */
-void stdpw_free(dpcell** P, int row_cnt, int col_cnt) {
-  if (P == NULL) {
-    return;
-  }
-  int i,j;
-  for (i = 0; i < row_cnt; i++) {
-    for (j = 0; j < col_cnt; j++) {
-      if (P[i][j].num_choices > 0) {
-        free(P[i][j].choices);
-      }
-    }
-    free(P[i]);
-  }
-  free(P);
-}
-
-/**
  * Given an alignment with allocated DP table, solves the alignment problem (i.e
  * populates the alignment table). The optimal score and transcript can then
  * be obtained by using `traceback`. Half of the constraints imposed by
@@ -80,13 +22,13 @@ void stdpw_free(dpcell** P, int row_cnt, int col_cnt) {
  * - Overlap alignments (except for start anchored ones) can start anywhere.
  * - Global and start anchored alignments must start at the top left corner.
  *
- * @param P The dynamic programming table,
- * @param prob The alignment problem definition.
+ * @param T The dynamic programming table.
  * @return The optimal cell for the alignment to end at or {-1,-1} if error.
  */
-gridcoord stdpw_solve(dpcell** P, std_alnprob* prob) {
-  int n = prob->frame->S_max_idx - prob->frame->S_min_idx;
-  int m = prob->frame->T_max_idx - prob->frame->T_min_idx;
+gridcoord stdpw_solve(dptable* T) {
+  std_alnprob* prob = T->std_prob;
+  dpcell** P = T->cells;
+  int n = T->num_rows, m = T->num_cols;
   double max_score, prev_score, max_prev_score, del_score, ins_score;
   int num_choices, max_prev_choice_idx, num_max_scores;
   int i,j,k;
@@ -98,7 +40,7 @@ gridcoord stdpw_solve(dpcell** P, std_alnprob* prob) {
   P[0][0].num_choices = 1;
   P[0][0].choices = malloc(sizeof(alnchoice));
   if (P[0][0].choices == NULL) {
-    printf("Failed to allocate memory (`std_solve()`).\n");
+    printf("Failed to allocate memory (`stdpw_solve()`).\n");
     return (gridcoord){-1, -1};
   }
   P[0][0].choices[0].op = 'B';
@@ -107,8 +49,8 @@ gridcoord stdpw_solve(dpcell** P, std_alnprob* prob) {
   P[0][0].choices[0].base = NULL;
 
   // Populate the table
-  for (i = 0; i < n+1; i++) {
-    for (j = 0; j < m+1; j++) {
+  for (i = 0; i < n; i++) {
+    for (j = 0; j < m; j++) {
       if (i == 0 && j == 0) {
         // Already dealt with
         continue;
@@ -125,7 +67,7 @@ gridcoord stdpw_solve(dpcell** P, std_alnprob* prob) {
       // Allocate for all 4 possible choices (B,M/S,I,D)
       alts = malloc(4 * sizeof(alnchoice));
       if (alts == NULL) {
-        printf("Failed to allocate memory (`std_solve()`).\n");
+        printf("Failed to allocate memory (`stdpw_solve()`).\n");
         return (gridcoord){-1, -1};
       }
       // Build all the alternatives at cell (i,j)
@@ -241,7 +183,7 @@ gridcoord stdpw_solve(dpcell** P, std_alnprob* prob) {
       // indices of maximum choices in the `alts' array
       max_score_alts = malloc(num_choices * sizeof(int));
       if (max_score_alts == NULL) {
-        printf("Failed to allocate memory (`std_solve()`).\n");
+        printf("Failed to allocate memory (`stdpw_solve()`).\n");
         return (gridcoord){-1, -1};
       }
       num_max_scores = 0;
@@ -260,7 +202,7 @@ gridcoord stdpw_solve(dpcell** P, std_alnprob* prob) {
       P[i][j].num_choices = num_max_scores;
       P[i][j].choices = malloc(num_max_scores * sizeof(alnchoice));
       if (P[i][j].choices == NULL) {
-        printf("Failed to allocate memory (`std_solve()`).\n");
+        printf("Failed to allocate memory (`stdpw_solve()`).\n");
         return (gridcoord){-1, -1};
       }
       for (k = 0; k < num_max_scores; k++) {
@@ -270,7 +212,7 @@ gridcoord stdpw_solve(dpcell** P, std_alnprob* prob) {
   }
   free(alts);
   free(max_score_alts);
-  return stdpw_find_optimal(P, prob);
+  return stdpw_find_optimal(T);
 }
 
 /**
@@ -284,12 +226,13 @@ gridcoord stdpw_solve(dpcell** P, std_alnprob* prob) {
  * - Local and start-anchored alignments (except for overlap ones) can end
  *   anywhere; the best is found.
  *
- * @param P  The *solved* (populated) dynamic programming table.
- * @param prob The alignment problem definition.
+ * @param T The *solved* dynamic programming table.
  *
  * @return The optimal cell for the alignment to end at or {-1,-1} if error.
  */
-gridcoord stdpw_find_optimal(dpcell** P, std_alnprob* prob) {
+gridcoord stdpw_find_optimal(dptable* T) {
+  std_alnprob* prob = T->std_prob;
+  dpcell** P = T->cells;
   double max;
   int i,j;
   int row = -1, col = -1;
@@ -353,8 +296,7 @@ gridcoord stdpw_find_optimal(dpcell** P, std_alnprob* prob) {
  * from a given cell all the way back to a cell with a `NULL` base (i.e an
  * alignment start cell).
  *
- * @param P The solved (i.e populated) alignment DP table.
- * @param prob The alignment problem definition.
+ * @param T The *solved* dynamic programming table.
  * @param end The desired ending point of alignment which becomes the starting
  *    point of traceback.
  *
@@ -363,7 +305,9 @@ gridcoord stdpw_find_optimal(dpcell** P, std_alnprob* prob) {
  *    and requires some sort of global state keeping to avoid convoluted
  *    recursions. I couldn't get it right in the first go; leave for later.
  */
-transcript* stdpw_traceback(dpcell** P, std_alnprob* prob, gridcoord end) {
+transcript* stdpw_traceback(dptable* T, gridcoord end) {
+  std_alnprob* prob = T->std_prob;
+  dpcell** P = T->cells;
   char op, *opseq;
   transcript* tx = malloc(sizeof(transcript));
   int S_idx = end.row,

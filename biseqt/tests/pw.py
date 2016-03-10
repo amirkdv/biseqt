@@ -33,7 +33,7 @@ T, m_opseq = S.mutate(**params)
 C = pw.AlignScores(subst_scores=subst_scores, alphabet=A,
     go_score=go_score, ge_score=ge_score)
 F = pw.AlignFrame(S, T)
-with pw.AlignProblem(F, C, bradius=params['bradius'], alntype=params['alntype']) as P:
+with pw.AlignTable(F, C, bradius=params['bradius'], alntype=params['alntype']) as P:
     score = P.solve(print_dp_table=params['show_dp'])
     transcript = P.traceback()
 

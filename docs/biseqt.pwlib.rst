@@ -4,6 +4,7 @@ pwlib (C component)
 Constants
 ---------
 
+.. doxygenenum:: alnmode
 .. doxygenenum:: banded_alntype
 .. doxygenenum:: std_alntype
 
@@ -13,9 +14,10 @@ Data Structures
 
 .. doxygenstruct:: alnchoice
 .. doxygenstruct:: alnframe
-.. doxygenstruct:: alnparams
+.. doxygenstruct:: alnscores
 .. doxygenstruct:: banded_alnprob
 .. doxygenstruct:: dpcell
+.. doxygenstruct:: dptable
 .. doxygenstruct:: gridcoord
 .. doxygenstruct:: segment
 .. doxygenstruct:: std_alnprob
@@ -26,16 +28,15 @@ Functions
 ---------
 
 .. doxygenfunction:: bandedpw_find_optimal
-.. doxygenfunction:: bandedpw_free
-.. doxygenfunction:: bandedpw_init
 .. doxygenfunction:: bandedpw_solve
 .. doxygenfunction:: bandedpw_traceback
+.. doxygenfunction:: dptable_free
+.. doxygenfunction:: dptable_init
+.. doxygenfunction:: dptable_solve
 .. doxygenfunction:: extend
 .. doxygenfunction:: extend_1d
 .. doxygenfunction:: extend_1d_once
 .. doxygenfunction:: stdpw_find_optimal
-.. doxygenfunction:: stdpw_free
-.. doxygenfunction:: stdpw_init
 .. doxygenfunction:: stdpw_solve
 .. doxygenfunction:: stdpw_traceback
 .. doxygenfunction:: tx_seq_len

@@ -28,7 +28,7 @@ int extend_1d_once(segment* res, segment* seg,
 
   std_alnprob prob;
   alnframe frame;
-  dpcell **P;
+  dptable table;
   gridcoord opt;
   std_alntype type;
   transcript* tx;
@@ -60,20 +60,20 @@ int extend_1d_once(segment* res, segment* seg,
   prob = (std_alnprob) {
     .frame=&frame, .type=type, .scores=scores, .bradius=-1
   };
-  P = stdpw_init(&prob);
-  if (P == NULL) {
+  table = (dptable) {.mode=STD_MODE, .std_prob=&prob, .num_rows=-1, .num_cols=-1};
+  if (dptable_init(&table) == -1) {
     return -1;
   }
-  opt = stdpw_solve(P, &prob);
+  opt = dptable_solve(&table);
   if (opt.row == -1 || opt.col == -1) {
     failure = 1;
   }
 
-  tx = stdpw_traceback(P, &prob, opt);
+  tx = stdpw_traceback(&table, opt);
   if (tx == NULL) {
     failure = 1;
   }
-  stdpw_free(P, frame.S_max_idx - frame.S_min_idx + 1, frame.T_max_idx - frame.T_min_idx + 1);
+  dptable_free(&table);
   if (failure) {
     return -1;
   }

@@ -23,6 +23,11 @@ from termcolor import colored
 from contextlib import contextmanager
 from . import ffi, lib, seq, CffiObject
 
+# alignment modes
+STD_MODE = lib.STD_MODE
+BANDED_MODE = lib.BANDED_MODE
+
+# standard alignment types:
 GLOBAL = lib.GLOBAL
 LOCAL = lib.LOCAL
 START_ANCHORED = lib.START_ANCHORED
@@ -31,6 +36,7 @@ OVERLAP = lib.OVERLAP
 START_ANCHORED_OVERLAP = lib.START_ANCHORED_OVERLAP
 END_ANCHORED_OVERLAP = lib.END_ANCHORED_OVERLAP
 
+# banded alignment types:
 B_GLOBAL = lib.GLOBAL
 B_OVERLAP = lib.B_OVERLAP
 
@@ -238,16 +244,18 @@ class AlignFrame(CffiObject):
         })
 
 
-class AlignProblem(CffiObject):
-    """Wraps the C struct ``alndef`` and provides a context manager to
-    solve and potentially traceback an alignment problem. Example::
+class AlignTable(CffiObject):
+    """Wraps the C struct ``dptable`` and provides a context manager to
+    solve and potentially traceback an alignment problem. The corresponding
+    ``std_alnprob`` or ``banded_alnprob`` is contained in this class as well.
+    Example::
 
         A = seq.Alphabet('ACGT')
         S, T = A.randseq(100), A.randseq(100)
         C = biseqt.AlignScores(
             ... # snip
         )
-        with biseqt.AlignProblem(S, T, C, align_type=biseqt.GLOBAL) as P:
+        with biseqt.AlignTable(S, T, C, align_type=biseqt.GLOBAL) as P:
             score = P.solve()
             transcript = P.traceback()
 
@@ -267,8 +275,6 @@ class AlignProblem(CffiObject):
         dp_table (List[List[float]]): The dynamic programming table built upon
             access from the underlying C ``double **``.
         c_obj (cffi.cdata): points to the underlying ``alndef`` struct.
-        c_dp_table (cffi.cdata): points to the underlying ``double **``
-            dynamic programming table.
     """
     def __init__(self, frame, scores, **kw):
         alntype = kw.pop('alntype', GLOBAL)
@@ -276,26 +282,29 @@ class AlignProblem(CffiObject):
         assert(isinstance(frame, AlignFrame))
 
         self.frame, self.scores, self.alntype = frame, scores, alntype
-        self.c_obj = ffi.new('std_alnprob*', {
+        self.c_alnprob = ffi.new('std_alnprob*', {
             'frame': frame.c_obj,
             'scores': scores.c_obj,
             'type': alntype,
             'bradius': bradius,
         })
+        self.c_obj = ffi.new('dptable*', {
+            'mode': STD_MODE,
+            'std_prob': self.c_alnprob,
+            'cells': ffi.NULL,
+            'num_rows': -1,
+            'num_cols': -1,
+        })
+
 
     def __enter__(self):
-        self.c_dp_table = lib.stdpw_init(self.c_obj)
-        if self.c_dp_table == -1:
-            raise('Got -1 from pwlib.stdpw_init().')
-        self.c_dp_row_cnt = self.frame.S_max_idx - self.frame.S_min_idx + 1
-        self.c_dp_col_cnt = self.frame.T_max_idx - self.frame.T_min_idx + 1
+
+        if lib.dptable_init(self.c_obj) == -1:
+            raise('Got -1 from pwlib.dptable_init().')
         return self
 
     def __exit__(self, *args):
-        if self.c_dp_table not in [ffi.NULL, -1]:
-            lib.stdpw_free(
-                self.c_dp_table, self.c_dp_row_cnt, self.c_dp_col_cnt
-            )
+        lib.dptable_free(self.c_obj)
 
     def score(self, opseq):
         """Calculates the score for an arbitray opseq. Opseqs are allowed to be
@@ -319,15 +328,15 @@ class AlignProblem(CffiObject):
             float|NoneType: Optimal alignment score or ``None`` if no alignment
                 found.
         """
-        self.opt = lib.stdpw_solve(self.c_dp_table, self.c_obj)
+        self.opt = lib.dptable_solve(self.c_obj)
         if print_dp_table:
-            mat = self.c_dp_table
+            mat = self.c_obj.cells
             for i in range(len(mat)):
                 print [round(f, 2) for f in mat[i]]
         if self.opt.row == -1 or self.opt.col == -1:
             self.opt = None
             return None
-        score = self.c_dp_table[self.opt.row][self.opt.col].choices[0].score
+        score = self.c_obj.cells[self.opt.row][self.opt.col].choices[0].score
         return score
 
     def traceback(self):
@@ -339,7 +348,7 @@ class AlignProblem(CffiObject):
         if self.opt is None:
             return None
 
-        transcript = lib.stdpw_traceback(self.c_dp_table, self.c_obj, self.opt)
+        transcript = lib.stdpw_traceback(self.c_obj, self.opt)
         if transcript == ffi.NULL:
             return None
         return Transcript(c_obj=transcript)
@@ -356,7 +365,7 @@ class AlignProblem(CffiObject):
                     return None
             return [[score(i, j) for j in j_idx] for i in i_idx]
         else:
-            return super(AlignProblem, self).__getattr__(name)
+            return super(AlignTable, self).__getattr__(name)
 
 
 class Transcript(CffiObject):
