@@ -207,6 +207,6 @@ gridcoord bandedpw_find_optimal(dptable* T);
 transcript* bandedpw_traceback(dptable* T, dpcell* end);
 
 // Internals
-int _alnalt_B(dptable *T, int i, int j, alnchoice* choice);
-int _alnalt_MS(dptable *T, int i, int j, alnchoice* choice);
-int _alnalt_ID(dptable* T, int i, int j, alnchoice* choice, char op);
+int _alnchoice_B(dptable *T, int i, int j, alnchoice* choice);
+int _alnchoice_MS(dptable *T, int i, int j, alnchoice* choice);
+int _alnchoice_ID(dptable* T, int i, int j, alnchoice* choice, char op);

@@ -6,20 +6,15 @@
 #include <string.h>
 
 #include "pwlib.h"
+
 /**
  * Given an alignment with allocated DP table, solves the alignment problem (i.e
- * populates the alignment table). The optimal score and transcript can then
- * be obtained by using `traceback`. Half of the constraints imposed by
- * an alignment type are implemented here where we decide
- * what positions on the table can be starting positions of alignments. The
- * other half of the constraints concerning the ending position of the alignment
- * on the table is encapsulated in `traceback`.
- *
- * The rules of starting alignments are:
- * - Local and end-anchored alignments (except for overlap ones) can start
- *   anywhere.
- * - Overlap alignments (except for start anchored ones) can start anywhere.
- * - Global and start anchored alignments must start at the top left corner.
+ * populates the alignment table) and returns the optimal ending point for the
+ * alignment.  The optimal score and transcript can then be obtained by using
+ * `traceback`. Half of the constraints imposed by an alignment type are
+ * implemented here where we decide what positions on the table can be starting
+ * positions of alignments. The other half of the constraints concerning the
+ * ending position of the alignment on the table is encapsulated in `traceback`.
  *
  * @param T The dynamic programming table.
  * @return The optimal cell for the alignment to end at or {-1,-1} if error.
@@ -27,55 +22,54 @@
 gridcoord stdpw_solve(dptable* T) {
   int num_choices, num_max_scores;
   int i,j,k;
-  int *max_score_alts = NULL;
+  int *max_score_choices = NULL;
   double max_score;
-  alnchoice *alts = NULL;
+  alnchoice *choices = NULL;
 
   // Populate the table
   for (i = 0; i < T->num_rows; i++) {
     for (j = 0; j < T->num_cols; j++) {
-      T->cells[i][j].num_choices = 0;
-
-      if (alts != NULL) {
-        free(alts);
+      if (choices != NULL) {
+        free(choices);
       }
-      if (max_score_alts != NULL) {
-        free(max_score_alts);
+      if (max_score_choices != NULL) {
+        free(max_score_choices);
       }
       // Allocate for all 4 possible choices (B,M/S,I,D)
-      alts = malloc(4 * sizeof(alnchoice));
-      if (alts == NULL) {
+      choices = malloc(4 * sizeof(alnchoice));
+      if (choices == NULL) {
         printf("Failed to allocate memory (`stdpw_solve()`).\n");
         return (gridcoord){-1, -1};
       }
       // Build all the alternatives at cell (i,j)
       num_choices = 0;
-      num_choices += (_alnalt_B (T, i, j, &alts[num_choices])      == 0) ? 1 : 0;
-      num_choices += (_alnalt_ID(T, i, j, &alts[num_choices], 'D') == 0) ? 1 : 0;
-      num_choices += (_alnalt_ID(T, i, j, &alts[num_choices], 'I') == 0) ? 1 : 0;
-      num_choices += (_alnalt_MS(T, i, j, &alts[num_choices])      == 0) ? 1 : 0;
+      num_choices += (_alnchoice_B (T, i, j, &choices[num_choices])      == 0) ? 1 : 0;
+      num_choices += (_alnchoice_ID(T, i, j, &choices[num_choices], 'D') == 0) ? 1 : 0;
+      num_choices += (_alnchoice_ID(T, i, j, &choices[num_choices], 'I') == 0) ? 1 : 0;
+      num_choices += (_alnchoice_MS(T, i, j, &choices[num_choices])      == 0) ? 1 : 0;
 
       // Find the best alternatives
       if (num_choices == 0) {
+        T->cells[i][j].num_choices = 0;
         continue;
       }
 
-      // indices of maximum choices in the `alts' array
-      max_score_alts = malloc(num_choices * sizeof(int));
-      if (max_score_alts == NULL) {
+      // indices of maximum choices in the `choices' array
+      max_score_choices = malloc(num_choices * sizeof(int));
+      if (max_score_choices == NULL) {
         printf("Failed to allocate memory (`stdpw_solve()`).\n");
         return (gridcoord){-1, -1};
       }
       num_max_scores = 0;
-      max_score = alts[0].score;
+      max_score = choices[0].score;
       for (k = 0; k < num_choices; k++){
-        if (alts[k].score == max_score) {
-          max_score_alts[num_max_scores] = k;
+        if (choices[k].score == max_score) {
+          max_score_choices[num_max_scores] = k;
           num_max_scores++;
         }
-        else if (alts[k].score > max_score) {
-          max_score = alts[k].score;
-          max_score_alts[0] = k;
+        else if (choices[k].score > max_score) {
+          max_score = choices[k].score;
+          max_score_choices[0] = k;
           num_max_scores = 1;
         }
       }
@@ -86,12 +80,12 @@ gridcoord stdpw_solve(dptable* T) {
         return (gridcoord){-1, -1};
       }
       for (k = 0; k < num_max_scores; k++) {
-        T->cells[i][j].choices[k] = alts[max_score_alts[k]];
+        T->cells[i][j].choices[k] = choices[max_score_choices[k]];
       }
     }
   }
-  free(alts);
-  free(max_score_alts);
+  free(choices);
+  free(max_score_choices);
   return stdpw_find_optimal(T);
 }
 

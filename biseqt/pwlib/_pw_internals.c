@@ -5,43 +5,32 @@
 #include "pwlib.h"
 
 /**
- * Decides whether a B movement is allowed at a given position (position can be
- * in either coordinate system depending on alignment mode).
- *
- * @return 0 if choice successfully built, -1 if choice not possible.
- */
-bool _alnalt_B_allowed(dptable *T, int i, int j) {
-  switch (T->mode) {
-    case STD_MODE:
-      if (i == 0 && j == 0) {
-        return true;
-      }
-      if (T->std_prob->type == LOCAL || T->std_prob->type == END_ANCHORED) {
-        return true;
-      }
-      if (T->std_prob->type == OVERLAP && (i == 0 || j == 0)) {
-        return true;
-      }
-      if (T->std_prob->type == END_ANCHORED_OVERLAP && (i == 0 || j == 0)) {
-        return true;
-      }
-      return false;
-    case BANDED_MODE:
-      //FIXME
-      break;
-  }
-  return false;
-}
-
-/**
  * If possible populates an alignment 'B' move for a given position of the table
  * (in either coordinate systems depending on alignment mode).
  *
  * @return 0 if choice successfully built, -1 if choice not possible.
  */
-int _alnalt_B(dptable *T, int i, int j, alnchoice* choice) {
-  if (!_alnalt_B_allowed(T, i, j)) {
-    return -1;
+int _alnchoice_B(dptable *T, int i, int j, alnchoice* choice) {
+  // return -1 if the current cell is not elligible for a B:
+  switch (T->mode) {
+    case STD_MODE:
+      if (i == 0 && j == 0) {
+        break;
+      }
+      if (T->std_prob->type == LOCAL || T->std_prob->type == END_ANCHORED) {
+        break;
+      }
+      if (T->std_prob->type == OVERLAP && (i == 0 || j == 0)) {
+        break;
+      }
+      if (T->std_prob->type == END_ANCHORED_OVERLAP && (i == 0 || j == 0)) {
+        break;
+      }
+      // not elligible:
+      return -1;
+    case BANDED_MODE:
+      //FIXME
+      break;
   }
   choice->op = 'B';
   choice->score = 0;
@@ -55,7 +44,7 @@ int _alnalt_B(dptable *T, int i, int j, alnchoice* choice) {
  *
  * @return 0 if choice successfully built, -1 if choice not possible.
  */
-int _alnalt_MS(dptable *T, int i, int j, alnchoice* choice) {
+int _alnchoice_MS(dptable *T, int i, int j, alnchoice* choice) {
   int s,t, iprev, jprev;
   double score;
   switch (T->mode) {
@@ -89,7 +78,7 @@ int _alnalt_MS(dptable *T, int i, int j, alnchoice* choice) {
  *
  * @return 0 if choice successfully built, -1 if choice not possible.
  */
-int _alnalt_ID(dptable* T, int i, int j, alnchoice* choice, char op) {
+int _alnchoice_ID(dptable* T, int i, int j, alnchoice* choice, char op) {
   int iprev, jprev, base_idx, content;
   double score, max_score, gap_open_score, gap_extend_score;
   switch (T->mode) {
