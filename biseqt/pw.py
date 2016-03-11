@@ -330,10 +330,10 @@ class AlignTable(CffiObject):
             mat = self.c_obj.cells
             for i in range(len(mat)):
                 print [round(f, 2) for f in mat[i]]
-        if self.opt.row == -1 or self.opt.col == -1:
+        if self.opt.i == -1 or self.opt.j == -1:
             self.opt = None
             return None
-        score = self.c_obj.cells[self.opt.row][self.opt.col].choices[0].score
+        score = self.c_obj.cells[self.opt.i][self.opt.j].choices[0].score
         return score
 
     def traceback(self):

@@ -134,11 +134,11 @@ typedef struct alnchoice {
 } alnchoice;
 
 /**
- * A pair of integers representing a position in an arbitrary table.
+ * Any pair of integers.
  */
 typedef struct {
-  int row; /**< Vertical position (row number).*/
-  int col; /**< horizontal position (col number).*/
+  int i;
+  int j;
 } gridcoord;
 
 /**

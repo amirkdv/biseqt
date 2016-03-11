@@ -104,6 +104,8 @@ gridcoord stdpw_solve(dptable* T) {
  *
  * @return The optimal cell for the alignment to end at or {-1,-1} if error.
  */
+//FIXME this should move to internals
+//FIXME figure out how to merge this with banded
 gridcoord stdpw_find_optimal(dptable* T) {
   std_alnprob* prob = T->std_prob;
   dpcell** P = T->cells;
@@ -162,7 +164,7 @@ gridcoord stdpw_find_optimal(dptable* T) {
   if (row == -1 || col == -1 || P[row][col].num_choices == 0) {
     return (gridcoord){-1, -1};
   }
-  return (gridcoord) {.row=row, .col=col};
+  return (gridcoord) {row, col};
 }
 
 /**
@@ -179,13 +181,14 @@ gridcoord stdpw_find_optimal(dptable* T) {
  *    and requires some sort of global state keeping to avoid convoluted
  *    recursions. I couldn't get it right in the first go; leave for later.
  */
+// FIXME this should Just Work on banded except for initializing S_idx, T_idx
 transcript* stdpw_traceback(dptable* T, gridcoord end) {
   std_alnprob* prob = T->std_prob;
   dpcell** P = T->cells;
   char op, *opseq;
   transcript* tx = malloc(sizeof(transcript));
-  int S_idx = end.row,
-      T_idx = end.col,
+  int S_idx = end.i,
+      T_idx = end.j,
       len = S_idx + T_idx + 1,
       pos = len - 1;
   dpcell cur = P[S_idx][T_idx];
@@ -227,7 +230,7 @@ transcript* stdpw_traceback(dptable* T, gridcoord end) {
 
   tx->S_idx = S_idx + prob->frame->S_min_idx;
   tx->T_idx = T_idx + prob->frame->T_min_idx;
-  tx->score = P[end.row][end.col].choices[0].score;
+  tx->score = P[end.i][end.j].choices[0].score;
   tx->opseq = opseq;
   return tx;
 }

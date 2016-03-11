@@ -88,7 +88,7 @@ int extend_1d_once(segment* res, segment* seg,
     return -1;
   }
   opt = dptable_solve(&table);
-  if (opt.row == -1 || opt.col == -1) {
+  if (opt.i == -1 || opt.j == -1) {
     failure = 1;
   }
 
