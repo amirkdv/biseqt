@@ -6,7 +6,6 @@
 #include <string.h>
 
 #include "pwlib.h"
-
 /**
  * Given an alignment with allocated DP table, solves the alignment problem (i.e
  * populates the alignment table). The optimal score and transcript can then
@@ -26,20 +25,16 @@
  * @return The optimal cell for the alignment to end at or {-1,-1} if error.
  */
 gridcoord stdpw_solve(dptable* T) {
-  std_alnprob* prob = T->std_prob;
-  dpcell** P = T->cells;
-  int n = T->num_rows, m = T->num_cols;
-  double max_score, prev_score, max_prev_score, del_score, ins_score;
-  int num_choices, max_prev_choice_idx, num_max_scores;
+  int num_choices, num_max_scores;
   int i,j,k;
   int *max_score_alts = NULL;
+  double max_score;
   alnchoice *alts = NULL;
-  int s,t;
 
   // Populate the table
-  for (i = 0; i < n; i++) {
-    for (j = 0; j < m; j++) {
-      P[i][j].num_choices = 0;
+  for (i = 0; i < T->num_rows; i++) {
+    for (j = 0; j < T->num_cols; j++) {
+      T->cells[i][j].num_choices = 0;
 
       if (alts != NULL) {
         free(alts);
@@ -55,78 +50,12 @@ gridcoord stdpw_solve(dptable* T) {
       }
       // Build all the alternatives at cell (i,j)
       num_choices = 0;
-      if (prob->type == LOCAL || // local alignments can start anywhere
-          prob->type == END_ANCHORED || // end-anchored alignments can ...
-          // Overlap alignments and end-anchored alignments can start anywhere
-          // on either of the left or top edges:
-          (prob->type == OVERLAP && (i == 0 || j == 0)) ||
-          (prob->type == END_ANCHORED_OVERLAP && (i == 0 || j == 0))
-        ) {
-        alts[num_choices] = (alnchoice) {.op='B', .base=NULL, .score=0};
-        num_choices++;
-      }
-      // the indices in the table are on ahead of the indices of letters:
-      s = prob->frame->S[prob->frame->S_min_idx + i - 1];
-      t = prob->frame->T[prob->frame->T_min_idx + j - 1];
+      num_choices += (_alnalt_B (T, i, j, &alts[num_choices])      == 0) ? 1 : 0;
+      num_choices += (_alnalt_ID(T, i, j, &alts[num_choices], 'D') == 0) ? 1 : 0;
+      num_choices += (_alnalt_ID(T, i, j, &alts[num_choices], 'I') == 0) ? 1 : 0;
+      num_choices += (_alnalt_MS(T, i, j, &alts[num_choices])      == 0) ? 1 : 0;
 
-      // choose the gap extend score:
-      if (prob->scores->content_dependent_gap_scores == NULL) {
-        del_score = prob->scores->gap_extend_score;
-        ins_score = prob->scores->gap_extend_score;
-      } else {
-        del_score = prob->scores->content_dependent_gap_scores[s];
-        ins_score = prob->scores->content_dependent_gap_scores[t];
-      }
-      // To (i-1,j)
-      if (i > 0 && P[i-1][j].num_choices > 0) {
-        max_prev_choice_idx = 0;
-        max_prev_score = -INT_MAX;
-        for (k = 0; k < P[i-1][j].num_choices; k++) {
-          prev_score = P[i-1][j].choices[k].score + del_score;
-          if (P[i-1][j].choices[k].op != 'D') {
-            prev_score += prob->scores->gap_open_score;
-          }
-          if (prev_score > max_prev_score) {
-            max_prev_score = prev_score;
-            max_prev_choice_idx = k;
-          }
-        }
-        alts[num_choices] = (alnchoice) {.op='D', .score=max_prev_score,
-          .base=&(P[i-1][j].choices[max_prev_choice_idx])};
-
-        num_choices++;
-      }
-      // To (i,j-1)
-      if (j > 0 && P[i][j-1].num_choices > 0) {
-        max_prev_choice_idx = 0;
-        max_prev_score = - INT_MAX;
-        for (k = 0; k < P[i][j-1].num_choices; k++) {
-          prev_score = P[i][j-1].choices[k].score + ins_score;
-          if (P[i][j-1].choices[k].op != 'I') {
-            prev_score += prob->scores->gap_open_score;
-          }
-          if (prev_score > max_prev_score) {
-            max_prev_score = prev_score;
-            max_prev_choice_idx = k;
-          }
-        }
-        alts[num_choices] = (alnchoice) {.op='I', .score=max_prev_score,
-          .base=&(P[i][j-1].choices[max_prev_choice_idx])};
-
-        num_choices++;
-      }
-      // To (i-1,j-1)
-      if (i > 0 && j > 0 && P[i-1][j-1].num_choices > 0) {
-        // All choices to (i-1,j-1) have the same score:
-        alts[num_choices] = (alnchoice) {
-          .op=(s==t ? 'M' : 'S'),
-          .score=P[i-1][j-1].choices[0].score + prob->scores->subst_scores[s][t],
-          .base=&(P[i-1][j-1].choices[0])
-        };
-        num_choices++;
-      }
-
-      // ================== Find the best alternatives ==================
+      // Find the best alternatives
       if (num_choices == 0) {
         continue;
       }
@@ -150,14 +79,14 @@ gridcoord stdpw_solve(dptable* T) {
           num_max_scores = 1;
         }
       }
-      P[i][j].num_choices = num_max_scores;
-      P[i][j].choices = malloc(num_max_scores * sizeof(alnchoice));
-      if (P[i][j].choices == NULL) {
+      T->cells[i][j].num_choices = num_max_scores;
+      T->cells[i][j].choices = malloc(num_max_scores * sizeof(alnchoice));
+      if (T->cells[i][j].choices == NULL) {
         printf("Failed to allocate memory (`stdpw_solve()`).\n");
         return (gridcoord){-1, -1};
       }
       for (k = 0; k < num_max_scores; k++) {
-        P[i][j].choices[k] = alts[max_score_alts[k]];
+        T->cells[i][j].choices[k] = alts[max_score_alts[k]];
       }
     }
   }

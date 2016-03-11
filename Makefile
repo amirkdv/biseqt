@@ -5,7 +5,7 @@ GCC = gcc -shared -Wall -fPIC -std=c99 -g
 # To debug coredump:
 # 	$ gdb biseqt/libbiseqt.so core
 LIBDIR = biseqt/pwlib
-CFILES = $(LIBDIR)/util.c $(LIBDIR)/stdpw.c $(LIBDIR)/bandedpw.c $(LIBDIR)/seedext.c
+CFILES = $(LIBDIR)/util.c $(LIBDIR)/_pw_internals.c $(LIBDIR)/stdpw.c $(LIBDIR)/bandedpw.c $(LIBDIR)/seedext.c
 $(LIBDIR)/pwlib.so: $(CFILES) $(LIBDIR)/pwlib.h
 	$(GCC) $(CFILES) -o $@
 

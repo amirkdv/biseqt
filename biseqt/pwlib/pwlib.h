@@ -205,3 +205,8 @@ transcript* stdpw_traceback(dptable* T, gridcoord end);
 gridcoord bandedpw_solve(dptable* T);
 gridcoord bandedpw_find_optimal(dptable* T);
 transcript* bandedpw_traceback(dptable* T, dpcell* end);
+
+// Internals
+int _alnalt_B(dptable *T, int i, int j, alnchoice* choice);
+int _alnalt_MS(dptable *T, int i, int j, alnchoice* choice);
+int _alnalt_ID(dptable* T, int i, int j, alnchoice* choice, char op);
