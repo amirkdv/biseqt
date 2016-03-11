@@ -3,6 +3,9 @@
 from pycparser import c_ast, parse_file
 import sys
 
+def skip_name(name):
+    return name[0] == '_'
+
 class DocItemCollector(c_ast.NodeVisitor):
     def __init__(self):
         self.collected = {'enum': [], 'struct': [], 'func': []}
@@ -14,12 +17,13 @@ class DocItemCollector(c_ast.NodeVisitor):
         # twice to get to the function name:
         while not isinstance(t, c_ast.TypeDecl):
             t = t.type
-        self.collected['func'].append(t.declname)
+        if not skip_name(t.declname):
+            self.collected['func'].append(t.declname)
 
     def visit_Typedef(self, node):
-        if isinstance(node.type.type, c_ast.Enum):
+        if isinstance(node.type.type, c_ast.Enum) and not skip_name(node.name):
             self.collected['enum'].append(node.name)
-        elif isinstance(node.type.type, c_ast.Struct):
+        elif isinstance(node.type.type, c_ast.Struct) and not skip_name(node.name):
             self.collected['struct'].append(node.name)
 
 def generate(filename):

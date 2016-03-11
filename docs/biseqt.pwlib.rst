@@ -34,9 +34,6 @@ Functions
 .. doxygenfunction:: dptable_init
 .. doxygenfunction:: dptable_solve
 .. doxygenfunction:: extend
-.. doxygenfunction:: extend_1d
-.. doxygenfunction:: extend_1d_once
 .. doxygenfunction:: stdpw_find_optimal
 .. doxygenfunction:: stdpw_solve
 .. doxygenfunction:: stdpw_traceback
-.. doxygenfunction:: tx_seq_len
