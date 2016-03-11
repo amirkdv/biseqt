@@ -4,6 +4,12 @@
 
 #include "pwlib.h"
 
+/**
+ * Decides whether a B movement is allowed at a given position (position can be
+ * in either coordinate system depending on alignment mode).
+ *
+ * @return 0 if choice successfully built, -1 if choice not possible.
+ */
 bool _alnalt_B_allowed(dptable *T, int i, int j) {
   switch (T->mode) {
     case STD_MODE:
@@ -27,6 +33,12 @@ bool _alnalt_B_allowed(dptable *T, int i, int j) {
   return false;
 }
 
+/**
+ * If possible populates an alignment 'B' move for a given position of the table
+ * (in either coordinate systems depending on alignment mode).
+ *
+ * @return 0 if choice successfully built, -1 if choice not possible.
+ */
 int _alnalt_B(dptable *T, int i, int j, alnchoice* choice) {
   if (!_alnalt_B_allowed(T, i, j)) {
     return -1;
@@ -37,6 +49,12 @@ int _alnalt_B(dptable *T, int i, int j, alnchoice* choice) {
   return 0;
 }
 
+/**
+ * If possible populates an alignment 'M' or 'S' move for a given position of
+ * the table (in either coordinate systems depending on alignment mode).
+ *
+ * @return 0 if choice successfully built, -1 if choice not possible.
+ */
 int _alnalt_MS(dptable *T, int i, int j, alnchoice* choice) {
   int s,t, iprev, jprev;
   double score;
@@ -65,6 +83,12 @@ int _alnalt_MS(dptable *T, int i, int j, alnchoice* choice) {
   return 0;
 }
 
+/**
+ * If possible populates an alignment 'M' or 'S' move for a given position of
+ * the table (in either coordinate systems depending on alignment mode).
+ *
+ * @return 0 if choice successfully built, -1 if choice not possible.
+ */
 int _alnalt_ID(dptable* T, int i, int j, alnchoice* choice, char op) {
   int iprev, jprev, base_idx, content;
   double score, max_score, gap_open_score, gap_extend_score;
