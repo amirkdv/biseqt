@@ -49,7 +49,7 @@ int extend_1d_once(segment* res, segment* seg,
   int* S, int* T, alnscores* scores,
   int window, int forward) {
 
-  std_alnprob prob;
+  alnprob prob;
   alnframe frame;
   dptable table;
   intpair opt;
@@ -61,29 +61,20 @@ int extend_1d_once(segment* res, segment* seg,
 
   int S_len = tx_seq_len(seg->tx, 'S'),
       T_len = tx_seq_len(seg->tx, 'T');
-  int S_min_idx, S_max_idx, T_min_idx, T_max_idx;
+  intpair S_range, T_range;
   if (forward) {
-    S_min_idx = seg->tx->S_idx + S_len;
-    T_min_idx = seg->tx->T_idx + T_len;
-    S_max_idx = S_min_idx + window;
-    T_max_idx = T_min_idx + window;
+    S_range = (intpair) {seg->tx->S_idx + S_len, seg->tx->S_idx + S_len + window};
+    T_range = (intpair) {seg->tx->T_idx + T_len, seg->tx->T_idx + T_len + window};
   } else {
-    S_max_idx = seg->tx->S_idx;
-    T_max_idx = seg->tx->T_idx;
-    S_min_idx = S_max_idx - window;
-    T_min_idx = T_max_idx - window;
+    S_range = (intpair) {seg->tx->S_idx - window, seg->tx->S_idx};
+    T_range = (intpair) {seg->tx->T_idx - window, seg->tx->T_idx};
   }
 
   type = forward ? START_ANCHORED_OVERLAP : END_ANCHORED_OVERLAP;
-  frame = (alnframe) {
-    .S=S, .T=T,
-    .S_min_idx=S_min_idx, .S_max_idx=S_max_idx,
-    .T_min_idx=T_min_idx, .T_max_idx=T_max_idx,
-  };
-  prob = (std_alnprob) {
-    .frame=&frame, .type=type, .scores=scores
-  };
-  table = (dptable) {.mode=STD_MODE, .std_prob=&prob, .num_rows=-1, .num_cols=-1};
+  frame = (alnframe) {.S=S, .T=T, .S_range=S_range, .T_range=T_range};
+  std_alnparams params = (std_alnparams) {.type=type};
+  prob = (alnprob) {.frame=&frame, .scores=scores, .mode=STD_MODE, .std_params=&params};
+  table = (dptable) {.prob=&prob, .cells=NULL, .row_lens=NULL, .table_dims=(intpair){-1,-1}};
   if (dptable_init(&table) == -1) {
     return -1;
   }

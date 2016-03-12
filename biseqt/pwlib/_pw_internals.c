@@ -8,21 +8,21 @@
 //FIXME docs
 
 
-intpair _framedims(alnframe* frame) {
+intpair _frame_dims(alnframe* frame) {
   return (intpair) {
-    frame->S_max_idx - frame->S_min_idx,
-    frame->T_max_idx - frame->T_min_idx
+    frame->S_range.j - frame->S_range.i,
+    frame->T_range.j - frame->T_range.i
   };
 }
 
 bool _cellpos_valid(dptable* T, intpair pos) {
-  if (pos.i < 0 || pos.j < 0 || pos.i >= T->num_rows) {
+  if (pos.i < 0 || pos.j < 0 || pos.i >= T->table_dims.i) {
     return false;
   }
-  if (T->mode == STD_MODE && pos.j >= T->num_cols) {
+  if (T->prob->mode == STD_MODE && pos.j >= T->table_dims.j) {
     return false;
   }
-  if (T->mode == BANDED_MODE && pos.j >= T->row_lens[pos.i]) {
+  if (T->prob->mode == BANDED_MODE && pos.j >= T->row_lens[pos.i]) {
     return false;
   }
   return true;
@@ -51,25 +51,97 @@ intpair _xy_from_da(int d, int a) {
   return (intpair) {a + (d > 0 ? 0 : d), a - (d > 0 ? d : 0)};
 }
 
-intpair _cellpos_from_xy(int x, int y, alnmode mode, int T_len) {
-  if (mode == STD_MODE) {
+intpair _cellpos_from_xy(alnprob* prob, int x, int y) {
+  if (prob->mode == STD_MODE) {
     return (intpair) {x, y};
-  } else if (mode == BANDED_MODE) {
+  } else if (prob->mode == BANDED_MODE) {
     intpair pos = _da_from_xy(x, y);
-    return (intpair) {pos.i + T_len, pos.i};
+    return (intpair) {pos.i + prob->banded_params->radius - prob->banded_params->ctrdiag, pos.i};
   } else {
     _panick("Unknown alignment mode given to _cellpos_from_xy()");
-    // for the compiler:
-    return (intpair) {-1, -1};
   }
+  // for the compiler:
+  return (intpair) {-1, -1};
 }
+
+intpair _xy_from_cellpos(alnprob* prob, int i, int j) {
+  if (prob->mode == STD_MODE) {
+    return (intpair) {i, j};
+  } else if (prob->mode == BANDED_MODE) {
+    i += prob->banded_params->ctrdiag - prob->banded_params->radius;
+    return _xy_from_da(i, j);
+  } else {
+    _panick("Unknown alignment mode given to _cellpos_from_xy()");
+  }
+  // for the compiler:
+  return (intpair) {-1, -1};
+}
+
+intpair _prev_cell_M(alnprob* prob, int i, int j) {
+  switch (prob->mode) {
+    case STD_MODE:
+      return (intpair) {i - 1, j - 1};
+    case BANDED_MODE:
+      return (intpair) {i, j - 1};
+    default:
+      _panick("Invalid alignment mode");
+  }
+  // for the compiler:
+  return (intpair) {-1, -1};
+}
+
+intpair _prev_cell_I(alnprob* prob, int i, int j) {
+  switch (prob->mode) {
+    case STD_MODE:
+      return (intpair) {i, j - 1};
+    case BANDED_MODE:
+      if (j > prob->banded_params->radius) {
+        return (intpair) {i + 1, j};
+      } else {
+        return (intpair) {i + 1, j - 1};
+      }
+    default:
+      _panick("Invalid alignment mode");
+  }
+  // for the compiler:
+  return (intpair) {-1, -1};
+}
+
+intpair _prev_cell_D(alnprob* prob, int i, int j) {
+  switch (prob->mode) {
+    case STD_MODE:
+      return (intpair) {i - 1, j};
+    case BANDED_MODE:
+      if (j < prob->banded_params->radius) {
+        return (intpair) {i - 1, j};
+      } else {
+        return (intpair) {i - 1, j - 1};
+      }
+    default:
+      _panick("Invalid alignment mode");
+  }
+  // for the compiler:
+  return (intpair) {-1, -1};
+}
+
+double _ge_score(alnprob* prob, intpair pos, char op) {
+  if (prob->scores->content_dependent_gap_scores == NULL) {
+    return prob->scores->gap_extend_score;
+  }
+  intpair xy = _xy_from_cellpos(prob, pos.i, pos.j);
+  if (op == 'D') {
+    return prob->scores->content_dependent_gap_scores[prob->frame->S_range.i + xy.i];
+  }
+  return prob->scores->content_dependent_gap_scores[prob->frame->T_range.i + xy.j];
+}
+
 
 /**
  * Gives the maximum possible value of `a` for a given shift in standard (d,a)
  * format.
  */
-int _da_row_len(intpair framedims, int d) {
-  return 1 + (d > 0 ? 0 : d) + (framedims.i - d > framedims.j ? framedims.j : framedims.i - d);
+int _da_row_len(intpair dims, int d) {
+  return 1 + (d > 0 ? 0 : d) + (dims.i - d > dims.j ? dims.j : dims.i - d);
 }
 
 /**
@@ -80,18 +152,20 @@ int _da_row_len(intpair framedims, int d) {
  */
 int _alnchoice_B(dptable *T, intpair pos, alnchoice* choice) {
   // return -1 if the current cell is not elligible for a B:
-  switch (T->mode) {
+  std_alntype std_type;
+  switch (T->prob->mode) {
     case STD_MODE:
+      std_type = T->prob->std_params->type;
       if (pos.i == 0 && pos.j == 0) {
         break;
       }
-      if (T->std_prob->type == LOCAL || T->std_prob->type == END_ANCHORED) {
+      if (std_type == LOCAL || std_type == END_ANCHORED) {
         break;
       }
-      if (T->std_prob->type == OVERLAP && (pos.i == 0 || pos.j == 0)) {
+      if (std_type == OVERLAP && (pos.i == 0 || pos.j == 0)) {
         break;
       }
-      if (T->std_prob->type == END_ANCHORED_OVERLAP && (pos.i == 0 || pos.j == 0)) {
+      if (std_type == END_ANCHORED_OVERLAP && (pos.i == 0 || pos.j == 0)) {
         break;
       }
       // not elligible:
@@ -100,7 +174,7 @@ int _alnchoice_B(dptable *T, intpair pos, alnchoice* choice) {
       if (pos.i == 0 && pos.j == 0) {
         break;
       }
-      if (T->banded_prob->type == B_OVERLAP && pos.j == 0) {
+      if (T->prob->banded_params->type == B_OVERLAP && pos.j == 0) {
         break;
       }
       // not elligible:
@@ -123,37 +197,22 @@ int _alnchoice_B(dptable *T, intpair pos, alnchoice* choice) {
  * @return 0 if choice successfully built, -1 if choice not possible.
  */
 int _alnchoice_M(dptable *T, intpair pos, alnchoice* choice) {
-  intpair prev,  // the position of base cell (in whichever system `pos` is),
-            xy,  // the position of `pos` in xy-system,
-         chars; // the indices of characters in question of S and T,
+  intpair chars; // the indices of characters in question of S and T,
   double score;
-  alnframe* frame;
-  switch (T->mode) {
-    case STD_MODE:
-      frame = T->std_prob->frame;
-      xy = pos;
-      prev = (intpair) {pos.i - 1, pos.j - 1};
-      break;
-    case BANDED_MODE:
-      frame = T->banded_prob->frame;
-      prev = (intpair) {pos.i, pos.j-1};
-      xy = _xy_from_da(pos.i - T->banded_prob->bradius, pos.j);
-      break;
-    default:
-      _panick("Invalid alignment mode");
-      // for compiler's sake:
-      return -1;
-  }
+  alnframe* frame = T->prob->frame;
+  intpair xy = _xy_from_cellpos(T->prob, pos.i, pos.j);
+  intpair prev = _prev_cell_M(T->prob, pos.i, pos.j);
+
   if (!_cellpos_valid(T, prev) || T->cells[prev.i][prev.j].num_choices < 1) {
     return -1;
   }
   // pos is guaranteed to be in xy-system now:
   chars = (intpair) {
-    frame->S[frame->S_min_idx + xy.i - 1],
-    frame->T[frame->T_min_idx + xy.j - 1]
+    frame->S[frame->S_range.i + xy.i - 1],
+    frame->T[frame->T_range.i + xy.j - 1]
   };
 
-  score = T->std_prob->scores->subst_scores[chars.i][chars.j];
+  score = T->prob->scores->subst_scores[chars.i][chars.j];
   choice->op = (chars.i == chars.j ? 'M' : 'S');
   // No path-dependence for S/M; all previous bases are the same:
   choice->score = T->cells[prev.i][prev.j].choices[0].score + score;
@@ -161,96 +220,36 @@ int _alnchoice_M(dptable *T, intpair pos, alnchoice* choice) {
   return 0;
 }
 
-intpair _prev_cell_I(dptable* T, intpair pos) {
-  switch (T->mode) {
-    case STD_MODE:
-      return (intpair) {pos.i, pos.j - 1};
-    case BANDED_MODE:
-      if (pos.j > T->banded_prob->bradius) {
-        return (intpair) {pos.i + 1, pos.j};
-      } else {
-        return (intpair) {pos.i + 1, pos.j - 1};
-      }
-    default:
-      _panick("Invalid alignment mode");
-      // for compiler's sake:
-      return (intpair) {-1, -1};
-  }
-}
-
-intpair _prev_cell_D(dptable* T, intpair pos) {
-  switch (T->mode) {
-    case STD_MODE:
-      return (intpair) {pos.i - 1, pos.j};
-    case BANDED_MODE:
-      if (pos.j < T->banded_prob->bradius) {
-        return (intpair) {pos.i - 1, pos.j};
-      } else {
-        return (intpair) {pos.i - 1, pos.j - 1};
-      }
-    default:
-      _panick("Invalid alignment mode");
-      // for compiler's sake:
-      return (intpair) {-1, -1};
-  }
-}
-
-double _ge_score(dptable *T, intpair pos, char op) {
-  alnscores* scores = (T->mode == STD_MODE ? T->std_prob->scores : T->banded_prob->scores);
-  if (scores->content_dependent_gap_scores == NULL) {
-    return scores->gap_extend_score;
-  } else {
-    alnframe* frame = (T->mode == STD_MODE ? T->std_prob->frame : T->banded_prob->frame);
-    intpair xy = (T->mode == STD_MODE ? pos : _xy_from_da(pos.i - T->banded_prob->bradius, pos.j));
-    int content = (op == 'D' ? frame->S_min_idx + xy.i : frame->T_min_idx + xy.j);
-    return scores->content_dependent_gap_scores[content];
-  }
-}
-
-//FIXME this kind of silly thing would be resolved when refactoring alnprob
-//happens.
-double _go_score(dptable* T) {
-  switch (T->mode) {
-    case STD_MODE:
-      return T->std_prob->scores->gap_open_score;
-    case BANDED_MODE:
-      return T->banded_prob->scores->gap_open_score;
-    default:
-      _panick("Invalid alignment mode");
-      // for compiler's sake:
-      return -1;
-  }
-}
-
 int _alnchoice_ID(dptable* T, intpair pos, alnchoice* choice, char op) {
   int base_idx;
-  double score, max_score;
-  double ge_score, go_score;
+  double score, max_score, ge_score;
+  intpair prev;
 
-  if (op != 'I' && op != 'D') {
-    _panick("Unknown op given to _alnchoice_ID\n");
+  switch (op) {
+    case 'I':
+      prev = _prev_cell_I(T->prob, pos.i, pos.j);
+      break;
+    case 'D':
+      prev = _prev_cell_D(T->prob, pos.i, pos.j);
+      break;
+    default:
+      _panick("Unknown op given to _alnchoice_ID\n");
   }
-
-  intpair prev = (op == 'I' ? _prev_cell_I(T, pos) : _prev_cell_D(T, pos));
   if (!_cellpos_valid(T, prev)) {
     return -1;
   }
   if (T->cells[prev.i][prev.j].num_choices <= 0) {
     return -1;
   }
-  //FIXME
-  /*printf("(%d, %d) ---%c--> (%d,%d)\n", pos.i, pos.j, op, prev.i, prev.j);*/
-  /*exit(1);*/
 
-  go_score = _go_score(T);
-  ge_score = _ge_score(T, pos, op);
+  ge_score = _ge_score(T->prob, pos, op);
 
   base_idx = 0;
   max_score = -INT_MAX;
   for (int k = 0; k < T->cells[prev.i][prev.j].num_choices; k++) {
     score = T->cells[prev.i][prev.j].choices[k].score + ge_score;
     if (T->cells[prev.i][prev.j].choices[k].op != op) {
-      score += go_score;
+      score += T->prob->scores->gap_open_score;
     }
     if (score > max_score) {
       max_score = score;
@@ -274,29 +273,28 @@ int _alnchoice_I(dptable* T, intpair pos, alnchoice* choice) {
 /**
  */
 intpair _std_find_optimal(dptable* T) {
-  std_alnprob* prob = T->std_prob;
+  std_alntype type = T->prob->std_params->type;
+  alnframe* frame = T->prob->frame;
   double max;
   int i,j;
   int row = -1, col = -1;
-  if (prob->type == GLOBAL ||
-      prob->type == END_ANCHORED ||
-      prob->type == END_ANCHORED_OVERLAP) {
+  if (type == GLOBAL || type == END_ANCHORED || type == END_ANCHORED_OVERLAP) {
     // Global and end-anchored alignments must end at the bottom right corner
-    row = prob->frame->S_max_idx - prob->frame->S_min_idx;
-    col = prob->frame->T_max_idx - prob->frame->T_min_idx;
+    row = frame->S_range.j - frame->S_range.i;
+    col = frame->T_range.j - frame->T_range.i;
     if (T->cells[row][col].num_choices == 0) {
       return (intpair){-1, -1};
     }
   }
-  else if (prob->type == OVERLAP || prob->type == START_ANCHORED_OVERLAP) {
+  else if (type == OVERLAP || type == START_ANCHORED_OVERLAP) {
     // Overlap alignments (except end-anchored ones) can end anywhere on either
     // of the bottom or right edges; find the best:
     max = -INT_MAX;
-    for (i = 0; i < prob->frame->S_max_idx - prob->frame->S_min_idx + 1; i++){
-      for (j = 0; j < prob->frame->T_max_idx - prob->frame->T_min_idx + 1; j++) {
+    for (i = 0; i < frame->S_range.j - frame->S_range.i + 1; i++){
+      for (j = 0; j < frame->T_range.j - frame->T_range.i + 1; j++) {
         // Are we on the bottom row or the right column?
-        if (i != prob->frame->S_max_idx - prob->frame->S_min_idx &&
-            j != prob->frame->T_max_idx - prob->frame->T_min_idx) {
+        if (i != frame->S_range.j - frame->S_range.i &&
+            j != frame->T_range.j - frame->T_range.i) {
           continue;
         }
         if (T->cells[i][j].num_choices == 0) {
@@ -310,12 +308,12 @@ intpair _std_find_optimal(dptable* T) {
       }
     }
   }
-  else if (prob->type == LOCAL || prob->type == START_ANCHORED) {
+  else if (type == LOCAL || type == START_ANCHORED) {
     // Local and start-anchored alignments (except for overlap ones) can end
     // anywhere; find the best:
     max = T->cells[0][0].choices[0].score;
-    for (i = 0; i < prob->frame->S_max_idx - prob->frame->S_min_idx + 1; i++){
-      for (j = 0; j < prob->frame->T_max_idx - prob->frame->T_min_idx + 1; j++) {
+    for (i = 0; i < frame->S_range.j - frame->S_range.i + 1; i++){
+      for (j = 0; j < frame->T_range.j - frame->T_range.i + 1; j++) {
         if (T->cells[i][j].num_choices == 0) {
           continue;
         }
@@ -327,7 +325,7 @@ intpair _std_find_optimal(dptable* T) {
       }
     }
   }
-  if (row == -1 || col == -1 || T->cells[row][col].num_choices == 0) {
+  if (row == -1 || col == -1) {
     return (intpair){-1, -1};
   }
   return (intpair) {row, col};
@@ -336,17 +334,17 @@ intpair _std_find_optimal(dptable* T) {
 /**
  */
 intpair _banded_find_optimal(dptable* T) {
-  alnframe* frame = T->banded_prob->frame;
+  alnframe* frame = T->prob->frame;
   double max;
   int i,j;
   int row = -1, col = -1;
-  if (T->banded_prob->type == B_GLOBAL) {
-    row = frame->S_max_idx - frame->S_min_idx;
-    col = frame->T_max_idx - frame->T_min_idx;
+  if (T->prob->banded_params->type == B_GLOBAL) {
+    row = frame->S_range.j - frame->S_range.i;
+    col = frame->T_range.j - frame->T_range.i;
   }
-  else if (T->banded_prob->type == B_OVERLAP) {
+  else if (T->prob->banded_params->type == B_OVERLAP) {
     max = -INT_MAX;
-    for (i = 0; i < T->num_rows; i++){
+    for (i = 0; i < T->table_dims.i; i++){
       j = T->row_lens[i];
       if (T->cells[i][j].num_choices == 0) {
         continue;

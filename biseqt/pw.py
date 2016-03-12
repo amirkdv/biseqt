@@ -237,17 +237,15 @@ class AlignFrame(CffiObject):
         self.c_obj = ffi.new('alnframe*', {
             'S': S.c_idxseq,
             'T': T.c_idxseq,
-            'S_min_idx': S_min_idx,
-            'S_max_idx': S_max_idx,
-            'T_min_idx': T_min_idx,
-            'T_max_idx': T_max_idx,
+            'S_range': (S_min_idx, S_max_idx),
+            'T_range': (T_min_idx, T_max_idx),
         })
 
 
 class AlignTable(CffiObject):
     """Wraps the C struct ``dptable`` and provides a context manager to
     solve and potentially traceback an alignment problem. The corresponding
-    ``std_alnprob`` or ``banded_alnprob`` is contained in this class as well.
+    ``alnprob`` or ``banded_alnprob`` is contained in this class as well.
     Example::
 
         A = seq.Alphabet('ACGT')
@@ -280,17 +278,17 @@ class AlignTable(CffiObject):
         assert(isinstance(frame, AlignFrame))
 
         self.frame, self.scores, self.alntype = frame, scores, alntype
-        self.c_alnprob = ffi.new('std_alnprob*', {
+        self.c_alnparams = ffi.new('std_alnparams*', {'type': alntype});
+        self.c_alnprob = ffi.new('alnprob*', {
             'frame': frame.c_obj,
             'scores': scores.c_obj,
-            'type': alntype,
+            'mode': STD_MODE,
+            'std_params': self.c_alnparams,
         })
         self.c_obj = ffi.new('dptable*', {
-            'mode': STD_MODE,
-            'std_prob': self.c_alnprob,
+            'prob': self.c_alnprob,
             'cells': ffi.NULL,
-            'num_rows': -1,
-            'num_cols': -1,
+            'table_dims': (-1, -1),
             'row_lens': ffi.NULL,
         })
 
@@ -312,7 +310,7 @@ class AlignTable(CffiObject):
             P.score('MMMSSISSD') #=> 23.50
         """
         return self.scores.score(
-            self.frame.S, self.frame.T, opseq, self.frame.S_min_idx, self.frame.T_min_idx
+            self.frame.S, self.frame.T, opseq, self.frame.S_range.i, self.frame.T_range.i
         )
 
     def solve(self, print_dp_table=False):
@@ -330,8 +328,8 @@ class AlignTable(CffiObject):
         if print_dp_table:
             # FIXME this is broken and needs checking for banded
             mat = self.c_obj.cells
-            for i in range(self.c_obj.num_rows):
-                print [round(mat[i][j].num_choices, 2) for j in range(self.c_obj.num_cols)]
+            for i in range(self.c_obj.table_dims.i):
+                print [round(mat[i][j].choices[0].score, 2) for j in range(self.c_obj.table_dims.j)]
         if self.opt.i == -1 or self.opt.j == -1:
             self.opt = None
             return None
@@ -354,8 +352,8 @@ class AlignTable(CffiObject):
 
     def __getattr__(self, name):
         if name == 'dp_table':
-            i_idx = range(self.S_max_idx - self.S_min_idx + 1)
-            j_idx = range(self.T_max_idx - self.T_min_idx + 1)
+            i_idx = range(self.frame.S_range.j - self.frame.S_range.i + 1)
+            j_idx = range(self.frame.T_range.j - self.frame.T_range.j + 1)
 
             def score(i, j):
                 if self.c_dp_table[i][j].num_choices != 0:

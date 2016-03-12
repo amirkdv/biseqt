@@ -14,13 +14,14 @@ Data Structures
 
 .. doxygenstruct:: alnchoice
 .. doxygenstruct:: alnframe
+.. doxygenstruct:: alnprob
 .. doxygenstruct:: alnscores
-.. doxygenstruct:: banded_alnprob
+.. doxygenstruct:: banded_alnparams
 .. doxygenstruct:: dpcell
 .. doxygenstruct:: dptable
 .. doxygenstruct:: intpair
 .. doxygenstruct:: segment
-.. doxygenstruct:: std_alnprob
+.. doxygenstruct:: std_alnparams
 .. doxygenstruct:: transcript
 
 

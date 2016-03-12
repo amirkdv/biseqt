@@ -1,4 +1,13 @@
 //FIXME docs
+
+/**
+ * Any pair of integers.
+ */
+typedef struct {
+  int i;
+  int j;
+} intpair;
+
 /**
  * Indicates which of the pairwise alignment algorithms should be used, cf.
  * ::dptable.  There are two available variations of the standard dynamic
@@ -9,7 +18,7 @@
  * are linear in sequence lengths (in fact, the shorter of the sequence
  * lengths). This mode is not well-posed for local alignments.
  *
- * @note Any of these alignments can be made banded using `bradius` of
+ * @note Any of these alignments can be made banded using `radius` of
  * ::alnscores. This, however, only reduces the time complexity but not the
  * memory complexity.
 */
@@ -22,7 +31,7 @@ typedef enum {
  * Defines the boundary conditions (i.e where an alignment can start and
  * where it can end) on the dynamic programming table for standard alignments.
  *
- * @note Any of these alignments can be made banded using `bradius` of
+ * @note Any of these alignments can be made banded using `radius` of
  * ::alnscores. This, however, only reduces the time complexity but not the
  * memory complexity.
 */
@@ -75,42 +84,41 @@ typedef struct {
  * Defines the skeleton of a pairwise alignment problem: two sequences and
  * their start/end of frame positions.
  */
-//FIXME make S_{min,max}_idx an intpair
 typedef struct {
   int* S; /**< The "from" sequence as an array of integers.*/
   int* T; /**< The "to" sequence as an array of integers.*/
-  int S_min_idx; /**< The opening index for the frame of S, inclusive.*/
-  int S_max_idx; /**< The closing index for the frame of S, exclusive.*/
-  int T_min_idx; /**< The opening index for the frame of T, inclusive.*/
-  int T_max_idx; /**< The closing index for the frame of T, exclusive.*/
+  intpair S_range; /** Vertical span of the frame in [min, max) format. */
+  intpair T_range; /** Horizontal span of the frame in [min, max) format. */
 } alnframe;
 
 /**
- * Groups together all information defining a standard pairwise alignment
- * problem: a frame, alignment type, alignment parameters, and a band radius
- * (optional).
+ * Groups together all parameters of a standard pairwise alignment problem:
+ * for now only an alignment type.
  */
-// FIXME we should have a single alnprob type (maybe call it alnparams?) and an
-// additional banded_params.
+typedef struct {
+  std_alntype type; /**< The subtype of standard algorithms.*/
+} std_alnparams;
+
+/**
+ * Groups together all parameters of a banded pairwise alignment problem:
+ * alignment type, scores, starting diagonal, and a band radius.
+ */
+typedef struct {
+  banded_alntype type; /**< The subtype of banded algorithms.*/
+  int radius; /**< The band radius, inclusive. */
+  int ctrdiag; /**< The diagonal at the center of band (must be between `-|T|`
+    and `+|S|`. */
+} banded_alnparams;
+
 typedef struct {
   alnframe *frame; /**< The skeleton of the DP table. */
   alnscores *scores; /**< The parameters defining an optimal solution.*/
-  std_alntype type; /**< The subtype of standard algorithms.*/
-} std_alnprob;
-
-/**
- * Groups together all information defining a banded pairwise alignment
- * problem: a frame, alignment type, alignment parameters, starting diagonal,
- * and a band radius.
- */
-typedef struct {
-  alnframe* frame; /**< The skeleton of the DP table. */
-  alnscores* scores; /**< The scores for various alignment moves..*/
-  banded_alntype type; /**< The subtype of banded algorithms.*/
-  int bradius; /**< The band radius, inclusive. */
-  int ctrdiag; /**< The diagonal at the center of band (must be between `-|T|`
-    and `+|S|`. */
-} banded_alnprob;
+  alnmode mode; /**< Indicates which of standard or overlap alignment this is. */
+  union {
+    std_alnparams* std_params; /**< The parameters for standard algorithms. */
+    banded_alnparams* banded_params; /**< The parameters for banded algorithms. */
+  };
+} alnprob;
 
 /**
  * The fundamental unit of solving standard pairwise alignment problems. Each
@@ -138,14 +146,6 @@ typedef struct alnchoice {
 } alnchoice;
 
 /**
- * Any pair of integers.
- */
-typedef struct {
-  int i;
-  int j;
-} intpair;
-
-/**
  * A single cell of the dynamic programming table. Each cell has an array of
  * optimal choices linking to choices in dependent cells.
  */
@@ -161,14 +161,9 @@ typedef struct {
  */
 typedef struct {
   dpcell** cells; /**< The DP table in (i,j) or (d,a) coordinates. */
-  int* row_lens; /**< Row lengths in the DP table; only applies to banded alignments. */
-  int num_rows; /**< The number of rows in the DP table. */
-  int num_cols; /**< The number of columns in the DP table. */
-  alnmode mode; /**< Indicates which of standard or overlap alignment this is. */
-  union {
-    std_alnprob* std_prob; /**< The alignment problem for standard algorithms. */
-    banded_alnprob* banded_prob; /**< The alignment problem for banded algorithms. */
-  };
+  int* row_lens; /**< Row lengths in the DP table; only applies to banded. */
+  intpair table_dims; /**< The height/width of the DP table in memory. */
+  alnprob* prob; /**< The alignment problem.*/
 } dptable;
 
 /**
@@ -213,10 +208,11 @@ int _alnchoice_I(dptable* T, intpair pos, alnchoice* choice);
 int _alnchoice_D(dptable* T, intpair pos, alnchoice* choice);
 intpair _std_find_optimal(dptable* T);
 intpair _banded_find_optimal(dptable* T);
-intpair _framedims(alnframe* frame);
+intpair _frame_dims(alnframe* frame);
 int _da_row_len(intpair framedims, int d);
 intpair _xy_from_da(int d, int a);
 intpair _da_from_xy(int x, int y);
-intpair _cellpos_from_xy(int x, int y, alnmode mode, int T_len);
+intpair _cellpos_from_xy(alnprob* prob, int x, int y);
+intpair _xy_from_cellpos(alnprob* prob, int i, int j);
 void _print_mem_usage();
 void _panick(char* message);
