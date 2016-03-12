@@ -18,7 +18,7 @@ Data Structures
 .. doxygenstruct:: banded_alnprob
 .. doxygenstruct:: dpcell
 .. doxygenstruct:: dptable
-.. doxygenstruct:: gridcoord
+.. doxygenstruct:: intpair
 .. doxygenstruct:: segment
 .. doxygenstruct:: std_alnprob
 .. doxygenstruct:: transcript
@@ -27,13 +27,8 @@ Data Structures
 Functions
 ---------
 
-.. doxygenfunction:: bandedpw_find_optimal
-.. doxygenfunction:: bandedpw_solve
-.. doxygenfunction:: bandedpw_traceback
 .. doxygenfunction:: dptable_free
 .. doxygenfunction:: dptable_init
 .. doxygenfunction:: dptable_solve
+.. doxygenfunction:: dptable_traceback
 .. doxygenfunction:: extend
-.. doxygenfunction:: stdpw_find_optimal
-.. doxygenfunction:: stdpw_solve
-.. doxygenfunction:: stdpw_traceback

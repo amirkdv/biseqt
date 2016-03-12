@@ -291,6 +291,7 @@ class AlignTable(CffiObject):
             'cells': ffi.NULL,
             'num_rows': -1,
             'num_cols': -1,
+            'row_lens': ffi.NULL,
         })
 
 
@@ -327,9 +328,10 @@ class AlignTable(CffiObject):
         """
         self.opt = lib.dptable_solve(self.c_obj)
         if print_dp_table:
+            # FIXME this is broken and needs checking for banded
             mat = self.c_obj.cells
-            for i in range(len(mat)):
-                print [round(f, 2) for f in mat[i]]
+            for i in range(self.c_obj.num_rows):
+                print [round(mat[i][j].num_choices, 2) for j in range(self.c_obj.num_cols)]
         if self.opt.i == -1 or self.opt.j == -1:
             self.opt = None
             return None
@@ -345,7 +347,7 @@ class AlignTable(CffiObject):
         if self.opt is None:
             return None
 
-        transcript = lib.stdpw_traceback(self.c_obj, self.opt)
+        transcript = lib.dptable_traceback(self.c_obj, self.opt)
         if transcript == ffi.NULL:
             return None
         return Transcript(c_obj=transcript)

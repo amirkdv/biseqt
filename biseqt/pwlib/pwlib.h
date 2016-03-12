@@ -1,3 +1,4 @@
+//FIXME docs
 /**
  * Indicates which of the pairwise alignment algorithms should be used, cf.
  * ::dptable.  There are two available variations of the standard dynamic
@@ -74,6 +75,7 @@ typedef struct {
  * Defines the skeleton of a pairwise alignment problem: two sequences and
  * their start/end of frame positions.
  */
+//FIXME make S_{min,max}_idx an intpair
 typedef struct {
   int* S; /**< The "from" sequence as an array of integers.*/
   int* T; /**< The "to" sequence as an array of integers.*/
@@ -88,6 +90,8 @@ typedef struct {
  * problem: a frame, alignment type, alignment parameters, and a band radius
  * (optional).
  */
+// FIXME we should have a single alnprob type (maybe call it alnparams?) and an
+// additional banded_params.
 typedef struct {
   alnframe *frame; /**< The skeleton of the DP table. */
   alnscores *scores; /**< The parameters defining an optimal solution.*/
@@ -101,8 +105,8 @@ typedef struct {
  */
 typedef struct {
   alnframe* frame; /**< The skeleton of the DP table. */
-  banded_alntype type; /**< The subtype of standard algorithms.*/
   alnscores* scores; /**< The scores for various alignment moves..*/
+  banded_alntype type; /**< The subtype of banded algorithms.*/
   int bradius; /**< The band radius, inclusive. */
   int ctrdiag; /**< The diagonal at the center of band (must be between `-|T|`
     and `+|S|`. */
@@ -139,7 +143,7 @@ typedef struct alnchoice {
 typedef struct {
   int i;
   int j;
-} gridcoord;
+} intpair;
 
 /**
  * A single cell of the dynamic programming table. Each cell has an array of
@@ -157,8 +161,9 @@ typedef struct {
  */
 typedef struct {
   dpcell** cells; /**< The DP table in (i,j) or (d,a) coordinates. */
-  int num_rows; /**< The number of rows in P. */
-  int num_cols; /**< The number of rows in P. */
+  int* row_lens; /**< Row lengths in the DP table; only applies to banded alignments. */
+  int num_rows; /**< The number of rows in the DP table. */
+  int num_cols; /**< The number of columns in the DP table. */
   alnmode mode; /**< Indicates which of standard or overlap alignment this is. */
   union {
     std_alnprob* std_prob; /**< The alignment problem for standard algorithms. */
@@ -186,6 +191,8 @@ typedef struct {
  * uniquely identified by two sequence IDs and a transcript.
  */
 typedef struct segment {
+  // FIXME S_id and T_id have no role here; keep it in python. This would
+  // disolve this struct and seedext.c shuffles transcripts back and forth.
   int S_id; /**< The identifier of the "from" sequence. */
   int T_id; /**<The identifier of the "to" sequence. */
   transcript* tx; /**< The transcript of the local alignment. */
@@ -193,20 +200,23 @@ typedef struct segment {
 
 int dptable_init(dptable* T);
 void dptable_free(dptable* T);
-gridcoord dptable_solve(dptable* T);
+intpair dptable_solve(dptable* T);
+transcript* dptable_traceback(dptable* T, intpair end);
 
 segment* extend(segment** segs, int num_segs, int* S, int* T, int S_len, int T_len,
   alnscores* scores, int window, int max_new_mins, double min_overlap_score, int debug);
 
-gridcoord stdpw_solve(dptable* T);
-gridcoord stdpw_find_optimal(dptable* T);
-transcript* stdpw_traceback(dptable* T, gridcoord end);
-
-gridcoord bandedpw_solve(dptable* T);
-gridcoord bandedpw_find_optimal(dptable* T);
-transcript* bandedpw_traceback(dptable* T, dpcell* end);
-
 // Internals
-int _alnchoice_B(dptable *T, int i, int j, alnchoice* choice);
-int _alnchoice_MS(dptable *T, int i, int j, alnchoice* choice);
-int _alnchoice_ID(dptable* T, int i, int j, alnchoice* choice, char op);
+int _alnchoice_B(dptable *T, intpair pos, alnchoice* choice);
+int _alnchoice_M(dptable *T, intpair pos, alnchoice* choice);
+int _alnchoice_I(dptable* T, intpair pos, alnchoice* choice);
+int _alnchoice_D(dptable* T, intpair pos, alnchoice* choice);
+intpair _std_find_optimal(dptable* T);
+intpair _banded_find_optimal(dptable* T);
+intpair _framedims(alnframe* frame);
+int _da_row_len(intpair framedims, int d);
+intpair _xy_from_da(int d, int a);
+intpair _da_from_xy(int x, int y);
+intpair _cellpos_from_xy(int x, int y, alnmode mode, int T_len);
+void _print_mem_usage();
+void _panick(char* message);

@@ -52,7 +52,7 @@ int extend_1d_once(segment* res, segment* seg,
   std_alnprob prob;
   alnframe frame;
   dptable table;
-  gridcoord opt;
+  intpair opt;
   std_alntype type;
   transcript* tx;
   int tx_opseq_len, seg_opseq_len;
@@ -92,7 +92,7 @@ int extend_1d_once(segment* res, segment* seg,
     failure = 1;
   }
 
-  tx = stdpw_traceback(&table, opt);
+  tx = dptable_traceback(&table, opt);
   if (tx == NULL) {
     failure = 1;
   }
