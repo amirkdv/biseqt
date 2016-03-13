@@ -7,22 +7,89 @@
 
 //FIXME docs
 
+int _dpos_from_d(alnprob* prob, int d) {
+  // dpos = d + r - d0
+  return d + prob->banded_params->radius - prob->banded_params->ctrdiag;
+}
 
-intpair _frame_dims(alnframe* frame) {
-  return (intpair) {
-    frame->S_range.j - frame->S_range.i,
-    frame->T_range.j - frame->T_range.i
-  };
+int _d_from_dpos(alnprob* prob, int dpos) {
+  // d = dpos - r + d0
+  return dpos - prob->banded_params->radius - prob->banded_params->ctrdiag;
+}
+
+int _table_init_dims(dptable* T) {
+  intpair g_end;
+  int xmax = T->prob->frame->S_range.j - T->prob->frame->S_range.i,
+      ymax = T->prob->frame->T_range.j - T->prob->frame->T_range.i;
+  int dmax, dmin, d, i;
+  switch (T->prob->mode) {
+    case STD_MODE:
+      T->num_rows = xmax + 1;
+      break;
+    case BANDED_MODE:
+      g_end = _da_from_xy(T->prob->frame->S_range.j, T->prob->frame->T_range.j);
+      dmax = T->prob->banded_params->ctrdiag + T->prob->banded_params->radius;
+      dmin = T->prob->banded_params->ctrdiag - T->prob->banded_params->radius;
+      if (dmax > xmax || dmin < - ymax || (
+            T->prob->banded_params->type == B_GLOBAL &&
+            (g_end.i > dmax || g_end.i < dmin)
+          )) {
+        // FIXME instead of this, reduce the band as necessary?
+        printf("Invalid band!\n");
+        return -1;
+      }
+      T->num_rows = 1 + 2 * T->prob->banded_params->radius;
+      break;
+    default:
+      _panick("Shouldn't have happened!");
+  }
+
+  // Caclculate row lengths:
+  T->row_lens = malloc(T->num_rows * sizeof(int));
+  if (T->row_lens == NULL) {
+    _panick("Failed to allocated memory (_table_init_dims()).");
+  }
+  for (i = 0; i < T->num_rows; i++) {
+    switch (T->prob->mode) {
+      case STD_MODE:
+        T->row_lens[i] = ymax + 1;
+        break;
+      case BANDED_MODE:
+        d = _d_from_dpos(T->prob, i);
+        T->row_lens[i] = 1 + (d > 0 ? 0 : d) + (xmax - d > ymax ? ymax : xmax - d);
+        printf("d=%d, L=%d\n", d, T->row_lens[i]);
+        break;
+      default:
+        _panick("Shouldn't have happened!");
+    }
+  }
+  return 0;
+}
+
+int _table_init_cells(dptable* T) {
+  int i, j;
+  T->cells = malloc(T->num_rows * sizeof(dpcell *));
+  if (T->cells == NULL) {
+    _panick("Failed to allocated memory (_table_init_dims()).");
+  }
+  for (i = 0; i < T->num_rows; i++) {
+    T->cells[i] = malloc(T->row_lens[i] * sizeof(dpcell));
+    if (T->cells[i] == NULL) {
+      _panick("Failed to allocated memory (_table_init_dims()).");
+    }
+    for (j = 0; j < T->row_lens[i]; j++) {
+      T->cells[i][j] = (dpcell) {.num_choices=0, .choices=NULL};
+    }
+  }
+  return 0;
 }
 
 bool _cellpos_valid(dptable* T, intpair pos) {
-  if (pos.i < 0 || pos.j < 0 || pos.i >= T->table_dims.i) {
-    return false;
-  }
-  if (T->prob->mode == STD_MODE && pos.j >= T->table_dims.j) {
-    return false;
-  }
-  if (T->prob->mode == BANDED_MODE && pos.j >= T->row_lens[pos.i]) {
+  if (pos.i < 0 ||
+      pos.j < 0 ||
+      pos.i >= T->num_rows ||
+      pos.j >= T->row_lens[pos.i]
+    ) {
     return false;
   }
   return true;
@@ -56,25 +123,63 @@ intpair _cellpos_from_xy(alnprob* prob, int x, int y) {
     return (intpair) {x, y};
   } else if (prob->mode == BANDED_MODE) {
     intpair pos = _da_from_xy(x, y);
-    return (intpair) {pos.i + prob->banded_params->radius - prob->banded_params->ctrdiag, pos.i};
+    return (intpair) {_dpos_from_d(prob, pos.i), pos.j};
   } else {
-    _panick("Unknown alignment mode given to _cellpos_from_xy()");
+    _panick("Unknown alignment mode.");
   }
-  // for the compiler:
-  return (intpair) {-1, -1};
+  return (intpair) {-1, -1}; // for the compiler
 }
 
 intpair _xy_from_cellpos(alnprob* prob, int i, int j) {
-  if (prob->mode == STD_MODE) {
-    return (intpair) {i, j};
-  } else if (prob->mode == BANDED_MODE) {
-    i += prob->banded_params->ctrdiag - prob->banded_params->radius;
-    return _xy_from_da(i, j);
-  } else {
-    _panick("Unknown alignment mode given to _cellpos_from_xy()");
+  switch (prob->mode) {
+    case STD_MODE:
+      return (intpair) {i, j};
+    case BANDED_MODE:
+      i += prob->banded_params->ctrdiag - prob->banded_params->radius;
+      return _xy_from_da(i, j);
+    default:
+      _panick("Unknown alignment mode.");
   }
-  // for the compiler:
-  return (intpair) {-1, -1};
+  return (intpair) {-1, -1}; // for the compiler
+}
+
+intpair _xlim(alnprob* prob) {
+  int dmin, dmax;
+  int S_len = prob->frame->S_range.j - prob->frame->S_range.i,
+      T_len = prob->frame->T_range.j - prob->frame->T_range.i;
+  switch (prob->mode) {
+    case STD_MODE:
+      return (intpair) {0, S_len + 1};
+    case BANDED_MODE:
+      dmax = prob->banded_params->ctrdiag + prob->banded_params->radius;
+      dmin = prob->banded_params->ctrdiag - prob->banded_params->radius;
+      return (intpair) {
+        dmin > 0 ? dmin : 0,
+        1 + (S_len > T_len + dmax ? T_len + dmax : S_len)
+      };
+    default:
+      _panick("Unknown alignment mode.");
+  }
+  return (intpair) {-1, -1}; // for the compiler
+}
+
+intpair _ylim(alnprob* prob, int x) {
+  int dmin, dmax;
+  int T_len = prob->frame->T_range.j - prob->frame->T_range.i;
+  switch (prob->mode) {
+    case STD_MODE:
+      return (intpair) {0, T_len + 1};
+    case BANDED_MODE:
+      dmax = prob->banded_params->ctrdiag + prob->banded_params->radius;
+      dmin = prob->banded_params->ctrdiag - prob->banded_params->radius;
+      return (intpair) {
+        x - dmax > 0 ? x - dmax : 0,
+        1 + (T_len > x - dmin ? x - dmin : T_len)
+      };
+    default:
+      _panick("Unknown alignment mode.");
+  }
+  return (intpair) {-1, -1}; // for the compiler
 }
 
 intpair _prev_cell_M(alnprob* prob, int i, int j) {
@@ -86,8 +191,7 @@ intpair _prev_cell_M(alnprob* prob, int i, int j) {
     default:
       _panick("Invalid alignment mode");
   }
-  // for the compiler:
-  return (intpair) {-1, -1};
+  return (intpair) {-1, -1}; // for the compiler
 }
 
 intpair _prev_cell_I(alnprob* prob, int i, int j) {
@@ -103,8 +207,7 @@ intpair _prev_cell_I(alnprob* prob, int i, int j) {
     default:
       _panick("Invalid alignment mode");
   }
-  // for the compiler:
-  return (intpair) {-1, -1};
+  return (intpair) {-1, -1}; // for the compiler
 }
 
 intpair _prev_cell_D(alnprob* prob, int i, int j) {
@@ -120,8 +223,7 @@ intpair _prev_cell_D(alnprob* prob, int i, int j) {
     default:
       _panick("Invalid alignment mode");
   }
-  // for the compiler:
-  return (intpair) {-1, -1};
+  return (intpair) {-1, -1}; // for the compiler
 }
 
 double _ge_score(alnprob* prob, intpair pos, char op) {
@@ -133,15 +235,6 @@ double _ge_score(alnprob* prob, intpair pos, char op) {
     return prob->scores->content_dependent_gap_scores[prob->frame->S_range.i + xy.i];
   }
   return prob->scores->content_dependent_gap_scores[prob->frame->T_range.i + xy.j];
-}
-
-
-/**
- * Gives the maximum possible value of `a` for a given shift in standard (d,a)
- * format.
- */
-int _da_row_len(intpair dims, int d) {
-  return 1 + (d > 0 ? 0 : d) + (dims.i - d > dims.j ? dims.j : dims.i - d);
 }
 
 /**
@@ -344,8 +437,8 @@ intpair _banded_find_optimal(dptable* T) {
   }
   else if (T->prob->banded_params->type == B_OVERLAP) {
     max = -INT_MAX;
-    for (i = 0; i < T->table_dims.i; i++){
-      j = T->row_lens[i];
+    for (i = 0; i < T->num_rows; i++){
+      j = T->row_lens[i] - 1;
       if (T->cells[i][j].num_choices == 0) {
         continue;
       }

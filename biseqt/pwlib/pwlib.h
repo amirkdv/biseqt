@@ -161,8 +161,8 @@ typedef struct {
  */
 typedef struct {
   dpcell** cells; /**< The DP table in (i,j) or (d,a) coordinates. */
-  int* row_lens; /**< Row lengths in the DP table; only applies to banded. */
-  intpair table_dims; /**< The height/width of the DP table in memory. */
+  int num_rows; /**< The height of the DP table in memory. */
+  int* row_lens; /**< Row lengths (width) in the DP table at each row. */
   alnprob* prob; /**< The alignment problem.*/
 } dptable;
 
@@ -187,7 +187,7 @@ typedef struct {
  */
 typedef struct segment {
   // FIXME S_id and T_id have no role here; keep it in python. This would
-  // disolve this struct and seedext.c shuffles transcripts back and forth.
+  // disolve this struct and mean that seedext.c shuffles transcripts only.
   int S_id; /**< The identifier of the "from" sequence. */
   int T_id; /**<The identifier of the "to" sequence. */
   transcript* tx; /**< The transcript of the local alignment. */
@@ -206,13 +206,22 @@ int _alnchoice_B(dptable *T, intpair pos, alnchoice* choice);
 int _alnchoice_M(dptable *T, intpair pos, alnchoice* choice);
 int _alnchoice_I(dptable* T, intpair pos, alnchoice* choice);
 int _alnchoice_D(dptable* T, intpair pos, alnchoice* choice);
+
 intpair _std_find_optimal(dptable* T);
 intpair _banded_find_optimal(dptable* T);
-intpair _frame_dims(alnframe* frame);
-int _da_row_len(intpair framedims, int d);
+
+int _table_init_dims(dptable* T);
+int _table_init_cells(dptable* T);
+
+intpair _xlim(alnprob* prob);
+intpair _ylim(alnprob* prob, int x);
+
+int _dpos_from_d(alnprob* prob, int d);
+int _d_from_dpos(alnprob* prob, int dpos);
 intpair _xy_from_da(int d, int a);
 intpair _da_from_xy(int x, int y);
 intpair _cellpos_from_xy(alnprob* prob, int x, int y);
 intpair _xy_from_cellpos(alnprob* prob, int i, int j);
+
 void _print_mem_usage();
 void _panick(char* message);

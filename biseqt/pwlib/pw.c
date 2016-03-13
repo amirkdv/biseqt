@@ -24,39 +24,9 @@
  *
  * @return 0 if successful and -1 if an error occurs.
  */
-// FIXME move this and the next one to pw.c
 int dptable_init(dptable* T) {
-  int i, j;
-  intpair frame_dims = _frame_dims(T->prob->frame);
-  switch (T->prob->mode) {
-    case STD_MODE:
-      T->table_dims = (intpair) {frame_dims.i + 1, frame_dims.j + 1};
-      break;
-    case BANDED_MODE:
-      T->table_dims = (intpair) {
-        1 + 2 * T->prob->banded_params->radius,
-        1 + (frame_dims.i < frame_dims.j ? frame_dims.i : frame_dims.j)
-      };
-      T->row_lens = malloc(T->table_dims.i * sizeof(int));
-      for (i = 0; i < T->table_dims.i; i++) {
-        T->row_lens[i] = _da_row_len(frame_dims, i + T->prob->banded_params->radius);
-      }
-      break;
-  }
-  T->cells = malloc(T->table_dims.i * sizeof(dpcell *));
-  if (T->cells == NULL) {
-    printf("Failed to allocate memory (`dptable_init()`).\n");
+  if (_table_init_dims(T) == -1 || _table_init_cells(T) == -1) {
     return -1;
-  }
-  for (i = 0; i < T->table_dims.i; i++) {
-    T->cells[i] = malloc(T->table_dims.j * sizeof(dpcell));
-    if (T->cells[i] == NULL) {
-      printf("Failed to allocate memory (`dptable_init()`).\n");
-      return -1;
-    }
-    for (j = 0; j < T->table_dims.j; j++) {
-      T->cells[i][j] = (dpcell) {.num_choices=0, .choices=NULL};
-    }
   }
   return 0;
 }
@@ -71,13 +41,16 @@ void dptable_free(dptable* T) {
     return;
   }
   int i,j;
-  for (i = 0; i < T->table_dims.i; i++) {
-    for (j = 0; j < T->table_dims.j; j++) {
+  for (i = 0; i < T->num_rows; i++) {
+    for (j = 0; j < T->row_lens[i]; j++) {
       if (T->cells[i][j].num_choices > 0) {
         free(T->cells[i][j].choices);
       }
     }
     free(T->cells[i]);
+  }
+  if (T->prob->mode == BANDED_MODE) {
+    free(T->row_lens);
   }
   free(T->cells);
 }
@@ -97,19 +70,19 @@ void dptable_free(dptable* T) {
 intpair dptable_solve(dptable* T) {
   int num_choices, num_max_scores;
   intpair cellpos; // dpcell position in the table, could be either xy/da
-  int i,j,k;
+  int x, y, k;
   int *max_score_choices = NULL;
   double max_score;
   alnchoice *choices = NULL;
-  intpair frame_dims = _frame_dims(T->prob->frame);
-
+  intpair ylim, xlim = _xlim(T->prob);
   // It's simpler to always populate the table in the natural order of xy
   // coordinates (note that order of dependencies is obviously statisfied in any
   // coordinate system).
-  for (i = 0; i <= frame_dims.i; i++) {
-    for (j = 0; j <= frame_dims.j; j++) {
-      // the coordinates of our cell in the coordinate system in use: xy or da.
-      cellpos = _cellpos_from_xy(T->prob, i, j);
+  for (x = xlim.i; x < xlim.j; x++) {
+    ylim = _ylim(T->prob, x);
+    for (y = ylim.i; y < ylim.j; y++) {
+      // the coordinates of our cell in the dynamic programming table.
+      cellpos = _cellpos_from_xy(T->prob, x, y);
       if (choices != NULL) {
         free(choices);
       }
@@ -119,9 +92,9 @@ intpair dptable_solve(dptable* T) {
       // Allocate for all 4 possible choices (B,M/S,I,D)
       choices = malloc(4 * sizeof(alnchoice));
       if (choices == NULL) {
-        printf("Failed to allocate memory (`dptable_solve()`).\n");
-        return (intpair){-1, -1};
+        _panick("Failed to allocate memory.");
       }
+
       // Find all possible moves: _alnchoice_X functions populate the choice*
       // they're given and return 0 if move is allowed.
       num_choices = 0;
@@ -131,15 +104,14 @@ intpair dptable_solve(dptable* T) {
       num_choices += (_alnchoice_M(T, cellpos, &choices[num_choices]) == 0) ? 1 : 0;
 
       if (num_choices == 0) {
-        T->cells[i][j].num_choices = 0;
+        T->cells[cellpos.i][cellpos.j].num_choices = 0;
         continue;
       }
 
       // Find the highest scoring alternatives
       max_score_choices = malloc(num_choices * sizeof(int));
       if (max_score_choices == NULL) {
-        printf("Failed to allocate memory (`dptable_solve()`).\n");
-        return (intpair){-1, -1};
+        _panick("Failed to allocate memory.");
       }
       num_max_scores = 0;
       max_score = choices[0].score;
@@ -157,8 +129,7 @@ intpair dptable_solve(dptable* T) {
       T->cells[cellpos.i][cellpos.j].num_choices = num_max_scores;
       T->cells[cellpos.i][cellpos.j].choices = malloc(num_max_scores * sizeof(alnchoice));
       if (T->cells[cellpos.i][cellpos.j].choices == NULL) {
-        printf("Failed to allocate memory (`dptable_solve()`).\n");
-        return (intpair){-1, -1};
+        _panick("Failed to allocate memory.");
       }
       for (k = 0; k < num_max_scores; k++) {
         T->cells[cellpos.i][cellpos.j].choices[k] = choices[max_score_choices[k]];
@@ -187,6 +158,9 @@ intpair dptable_solve(dptable* T) {
 transcript* dptable_traceback(dptable* T, intpair end) {
   char *opseq;
   transcript* tx = malloc(sizeof(transcript));
+  if (tx == NULL) {
+    _panick("Failed to allocate memory.");
+  }
   int len = end.i + end.j + 1, // FIXME not unnecessarily too big?
       pos = len - 1;
   alnchoice* cur = &(T->cells[end.i][end.j].choices[0]);
@@ -208,8 +182,7 @@ transcript* dptable_traceback(dptable* T, intpair end) {
   len = len - pos - 1;
   opseq = malloc(len + 1);
   if (opseq == NULL) {
-    printf("Failed to allocate memory (`tracback()`).\n");
-    return NULL;
+    _panick("Failed to allocate memory.");
   }
   strncpy(opseq, rev_opseq + pos, len);
   // strncpy does not null terminate:

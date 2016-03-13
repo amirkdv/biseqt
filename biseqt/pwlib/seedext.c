@@ -74,7 +74,7 @@ int extend_1d_once(segment* res, segment* seg,
   frame = (alnframe) {.S=S, .T=T, .S_range=S_range, .T_range=T_range};
   std_alnparams params = (std_alnparams) {.type=type};
   prob = (alnprob) {.frame=&frame, .scores=scores, .mode=STD_MODE, .std_params=&params};
-  table = (dptable) {.prob=&prob, .cells=NULL, .row_lens=NULL, .table_dims=(intpair){-1,-1}};
+  table = (dptable) {.prob=&prob, .cells=NULL, .row_lens=NULL, .num_rows=-1};
   if (dptable_init(&table) == -1) {
     return -1;
   }

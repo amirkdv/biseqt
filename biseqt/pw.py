@@ -279,22 +279,23 @@ class AlignTable(CffiObject):
 
         self.frame, self.scores, self.alntype = frame, scores, alntype
         self.c_alnparams = ffi.new('std_alnparams*', {'type': alntype});
+        #self.c_alnparams = ffi.new('banded_alnparams*', {'type': B_GLOBAL, 'radius': 3, 'ctrdiag': 0});
         self.c_alnprob = ffi.new('alnprob*', {
             'frame': frame.c_obj,
             'scores': scores.c_obj,
             'mode': STD_MODE,
             'std_params': self.c_alnparams,
+            #'mode': BANDED_MODE,
+            #'banded_params': self.c_alnparams,
         })
         self.c_obj = ffi.new('dptable*', {
             'prob': self.c_alnprob,
             'cells': ffi.NULL,
-            'table_dims': (-1, -1),
+            'num_rows': -1,
             'row_lens': ffi.NULL,
         })
 
-
     def __enter__(self):
-
         if lib.dptable_init(self.c_obj) == -1:
             raise('Got -1 from pwlib.dptable_init().')
         return self
@@ -328,8 +329,8 @@ class AlignTable(CffiObject):
         if print_dp_table:
             # FIXME this is broken and needs checking for banded
             mat = self.c_obj.cells
-            for i in range(self.c_obj.table_dims.i):
-                print [round(mat[i][j].choices[0].score, 2) for j in range(self.c_obj.table_dims.j)]
+            for i in range(self.c_obj.num_rows):
+                print [round(mat[i][j].num_choices, 2) for j in range(self.c_obj.row_lens[i])]
         if self.opt.i == -1 or self.opt.j == -1:
             self.opt = None
             return None
