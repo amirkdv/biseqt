@@ -279,14 +279,14 @@ class AlignTable(CffiObject):
 
         self.frame, self.scores, self.alntype = frame, scores, alntype
         self.c_alnparams = ffi.new('std_alnparams*', {'type': alntype});
-        #self.c_alnparams = ffi.new('banded_alnparams*', {'type': B_GLOBAL, 'radius': 3, 'ctrdiag': 0});
+        self.c_alnparams = ffi.new('banded_alnparams*', {'type': B_OVERLAP, 'dmax': 1200, 'dmin': 800});
         self.c_alnprob = ffi.new('alnprob*', {
             'frame': frame.c_obj,
             'scores': scores.c_obj,
-            'mode': STD_MODE,
-            'std_params': self.c_alnparams,
-            #'mode': BANDED_MODE,
-            #'banded_params': self.c_alnparams,
+            #'mode': STD_MODE,
+            #'std_params': self.c_alnparams,
+            'mode': BANDED_MODE,
+            'banded_params': self.c_alnparams,
         })
         self.c_obj = ffi.new('dptable*', {
             'prob': self.c_alnprob,
@@ -297,7 +297,7 @@ class AlignTable(CffiObject):
 
     def __enter__(self):
         if lib.dptable_init(self.c_obj) == -1:
-            raise('Got -1 from pwlib.dptable_init().')
+            raise Exception('Failed to initialize the DP table.')
         return self
 
     def __exit__(self, *args):
@@ -327,7 +327,6 @@ class AlignTable(CffiObject):
         """
         self.opt = lib.dptable_solve(self.c_obj)
         if print_dp_table:
-            # FIXME this is broken and needs checking for banded
             mat = self.c_obj.cells
             for i in range(self.c_obj.num_rows):
                 print [round(mat[i][j].num_choices, 2) for j in range(self.c_obj.row_lens[i])]

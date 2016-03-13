@@ -2,7 +2,7 @@
 from .. import pw, seq
 
 params = {
-    'length': 500,
+    'length': 50000,
     'go_prob': 0.1, # gap open score
     'ge_prob': 0.3, # gap extend score
     'show_dp':  0, # whether to print the DP table
@@ -29,6 +29,10 @@ print 'Pr(go) = %.2f, Pr(ge) = %.2f +----> Score(go)=%.2f, Score(ge)=%.2f' % \
 
 S = A.randseq(params['length'])
 T, m_opseq = S.mutate(**params)
+T = seq.Sequence(T[1000:2000], A)
+#print S
+#print
+#print T
 C = pw.AlignScores(subst_scores=subst_scores, alphabet=A,
     go_score=go_score, ge_score=ge_score)
 F = pw.AlignFrame(S, T)
@@ -39,6 +43,7 @@ with pw.AlignTable(F, C, alntype=params['alntype']) as P:
 print '\n--> optimal alignment:\n%s\n' % str(transcript)
 if transcript:
     transcript.pretty_print(S, T)
+import sys; sys.exit(0);
 
 m_transcript = pw.Transcript(S_idx=0, T_idx=0, score=P.score(m_opseq), opseq=m_opseq)
 print '\n--> mutation transcript:\n%s\n' % str(m_transcript)

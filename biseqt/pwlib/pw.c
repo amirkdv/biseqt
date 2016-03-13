@@ -25,10 +25,21 @@
  * @return 0 if successful and -1 if an error occurs.
  */
 int dptable_init(dptable* T) {
-  if (_table_init_dims(T) == -1 || _table_init_cells(T) == -1) {
-    return -1;
+  switch(T->prob->mode) {
+    case STD_MODE:
+      if (_std_table_init_dims(T) == -1) {
+        return -1;
+      }
+      break;
+    case BANDED_MODE:
+      if (_banded_table_init_dims(T) == -1) {
+        return -1;
+      }
+      break;
+    default:
+      _panick("Shouldn't have happened!");
   }
-  return 0;
+  return _table_init_cells(T);
 }
 
 /**
@@ -82,7 +93,6 @@ intpair dptable_solve(dptable* T) {
     ylim = _ylim(T->prob, x);
     for (y = ylim.i; y < ylim.j; y++) {
       // the coordinates of our cell in the dynamic programming table.
-      cellpos = _cellpos_from_xy(T->prob, x, y);
       if (choices != NULL) {
         free(choices);
       }
@@ -98,11 +108,12 @@ intpair dptable_solve(dptable* T) {
       // Find all possible moves: _alnchoice_X functions populate the choice*
       // they're given and return 0 if move is allowed.
       num_choices = 0;
-      num_choices += (_alnchoice_B(T, cellpos, &choices[num_choices]) == 0) ? 1 : 0;
-      num_choices += (_alnchoice_D(T, cellpos, &choices[num_choices]) == 0) ? 1 : 0;
-      num_choices += (_alnchoice_I(T, cellpos, &choices[num_choices]) == 0) ? 1 : 0;
-      num_choices += (_alnchoice_M(T, cellpos, &choices[num_choices]) == 0) ? 1 : 0;
+      num_choices += (_alnchoice_B(T, x, y, &choices[num_choices]) == 0) ? 1 : 0;
+      num_choices += (_alnchoice_D(T, x, y, &choices[num_choices]) == 0) ? 1 : 0;
+      num_choices += (_alnchoice_I(T, x, y, &choices[num_choices]) == 0) ? 1 : 0;
+      num_choices += (_alnchoice_M(T, x, y, &choices[num_choices]) == 0) ? 1 : 0;
 
+      cellpos = _cellpos_from_xy(T->prob, x, y);
       if (num_choices == 0) {
         T->cells[cellpos.i][cellpos.j].num_choices = 0;
         continue;
@@ -161,17 +172,17 @@ transcript* dptable_traceback(dptable* T, intpair end) {
   if (tx == NULL) {
     _panick("Failed to allocate memory.");
   }
-  int len = end.i + end.j + 1, // FIXME not unnecessarily too big?
+  intpair xy = _xy_from_cellpos(T->prob, end.i, end.j);
+  int len = xy.i + xy.j + 1, // FIXME not unnecessarily too big?
       pos = len - 1;
   alnchoice* cur = &(T->cells[end.i][end.j].choices[0]);
-  intpair starts = _xy_from_cellpos(T->prob, end.i, end.j);
   // We write ops to rev_opseq backwards starting from the end (position `len')
   char rev_opseq[len];
   while (cur->base != NULL) {
     pos--;
     rev_opseq[pos] = cur->op;
-    starts.i -= (cur->op == 'I' ? 0 : 1);
-    starts.j -= (cur->op == 'D' ? 0 : 1);
+    xy.i -= (cur->op == 'I' ? 0 : 1);
+    xy.j -= (cur->op == 'D' ? 0 : 1);
     cur = cur->base;
   }
   if (pos == len - 1) {
@@ -188,8 +199,8 @@ transcript* dptable_traceback(dptable* T, intpair end) {
   // strncpy does not null terminate:
   opseq[len] = '\0';
 
-  tx->S_idx = starts.i + T->prob->frame->S_range.i;
-  tx->T_idx = starts.j + T->prob->frame->T_range.i;
+  tx->S_idx = xy.i + T->prob->frame->S_range.i;
+  tx->T_idx = xy.j + T->prob->frame->T_range.i;
   tx->score=T->cells[end.i][end.j].choices[0].score;
   tx->opseq=opseq;
   return tx;

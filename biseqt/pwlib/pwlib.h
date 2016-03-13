@@ -17,10 +17,6 @@ typedef struct {
  * lengths.  Second, the "banded" mode, in which both time and space complexity
  * are linear in sequence lengths (in fact, the shorter of the sequence
  * lengths). This mode is not well-posed for local alignments.
- *
- * @note Any of these alignments can be made banded using `radius` of
- * ::alnscores. This, however, only reduces the time complexity but not the
- * memory complexity.
 */
 typedef enum {
   STD_MODE, /**< Standard alignment algorithm.*/
@@ -30,10 +26,6 @@ typedef enum {
 /**
  * Defines the boundary conditions (i.e where an alignment can start and
  * where it can end) on the dynamic programming table for standard alignments.
- *
- * @note Any of these alignments can be made banded using `radius` of
- * ::alnscores. This, however, only reduces the time complexity but not the
- * memory complexity.
 */
 typedef enum {
   GLOBAL, /**< Solve for optimal global alignments, equivalent to the
@@ -101,13 +93,12 @@ typedef struct {
 
 /**
  * Groups together all parameters of a banded pairwise alignment problem:
- * alignment type, scores, starting diagonal, and a band radius.
+ * alignment type, scores, and bounding diagonals.
  */
 typedef struct {
   banded_alntype type; /**< The subtype of banded algorithms.*/
-  int radius; /**< The band radius, inclusive. */
-  int ctrdiag; /**< The diagonal at the center of band (must be between `-|T|`
-    and `+|S|`. */
+  int dmin; /**< The upper diagonal bounding the band. */
+  int dmax; /**< The lower diagonal bounding the band. */
 } banded_alnparams;
 
 typedef struct {
@@ -202,24 +193,21 @@ segment* extend(segment** segs, int num_segs, int* S, int* T, int S_len, int T_l
   alnscores* scores, int window, int max_new_mins, double min_overlap_score, int debug);
 
 // Internals
-int _alnchoice_B(dptable *T, intpair pos, alnchoice* choice);
-int _alnchoice_M(dptable *T, intpair pos, alnchoice* choice);
-int _alnchoice_I(dptable* T, intpair pos, alnchoice* choice);
-int _alnchoice_D(dptable* T, intpair pos, alnchoice* choice);
+int _alnchoice_B(dptable *T, int x, int y, alnchoice* choice);
+int _alnchoice_M(dptable *T, int x, int y, alnchoice* choice);
+int _alnchoice_I(dptable* T, int x, int y, alnchoice* choice);
+int _alnchoice_D(dptable* T, int x, int y, alnchoice* choice);
 
 intpair _std_find_optimal(dptable* T);
 intpair _banded_find_optimal(dptable* T);
 
-int _table_init_dims(dptable* T);
+int _std_table_init_dims(dptable* T);
+int _banded_table_init_dims(dptable* T);
 int _table_init_cells(dptable* T);
 
 intpair _xlim(alnprob* prob);
 intpair _ylim(alnprob* prob, int x);
 
-int _dpos_from_d(alnprob* prob, int d);
-int _d_from_dpos(alnprob* prob, int dpos);
-intpair _xy_from_da(int d, int a);
-intpair _da_from_xy(int x, int y);
 intpair _cellpos_from_xy(alnprob* prob, int x, int y);
 intpair _xy_from_cellpos(alnprob* prob, int i, int j);
 

@@ -6,61 +6,59 @@
 #include "pwlib.h"
 
 //FIXME docs
-
-int _dpos_from_d(alnprob* prob, int d) {
-  // dpos = d + r - d0
-  return d + prob->banded_params->radius - prob->banded_params->ctrdiag;
-}
-
-int _d_from_dpos(alnprob* prob, int dpos) {
-  // d = dpos - r + d0
-  return dpos - prob->banded_params->radius - prob->banded_params->ctrdiag;
-}
-
-int _table_init_dims(dptable* T) {
-  intpair g_end;
+//
+int _std_table_init_dims(dptable* T) {
   int xmax = T->prob->frame->S_range.j - T->prob->frame->S_range.i,
       ymax = T->prob->frame->T_range.j - T->prob->frame->T_range.i;
-  int dmax, dmin, d, i;
-  switch (T->prob->mode) {
-    case STD_MODE:
-      T->num_rows = xmax + 1;
-      break;
-    case BANDED_MODE:
-      g_end = _da_from_xy(T->prob->frame->S_range.j, T->prob->frame->T_range.j);
-      dmax = T->prob->banded_params->ctrdiag + T->prob->banded_params->radius;
-      dmin = T->prob->banded_params->ctrdiag - T->prob->banded_params->radius;
-      if (dmax > xmax || dmin < - ymax || (
-            T->prob->banded_params->type == B_GLOBAL &&
-            (g_end.i > dmax || g_end.i < dmin)
-          )) {
-        // FIXME instead of this, reduce the band as necessary?
-        printf("Invalid band!\n");
-        return -1;
-      }
-      T->num_rows = 1 + 2 * T->prob->banded_params->radius;
-      break;
-    default:
-      _panick("Shouldn't have happened!");
-  }
+  int i;
+  T->num_rows = xmax + 1;
 
   // Caclculate row lengths:
   T->row_lens = malloc(T->num_rows * sizeof(int));
   if (T->row_lens == NULL) {
-    _panick("Failed to allocated memory (_table_init_dims()).");
+    _panick("Failed to allocated memory.");
   }
   for (i = 0; i < T->num_rows; i++) {
-    switch (T->prob->mode) {
-      case STD_MODE:
-        T->row_lens[i] = ymax + 1;
-        break;
-      case BANDED_MODE:
-        d = _d_from_dpos(T->prob, i);
-        T->row_lens[i] = 1 + (d > 0 ? 0 : d) + (xmax - d > ymax ? ymax : xmax - d);
-        printf("d=%d, L=%d\n", d, T->row_lens[i]);
-        break;
-      default:
-        _panick("Shouldn't have happened!");
+    T->row_lens[i] = ymax + 1;
+  }
+  return 0;
+}
+
+int _banded_table_init_dims(dptable* T) {
+  int xmax = T->prob->frame->S_range.j - T->prob->frame->S_range.i,
+      ymax = T->prob->frame->T_range.j - T->prob->frame->T_range.i,
+      dend = xmax - ymax,
+      dmax = T->prob->banded_params->dmax,
+      dmin = T->prob->banded_params->dmin,
+      d, i;
+  if (dmax > xmax || dmin < -ymax) {
+    dmax = (dmax > xmax ? xmax : dmax);
+    dmin = (dmin < -ymax ? -ymax: dmin);
+    printf("Band [%d, %d] exceeds table limits, reduced it to [%d, %d].\n",
+      T->prob->banded_params->dmin, T->prob->banded_params->dmax, dmin, dmax);
+    T->prob->banded_params->dmax = dmax;
+    T->prob->banded_params->dmin = dmin;
+  }
+  // in global mode, make sure the end points are in band:
+  if (T->prob->banded_params->type == B_GLOBAL &&
+      (dend > dmax || dend < dmin || dmax * dmin > 0)
+    ){
+    printf("End points not within band for global alignment!\n");
+    return -1;
+  }
+  T->num_rows = 1 + dmax - dmin;
+
+  // Caclculate row lengths:
+  T->row_lens = malloc(T->num_rows * sizeof(int));
+  if (T->row_lens == NULL) {
+    _panick("Failed to allocated memory.");
+  }
+  for (i = 0; i < T->num_rows; i++) {
+    // the actual shift is dmin + i since i is the adjusted to [0, dmax-dmin].
+    d = dmin + i;
+    T->row_lens[i] = 1 + (d > 0 ? 0 : d) + (xmax - d > ymax ? ymax : xmax - d);
+    if (T->row_lens[i] <= 0) {
+      _panick("This shouldn't have happened: row length is negative!");
     }
   }
   return 0;
@@ -70,12 +68,12 @@ int _table_init_cells(dptable* T) {
   int i, j;
   T->cells = malloc(T->num_rows * sizeof(dpcell *));
   if (T->cells == NULL) {
-    _panick("Failed to allocated memory (_table_init_dims()).");
+    _panick("Failed to allocated memory.");
   }
   for (i = 0; i < T->num_rows; i++) {
     T->cells[i] = malloc(T->row_lens[i] * sizeof(dpcell));
     if (T->cells[i] == NULL) {
-      _panick("Failed to allocated memory (_table_init_dims()).");
+      _panick("Failed to allocated memoryx.");
     }
     for (j = 0; j < T->row_lens[i]; j++) {
       T->cells[i][j] = (dpcell) {.num_choices=0, .choices=NULL};
@@ -95,35 +93,13 @@ bool _cellpos_valid(dptable* T, intpair pos) {
   return true;
 }
 
-
-/**
- * Converts the coordinates of a cell in the dynamic programming table from
- * the (d,a) system to the (x,y) system.
- *
- * Note: the first coordinate (d) is expected to be in the correct frame (not
- * adjusted to be positive for memory access).
- */
-intpair _da_from_xy(int x, int y) {
-  return (intpair) {x - y, x < y ? x : y};
-}
-
-/**
- * Converts the coordinates of a cell in the dynamic programming table from
- * the (x,y) system to the (d,a) system.
- *
- * Note: the first coordinate (d) must be adjusted based on band radius before
- * being used to access the dynamic programming table.
- */
-intpair _xy_from_da(int d, int a) {
-  return (intpair) {a + (d > 0 ? 0 : d), a - (d > 0 ? d : 0)};
-}
-
 intpair _cellpos_from_xy(alnprob* prob, int x, int y) {
   if (prob->mode == STD_MODE) {
     return (intpair) {x, y};
   } else if (prob->mode == BANDED_MODE) {
-    intpair pos = _da_from_xy(x, y);
-    return (intpair) {_dpos_from_d(prob, pos.i), pos.j};
+    intpair pos = (intpair) {x - y, x < y ? x : y};
+    // pos.i is the actual d, we want it adjusted to [0, dmax-dmin].
+    return (intpair) {pos.i - prob->banded_params->dmin, pos.j};
   } else {
     _panick("Unknown alignment mode.");
   }
@@ -135,8 +111,11 @@ intpair _xy_from_cellpos(alnprob* prob, int i, int j) {
     case STD_MODE:
       return (intpair) {i, j};
     case BANDED_MODE:
-      i += prob->banded_params->ctrdiag - prob->banded_params->radius;
-      return _xy_from_da(i, j);
+      // i is the adjusted d and j is a:
+      i += prob->banded_params->dmin;
+      // is is now the actual d and the formula is:
+      // (x,y) = (a+max(d,0), a-min(d,0))
+      return (intpair) {j + (i > 0 ? i : 0), j - (i > 0 ? 0 : i)};
     default:
       _panick("Unknown alignment mode.");
   }
@@ -151,8 +130,8 @@ intpair _xlim(alnprob* prob) {
     case STD_MODE:
       return (intpair) {0, S_len + 1};
     case BANDED_MODE:
-      dmax = prob->banded_params->ctrdiag + prob->banded_params->radius;
-      dmin = prob->banded_params->ctrdiag - prob->banded_params->radius;
+      dmin = prob->banded_params->dmin;
+      dmax = prob->banded_params->dmax;
       return (intpair) {
         dmin > 0 ? dmin : 0,
         1 + (S_len > T_len + dmax ? T_len + dmax : S_len)
@@ -170,8 +149,8 @@ intpair _ylim(alnprob* prob, int x) {
     case STD_MODE:
       return (intpair) {0, T_len + 1};
     case BANDED_MODE:
-      dmax = prob->banded_params->ctrdiag + prob->banded_params->radius;
-      dmin = prob->banded_params->ctrdiag - prob->banded_params->radius;
+      dmin = prob->banded_params->dmin;
+      dmax = prob->banded_params->dmax;
       return (intpair) {
         x - dmax > 0 ? x - dmax : 0,
         1 + (T_len > x - dmin ? x - dmin : T_len)
@@ -182,59 +161,14 @@ intpair _ylim(alnprob* prob, int x) {
   return (intpair) {-1, -1}; // for the compiler
 }
 
-intpair _prev_cell_M(alnprob* prob, int i, int j) {
-  switch (prob->mode) {
-    case STD_MODE:
-      return (intpair) {i - 1, j - 1};
-    case BANDED_MODE:
-      return (intpair) {i, j - 1};
-    default:
-      _panick("Invalid alignment mode");
-  }
-  return (intpair) {-1, -1}; // for the compiler
-}
-
-intpair _prev_cell_I(alnprob* prob, int i, int j) {
-  switch (prob->mode) {
-    case STD_MODE:
-      return (intpair) {i, j - 1};
-    case BANDED_MODE:
-      if (j > prob->banded_params->radius) {
-        return (intpair) {i + 1, j};
-      } else {
-        return (intpair) {i + 1, j - 1};
-      }
-    default:
-      _panick("Invalid alignment mode");
-  }
-  return (intpair) {-1, -1}; // for the compiler
-}
-
-intpair _prev_cell_D(alnprob* prob, int i, int j) {
-  switch (prob->mode) {
-    case STD_MODE:
-      return (intpair) {i - 1, j};
-    case BANDED_MODE:
-      if (j < prob->banded_params->radius) {
-        return (intpair) {i - 1, j};
-      } else {
-        return (intpair) {i - 1, j - 1};
-      }
-    default:
-      _panick("Invalid alignment mode");
-  }
-  return (intpair) {-1, -1}; // for the compiler
-}
-
-double _ge_score(alnprob* prob, intpair pos, char op) {
+double _ge_score(alnprob* prob, int x, int y, char op) {
   if (prob->scores->content_dependent_gap_scores == NULL) {
     return prob->scores->gap_extend_score;
   }
-  intpair xy = _xy_from_cellpos(prob, pos.i, pos.j);
   if (op == 'D') {
-    return prob->scores->content_dependent_gap_scores[prob->frame->S_range.i + xy.i];
+    return prob->scores->content_dependent_gap_scores[prob->frame->S_range.i + x];
   }
-  return prob->scores->content_dependent_gap_scores[prob->frame->T_range.i + xy.j];
+  return prob->scores->content_dependent_gap_scores[prob->frame->T_range.i + y];
 }
 
 /**
@@ -243,34 +177,40 @@ double _ge_score(alnprob* prob, intpair pos, char op) {
  *
  * @return 0 if choice successfully built, -1 if choice not possible.
  */
-int _alnchoice_B(dptable *T, intpair pos, alnchoice* choice) {
-  // return -1 if the current cell is not elligible for a B:
+int _alnchoice_B(dptable *T, int x, int y, alnchoice* choice) {
   std_alntype std_type;
+  banded_alntype banded_type;
+  intpair cellpos;
   switch (T->prob->mode) {
     case STD_MODE:
       std_type = T->prob->std_params->type;
-      if (pos.i == 0 && pos.j == 0) {
+      // the origin is always allowed as a start position:
+      if (x == 0 && y == 0) {
         break;
       }
+      // local and end-anchored alignments can start anywhere:
       if (std_type == LOCAL || std_type == END_ANCHORED) {
         break;
       }
-      if (std_type == OVERLAP && (pos.i == 0 || pos.j == 0)) {
+      // overlap and end-anchored overlap alignments must start on the edges:
+      if ((std_type == OVERLAP || std_type == END_ANCHORED_OVERLAP) &&
+          (x == 0 || y == 0)) {
         break;
       }
-      if (std_type == END_ANCHORED_OVERLAP && (pos.i == 0 || pos.j == 0)) {
-        break;
-      }
-      // not elligible:
+      // B not allowed otherwise:
       return -1;
     case BANDED_MODE:
-      if (pos.i == 0 && pos.j == 0) {
+      cellpos = _cellpos_from_xy(T->prob, x, y);
+      banded_type = T->prob->banded_params->type;
+      // global alignments must start at the origin:
+      if (banded_type == B_GLOBAL && x == 0 && y == 0) {
         break;
       }
-      if (T->prob->banded_params->type == B_OVERLAP && pos.j == 0) {
+      // overlap alignments can start anywhere with a = 0
+      if (banded_type == B_OVERLAP && cellpos.j == 0) {
         break;
       }
-      // not elligible:
+      // B not allowed otherwise:
       return -1;
     default:
       _panick("Invalid alignment mode");
@@ -289,20 +229,19 @@ int _alnchoice_B(dptable *T, intpair pos, alnchoice* choice) {
  *
  * @return 0 if choice successfully built, -1 if choice not possible.
  */
-int _alnchoice_M(dptable *T, intpair pos, alnchoice* choice) {
+int _alnchoice_M(dptable *T, int x, int y, alnchoice* choice) {
   intpair chars; // the indices of characters in question of S and T,
   double score;
   alnframe* frame = T->prob->frame;
-  intpair xy = _xy_from_cellpos(T->prob, pos.i, pos.j);
-  intpair prev = _prev_cell_M(T->prob, pos.i, pos.j);
+  intpair prev = _cellpos_from_xy(T->prob, x-1, y-1);
 
   if (!_cellpos_valid(T, prev) || T->cells[prev.i][prev.j].num_choices < 1) {
     return -1;
   }
   // pos is guaranteed to be in xy-system now:
   chars = (intpair) {
-    frame->S[frame->S_range.i + xy.i - 1],
-    frame->T[frame->T_range.i + xy.j - 1]
+    frame->S[frame->S_range.i + x - 1],
+    frame->T[frame->T_range.i + y - 1]
   };
 
   score = T->prob->scores->subst_scores[chars.i][chars.j];
@@ -313,29 +252,26 @@ int _alnchoice_M(dptable *T, intpair pos, alnchoice* choice) {
   return 0;
 }
 
-int _alnchoice_ID(dptable* T, intpair pos, alnchoice* choice, char op) {
+int _alnchoice_ID(dptable* T, int x, int y, alnchoice* choice, char op) {
   int base_idx;
   double score, max_score, ge_score;
   intpair prev;
 
   switch (op) {
     case 'I':
-      prev = _prev_cell_I(T->prob, pos.i, pos.j);
+      prev = _cellpos_from_xy(T->prob, x, y-1);
       break;
     case 'D':
-      prev = _prev_cell_D(T->prob, pos.i, pos.j);
+      prev = _cellpos_from_xy(T->prob, x-1, y);
       break;
     default:
       _panick("Unknown op given to _alnchoice_ID\n");
   }
-  if (!_cellpos_valid(T, prev)) {
-    return -1;
-  }
-  if (T->cells[prev.i][prev.j].num_choices <= 0) {
+  if (!_cellpos_valid(T, prev) || T->cells[prev.i][prev.j].num_choices < 1) {
     return -1;
   }
 
-  ge_score = _ge_score(T->prob, pos, op);
+  ge_score = _ge_score(T->prob, x, y, op);
 
   base_idx = 0;
   max_score = -INT_MAX;
@@ -355,12 +291,12 @@ int _alnchoice_ID(dptable* T, intpair pos, alnchoice* choice, char op) {
   return 0;
 }
 
-int _alnchoice_D(dptable* T, intpair pos, alnchoice* choice) {
-  return _alnchoice_ID(T, pos, choice, 'D');
+int _alnchoice_D(dptable* T, int x, int y, alnchoice* choice) {
+  return _alnchoice_ID(T, x, y, choice, 'D');
 }
 
-int _alnchoice_I(dptable* T, intpair pos, alnchoice* choice) {
-  return _alnchoice_ID(T, pos, choice, 'I');
+int _alnchoice_I(dptable* T, int x, int y, alnchoice* choice) {
+  return _alnchoice_ID(T, x, y, choice, 'I');
 }
 
 /**
@@ -430,29 +366,36 @@ intpair _banded_find_optimal(dptable* T) {
   alnframe* frame = T->prob->frame;
   double max;
   int i,j;
-  int row = -1, col = -1;
+  intpair opt = (intpair) {-1, -1};
   if (T->prob->banded_params->type == B_GLOBAL) {
-    row = frame->S_range.j - frame->S_range.i;
-    col = frame->T_range.j - frame->T_range.i;
+    opt = _cellpos_from_xy(T->prob,
+      frame->S_range.j - frame->S_range.i,
+      frame->T_range.j - frame->T_range.i
+    );
+    /*printf("(d+,a)=(%d,%d)\n", opt.i, opt.j);*/ // FIXME segfaults
+    if (T->cells[opt.i][opt.j].num_choices < 1) {
+      return (intpair) {-1, -1};
+    } else {
+      return opt;
+    }
   }
-  else if (T->prob->banded_params->type == B_OVERLAP) {
+  if (T->prob->banded_params->type == B_OVERLAP) {
     max = -INT_MAX;
     for (i = 0; i < T->num_rows; i++){
       j = T->row_lens[i] - 1;
-      if (T->cells[i][j].num_choices == 0) {
-        continue;
-      }
-      if (T->cells[i][j].choices[0].score > max) {
-        row = i;
-        col = j;
+      if (T->cells[i][j].num_choices > 1 &&
+        T->cells[i][j].choices[0].score > max) {
         max = T->cells[i][j].choices[0].score;
+        opt = (intpair) {i, j};
       }
     }
+    if (opt.i != -1 && opt.j != -1) {
+      return opt;
+    } else {
+      return (intpair) {-1, -1};
+    }
   }
-  if (row == -1 || col == -1 || T->cells[row][col].num_choices == 0) {
-    return (intpair){-1, -1};
-  }
-  return (intpair) {row, col};
+  return (intpair) {-1, -1};
 }
 
 /**
