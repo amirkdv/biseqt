@@ -48,6 +48,11 @@ int _banded_table_init_dims(dptable* T) {
   }
   T->num_rows = 1 + dmax - dmin;
 
+  if (T->num_rows < 0) {
+    printf("Invalid band: [%d, %d]!\n", dmin, dmax);
+    return -1;
+  }
+
   // Caclculate row lengths:
   T->row_lens = malloc(T->num_rows * sizeof(int));
   if (T->row_lens == NULL) {
