@@ -20,7 +20,7 @@ Data Structures
 .. doxygenstruct:: dpcell
 .. doxygenstruct:: dptable
 .. doxygenstruct:: intpair
-.. doxygenstruct:: segment
+.. doxygenstruct:: seedext_params
 .. doxygenstruct:: std_alnparams
 .. doxygenstruct:: transcript
 
@@ -33,3 +33,4 @@ Functions
 .. doxygenfunction:: dptable_solve
 .. doxygenfunction:: dptable_traceback
 .. doxygenfunction:: extend
+.. doxygenfunction:: tx_seq_len

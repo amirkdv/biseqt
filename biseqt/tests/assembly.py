@@ -2,7 +2,7 @@
 import sys
 import os
 import igraph
-from .. import pw, words, seq, overlap, homopolymeric, overlap, mapping, ProgressIndicator
+from .. import pw, words, seq, overlap, overlap, mapping, ProgressIndicator
 from ..mapping import Mapping
 
 params = {
@@ -40,12 +40,12 @@ C = pw.AlignScores(
     go_score=go_score,
     ge_score=ge_score
 )
-od_params = overlap.OverlapDiscoveryScores(
-    seed_ext_params=overlap.SeedExtensionScores(
+od_params = overlap.OverlapDiscoveryParams(
+    seed_ext_params=overlap.SeedExtensionParams(
         window=params['window'],
-        min_overlap_score=params['min_overlap_score'],
+        min_score=params['min_overlap_score'],
         max_new_mins=params['max_new_mins'],
-        align_params=C
+        scores=C
     ),
     shift_rolling_sum_width=params['shift_rolling_sum_width'],
 )

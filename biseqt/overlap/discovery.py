@@ -2,24 +2,31 @@ from collections import namedtuple
 from math import log
 import os.path
 import sys
-from .. import pw, words, lib, ffi, ProgressIndicator
+from .. import pw, words, lib, ffi, ProgressIndicator, CffiObject
 from . import OverlapGraph
 
-# TODO make this a C struct so the C code cleans up.
-# FIXME the documentation formatting is weird
-class SeedExtensionParams(namedtuple('SeedExtensionParams',
-    ['window', 'min_overlap_score', 'max_new_mins', 'align_scores'])):
-    """Represents the set of tuning parameters for seed extension.
+class SeedExtensionParams(CffiObject):
+    """Wraps the C struct ``seedext_params``, see ``pwlib.h``.
 
     Attributes:
-        window (int): The size of the rolling window.
-        min_overlap_score (float): The minimum required score for an alignment
-            to be reported
-        max_new_mins (int): Maximum number of new minima observed in the score
-            random walk until a segement is dropped.
-        align_scores (pw.AlignParams): The alignment parameters for the
-            rolling alignment.
+        scores (pw.AlignScores): Substitution and gap scores.
+        window (int): The width of the rolling window of alignment.
+        min_score (float): The minimum required score for an overlap to be
+            reported.
+        max_new_mins (int): Maximum number of times a new minimum score is
+            tolerated before alignment is aborted.
     """
+    def __init__(self, **kw):
+        if 'c_obj' in kw:
+            self.c_obj = kw['c_obj']
+        else:
+            self.c_obj = ffi.new('seedext_params*', {
+                'window': kw['window'],
+                'min_score': kw['min_score'],
+                'max_new_mins': kw['max_new_mins'],
+                'scores': kw['scores'].c_obj
+            })
+
 
 # FIXME docs
 OverlapDiscoveryParams = namedtuple('OverlapDiscoveryParams', [
@@ -44,13 +51,11 @@ def extend_segments(S, T, segments, params, rw_collect=False):
     if not segments:
         return None
 
-    segs = ffi.new('segment* []', [seg.c_obj for seg in segments])
-    res = lib.extend(
-        segs, len(segs),
-        S.c_idxseq, T.c_idxseq, len(S), len(T), params.align_scores.c_obj,
-        params.window, params.max_new_mins, params.min_overlap_score, int(bool(rw_collect))
-    )
-    return pw.Segment(c_obj=res) if res != ffi.NULL else None
+    S_id, T_id = segments[0].S_id, segments[0].T_id
+    txs = ffi.new('transcript* []', [seg.tx.c_obj for seg in segments])
+    frame = pw.AlignFrame(S, T)
+    tx = lib.extend(txs, len(txs), frame.c_obj, params.c_obj)
+    return pw.Segment(S_id, T_id, pw.Transcript(c_obj=tx)) if tx != ffi.NULL else None
 
 # FIXME docs
 def rolling_sum(data, width):
@@ -210,7 +215,7 @@ def overlap_graph(index, od_params, min_margin=10, rw_collect=False):
     es, ws = [], []
     seqinfo = index.seqdb.seqinfo()
     seqids = seqinfo.keys()
-    seqids = [1,2,3] # FIXME
+    #seqids = [1] # FIXME
     msg = 'Extending seeds on potentially homologous sequences'
     indicator = ProgressIndicator(msg,
         index.num_potential_homolog_pairs(), percentage=False)
@@ -218,8 +223,8 @@ def overlap_graph(index, od_params, min_margin=10, rw_collect=False):
     indicator.start()
     for S_id in seqids:
         for T_id in index.potential_homologs(S_id):
-            if T_id not in [1,2,3]:
-                continue
+            #if T_id not in [13]:
+                #continue
             indicator.progress()
             S_name = '%s #%d' % (seqinfo[S_id]['name'], S_id)
             T_name = '%s #%d' % (seqinfo[T_id]['name'], T_id)

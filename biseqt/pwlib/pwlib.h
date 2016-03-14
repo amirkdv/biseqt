@@ -171,28 +171,23 @@ typedef struct {
     that defines the alignment.*/
 } transcript;
 
-/**
- * A segment corresponds to a local alignment of two sequences.
- * Segments are the currency of alignment by seed extension. Each segment is
- * uniquely identified by two sequence IDs and a transcript.
- */
-typedef struct segment {
-  // FIXME S_id and T_id have no role here; keep it in python. This would
-  // disolve this struct and mean that seedext.c shuffles transcripts only.
-  int S_id; /**< The identifier of the "from" sequence. */
-  int T_id; /**<The identifier of the "to" sequence. */
-  transcript* tx; /**< The transcript of the local alignment. */
-} segment;
+typedef struct {
+  alnscores* scores; /** Substitution and gap scores. **/
+  int window; /**< The width of the rolling window of alignment. **/
+  double min_score; /**< The minimum required score for an overlap to be reported. **/
+  int max_new_mins; /**< Maximum number of times a new minimum score is
+    tolerated before alignment is aborted. **/
+} seedext_params;
 
 int dptable_init(dptable* T);
 void dptable_free(dptable* T);
 intpair dptable_solve(dptable* T);
 transcript* dptable_traceback(dptable* T, intpair end);
 
-segment* extend(segment** segs, int num_segs, int* S, int* T, int S_len, int T_len,
-  alnscores* scores, int window, int max_new_mins, double min_overlap_score, int debug);
+int tx_seq_len(transcript* tx, char on);
+transcript* extend(transcript** txs, int num_txs, alnframe* frame, seedext_params* params);
 
-// Internals
+// --------------------- Internals ---------------------
 int _alnchoice_B(dptable *T, int x, int y, alnchoice* choice);
 int _alnchoice_M(dptable *T, int x, int y, alnchoice* choice);
 int _alnchoice_I(dptable* T, int x, int y, alnchoice* choice);

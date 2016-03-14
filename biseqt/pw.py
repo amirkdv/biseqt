@@ -531,7 +531,7 @@ class Transcript(CffiObject):
 
         print_lines(sline, tline, f)
 
-class Segment(CffiObject):
+class Segment(object):
     """Wraps a C ``segment``: represents an aligned pair of substrings in
     two sequences.
 
@@ -540,17 +540,10 @@ class Segment(CffiObject):
         T_id (int): The id of the "to" sequence as found in ``seq``.
         tx (biseqt.pw.Transcript): The alignment transctipt.
     """
-    def __init__(self, **kw):
-        if 'c_obj' in kw:
-            self.c_obj = kw['c_obj']
-            self.tx = Transcript(c_obj=kw['c_obj'].tx)
-        else:
-            self.tx = kw['tx']
-            self.c_obj = ffi.new('segment*', {
-                'S_id': kw['S_id'],
-                'T_id': kw['T_id'],
-                'tx': kw['tx'].c_obj,
-            })
+    def __init__(self, S_id, T_id, tx):
+        self.S_id = S_id
+        self.T_id = T_id
+        self.tx = tx
 
     def __repr__(self):
         return 'Segment(S_id=%d,T_id=%d,tx=%s)' \
