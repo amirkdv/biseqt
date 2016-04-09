@@ -18,4 +18,5 @@ for i,j in combinations(mapped, 2):
     blasr_overlap = blasr[i].strand == blasr[j].strand and not (blasr[i].ref_from > blasr[j].ref_to or blasr[i].ref_to > blasr[j].ref_from)
     agree += 1 if bwa_overlap == blasr_overlap else 0
 
-print (1.0*agree)/(len(mapped)*(len(mapped)-1)) # ~ 50% for either of the 3
+agree = (200.0*agree/(len(mapped)*(len(mapped)-1)))
+print '%%%.2f' % agree, 'of pairs agree among ', len(mapped)

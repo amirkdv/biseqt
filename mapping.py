@@ -9,7 +9,7 @@ def load_mappings(path):
         return eval(f.read())
 
 bwa = load_mappings('leishmania/bwa.mappings.txt')
-lastz = load_mappings('leishmania/blasr.mappings.txt')
+blasr = load_mappings('leishmania/blasr.mappings.txt')
 
 with sqlite3.connect('genome.leishmania.db') as conn:
     lengths = dict(
@@ -19,22 +19,23 @@ with sqlite3.connect('genome.leishmania.db') as conn:
 title = lambda read: '%s (len=%s)' % (read, str(lengths[read]).rjust(5))
 
 bwa_mapped = set(bwa.keys())
-lastz_mapped = set(lastz.keys())
+blasr_mapped = set(blasr.keys())
 
 with open('diff.txt', 'w') as f:
-    for read in bwa_mapped - lastz_mapped:
-        f.write('%s: not mapped by lastz\n' % title(read))
+    for read in bwa_mapped - blasr_mapped:
+        f.write('%s: not mapped by blasr\n' % title(read))
 
-    for read in lastz_mapped - bwa_mapped:
+    for read in blasr_mapped - bwa_mapped:
         f.write('%s: not mapped by bwa\n' % title(read))
 
     from_diffs, to_diffs, colors, sizes = [], [], [], []
-    for read in bwa_mapped.intersection(lastz_mapped):
-        from_diff = bwa[read].ref_from - lastz[read].ref_from
-        to_diff = bwa[read].ref_to - lastz[read].ref_to
-        from_diffs += [from_diff]
-        to_diffs += [to_diff]
-        strand_diff = bwa[read].strand != lastz[read].strand
+    for read in bwa_mapped.intersection(blasr_mapped):
+        from_diff = bwa[read].ref_from - blasr[read].ref_from
+        to_diff = bwa[read].ref_to - blasr[read].ref_to
+        if bwa[read].strand == blasr[read].strand:
+            from_diffs += [from_diff]
+            to_diffs += [to_diff]
+        strand_diff = bwa[read].strand != blasr[read].strand
         colors += ['r' if strand_diff else 'g']
         sizes += [int(lengths[read]/1000)]
         tpl = '%s: from=%s, to=%s, strands=%s\n'
@@ -51,7 +52,7 @@ n, bins, _ = plt.hist(
 xmax = bins[len(filter(lambda x: n[x]<0.95, range(len(bins)-1)))]
 plt.xlim(-xmax/10, xmax)
 plt.grid(True)
-plt.xlabel('absolute mapping distance b.w. BWA and LASTZ')
+plt.xlabel('absolute mapping distance b.w. BWA and BLASR')
 plt.ylabel('cumulative distribution')
 plt.xticks([x*200 for x in range(30)], rotation='vertical')
 plt.savefig('diff_hist.png', dpi=300)
