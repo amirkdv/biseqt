@@ -20,6 +20,12 @@ class ReadMapper(object):
         recs = SeqIO.parse(path, 'fasta')
         return {rec.id: sha1(str(rec.seq)).hexdigest() for rec in recs}
 
+    def ids(self):
+        return {
+            'reads': self.identify(self.read_src),
+            'refs': self.identify(self.ref_src),
+        }
+
     def num_reads(self):
         proc = Popen(['grep', '^>', self.read_src], stdout=PIPE)
         return len(proc.communicate()[0].strip().split('\n'))
@@ -32,61 +38,17 @@ class ReadMapper(object):
         return indicator
 
     def mappings(self):
-        raise NotImplementedError
-
-# FIXME docs
-Mapping = namedtuple('Mapping', ['ref', 'strand', 'ref_from', 'ref_to'])
-
-def save_mappings(path, mappings):
-    with open(path, 'w') as f:
-        f.write('{\n')
-        for read, mapping in mappings:
-            f.write('%s: %s,\n' % (repr(read), repr(mapping)))
-        f.write('\n}\n')
-
-class BwaReadMapper(ReadMapper):
-    def index(self):
-        sys.stderr.write('Creating BWA index for %s.\n' % self.ref_src)
-        proc = Popen(['bwa', 'index', self.ref_src], stdout=PIPE, stderr=PIPE)
-        _, err = proc.communicate()
-        if proc.returncode != 0:
-            raise RuntimeError('`bwa index` exited with code %d' % proc.returncode)
-        stderr.write('|  %s\n' % '\n|  '.join(err.strip().split('\n')))
-
-    def ids(self):
-        return {
-            'reads': self.identify(self.read_src),
-            'refs': self.identify(self.ref_src),
-        }
-
-    def mappings(self):
-        self.index()
         ids = self.ids()
         indicator = self.indicator()
         indicator.start()
         for rec in SeqIO.parse(self.read_src, 'fasta'):
             indicator.progress()
-            bwa_mem_opts = [
-                '-A', '1',
-                '-B', '2',
-                '-O', '3',
-                '-E', '1',
-            ]
-            lastz_opts = [
-                '--ambiguous=n',
-                '--format=softsam',
-                '--gap=3,1',
-                '--match=1,2',
-                '--chain', # NOTE
-            ]
             read_len = len(rec.seq)
             with NamedTemporaryFile(suffix='.fasta') as tmp:
                 tmp.write('>%s\n%s\n' % (rec.id, str(rec.seq)))
                 tmp.flush() # flush to disk, a subprocess will be accessing it
 
-                cmd = ['/home/amir/lastz-distrib/bin/lastz'] + lastz_opts + [self.ref_src, tmp.name]
-                #cmd = ['bwa', 'mem'] + bwa_mem_opts + [self.ref_src, tmp.name]
-                proc = Popen(cmd, stdout=PIPE, stderr=PIPE)
+                proc = Popen(self.cmd(tmp.name), stdout=PIPE, stderr=PIPE)
                 out, err = proc.communicate()
                 #print '\n', out
                 if proc.returncode != 0:
@@ -138,6 +100,54 @@ class BwaReadMapper(ReadMapper):
 
         indicator.finish()
 
+# FIXME docs
+Mapping = namedtuple('Mapping', ['ref', 'strand', 'ref_from', 'ref_to'])
+
+def save_mappings(path, mappings):
+    with open(path, 'w') as f:
+        f.write('{\n')
+        for read, mapping in mappings:
+            f.write('%s: %s,\n' % (repr(read), repr(mapping)))
+        f.write('\n}\n')
+
+class BwaReadMapper(ReadMapper):
+    def index(self):
+        sys.stderr.write('Creating BWA index for %s.\n' % self.ref_src)
+        proc = Popen(['bwa', 'index', self.ref_src], stdout=PIPE, stderr=PIPE)
+        _, err = proc.communicate()
+        if proc.returncode != 0:
+            raise RuntimeError('`bwa index` exited with code %d' % proc.returncode)
+        stderr.write('|  %s\n' % '\n|  '.join(err.strip().split('\n')))
+
+    def mappings(self):
+        self.index()
+        return super(BwaReadMapper, self).mappings()
+
+    def cmd(self, path):
+        bwa_mem_opts = [
+            '-A', '1',
+            '-B', '2',
+            '-O', '3',
+            '-E', '1',
+        ]
+        return ['bwa', 'mem'] + bwa_mem_opts + [self.ref_src, path]
+
+class LastzReadMapper(ReadMapper):
+    def __init__(self, **kw):
+        self.lastz_path = kw['lastz_path']
+        return super(LastzReadMapper, self).__init__(**kw)
+
+    def cmd(self, path):
+        lastz_opts = [
+            '--ambiguous=n',
+            '--format=softsam',
+            '--gap=3,1',
+            '--match=1,2',
+            '--chain', # NOTE
+        ]
+        return [self.lastz_path] + lastz_opts + [self.ref_src, path]
+
+# FIXME
 class WordReadMapper(ReadMapper):
     def save_mapping(self, mapping):
         with sqlite3.connect(self.seqdb.db) as conn:

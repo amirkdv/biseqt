@@ -19,9 +19,14 @@ $(REFERENCE): $(GENOME)
 		rec = I.parse("$(GENOME)", "fasta").next(); \
 		I.write([R.SeqRecord(rec.seq, id=rec.id)], "$@", "fasta")'
 
-$(MAPPINGS): $(REFERENCE) $(READS)
+leishmania/bwa.mappings.txt: $(REFERENCE) $(READS)
 	python -c 'from biseqt.mapping import BwaReadMapper as M, save_mappings; \
 		save_mappings("$@", M(read_src="$(READS)", ref_src="$(REFERENCE)").mappings());'
+
+LASTZ_PATH=/home/amir/lastz-distrib/bin/lastz
+leishmania/lastz.mappings.txt: $(REFERENCE) $(READS)
+	python -c 'from biseqt.mapping import LastzReadMapper as M, save_mappings; \
+		save_mappings("$@", M(read_src="$(READS)", ref_src="$(REFERENCE)", lastz_path="$(LASTZ_PATH)").mappings());'
 
 ASSEMBLY_TARGET = leishmania.gml
 assembly:
