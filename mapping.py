@@ -9,7 +9,7 @@ def load_mappings(path):
         return eval(f.read())
 
 bwa = load_mappings('leishmania/bwa.mappings.txt')
-lastz = load_mappings('leishmania/lastz.mappings.txt')
+lastz = load_mappings('leishmania/blasr.mappings.txt')
 
 with sqlite3.connect('genome.leishmania.db') as conn:
     lengths = dict(
@@ -57,8 +57,8 @@ plt.xticks([x*200 for x in range(30)], rotation='vertical')
 plt.savefig('diff_hist.png', dpi=300)
 
 plt.clf()
-plt.plot([-150000,200000], [-150000,200000], 'k-', lw=2, alpha=0.6)
-plt.scatter(from_diffs, to_diffs, marker='o', color=colors, s=sizes)
+plt.plot([-150000,200000], [-150000,200000], 'k-', lw=2, alpha=0.5)
+plt.scatter(from_diffs, to_diffs, marker='o', color=colors, s=sizes, alpha=0.5)
 plt.grid(True)
 plt.xlabel('starting position difference')
 plt.ylabel('ending position difference')

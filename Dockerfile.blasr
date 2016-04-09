@@ -1,0 +1,15 @@
+FROM ubuntu:15.10
+
+RUN apt-get update
+RUN apt-get install -y libhdf5-10 libhdf5-cpp-10 make gcc build-essential python git libz-dev wget
+RUN git clone https://github.com/PacificBiosciences/blasr /var/blasr
+RUN wget http://www.hdfgroup.org/ftp/HDF5/current/src/hdf5-1.8.16.tar.gz -qO /var/blasr/hdf.tar.gz
+
+RUN cd /var/blasr && tar -zxf hdf.tar.gz
+WORKDIR /var/blasr/hdf5-1.8.16
+RUN ./configure --prefix=/usr/local/hdf5 --enable-cxx
+RUN make && make check install check-install
+
+WORKDIR /var/blasr
+RUN ./configure.py --sub --no-pbbam HDF5_INCLUDE=/usr/local/hdf5/include/ HDF5_LIB=/usr/local/hdf5/lib/
+RUN make init-submodule blasr
