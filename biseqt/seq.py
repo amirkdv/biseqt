@@ -275,16 +275,7 @@ REFERENCE = 1
 class SeqDB(object):
     """Wraps an SQLite database containing sequences and potentiall word indices
     (see :class:`biseqt.words.Index`) or assembly data structures. The sequences
-    are stored in a ``seq`` table with the following schema:
-
-    .. code-block:: sql
-
-        CREATE TABLE seq (
-              'id'   INTEGER PRIMARY KEY ASC,
-              'name' VARCHAR(40), -- content address (SHA1)
-              'type' INTEGER,     -- READ or REFERENCE (module constants)
-              'seq'  TEXT         -- the contents of the sequence
-            );
+    are stored in a ``seq`` table.
 
     Attributes:
         db (string): Path to the SQLite datbase.
@@ -306,11 +297,12 @@ class SeqDB(object):
             c.execute('PRAGMA journal_mode = OFF;')
             q = """
                 CREATE TABLE seq (
-                  'id'   INTEGER PRIMARY KEY ASC,
-                  'name' VARCHAR(40), -- content address (SHA1)
-                  'type' INTEGER,     -- READ or REFERENCE (module constants)
-                  'orig' TEXT,        -- original sequence identifier
-                  'seq'  TEXT         -- the contents of the sequence
+                  id   INTEGER PRIMARY KEY ASC,
+                  name VARCHAR(40), -- content address (SHA1)
+                  type INTEGER,     -- READ or REFERENCE (module constants)
+                  orig TEXT,        -- original sequence identifier
+                  rc   INTEGER DEFAULT 0, -- whether sha(seq) == name (0) or sha(seq.rc) == name (1)
+                  seq  TEXT         -- the contents of the sequence
                 );
             """
             c.execute(q)
@@ -325,17 +317,17 @@ class SeqDB(object):
         """
         sys.stderr.write('Loading sequences from: %s\n' % fasta_src)
 
-        # only insert a sequence if it does not already exist.
+        # leave the rc reference empty for now
         q = """
-            INSERT INTO seq (name, type, orig, seq) VALUES (?, ?, ?, ?)
+            INSERT INTO seq (name, type, orig, rc, seq) VALUES (?, ?, ?, ?, ?)
         """
         name = lambda x: sha1(str(x)).hexdigest()
-        give_rec = lambda r: (name(r.seq), seq_type, r.id, str(r.seq))
+        seqgen = lambda: enumerate(SeqIO.parse(fasta_src, 'fasta'))
+        # FIXME debug
         recs = chain(
-            (give_rec(rec) for rec in SeqIO.parse(fasta_src, 'fasta')),
-            (give_rec(rec.reverse_complement()) for rec in SeqIO.parse(fasta_src, 'fasta'))
+            ((name(r.seq), seq_type, r.id, 0, str(r.seq)) for idx,r in seqgen() if idx < 100),
+            ((name(r.seq), seq_type, r.id, 1, str(r.reverse_complement().seq)) for idx,r in seqgen() if idx < 100)
         )
-
         with sqlite3.connect(self.db) as conn:
             c = conn.cursor()
             c.executemany(q, recs)
@@ -381,13 +373,14 @@ class SeqDB(object):
         self._seqinfo = {}
         with sqlite3.connect(self.db) as conn:
             c = conn.cursor()
-            c.execute("SELECT id, name, type, orig, LENGTH(seq) FROM seq")
+            c.execute("SELECT id, name, type, orig, rc, LENGTH(seq) FROM seq")
             for row in c:
                 self._seqinfo[row[0]] = {
-                    'name': row[1],
-                    'type': row[2],
-                    'orig': row[3],
-                    'length': row[4],
+                    'name':   row[1],
+                    'type':   row[2],
+                    'orig':   row[3],
+                    'rc':     row[4],
+                    'length': row[5],
                 }
 
         return self._seqinfo

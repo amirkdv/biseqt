@@ -89,7 +89,7 @@ class ShiftWindow(namedtuple('ShiftWindow', ['S_len', 'T_len', 'width', 'shift']
 
 # FIXME find the strip with max number of shifts *per unit area*.
 # FIXME make some of these keyword arguments
-def most_signifcant_shift(S_len, T_len, seeds, rolling_sum_width):
+def most_signifcant_shift(S_id, T_id, index):
     """Builds a smoothed distribution (via a rolling sum of known width) of
     shifts for the provided seeds of a pair of sequences of known lengths and
     returns the shift with most number of seeds and its p-value.
@@ -133,22 +133,20 @@ def most_signifcant_shift(S_len, T_len, seeds, rolling_sum_width):
         (mode_shift, log_pvalue): A tuple of the form ``(int, float)``.
 
     """
-    shift_range = range(-T_len, S_len)
-    shift_coverage = {shift:0 for shift in shift_range}
+    seeds = index.seeds(S_id, T_id)
+    if not seeds:
+        return None, None
+    seqinfo = index.seqdb.seqinfo()
+    S_len, T_len = seqinfo[S_id]['length'], seqinfo[T_id]['length']
+    scores = {}
     for seed in seeds:
-        # all seeds are the same length at this stage (and they
-        # are potentially overlapping):
-        shift_coverage[seed.tx.S_idx - seed.tx.T_idx] += 1
+        shift = seed.tx.S_idx - seed.tx.T_idx
+        r, s, s0 = index.seed_pvalue_contribution((S_len, T_len), shift)
+        for d in range(shift - r, shift + r + 1):
+            scores[d] = s0 if d not in scores else scores[d]
+            scores[d] += s
 
-    shift_coverage = [x[1] for x in sorted(shift_coverage.items())]
-    shift_distrib = rolling_sum(shift_coverage, rolling_sum_width)
-    mode_idx, mode = max(enumerate(shift_distrib), key=lambda x: x[1])
-    most_dense_window = ShiftWindow(S_len=S_len, T_len=T_len,
-        width=rolling_sum_width,
-        shift=shift_range[min(mode_idx, len(shift_range)-1)]
-    )
-
-    return most_dense_window.shift, most_dense_window.significance(mode)
+    return max(scores.items(), key=lambda x: scores[x[0]])
 
 # FIXME docs
 def discover_overlap(S_id, T_id, rw_collect=False, **kwargs):

@@ -33,6 +33,7 @@ leishmania/bwa.mappings.txt: $(REFERENCE) $(READS)
 	python -c 'from biseqt.mapping import parse_mappings, save_mappings; \
 		save_mappings("$@", parse_mappings("$(REFERENCE)", "$(READS)", "$(BWA_SAM)"));'
 
+#FIXME document installation steps, this works nowhere else
 LASTZ_PATH=/home/amir/lastz-distrib/bin/lastz
 LASTZ_OPTS=--ambiguous=n --format=softsam --chain # --gap=31 --match=12
 LASTZ=$(LASTZ_PATH) $(LASTZ_OPTS) $(REFERENCE) $(READS)

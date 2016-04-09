@@ -5,6 +5,7 @@ import os.path
 import re
 import sqlite3
 from math import sqrt, erf, log
+from scipy.special import erfinv
 from Bio import SeqIO
 from collections import namedtuple
 from matplotlib import pyplot as plt
@@ -61,6 +62,7 @@ class Index(object):
         self.wordlen = kwargs.get('wordlen', 10)
         self.min_seeds_for_homology = kwargs.get('min_seeds_for_homology', 1)
         self.min_word_log_pvalue = kwargs.get('min_word_log_pvalue', -5)
+        self.sensitivity_erfinv = erfinv(kwargs.get('band_sensitivity', 0.9))
         self.t_words = 'words_%d' % self.wordlen
         self.t_seeds = 'seeds_%d' % self.wordlen
         self.t_scores = 'scores_%d' % self.wordlen
@@ -97,7 +99,7 @@ class Index(object):
             """ % (self.t_scores)
             c.execute(q)
         sys.stderr.write('Initialized index tables %s, %s, %s.\n'
-            % (self.words_table, self.seeds_table, self.potential_homologs_table)
+            % (self.t_words, self.t_seeds, self.t_scores)
         )
 
     def tup_scan(self, string):
@@ -139,10 +141,6 @@ class Index(object):
             yield (tup, idx)
 
     def index(self):
-        """Populates all index tables, in order: ``words_N``, ``seeds_N``, and
-        ``potential_homologs_N`` by calling :func:`index_words`,
-        :func:`index_seeds`, and :func:`index_potential_homologs`.
-        """
         self.index_words()
         self.index_seeds()
 
@@ -163,7 +161,7 @@ class Index(object):
         hit_ins_q = """
             INSERT OR REPLACE INTO %s (tuple, hits)
             SELECT ?, IFNULL( (SELECT hits FROM %s WHERE tuple = ?), "") || ?
-        """ % (self.words_table, self.words_table)
+        """ % (self.t_words, self.t_words)
         with sqlite3.connect(self.seqdb.db) as conn:
             seq_c = conn.cursor() # to load sequences from the seq table.
             c = conn.cursor()     # to write words to the words table.
@@ -237,50 +235,62 @@ class Index(object):
         """
         with sqlite3.connect(self.seqdb.db) as conn:
             c = conn.cursor()
+            c.execute('SELECT tuple, hits from %s' % self.t_words)
             q = """
                 INSERT INTO %s (S_id, T_id, S_idx, T_idx)
                 VALUES (?, ?, ?, ?)
-            """ % self.seeds_table
-            conn.cursor().executemany(q, self._give_seeds(c))
+            """ % self.t_seeds
+            conn.cursor().executemany(q, self.scan_seeds(c, conn.cursor()))
 
-            sys.stderr.write('Creating SQL index on %s'  % self.seeds_table)
+            sys.stderr.write('Creating SQL index on %s'  % self.t_seeds)
             c.execute("""
                 CREATE INDEX seeds_ids ON %s (S_id, T_id)
-            """ % self.seeds_table)
+            """ % self.t_seeds)
             sys.stderr.write('.\n')
             conn.commit()
 
-    def word_pvalue_calculator(self, num_words):
+    def word_pvalue_calculator(self):
+        with sqlite3.connect(self.seqdb.db) as conn:
+            c = conn.cursor()
+            c.execute('select count(*) from %s' % self.t_words)
+            N = int(c.next()[0]) # total number of words
+            c.execute('select sum(length(seq)) from seq')
+            L = int(c.next()[0]) # total sequence length of all reads
+
+        # NOTE
+        self.num_words = L
+
         # Normal approximation (mean and standard deviation) of a binomial distribution
         B2N = lambda n, p: (n*p, sqrt(n * p * (1-p)))
-        prob_word = lambda length: (1.0/self.seqdb.alphabet.length) ** length
-        cursor.execute('select count(*) from %s' % self.words_table)
-        cursor.execute('select sum(length(seq)) from seq')
-        L = int(cursor.next()[0]) # total sequence length of all reads
+        prob_word = lambda length: (1.0/len(self.seqdb.alphabet)) ** length
         mu, sd = B2N(L, prob_word(self.wordlen)) # approximating normal distribution of word counts
 
-        pvalue_calculator = lambda x: num_words * 0.5 * (1 - erf((x - mu) / (sd * sqrt(2))))
+        pvalue_calculator = lambda x: N * 0.5 * (1 - erf((x - mu) / (sd * sqrt(2))))
         return pvalue_calculator
 
-    def band_radius(self, lengths, gap_prob, sensitivity=0.9):
-        return 2*sqrt(gap_prob*min(lengths))*erfinv(sensitivity)
+    def band_radius(self, readlens, d, g):
+        # max alignment length
+        L = min(readlens[0] - d, readlens[1]) + min(d, 0)
+        # expected alignment length
+        K = (2.0/(2-g)) * L
+        r = 2 * self.sensitivity_erfinv * sqrt(g * (1-g) * K)
+        return int(r)
 
-    def seed_pvalue_contribution(self, lengths, shift, gap_prob=0.1):
-        r = band_radius(lengths, gap_prob)
-        A = 2 * r * sqrt(sum(l - abs(shift)**2 for l in lengths))
-        return r, sum(log(l) for l in lengths) - log(A), log(sum(lengths))
+    def seed_pvalue_contribution(self, readlens, shift, gap_prob=0.1):
+        r = self.band_radius(readlens, shift, gap_prob)
+        A = 2 * r * sqrt(sum((l - abs(shift))**2 for l in readlens))
+        # (radius, contribution of one seed, starting value)
+        return r, sum(log(l) for l in readlens) - log(A), log(sum(readlens))
 
     # Helper for index(): yields data values to be inserted in the seeds index.
-    def _give_seeds(self, cursor):
-        word_pvalue_calc = self.word_pvalue_calculator(cursor)
-        cursor.execute('select count(*) from %s' % self.words_table)
-        N = int(cursor.next()[0]) # total number of words
+    def scan_seeds(self, hit_recs, cursor):
+        word_pvalue_calc = self.word_pvalue_calculator()
+        seqinfo = self.seqdb.seqinfo()
         indicator = ProgressIndicator(
-            'Indexing %d observed %d-mers' % (N, self.wordlen), N
+            'Indexing %d observed %d-mers' % (self.num_words, self.wordlen), self.num_words
         )
         indicator.start()
-        cursor.execute('SELECT tuple, hits from %s' % self.words_table)
-        for tup, hits in cursor:
+        for tup, hits in hit_recs:
             indicator.progress()
             pvalue = word_pvalue_calc(hits.count('@'))
             if not pvalue or log(pvalue) < self.min_word_log_pvalue:
@@ -292,138 +302,43 @@ class Index(object):
                 for T_hit_idx in range(S_hit_idx + 1, len(hits)):
                     S_hit, T_hit = hits[S_hit_idx], hits[T_hit_idx]
                     # not interested in seeds from a sequence to itself:
-                    if S_hit[0] == T_hit[0]:
+                    S_id, T_id = int(S_hit[0]), int(T_hit[0])
+                    S_idx, T_idx = int(S_hit[1]), int(T_hit[1])
+                    if seqinfo[S_id]['name'] == seqinfo[T_id]['name']:
+                        # don't care about seeds from S to S or S'
                         continue
 
-                    shift = S_hit[1] - T_hit[1]
-                    lengths = [
-                        self.seqinfo[S_hit[0]]['length'],
-                        self.seqinfo[T_hit[0]]['length']
-                    ]
-                    r, s, s0 = seed_pvalue_contribution(lengths, shift)
-                    # FIXME self.guesses = O(n^2) array of best observed shifts and their scores
-                    q = """SELECT shift, score FROM scores
-                        WHERE S_id = ? AND T_id = ? AND shift BETWEEN ? AND ?
-                    """ # FIXME correct index? currently PK(S_id, T_id, shift)
-                    othercursor.execute(q, (S_hit[0], T_hit[0], shift + r, shift - r))
-                    update_recs = (score + s if score > 0 else s0 for shift, score in othercursor)
-                    q = """UPDATE scores SET score = ?
-                        WHERE S_id = %d AND T_id = %d AND shift = %d
-                    """ % (S_hit[0], T_hit[0], shift)
-                    anothercursor.executemany(q, update_recs)
-
-                    yield (S_hit[0], T_hit[0], S_hit[1], T_hit[1])
-
-        indicator.finish()
-
-    def num_potential_homolog_pairs(self, cursor=None):
-        """Returns the number of potential homolog pairs in the database.
-        Provide a specific cursor object to access the SQLite database if
-        accessing this function through a transaction.
-        """
-        cnt_q = 'SELECT COUNT(*) FROM scores WHERE score > ?'
-        if cursor is None:
-            with sqlite3.connect(self.seqdb.db) as conn:
-                cursor = conn.cursor()
-                cursor.execute(cnt_q)
-        else:
-            cursor.execute(cnt_q)
-        for row in cursor:
-            return row[0]
-
-    # Helper for index_potential_homolgs(): yields data values for the potential
-    # homologs index.
-    #
-    # Note that for each sequence id (which is an integer as per the seq table),
-    # only potential homologs with greater sequence IDs are reported to avoid
-    # duplicates.
-    def _give_potential_homologs(self, cursor):
-        num_total = self.num_potential_homolog_pairs(cursor)
-        msg = 'Indexing potentially homologous pairs of sequences with at least %d seeds' % self.min_seeds_for_homology
-        indicator = ProgressIndicator(msg, num_total)
-        indicator.start()
-        cursor.execute(self.potential_homologs_q)
-        for row in cursor:
-            if int(row[2]) < self.min_seeds_for_homology:
-                continue;
-            if row[0] < row[1]:
-                yield (row[0], row[0], str(row[1]) + ',')
-            elif row[0] > row[1]:
-                yield (row[1], row[1], str(row[0]) + ',')
-            else:
-                raise RuntimeError("This shouldn't have happened, row=%s", str(row))
-            indicator.progress()
+                    # FIXME takes too long; see discovery.most_signifcant_shift
+                    #shift = S_hit[1] - T_hit[1]
+                    #lengths = [
+                        #seqinfo[S_id]['length'],
+                        #seqinfo[T_id]['length']
+                    #]
+                    # (radius, contribution of one seed, base)
+                    #r, s, s0 = self.seed_pvalue_contribution(lengths, shift)
+                    #q = """INSERT OR REPLACE INTO %s (S_id, T_id, shift, score)
+                        #SELECT ?, ?, ?, IFNULL(
+                            #(SELECT ? + score FROM %s
+                             #WHERE S_id = ? AND T_id = ? AND shift = ?
+                            #), ?
+                        #)
+                    #""" % (self.t_scores, self.t_scores)
+                    #_give_rec = lambda d: (S_id, T_id, d, s, S_id, T_id, d, s0)
+                    #cursor.executemany(q, (_give_rec(d) for d in range(shift-r, shift+r+1)))
+                    yield (S_id, T_id, S_idx, T_idx)
 
         indicator.finish()
 
-    def index_potential_homologs(self):
+    def most_signifcant_shift(self, S_id, T_id):
         with sqlite3.connect(self.seqdb.db) as conn:
-            c = conn.cursor()
-            # populate the seeds cache table:
             q = """
-                INSERT OR REPLACE INTO %s (id, homologs)
-                SELECT ?, IFNULL( (SELECT homologs FROM %s WHERE id = ?), "") || ?
-            """ % (self.potential_homologs_table, self.potential_homologs_table)
-            conn.cursor().executemany(q, self._give_potential_homologs(c))
-
-    def verify(self):
-        """Verifies the database contents to make sure:
-
-            * There seeds table contains no more than one for each 4-tuple
-              ``(S_id,T_id,S_idx,T_idx)``.
-            * The potential homologs table contains no more than one row for
-              each sequence in ``seq``.
-
-            If an inconsistency is found an ``AssertionError`` is raised.
-
-            Note:
-                The point of this function is to avoid setting up the above
-                constraints on the SQLite tables. The reason is:
-                * SQLite does not allow modifying constraints on a table after
-                  creation.
-                * Having the constraints in place while we are munging seeds
-                  cripples performance.
-        """
-        with sqlite3.connect(self.seqdb.db) as conn:
+                SELECT shift, score FROM %s
+                WHERE S_id = ? AND T_id = ? ORDER BY score DESC LIMIT 1
+            """ % self.t_scores
             c = conn.cursor()
-            sys.stderr.write('Verifying database consistency at %s:' % self.seqdb.db)
-            # potential homologs should have at most a single row per sequence.
-            c.execute('SELECT COUNT(*) FROM %s' % self.potential_homologs_table)
-            for row in c:
-                num_records = row[0]
-            c.execute("""
-                SELECT COUNT(*) FROM (SELECT DISTINCT id FROM %s)
-            """ % self.potential_homologs_table)
-            for row in c:
-                assert(num_records == row[0])
-
-            c.execute('SELECT COUNT(*) FROM %s' % self.seeds_table)
-            for row in c:
-                num_records = row[0]
-            c.execute("""
-                SELECT COUNT(*) FROM (SELECT DISTINCT S_id,T_id,S_idx,T_idx FROM %s)
-            """ % self.seeds_table)
-            for row in c:
-                assert(num_records == row[0])
-
-            sys.stderr.write(' looks good!\n')
-
-    def potential_homologs(self, seqid):
-        """Given a sequence ID, returns a list of sequence IDs, all integers
-        greater than ``seqid`` (to avoid duplicates in assembly), that are
-        potentially homologous to the given sequence. The result is read
-        directly from the ``potential_homologs_N`` table.
-        """
-        q = """
-            SELECT homologs FROM %s WHERE id = ?
-        """ % self.potential_homologs_table
-        with sqlite3.connect(self.seqdb.db) as conn:
-            c = conn.cursor()
-            c.execute(q, (seqid,))
-            for row in c:
-                return [int(i) for i in row[0].split(',') if i]
-
-        return []
+            c.execute(q, (S_id, T_id))
+            row = c.next()
+            return (int(row[0]), float(row[1]))
 
     def seeds(self, S_id, T_id):
         """Given two sequence ids, finds all exactly matching segments
@@ -446,7 +361,7 @@ class Index(object):
         q = """
             SELECT S_id, T_id, S_idx, T_idx FROM %s
             WHERE (S_id = ? AND T_id = ? ) OR (S_id = ? AND T_id = ?)
-        """ % (self.seeds_table)
+        """ % (self.t_seeds)
         seeds = []
         with sqlite3.connect(self.seqdb.db) as conn:
             c = conn.cursor()
@@ -471,8 +386,8 @@ def plot_word_pvalues(index, path=None, num_bins=500):
         path = 'word_pvalues.%d.png' % index.wordlen
     with sqlite3.connect(index.seqdb.db) as conn:
         c = conn.cursor()
-        calc = index.word_pvalue_calculator(c)
-        c.execute('select hits from %s' % index.words_table)
+        calc = index.word_pvalue_calculator()
+        c.execute('select hits from %s' % index.t_words)
         log_pvalues = []
         for row in c:
             pvalue = calc(row[0].count('@'))

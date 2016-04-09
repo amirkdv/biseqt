@@ -2,6 +2,7 @@
 import sys
 import os
 import igraph
+from itertools import combinations
 from .. import pw, words, seq, overlap, overlap, mapping, ProgressIndicator
 from ..mapping import Mapping
 
@@ -83,7 +84,7 @@ def map_reads(db, reference, reads):
 
 def true_overlaps(true_path):
     G = igraph.read(true_path)
-    return [set([db_id(G, u), db_id(G, v)]) for u, v in G.get_edgelist()]
+    return [set([G.vs[u]['name'], G.vs[v]['name']]) for u, v in G.get_edgelist()]
 
 def create_denovo_db(db, reads):
     B = seq.SeqDB(db, alphabet=A)
@@ -128,7 +129,7 @@ def plot_seeds(db, path, true_path, mappings):
     B = seq.SeqDB(db, alphabet=A)
     Idx = words.Index(seqdb=B, **params)
     G = igraph.read(true_path)
-    true_overlaps = [set([db_id(G, u), db_id(G, v)]) for u, v in G.get_edgelist()]
+    true_overlaps = [set(G.vs[u]['name'], G.vs[v]['name']) for u, v in G.get_edgelist()]
     with open(mappings) as f:
         mappings = eval(f.read())
     overlap.plot_all_seeds(
@@ -146,43 +147,44 @@ def plot_rw(db, path, true_path):
         logfile='scores.txt', true_overlaps=true_overlaps(true_path)
     )
 
-def build_true_overlap_graph(db, mappings):
+def build_true_overlap_graph(db, mappings_path):
     B = seq.SeqDB(db, alphabet=A)
-    seqinfo = B.seqinfo()
+    seqnames = set([x['name'] for x in B.seqinfo().values()])
     indicator = ProgressIndicator(
-        'Building true overlap graph from mappings at %s' % mappings,
-        len(seqinfo)*(len(seqinfo) - 1)/2.0,
+        'Building true overlap graph from mappings at %s' % mappings_path,
+        len(seqnames)*(len(seqnames) - 1)/2.0,
     )
     indicator.start()
-    seqids = seqinfo.keys()
-    with open(mappings) as f:
+    with open(mappings_path) as f:
         mappings = eval(f.read())
     vs = set()
     es, ws = [], []
-    for sid_idx in range(len(seqids)):
-        for tid_idx in range(sid_idx + 1, len(seqids)):
-            indicator.progress()
-            S_id, T_id = seqids[sid_idx], seqids[tid_idx]
-            S_name, T_name = seqinfo[S_id]['name'], seqinfo[T_id]['name']
-            S_start, S_end = mappings[S_name].ref_from, mappings[S_name].ref_to
-            T_start, T_end = mappings[T_name].ref_from, mappings[T_name].ref_to
+    # position of a mapping record on the positive strand of reference
+    def plus_pos(m):
+        return (m.ref_from, m.ref_to) if m.strand == '+' else (m.ref_to, m.ref_from)
 
-            if mappings[S_name].strand == '-':
-                S_start, S_end = S_end, S_start
-            if mappings[T_name].strand == '-':
-                T_start, T_end = T_end, T_start
+    def overlaps(S_mapping, T_mapping):
+        S_start, S_end = plus_pos(S_mapping)
+        T_start, T_end = plus_pos(T_mapping)
+        overlap_len = min(S_end, T_end) - max(S_start, T_start)
+        if overlap_len > 0:
+            if S_mapping.strand == T_mapping.strand:
+                return [(S_name + '+', T_name + '+', overlap_len),
+                        (S_name + '-', T_name + '-', overlap_len)]
+            else:
+                return [(S_name + '+', T_name + '-', overlap_len),
+                        (S_name + '-', T_name + '+', overlap_len)]
+        return []
 
-            S_name = '%s #%d' % (S_name, S_id)
-            T_name = '%s #%d' % (T_name, T_id)
+    for S_name, T_name in combinations(seqnames, 2):
+        indicator.progress()
+        S_start, S_end = mappings[S_name].ref_from, mappings[S_name].ref_to
+        T_start, T_end = mappings[T_name].ref_from, mappings[T_name].ref_to
 
-            vs = vs.union(set([S_name, T_name]))
-            overlap_len = min(S_end, T_end) - max(S_start, T_start)
-            if overlap_len > 0:
-                if S_start < T_start or (S_start == T_start and S_end < T_end):
-                    es += [(S_name, T_name)]
-                else:
-                    es += [(T_name, S_name)]
-                ws += [overlap_len]
+        for o in overlaps(mappings[S_name], mappings[T_name]):
+            vs = vs.union(set(o[:2]))
+            es += [(str(o[0]), str(o[1]))]
+            ws += [o[2]]
 
     indicator.finish()
     G = overlap.OverlapGraph()
