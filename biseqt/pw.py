@@ -279,14 +279,14 @@ class AlignTable(CffiObject):
 
         self.frame, self.scores, self.alntype = frame, scores, alntype
         self.c_alnparams = ffi.new('std_alnparams*', {'type': alntype});
-        self.c_alnparams = ffi.new('banded_alnparams*', {'type': B_OVERLAP, 'dmax': 1200, 'dmin': 800});
+        #self.c_alnparams = ffi.new('banded_alnparams*', {'type': B_OVERLAP, 'dmin': 2800, 'dmax': 3200});
         self.c_alnprob = ffi.new('alnprob*', {
             'frame': frame.c_obj,
             'scores': scores.c_obj,
-            #'mode': STD_MODE,
-            #'std_params': self.c_alnparams,
-            'mode': BANDED_MODE,
-            'banded_params': self.c_alnparams,
+            'mode': STD_MODE,
+            'std_params': self.c_alnparams,
+            #'mode': BANDED_MODE,
+            #'banded_params': self.c_alnparams,
         })
         self.c_obj = ffi.new('dptable*', {
             'prob': self.c_alnprob,
