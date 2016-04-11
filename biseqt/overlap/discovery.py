@@ -70,25 +70,6 @@ def rolling_sum(data, width):
         # FIXME yield the corresponding indices so we can double check
         yield cur
 
-# FIXME docs
-class ShiftWindow(namedtuple('ShiftWindow', ['S_len', 'T_len', 'width', 'shift'])):
-    # FIXME docs
-    def significance(self, num):
-        diag_len_squared = (self.S_len - abs(self.shift))**2 + \
-            (self.T_len - abs(self.shift))**2
-        log_pvalue = - log(self.S_len) - log(self.T_len) \
-            + log(self.width) \
-            + 0.5 * log(diag_len_squared)
-        # we have num observations (each a seed) with the same probability
-        # of being matched by the null hypothesis:
-        log_pvalue *= num
-        # we are testing S_len+T_len simultaneous hypotheses; apply a Bonferroni
-        # correction:
-        log_pvalue += log(self.S_len + self.T_len)
-        return log_pvalue
-
-# FIXME find the strip with max number of shifts *per unit area*.
-# FIXME make some of these keyword arguments
 def most_signifcant_shift(S_id, T_id, index):
     """Builds a smoothed distribution (via a rolling sum of known width) of
     shifts for the provided seeds of a pair of sequences of known lengths and
