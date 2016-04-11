@@ -23,7 +23,7 @@ params = {
     'upper_log_pvalue_cutoff': 0, # FIXME
     # ------------- Index ----------------
     'min_seeds_for_homology': 1, # minimum number of seeds for two reads to be considered.
-    'min_word_log_pvalue': -5, # minimum p-value allowed for a word to be considered a seed
+    'min_word_log_pvalue': 0, # minimum p-value allowed for a word to be considered a seed
     # ---------------- simulations ------------------
     'genome_length': 70000, # length of randomly generated genome
     'coverage': 10,          # coverage of random sequencing reads
@@ -115,7 +115,6 @@ def plot_shift_pvalues(db, path, true_path):
     overlap.plot_shift_signifiance_discrimination(
         path,
         Idx,
-        params['shift_rolling_sum_width'],
         true_overlaps(true_path),
         num_bins=500
     )
@@ -129,7 +128,7 @@ def plot_seeds(db, path, true_path, mappings):
     B = seq.SeqDB(db, alphabet=A)
     Idx = words.Index(seqdb=B, **params)
     G = igraph.read(true_path)
-    true_overlaps = [set(G.vs[u]['name'], G.vs[v]['name']) for u, v in G.get_edgelist()]
+    true_overlaps = [set(G.vs[u]['name'], G.vs[v]['name']) for u, v in G.get_edgelist() if G]
     with open(mappings) as f:
         mappings = eval(f.read())
     overlap.plot_all_seeds(
@@ -159,16 +158,12 @@ def build_true_overlap_graph(db, mappings_path):
         mappings = eval(f.read())
     vs = set()
     es, ws = [], []
-    # position of a mapping record on the positive strand of reference
-    def plus_pos(m):
-        return (m.ref_from, m.ref_to) if m.strand == '+' else (m.ref_to, m.ref_from)
 
     def overlaps(S_mapping, T_mapping):
-        S_start, S_end = plus_pos(S_mapping)
-        T_start, T_end = plus_pos(T_mapping)
-        overlap_len = min(S_end, T_end) - max(S_start, T_start)
-        if overlap_len > 0:
-            if S_mapping.strand == T_mapping.strand:
+        overlap_len = min(S_mapping.ref_to, T_mapping.ref_to) - max(S_mapping.ref_from, T_mapping.ref_from)
+        # FIXME debug; expose this
+        if overlap_len > 1000:
+            if S_mapping.rc == T_mapping.rc:
                 return [(S_name + '+', T_name + '+', overlap_len),
                         (S_name + '-', T_name + '-', overlap_len)]
             else:
