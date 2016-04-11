@@ -13,7 +13,8 @@ import os
 from . import seq, words, lib, ProgressIndicator, overlap
 
 # FIXME docs
-Mapping = namedtuple('Mapping', ['ref', 'strand', 'ref_from', 'ref_to'])
+# rc is whether the read is reverse complemented to match the reference
+Mapping = namedtuple('Mapping', ['ref', 'rc', 'ref_from', 'ref_to'])
 
 def save_mappings(path, mappings):
     with open(path, 'w') as f:
@@ -42,7 +43,6 @@ def parse_mappings(ref, reads, sam_output, blasr=0):
         for l in f:
             if l[0] == '@':
                 continue
-            #read_len = len(rec.seq)
 
             # cf. SAM spec: https://samtools.github.io/hts-specs/SAMv1.pdf
             read, flag, ref, start, quality, cigar = l.strip().split()[:6]
@@ -57,36 +57,30 @@ def parse_mappings(ref, reads, sam_output, blasr=0):
                 # Secondary/Supplemantary alignment
                 continue
             indicator.progress()
+            # flag 0x10 means the query (the "segment") has been reveresed
             assert(flag in [0, 0x10])
-            direction = 1 if flag == 0 else -1
             len_on_ref = 0
             for match in finditer('\d+(S|M|D|I)', cigar):
                 op = match.group()
+                assert(op[-1] in 'SMDI')
                 length = int(op[:-1])
                 # soft clipping
-                # FIXME double check and simplify the if soup:
-                read_len = -1
-                if op[-1] == 'S':
-                    if match.start() == 0:
-                        if direction == 1:
-                            start -= length
-                        else:
-                            len_on_ref += length
-                    elif match.end() == len(cigar):
-                        if direction == 1:
-                            len_on_ref += length
-                        else:
-                            start -= length
+                if op[-1] == 'S' and (match.start() == 0 or match.end() == len(cigar)):
+                    # soft clipping at the beginning of query or at the end of
+                    # rc'd query.
+                    if (match.start() == 0 and flag == 0) or (match.end() == len(cigar) and flag == 0x10):
+                        start -= length
+                    else:
+                        len_on_ref += length
                 elif op[-1] in 'MI':
                     len_on_ref += length
                 else:
                     assert(op[-1] == 'D')
 
-            end = start + direction * len_on_ref
-            #print '\n-----\n' + '\n'.join(ids['reads'].keys())
+            end = start + len_on_ref
             yield ids['reads'][read], Mapping(
                 ref=ids['refs'][ref],
-                strand='+' if direction == 1 else '-',
+                rc=1 if flag == 0x10 else 0,
                 ref_from=int(start),
                 ref_to=end,
             )
