@@ -93,11 +93,10 @@ def plot_seed_extension_rws(path, seqinfo, max_rws=225, draw_type='-+',
 
 
 # FIXME docs
-def plot_shift_signifiance_discrimination(path, index, rolling_sum_width,
-    true_overlaps, num_bins=500):
+def plot_shift_signifiance_discrimination(path, index, true_overlaps, num_bins=500):
     seqinfo = index.seqdb.seqinfo()
     ids = seqinfo.keys()
-    #ids = ids[:10]
+    #ids = ids[:100]
     pos_pvalues = []
     neg_pvalues = []
     msg = 'Finding most significant shift for all pairs of sequences'
@@ -111,14 +110,14 @@ def plot_shift_signifiance_discrimination(path, index, rolling_sum_width,
             indicator.progress()
             S_graph_name = seqinfo[S_id]['name'] + ('-' if seqinfo[S_id]['rc'] else '+')
             T_graph_name = seqinfo[T_id]['name'] + ('-' if seqinfo[T_id]['rc'] else '+')
-            _, log_pvalue = most_signifcant_shift(S_id, T_id, index)
-            #_, log_pvalue = index.most_signifcant_shift(S_id, T_id)
-            if log_pvalue is None:
+            _, significance = most_signifcant_shift(S_id, T_id, index)
+            #_, significance = index.most_signifcant_shift(S_id, T_id)
+            if significance is None:
                 continue
             if set([S_graph_name, T_graph_name]) in true_overlaps:
-                pos_pvalues += [log_pvalue]
+                pos_pvalues += [significance]
             else:
-                neg_pvalues += [log_pvalue]
+                neg_pvalues += [significance]
 
     indicator.finish()
 
@@ -129,18 +128,20 @@ def plot_shift_signifiance_discrimination(path, index, rolling_sum_width,
     n_pos, bins_pos, _= plt.hist(pos_pvalues, num_bins, color='green',
         histtype='step', cumulative=True, normed=True, label='Overlapping reads')
     xmax = min(
-        bins_neg[len(filter(lambda x: n_neg[x] < 1 - 0.005, range(len(bins_neg)-1)))],
-        bins_pos[len(filter(lambda x: n_pos[x] < 1 - 0.005, range(len(bins_pos)-1)))]
+        bins_neg[len(filter(lambda x: n_neg[x] < 1 - 0.001, range(len(bins_neg)-1)))],
+        bins_pos[len(filter(lambda x: n_pos[x] < 1 - 0.001, range(len(bins_pos)-1)))]
     )
     plt.grid(True)
     plt.xlim(-50, xmax)
-    plt.ylim(-0.1, 1.2)
-    plt.axvline(x=0, ymin=-0.1, ymax=1.2, color='k')
+    ymax = max(max(n_neg), max(n_pos))*1.1
+    plt.ylim(ymax*-0.1, ymax)
+    plt.axvline(x=0, ymin=plt.ylim()[0], ymax=plt.ylim()[1], color='k')
     plt.axhline(y=0, xmin=plt.xlim()[0], xmax=plt.xlim()[1], color='k')
     x_step = 100
+    y_step = 0.05
     plt.xticks([int(plt.xlim()[0]) + i*x_step for i in range(int((plt.xlim()[1]-plt.xlim()[0])/x_step) + 1)], rotation=90)
-    plt.yticks([i*0.05 for i in range(21)])
-    plt.xlabel('smallest log(p-values) for a shift window on %d-mers' % index.wordlen)
+    plt.yticks([i*y_step for i in range(int(plt.ylim()[1]/y_step))])
+    plt.xlabel('largest significance for a shift window on %d-mers' % index.wordlen)
     plt.ylabel('Proportion of read-pairs (cumulative)')
     plt.legend(loc='upper left', fontsize=10)
     plt.tight_layout()
