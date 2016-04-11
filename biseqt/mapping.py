@@ -10,7 +10,7 @@ import sqlite3
 import sys
 import os
 
-from . import seq, words, lib, ProgressIndicator, overlap
+from . import seq, words, lib, ProgressIndicator
 
 # FIXME docs
 # rc is whether the read is reverse complemented to match the reference

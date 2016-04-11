@@ -282,8 +282,9 @@ class SeqDB(object):
         alphabet (Alphabet): The alphabet for sequences in the database.
     """
     def __init__(self, db, alphabet=None):
-        assert isinstance(alphabet, Alphabet)
-        self.alphabet, self.db = alphabet, db
+        self.alphabet = alphabet if alphabet else Alphabet("ACGT")
+        assert isinstance(self.alphabet, Alphabet)
+        self.db = db
         # populate the seqinfo cache
         self.seqinfo(use_cache=False)
 

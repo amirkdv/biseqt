@@ -2,9 +2,7 @@
 import sys
 import os
 import igraph
-from itertools import combinations
 from .. import pw, words, seq, overlap, overlap, mapping, ProgressIndicator
-from ..mapping import Mapping
 
 params = {
     'show_params': False,   # print a summary of parameters
@@ -76,12 +74,6 @@ def create_example(db, reads='reads.fa'):
         go_prob=params['go_prob'],
     )
 
-def map_reads(db, reference, reads):
-    B = words.SeqDB(db, alphabet=A)
-    M = assembly.BwaMappingAssembler(B)
-    M.initialize(reference, reads)
-    M.save(M.mappings(num_reads=os.environ.get('NUM_READS', -1)))
-
 def true_overlaps(true_path):
     G = igraph.read(true_path)
     return [set([G.vs[u]['name'], G.vs[v]['name']]) for u, v in G.get_edgelist()]
@@ -145,46 +137,3 @@ def plot_rw(db, path, true_path):
         path, B.seqinfo(), max_rws=225, draw_type='-+',
         logfile='scores.txt', true_overlaps=true_overlaps(true_path)
     )
-
-def build_true_overlap_graph(db, mappings_path):
-    B = seq.SeqDB(db, alphabet=A)
-    seqnames = set([x['name'] for x in B.seqinfo().values()])
-    indicator = ProgressIndicator(
-        'Building true overlap graph from mappings at %s' % mappings_path,
-        len(seqnames)*(len(seqnames) - 1)/2.0,
-    )
-    indicator.start()
-    with open(mappings_path) as f:
-        mappings = eval(f.read())
-    vs = set()
-    es, ws = [], []
-
-    def overlaps(S_mapping, T_mapping):
-        overlap_len = min(S_mapping.ref_to, T_mapping.ref_to) - max(S_mapping.ref_from, T_mapping.ref_from)
-        # FIXME debug; expose this
-        if overlap_len > 1000:
-            if S_mapping.rc == T_mapping.rc:
-                return [(S_name + '+', T_name + '+', overlap_len),
-                        (S_name + '-', T_name + '-', overlap_len)]
-            else:
-                return [(S_name + '+', T_name + '-', overlap_len),
-                        (S_name + '-', T_name + '+', overlap_len)]
-        return []
-
-    for S_name, T_name in combinations(seqnames, 2):
-        indicator.progress()
-        S_start, S_end = mappings[S_name].ref_from, mappings[S_name].ref_to
-        T_start, T_end = mappings[T_name].ref_from, mappings[T_name].ref_to
-
-        for o in overlaps(mappings[S_name], mappings[T_name]):
-            vs = vs.union(set(o[:2]))
-            es += [(str(o[0]), str(o[1]))]
-            ws += [o[2]]
-
-    indicator.finish()
-    G = overlap.OverlapGraph()
-    G.iG.add_vertices(list(vs))
-    es = [(G.iG.vs.find(name=u), G.iG.vs.find(name=v)) for u,v in es]
-    G.iG.add_edges(es)
-    G.iG.es['weight'] = ws
-    return G

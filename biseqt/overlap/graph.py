@@ -1,7 +1,51 @@
 import sys
 import igraph
 from termcolor import colored
+from itertools import combinations
 
+from .. import ProgressIndicator
+from ..mapping import Mapping
+
+def overlap_graph_from_mappings(db, mappings_path, min_overlap=1000):
+    seqnames = set([x['name'] for x in db.seqinfo().values()])
+    indicator = ProgressIndicator(
+        'Building true overlap graph from mappings at %s' % mappings_path,
+        len(seqnames)*(len(seqnames) - 1)/2.0,
+    )
+    indicator.start()
+    with open(mappings_path) as f:
+        mappings = eval(f.read())
+    vs = set()
+    es, ws = [], []
+
+    def overlaps(S_mapping, T_mapping):
+        overlap_len = min(S_mapping.ref_to, T_mapping.ref_to) - max(S_mapping.ref_from, T_mapping.ref_from)
+        if overlap_len >= min_overlap:
+            if S_mapping.rc == T_mapping.rc:
+                return [(S_name + '+', T_name + '+', overlap_len),
+                        (S_name + '-', T_name + '-', overlap_len)]
+            else:
+                return [(S_name + '+', T_name + '-', overlap_len),
+                        (S_name + '-', T_name + '+', overlap_len)]
+        return []
+
+    for S_name, T_name in combinations(seqnames, 2):
+        indicator.progress()
+        S_start, S_end = mappings[S_name].ref_from, mappings[S_name].ref_to
+        T_start, T_end = mappings[T_name].ref_from, mappings[T_name].ref_to
+
+        for o in overlaps(mappings[S_name], mappings[T_name]):
+            vs = vs.union(set(o[:2]))
+            es += [(str(o[0]), str(o[1]))]
+            ws += [o[2]]
+
+    indicator.finish()
+    G = OverlapGraph()
+    G.iG.add_vertices(list(vs))
+    es = [(G.iG.vs.find(name=u), G.iG.vs.find(name=v)) for u,v in es]
+    G.iG.add_edges(es)
+    G.iG.es['weight'] = ws
+    return G
 
 class OverlapGraph(object):
     """Wraps an :class:`igraph.Graph` object with additional methods to build

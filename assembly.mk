@@ -50,8 +50,10 @@ $(ASSEMBLED_GRAPH).dag.gml: $(ASSEMBLED_GRAPH).gml
 		G.break_cycles(method="$(FAS_METHOD)"); G.save("$@")'
 
 $(TRUE_GRAPH).gml:
-	python -c 'import biseqt.tests.assembly as A; \
-		A.build_true_overlap_graph("$(DB)", "$(MAPPINGS)").save("$@")'
+	python -c 'from biseqt.overlap.graph import overlap_graph_from_mappings as f; \
+		from biseqt.seq import SeqDB, Alphabet; \
+		g = f(SeqDB("$(DB)"), "$(MAPPINGS)", min_overlap=1000); \
+		g.save("$@")'
 
 $(ASSEMBLED_GRAPH).svg:
 	python -c 'import biseqt.overlap as O, igraph as ig; \
