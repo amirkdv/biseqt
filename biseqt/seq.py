@@ -325,8 +325,8 @@ class SeqDB(object):
         seqgen = lambda: enumerate(SeqIO.parse(fasta_src, 'fasta'))
         # FIXME debug
         recs = chain(
-            ((name(r.seq), seq_type, r.id, 0, str(r.seq)) for idx,r in seqgen() if idx < 100),
-            ((name(r.seq), seq_type, r.id, 1, str(r.reverse_complement().seq)) for idx,r in seqgen() if idx < 100)
+            ((name(r.seq), seq_type, r.id, 0, str(r.seq)) for idx,r in seqgen()), # if idx < 100),
+            ((name(r.seq), seq_type, r.id, 1, str(r.reverse_complement().seq)) for idx,r in seqgen()) # if idx < 100)
         )
         with sqlite3.connect(self.db) as conn:
             c = conn.cursor()
