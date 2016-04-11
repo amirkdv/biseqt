@@ -74,11 +74,13 @@ class Index(object):
             c = conn.cursor()
             q = """
                 CREATE TABLE %s (
-                  'tuple' integer primary key,
+                  'rowid' integer primary key,
+                  'tuple' integer,
                   'hits'  varchar
                 );
             """ % (self.t_words)
             c.execute(q)
+            c.execute('CREATE index tuple ON %s(tuple)' % self.t_words)
             q = """
                 CREATE TABLE %s (
                   'S_id' integer REFERENCES seq(id),
@@ -171,7 +173,7 @@ class Index(object):
             num_seqs = int(seq_c.next()[0])
             msg = 'Scanning %d sequences for %d-mers' \
                 % (num_seqs, self.wordlen)
-            indicator = ProgressIndicator(msg, num_seqs)
+            indicator = ProgressIndicator(msg, num_seqs, percentage=False)
             indicator.start()
 
             # populate the words table:
@@ -252,13 +254,13 @@ class Index(object):
     def word_pvalue_calculator(self):
         with sqlite3.connect(self.seqdb.db) as conn:
             c = conn.cursor()
-            c.execute('select count(*) from %s' % self.t_words)
+            c.execute('select max(rowid) + 1 from %s' % self.t_words)
             N = int(c.next()[0]) # total number of words
             c.execute('select sum(length(seq)) from seq')
             L = int(c.next()[0]) # total sequence length of all reads
 
         # NOTE
-        self.num_words = L
+        self.num_words = N
 
         # Normal approximation (mean and standard deviation) of a binomial distribution
         B2N = lambda n, p: (n*p, sqrt(n * p * (1-p)))
@@ -387,12 +389,18 @@ def plot_word_pvalues(index, path=None, num_bins=500):
     with sqlite3.connect(index.seqdb.db) as conn:
         c = conn.cursor()
         calc = index.word_pvalue_calculator()
-        c.execute('select hits from %s' % index.t_words)
         log_pvalues = []
+        msg = 'Calculating p-values for all %d %d-mers' % (index.num_words, index.wordlen)
+        indicator = ProgressIndicator(msg, index.num_words)
+        indicator.start()
+        c.execute('select hits from %s' % index.t_words)
         for row in c:
             pvalue = calc(row[0].count('@'))
+            indicator.progress()
             if pvalue:
                 log_pvalues += [log(pvalue)]
+
+        indicator.finish()
 
         plt.grid(True)
         plt.hist(log_pvalues, num_bins, normed=True, histtype='step', cumulative=True, color='k')
