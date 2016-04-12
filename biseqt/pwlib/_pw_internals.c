@@ -222,6 +222,8 @@ int _alnchoice_B(dptable *T, int x, int y, alnchoice* choice) {
       // for compiler's sake:
       return -1;
   }
+  choice->mins_cd = T->prob->max_new_mins;
+  choice->cur_min = -INT_MAX;
   choice->op = 'B';
   choice->score = 0;
   choice->base = NULL;
@@ -254,6 +256,14 @@ int _alnchoice_M(dptable *T, int x, int y, alnchoice* choice) {
   // No path-dependence for S/M; all previous bases are the same:
   choice->score = T->cells[prev.i][prev.j].choices[0].score + score;
   choice->base = &(T->cells[prev.i][prev.j].choices[0]);
+  if (T->prob->max_new_mins >0 &&
+      choice->score < T->cells[prev.i][prev.j].choices[0].cur_min) {
+    choice->mins_cd = T->cells[prev.i][prev.j].choices[0].mins_cd - 1;
+    choice->cur_min = choice->score;
+    if (choice->mins_cd < 0) {
+      return -1;
+    }
+  }
   return 0;
 }
 
@@ -293,6 +303,14 @@ int _alnchoice_ID(dptable* T, int x, int y, alnchoice* choice, char op) {
   choice->op = op;
   choice->score = max_score;
   choice->base = &(T->cells[prev.i][prev.j].choices[base_idx]);
+  if (T->prob->max_new_mins >0 &&
+      choice->score < T->cells[prev.i][prev.j].choices[0].cur_min) {
+    choice->mins_cd = T->cells[prev.i][prev.j].choices[0].mins_cd - 1;
+    choice->cur_min = choice->score;
+    if (choice->mins_cd < 0) {
+      return -1;
+    }
+  }
   return 0;
 }
 
@@ -377,7 +395,7 @@ intpair _banded_find_optimal(dptable* T) {
       frame->S_range.j - frame->S_range.i,
       frame->T_range.j - frame->T_range.i
     );
-    /*printf("(d+,a)=(%d,%d)\n", opt.i, opt.j);*/ // FIXME segfaults
+    /*printf("(d+,a)=(%d,%d)\n", opt.i, opt.j);*/ // FIXME segfaults, does it?
     if (T->cells[opt.i][opt.j].num_choices < 1) {
       return (intpair) {-1, -1};
     } else {

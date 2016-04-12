@@ -95,9 +95,11 @@ intpair dptable_solve(dptable* T) {
       // the coordinates of our cell in the dynamic programming table.
       if (choices != NULL) {
         free(choices);
+        choices = NULL;
       }
       if (max_score_choices != NULL) {
         free(max_score_choices);
+        max_score_choices = NULL;
       }
       // Allocate for all 4 possible choices (B,M/S,I,D)
       choices = malloc(4 * sizeof(alnchoice));

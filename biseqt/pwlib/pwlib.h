@@ -104,6 +104,8 @@ typedef struct {
 typedef struct {
   alnframe *frame; /**< The skeleton of the DP table. */
   alnscores *scores; /**< The parameters defining an optimal solution.*/
+  int max_new_mins; /**< Maximum number of times a new minimum score is
+    tolerated before alignment is aborted (only operative if positive). **/
   alnmode mode; /**< Indicates which of standard or overlap alignment this is. */
   union {
     std_alnparams* std_params; /**< The parameters for standard algorithms. */
@@ -134,6 +136,10 @@ typedef struct alnchoice {
     chain of bases leading to here.*/
   struct alnchoice *base; /**< The choice for the consequent subproblem on
     which this choice and its score depends.*/
+  int mins_cd; /**< The countdown of the number of new score minima encountered
+    along the path leading to this choice. */
+  int cur_min; /**< The current minimum score along the path leading to this
+    choice. */
 } alnchoice;
 
 /**
@@ -171,6 +177,7 @@ typedef struct {
     that defines the alignment.*/
 } transcript;
 
+// TODO clarify the distinction between this max_new_min and the one in alnprob
 typedef struct {
   alnscores* scores; /** Substitution and gap scores. **/
   int window; /**< The width of the rolling window of alignment. **/

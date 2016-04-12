@@ -4,6 +4,7 @@ from termcolor import colored
 from itertools import combinations
 
 from .. import ProgressIndicator
+from .discovery import discover_overlap
 from ..mapping import Mapping
 
 def overlap_graph_from_mappings(db, mappings_path, min_overlap=1000):
@@ -43,6 +44,49 @@ def overlap_graph_from_mappings(db, mappings_path, min_overlap=1000):
     G = OverlapGraph()
     G.iG.add_vertices(list(vs))
     es = [(G.iG.vs.find(name=u), G.iG.vs.find(name=v)) for u,v in es]
+    G.iG.add_edges(es)
+    G.iG.es['weight'] = ws
+    return G
+
+def overlap_graph_de_novo(index, **kwargs):
+    vs = set()
+    es, ws = [], []
+    seqinfo = index.seqdb.seqinfo()
+    seqids = seqinfo.keys()
+    #seqids = [1] # FIXME
+    msg = 'Extending seeds on potentially homologous sequences'
+    indicator = ProgressIndicator(msg,
+        len(seqinfo) * (len(seqinfo) - 2)/2, percentage=False)
+    indicator.start()
+    for S_id_idx in range(len(seqids)):
+        for T_id_idx in range(S_id_idx, len(seqids)):
+            #if T_id not in [13]:
+                #continue
+            S_id, T_id = seqids[S_id_idx], seqids[T_id_idx]
+            S_name, T_name = seqinfo[S_id]['name'], seqinfo[T_id]['name']
+            if S_name == T_name:
+                continue
+
+            indicator.progress()
+            S_name += '+' if seqinfo[S_id]['rc'] else '-'
+            T_name += '+' if seqinfo[T_id]['rc'] else '-'
+            vs = vs.union([S_name, T_name])
+
+            tx = discover_overlap(S_id, T_id, index, **kwargs)
+            if not tx:
+                continue
+            assert(tx.T_idx * tx.S_idx == 0)
+            S_tx_len = lib.tx_seq_len(tx.c_obj, 'S')
+            T_tx_len = lib.tx_seq_len(tx.c_obj, 'T')
+            # at this point exactly one of tx.S_idx or tx.T_idx is zero.
+            es += [(S_name, T_name)] if tx.T_idx == 0 else [(T_name, S_name)]
+            ws += [seg.tx.score]
+
+    indicator.finish()
+
+    G = OverlapGraph()
+    G.iG.add_vertices(list(vs))
+    es = [(G.iG.vs.find(name=u), G.iG.vs.find(name=v)) for u, v in es]
     G.iG.add_edges(es)
     G.iG.es['weight'] = ws
     return G

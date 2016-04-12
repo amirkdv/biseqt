@@ -2,7 +2,7 @@
 import sys
 import os
 import igraph
-from .. import pw, words, seq, overlap, overlap, mapping, ProgressIndicator
+from .. import pw, words, seq, overlap, mapping, ProgressIndicator
 
 params = {
     'show_params': False,   # print a summary of parameters
@@ -16,9 +16,7 @@ params = {
     'window': 50,            # rolling window length for tuple extension.
     'max_new_mins': 5,       # how many consecutive drops are allowed.
     'min_overlap_score': 500,# minimum score required for an overlap to be reported.
-    'shift_rolling_sum_width': 100,
-    'lower_log_pvalue_cutoff': -200, # FIXME
-    'upper_log_pvalue_cutoff': 0, # FIXME
+    'min_shift_significance': 50,
     # ------------- Index ----------------
     'min_seeds_for_homology': 1, # minimum number of seeds for two reads to be considered.
     'min_word_log_pvalue': 0, # minimum p-value allowed for a word to be considered a seed
@@ -39,16 +37,12 @@ C = pw.AlignScores(
     go_score=go_score,
     ge_score=ge_score
 )
-od_params = overlap.OverlapDiscoveryParams(
-    seed_ext_params=overlap.SeedExtensionParams(
-        window=params['window'],
-        min_score=params['min_overlap_score'],
-        max_new_mins=params['max_new_mins'],
-        scores=C
-    ),
-    shift_rolling_sum_width=params['shift_rolling_sum_width'],
+seed_ext_params = overlap.SeedExtensionParams(
+    window=params['window'],
+    min_score=params['min_overlap_score'],
+    max_new_mins=params['max_new_mins'],
+    scores=C
 )
-db_id = lambda G, vid: int(G.vs[vid]['name'].split('#')[1])
 
 def show_params():
     print 'Substitution probs:'
@@ -92,7 +86,10 @@ def build_denovo_overlap_graph(db, path, true_path):
     Idx = words.Index(seqdb=B, **params)
     if params['show_params']:
         show_params()
-    G = overlap.discovery.overlap_graph(Idx, od_params, min_margin=params['min_margin'], rw_collect=params['rw_collect'])
+    #G = overlap.overlap_graph_de_novo(Idx, mode='seed extension',
+        #seed_ext_params=seed_ext_params, min_margin=params['min_margin'])
+    G = overlap.overlap_graph_de_novo(Idx, mode='banded alignment',
+        aln_scores=C, min_margin=params['min_margin'], min_shift_significance=params['min_shift_significance'])
     G.save(path)
 
 def plot_word_pvalues(db, path):
@@ -116,6 +113,7 @@ def plot_num_seeds(db, path, true_path):
     Idx = words.Index(seqdb=B, **params)
     overlap.plot_num_seeds_discrimination(path, Idx, true_overlaps(true_path))
 
+# FIXME get rid of shift_rolling_sum_width
 def plot_seeds(db, path, true_path, mappings):
     B = seq.SeqDB(db, alphabet=A)
     Idx = words.Index(seqdb=B, **params)
@@ -131,9 +129,3 @@ def plot_seeds(db, path, true_path, mappings):
         mappings=mappings
     )
 
-def plot_rw(db, path, true_path):
-    B = seq.SeqDB(db, alphabet=A)
-    overlap.plot_seed_extension_rws(
-        path, B.seqinfo(), max_rws=225, draw_type='-+',
-        logfile='scores.txt', true_overlaps=true_overlaps(true_path)
-    )

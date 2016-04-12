@@ -168,6 +168,8 @@ class AlignScores(CffiObject):
         if name == 'subst_scores':
             idx = range(len(self.alphabet))
             return [[self.c_obj.subst_scores[i][j] for j in idx] for i in idx]
+        elif name == 'gap_scores':
+            return (self.c_obj.gap_open_score, self.c_obj.gap_extend_score)
         else:
             return super(AlignScores, self).__getattr__(name)
 
@@ -274,20 +276,29 @@ class AlignTable(CffiObject):
         c_obj (cffi.cdata): points to the underlying ``alndef`` struct.
     """
     def __init__(self, frame, scores, **kw):
-        alntype = kw.pop('alntype', GLOBAL)
+        alnmode = kw['alnmode']
+        alntype = kw['alntype']
         assert(isinstance(frame, AlignFrame))
-
-        self.frame, self.scores, self.alntype = frame, scores, alntype
-        self.c_alnparams = ffi.new('std_alnparams*', {'type': alntype});
-        #self.c_alnparams = ffi.new('banded_alnparams*', {'type': B_OVERLAP, 'dmin': 2800, 'dmax': 3200});
-        self.c_alnprob = ffi.new('alnprob*', {
+        assert(alnmode in [STD_MODE, BANDED_MODE])
+        alnprob_args = {
             'frame': frame.c_obj,
             'scores': scores.c_obj,
-            'mode': STD_MODE,
-            'std_params': self.c_alnparams,
-            #'mode': BANDED_MODE,
-            #'banded_params': self.c_alnparams,
-        })
+            'mode': alnmode,
+            'max_new_mins': kw.get('max_new_mins', -1),
+        }
+        if alnmode == STD_MODE:
+            assert(alntype in [GLOBAL, LOCAL, START_ANCHORED, END_ANCHORED,
+                OVERLAP, START_ANCHORED_OVERLAP, END_ANCHORED_OVERLAP])
+            self.c_alnparams = ffi.new('std_alnparams*', {'type': alntype});
+            alnprob_args['std_params'] = self.c_alnparams
+        elif alnmode == BANDED_MODE:
+            assert(alntype in [B_GLOBAL, B_OVERLAP])
+            self.c_alnparams = ffi.new('banded_alnparams*', {
+                'type': alntype, 'dmin': kw['dmin'], 'dmax': kw['dmax']
+            });
+            alnprob_args['banded_params'] = self.c_alnparams
+
+        self.c_alnprob = ffi.new('alnprob*', alnprob_args)
         self.c_obj = ffi.new('dptable*', {
             'prob': self.c_alnprob,
             'cells': ffi.NULL,
@@ -314,22 +325,15 @@ class AlignTable(CffiObject):
             self.frame.S, self.frame.T, opseq, self.frame.S_range.i, self.frame.T_range.i
         )
 
-    def solve(self, print_dp_table=False):
+    def solve(self):
         """Wraps :c:func:`stdpw.solve() <solve()>`: populates the DP table
         and returns the optimal score.
 
-        Args:
-            print_dp_table(Optional[bool]): whether or not to print the
-                fully calculated DP table, default is ``False``.
         Returns:
             float|NoneType: Optimal alignment score or ``None`` if no alignment
                 found.
         """
         self.opt = lib.dptable_solve(self.c_obj)
-        if print_dp_table:
-            mat = self.c_obj.cells
-            for i in range(self.c_obj.num_rows):
-                print [round(mat[i][j].num_choices, 2) for j in range(self.c_obj.row_lens[i])]
         if self.opt.i == -1 or self.opt.j == -1:
             self.opt = None
             return None
@@ -351,18 +355,8 @@ class AlignTable(CffiObject):
         return Transcript(c_obj=transcript)
 
     def __getattr__(self, name):
-        if name == 'dp_table':
-            i_idx = range(self.frame.S_range.j - self.frame.S_range.i + 1)
-            j_idx = range(self.frame.T_range.j - self.frame.T_range.j + 1)
-
-            def score(i, j):
-                if self.c_dp_table[i][j].num_choices != 0:
-                    return self.c_dp_table[i][j].choices[0].score
-                else:
-                    return None
-            return [[score(i, j) for j in j_idx] for i in i_idx]
-        else:
-            return super(AlignTable, self).__getattr__(name)
+        # TODO look up attributes from self.c_obj or self.aln_prob
+        return super(AlignTable, self).__getattr__(name)
 
 
 class Transcript(CffiObject):

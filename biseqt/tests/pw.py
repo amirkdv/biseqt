@@ -2,11 +2,8 @@
 from .. import pw, seq
 
 params = {
-    'length': 10000,
     'go_prob': 0.05, # gap open score
     'ge_prob': 0.1, # gap extend score
-    'show_dp':  0, # whether to print the DP table
-    'alntype': pw.OVERLAP, # type of alignments
     'subst_probs': [[0.91 if k==i else 0.03 for k in range(4)] for i in range(4)]
 }
 import os
@@ -26,22 +23,28 @@ print 'Pr(go) = %.2f, Pr(ge) = %.2f +----> Score(go)=%.2f, Score(ge)=%.2f' % \
     (params['go_prob'], params['ge_prob'], go_score, ge_score)
 
 
-S = seq.Sequence('GGCCGAACCCAGTCGTACGTCTCCTTGTGAAGTATAAGCTGCATATAGATCATTGATAAAGATTTAGGTAGCTGACAAGCCCCGGAGGCATGGCTTGCAT', A)
-T = seq.Sequence('CAGAGACAGCGCCAGAGAGACCAGCCAGAA', A)
-
-#S = A.randseq(params['length'])
-#T, m_opseq = seq.Sequence(S[3000:6000] + A.randstr(params['length']/10), A).mutate(**params)
+#S = seq.Sequence('GGCCGAACCCAGTCGTACGTCTCCTTGTGAAGTATAAGCTGCATATAGATCATTGATAAAGATTTAGGTAGCTGACAAGCCCCGGAGGCATGGCTTGCAT', A)
+#T = seq.Sequence('CAGAGACAGCGCCAGAGAGACCAGCCAGAA', A)
+S = A.randseq(100)
+T, m_opseq = S.mutate(**params)
 C = pw.AlignScores(subst_scores=subst_scores, alphabet=A,
     go_score=go_score, ge_score=ge_score)
 F = pw.AlignFrame(S, T)
-with pw.AlignTable(F, C, alntype=params['alntype']) as P:
-    score = P.solve(print_dp_table=params['show_dp'])
+with pw.AlignTable(F, C, alnmode=pw.STD_MODE, alntype=pw.GLOBAL) as P:
+    score = P.solve()
     transcript = P.traceback()
 
-print '\n--> optimal alignment:\n%s\n' % str(transcript)
+print '\n--> optimal global alignment:\n%s\n' % str(transcript)
 if transcript:
     transcript.pretty_print(S, T)
 
-#m_transcript = pw.Transcript(S_idx=0, T_idx=0, score=P.score(m_opseq), opseq=m_opseq)
-#print '\n--> mutation transcript:\n%s\n' % str(m_transcript)
-#m_transcript.pretty_print(S, T)
+S = A.randseq(8000)
+T, m_opseq = seq.Sequence(S[4000:] + A.randstr(1000), A).mutate(**params)
+F = pw.AlignFrame(S, T)
+with pw.AlignTable(F, C, alnmode=pw.BANDED_MODE, alntype=pw.B_OVERLAP, dmin=3800, dmax=4200) as P:
+    score = P.solve()
+    transcript = P.traceback()
+
+print '\n--> optimal overlap alignment (banded):\n%s\n' % str(transcript)
+if transcript:
+    transcript.pretty_print(S, T)

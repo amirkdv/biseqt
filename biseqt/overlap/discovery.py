@@ -3,7 +3,6 @@ from math import log
 import os.path
 import sys
 from .. import pw, words, lib, ffi, ProgressIndicator, CffiObject
-from . import OverlapGraph
 
 class SeedExtensionParams(CffiObject):
     """Wraps the C struct ``seedext_params``, see ``pwlib.h``.
@@ -26,49 +25,6 @@ class SeedExtensionParams(CffiObject):
                 'max_new_mins': kw['max_new_mins'],
                 'scores': kw['scores'].c_obj
             })
-
-
-# FIXME docs
-OverlapDiscoveryParams = namedtuple('OverlapDiscoveryParams', [
-    'seed_ext_params', 'shift_rolling_sum_width'
-])
-
-def extend_segments(S, T, segments, params, rw_collect=False):
-    """Wraps :c:func:`extend()`: given two sequences and a number of
-    matching segments returns the first fully extended segment.
-
-    Args:
-        S (seq.Sequence): The "from" sequence.
-        T (seq.Sequence): The "to" sequence.
-        segments (list[pw.Segment]): The starting segments. If called
-            from :func:`build`, these are seeds but no assumption is made.
-        params (SeedExtensionParams): The parameters for seed extension.
-
-    Returns:
-        pw.Segment|None: A segment corresponding to an overlap alignment or
-            None if none found.
-    """
-    if not segments:
-        return None
-
-    S_id, T_id = segments[0].S_id, segments[0].T_id
-    txs = ffi.new('transcript* []', [seg.tx.c_obj for seg in segments])
-    frame = pw.AlignFrame(S, T)
-    tx = lib.extend(txs, len(txs), frame.c_obj, params.c_obj)
-    return pw.Segment(S_id, T_id, pw.Transcript(c_obj=tx)) if tx != ffi.NULL else None
-
-# FIXME docs
-def rolling_sum(data, width):
-    if len(data) < width:
-        return
-    cur = 0
-    for idx in range(len(data)):
-        if idx >= width:
-            cur -= data[idx - width]
-        if idx < len(data):
-            cur += data[idx]
-        # FIXME yield the corresponding indices so we can double check
-        yield cur
 
 def most_signifcant_shift(S_id, T_id, index):
     """Builds a smoothed distribution (via a rolling sum of known width) of
@@ -130,7 +86,7 @@ def most_signifcant_shift(S_id, T_id, index):
     return max(scores.items(), key=lambda x: scores[x[0]])
 
 # FIXME docs
-def discover_overlap(S_id, T_id, rw_collect=False, **kwargs):
+def discover_overlap(S_id, T_id, index, mode='banded alignment', **kwargs):
     """
     Args:
         S_id (int):
@@ -141,7 +97,8 @@ def discover_overlap(S_id, T_id, rw_collect=False, **kwargs):
         index (words.Index):
         params (OverlapDiscoveryParams):
     """
-    index, params = kwargs['index'], kwargs['params']
+    assert(mode in ['seed extension', 'banded alignment'])
+    min_sig = kwargs['min_shift_significance']
     seqinfo = index.seqdb.seqinfo()
     S_len, T_len = seqinfo[S_id]['length'], seqinfo[T_id]['length']
     seeds = index.seeds(S_id, T_id)
@@ -149,87 +106,32 @@ def discover_overlap(S_id, T_id, rw_collect=False, **kwargs):
     if not seeds:
         return None
 
-    # TODO is there any use to the significance value itself?
-    best_shift, _ = most_signifcant_shift(S_len, T_len, seeds,
-        params.shift_rolling_sum_width)
-
-    seeds = words.maximal_seeds(seeds, S_id, T_id)
-    seeds = sorted(seeds, key=lambda x: abs(x.tx.S_idx - x.tx.T_idx - best_shift))
-
-    S = index.seqdb.loadseq(S_id)
-    T = index.seqdb.loadseq(T_id)
-
-    seg = extend_segments(S, T, seeds, params.seed_ext_params, rw_collect=rw_collect)
-    if not seg:
+    shift, sig = most_signifcant_shift(S_len, T_len, index)
+    if sig < min_sig:
         return None
 
-    assert(seg.tx.T_idx * seg.tx.S_idx == 0)
-    return seg
+    S, T = index.seqdb.loadseq(S_id), index.seqdb.loadseq(T_id)
+    tx = None
+    if mode == 'banded_alignment':
+        radius = index.band_radius((S_len, T_len), shift, kwargs['gap_prob'])
+        F = pw.AlignFrame(S, T)
+        assert(isinstance(kwargs['aln_scores'], AlignScores))
+        with pw.AlignTable(F, kwargs['aln_scores'], alnmode=BANDED_MODE, alntype=B_OVERLAP) as T:
+            score = T.solve()
+            if score is not None and score > kwargs['min_alignment_score']:
+                tx = T.traceback()
+    elif mode == 'seed extension':
+        seeds = words.maximal_seeds(seeds, S_id, T_id)
+        seeds = sorted(seeds, key=lambda x: abs(x.tx.S_idx - x.tx.T_idx - best_shift))
+        txs = ffi.new('transcript* []', [seed.tx.c_obj for seed in seeds])
+        F = pw.AlignFrame(S, T)
+        assert(isinstance(kwargs['seed_ext_params'], SeedExtensionParams))
+        tx = lib.extend(txs, len(txs), F.c_obj, kwargs['seed_ext_params'].c_obj)
+        tx = None if tx == ffi.NULL else tx
 
-# FIXME docs, simplify?
-def _satisfies_min_margin(seg, S_tx_len, T_tx_len, min_margin):
-    assert(seg.tx.S_idx * seg.tx.T_idx == 0)
-    lmargin = abs(seg.tx.S_idx - seg.tx.T_idx)
-    rmargin = abs(seg.tx.S_idx + S_tx_len - (seg.tx.T_idx + T_tx_len))
-    if lmargin < min_margin:
-        return False
-    if lmargin == 0 and rmargin < min_margin:
-        return False
-    return True
+    # starting diagonal of the alignment must be far enough from the 0 diagonal:
+    if tx and abs(tx.S_idx - tx.T_idx) < kwargs.get('min_margin', 1000):
+        return None
 
-# FIXME docs
-def _overlap_direction(seg, S_tx_len, T_tx_len):
-    assert(seg.tx.S_idx * seg.tx.T_idx == 0)
+    return tx
 
-    if seg.tx.S_idx == 0 and seg.tx.T_idx == 0:
-        # Edge case: the two sequences align with no gap at (0,0):
-        return '+' if S_tx_len < T_tx_len else '-'
-        # TODO what to do with the case where S_tx_len = T_tx_len?
-    else:
-        # We know exactly one of `seg.tx.{S_idx,T_idx}` is zero:
-        return '+' if seg.tx.T_idx == 0 else '-'
-
-def overlap_graph(index, od_params, min_margin=10, rw_collect=False):
-    vs = set()
-    es, ws = [], []
-    seqinfo = index.seqdb.seqinfo()
-    seqids = seqinfo.keys()
-    #seqids = [1] # FIXME
-    msg = 'Extending seeds on potentially homologous sequences'
-    indicator = ProgressIndicator(msg,
-        index.num_potential_homolog_pairs(), percentage=False)
-    num_shift_decided = 0
-    indicator.start()
-    for S_id in seqids:
-        for T_id in index.potential_homologs(S_id):
-            #if T_id not in [13]:
-                #continue
-            indicator.progress()
-            S_name = '%s #%d' % (seqinfo[S_id]['name'], S_id)
-            T_name = '%s #%d' % (seqinfo[T_id]['name'], T_id)
-            vs = vs.union([S_name, T_name])
-
-            seg = discover_overlap(S_id, T_id, index=index,
-                params=od_params, rw_collect=rw_collect)
-
-            if not seg:
-                continue
-
-            S_tx_len = lib.tx_seq_len(seg.tx.c_obj, 'S')
-            T_tx_len = lib.tx_seq_len(seg.tx.c_obj, 'T')
-
-            if not _satisfies_min_margin(seg, S_tx_len, T_tx_len, min_margin):
-                continue
-
-            d = _overlap_direction(seg, S_tx_len, T_tx_len)
-            es += [(S_name, T_name)] if d == '+' else [(T_name, S_name)]
-            ws += [seg.tx.score]
-
-    indicator.finish()
-
-    G = OverlapGraph()
-    G.iG.add_vertices(list(vs))
-    es = [(G.iG.vs.find(name=u), G.iG.vs.find(name=v)) for u, v in es]
-    G.iG.add_edges(es)
-    G.iG.es['weight'] = ws
-    return G
