@@ -47,9 +47,10 @@ class Alphabet(object):
         Returns:
             str: A random string.
         """
-        cummulative_dist = kw.get('letters_dist', [
+        dist = kw.get('letters_dist', [
             1.0/len(self.letters) for _ in range(len(self.letters))
         ])
+        cummulative_dist = [sum(dist[:i+1]) for i in range(len(dist))]
         for idx, prob in enumerate(cummulative_dist):
             cummulative_dist[idx] = cummulative_dist[idx-1] + prob if idx else prob
         return ''.join(self.letters[bisect_left(cummulative_dist, random.randint(0, 1000)/1000.0)] for _ in range(length))
@@ -168,7 +169,8 @@ class Sequence(object):
         assert(go_prob <= ge_prob)
         insert_dist = kw.get('insert_dist', None)
         precision = kw.get('precision', 0.001)
-        N = 1/precision
+        assert(precision <= 0.1)
+        N = int(1./precision)
         assert(precision > 0)
         assert(go_prob < 1)
         assert(ge_prob < 1)
@@ -188,7 +190,7 @@ class Sequence(object):
                 )
                 continue
             else:
-                go_cutoff = go_prob * N / 2.0
+                go_cutoff = go_prob * N / 2.
                 if str(op) not in 'ID' and random.randint(0, N) < go_cutoff:
                     op, k = 'D', k + 1
                 elif str(op) not in 'ID' and random.randint(0, N) < go_cutoff:
