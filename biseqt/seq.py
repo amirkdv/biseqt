@@ -379,10 +379,11 @@ class SeqDB(object):
             c.execute("SELECT id, name, type, orig, rc, LENGTH(seq) FROM seq")
             for row in c:
                 self._seqinfo[row[0]] = {
-                    'name':   row[1],
                     'type':   row[2],
                     'orig':   row[3],
                     'rc':     row[4],
+                    'name':   row[1] + ('-' if row[4] else '+'),
+                    'hname':  row[1][:8] + ('-' if row[4] else '+'),
                     'length': row[5],
                 }
 
