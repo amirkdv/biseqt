@@ -1,7 +1,7 @@
 READS = leishmania/reads.fa
 GENOME = leishmania/genome.fa
 REFERENCE = leishmania/reference.fa
-ASSEMBLY_DB = genome.leishmania.db
+ASSEMBLY_DB = leishmania/genome.db
 ASSEMBLED_GRAPH = leishmania/graph
 TRUE_GRAPH = leishmania/true
 MAPPINGS = leishmania/bwa.mappings.txt

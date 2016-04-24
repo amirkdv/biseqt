@@ -16,17 +16,17 @@ $(DB): $(READS)
 	python -c 'import biseqt.tests.assembly as T; T.create_denovo_db("$@", "$(READS)")'
 
 WORDLEN = $(shell echo $$WORDLEN)
-word_pvalues.$(WORDLEN).png:
+plots/word_pvalues.$(WORDLEN).png:
 	python -c 'from biseqt.tests import assembly as T; T.plot_word_pvalues("$(DB)", "$@");'
 
-shift_pvalues.$(WORDLEN).png:
+plots/shift_pvalues.$(WORDLEN).png:
 	python -c 'from biseqt.tests import assembly as T; T.plot_shift_pvalues("$(DB)", "$@", "$(TRUE_GRAPH).gml", min_overlap=$(MIN_OVERLAP));'
 
-seeds-$(WORDLEN):
+plots/seeds-$(WORDLEN):
 	mkdir -p "$@"
 	python -c 'from biseqt.tests import assembly as T; T.plot_seeds("$(DB)", "$@", "$(TRUE_GRAPH).gml", "$(MAPPINGS)", min_overlap=$(MIN_OVERLAP));'
 
-num_seeds.$(WORDLEN).png:
+plots/num_seeds.$(WORDLEN).png:
 	python -c 'from biseqt.tests import assembly as T; T.plot_num_seeds("$(DB)", "$@", "$(TRUE_GRAPH).gml");'
 
 .PHONY: seeds-$(WORDLEN) shift_pvalues.$(WORDLEN).png word_pvalues.$(WORDLEN).png rw.$(WORDLEN).png num_seeds.$(WORDLEN).png

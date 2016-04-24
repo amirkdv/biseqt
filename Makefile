@@ -18,8 +18,6 @@ clean:
 
 tests: $(LIBDIR)/pwlib.so
 	python -m biseqt.tests.pw
-	# make -f assembly.mk clean
-	# make -f assembly.mk genome.assembly.db overlap.assembly.layout.pdf layout.diff.assembly.pdf
 
 loc:
 	find biseqt -type f -regex '.*\(\.py\|\.c\|\.h\)' | xargs wc -l
