@@ -138,8 +138,7 @@ class Index(object):
         digits = {let:idx for idx,let in enumerate(self.seqdb.alphabet.letters)}
         for idx in range(len(string) - self.wordlen + 1):
             tup = string[idx:idx + self.wordlen]
-            # FIXME assumes DNA
-            tup = sum(digits[x]*(4**i) for x,i in zip(tup,reversed(range(len(tup)))))
+            tup = sum(digits[x]*(len(digits)**i) for x,i in zip(tup,reversed(range(len(tup)))))
             yield (tup, idx)
 
     def index(self):
