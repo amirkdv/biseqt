@@ -3,6 +3,7 @@ ASSEMBLED_GRAPH = overlap
 DB = genome.db
 READS = reads.fa
 MAPPINGS =
+MIN_OVERLAP = 500
 
 clean:
 	rm -f $(ASSEMBLED_GRAPH).gml $(ASSEMBLED_GRAPH).dag.gml $(ASSEMBLED_GRAPH).layout.gml
@@ -19,14 +20,11 @@ word_pvalues.$(WORDLEN).png:
 	python -c 'from biseqt.tests import assembly as T; T.plot_word_pvalues("$(DB)", "$@");'
 
 shift_pvalues.$(WORDLEN).png:
-	python -c 'from biseqt.tests import assembly as T; T.plot_shift_pvalues("$(DB)", "$@", "$(TRUE_GRAPH).gml");'
+	python -c 'from biseqt.tests import assembly as T; T.plot_shift_pvalues("$(DB)", "$@", "$(TRUE_GRAPH).gml", min_overlap=$(MIN_OVERLAP));'
 
 seeds-$(WORDLEN):
 	mkdir -p "$@"
-	python -c 'from biseqt.tests import assembly as T; T.plot_seeds("$(DB)", "$@", "$(TRUE_GRAPH).gml", "$(MAPPINGS)");'
-
-rw.$(WORDLEN).png:
-	python -c 'from biseqt.tests import assembly as T; T.plot_rw("$(DB)", "$@", "$(TRUE_GRAPH).gml");'
+	python -c 'from biseqt.tests import assembly as T; T.plot_seeds("$(DB)", "$@", "$(TRUE_GRAPH).gml", "$(MAPPINGS)", min_overlap=$(MIN_OVERLAP));'
 
 num_seeds.$(WORDLEN).png:
 	python -c 'from biseqt.tests import assembly as T; T.plot_num_seeds("$(DB)", "$@", "$(TRUE_GRAPH).gml");'
@@ -52,7 +50,7 @@ $(ASSEMBLED_GRAPH).dag.gml: $(ASSEMBLED_GRAPH).gml
 $(TRUE_GRAPH).gml:
 	python -c 'from biseqt.overlap import overlap_graph_from_mappings as f; \
 		from biseqt.seq import SeqDB, Alphabet; \
-		g = f(SeqDB("$(DB)"), "$(MAPPINGS)", min_overlap=1000); \
+		g = f(SeqDB("$(DB)"), "$(MAPPINGS)", min_overlap=$(MIN_OVERLAP)); \
 		g.save("$@")'
 
 $(ASSEMBLED_GRAPH).svg:

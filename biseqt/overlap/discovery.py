@@ -26,7 +26,7 @@ class SeedExtensionParams(CffiObject):
                 'scores': kw['scores'].c_obj
             })
 
-def most_signifcant_shift(S_id, T_id, index):
+def most_significant_shift(S_id, T_id, index, min_overlap=-1):
     """Builds a smoothed distribution (via a rolling sum of known width) of
     shifts for the provided seeds of a pair of sequences of known lengths and
     returns the shift with most number of seeds and its p-value.
@@ -83,6 +83,15 @@ def most_signifcant_shift(S_id, T_id, index):
             scores[d] = s0 if d not in scores else scores[d]
             scores[d] += s
 
+    if min_overlap > 0:
+        for d in range(- T_len, - T_len + min_overlap):
+            scores.pop(d, 0)
+        for d in range(S_len - min_overlap, S_len):
+            scores.pop(d, 0)
+
+    if not scores:
+        return (None, None)
+
     return max(scores.items(), key=lambda x: scores[x[0]])
 
 # FIXME docs
@@ -107,7 +116,7 @@ def discover_overlap(S_id, T_id, index, mode='banded alignment', **kwargs):
         return None
 
     shift, sig = most_signifcant_shift(S_len, T_len, index)
-    if sig < min_sig:
+    if sig is None or sig < min_sig:
         return None
 
     S, T = index.seqdb.loadseq(S_id), index.seqdb.loadseq(T_id)

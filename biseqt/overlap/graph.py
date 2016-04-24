@@ -7,8 +7,8 @@ from .. import ProgressIndicator
 from .discovery import discover_overlap
 from ..mapping import Mapping
 
-def overlap_graph_from_mappings(db, mappings_path, min_overlap=1000):
-    seqnames = set([x['name'] for x in db.seqinfo().values()])
+def overlap_graph_from_mappings(db, mappings_path, min_overlap=-1):
+    seqnames = set([x['name'][:-1] for x in db.seqinfo().values()])
     indicator = ProgressIndicator(
         'Building true overlap graph from mappings at %s' % mappings_path,
         len(seqnames)*(len(seqnames) - 1)/2.0,
@@ -313,7 +313,7 @@ class OverlapGraph(object):
             'layout': self.iG.layout_sugiyama(**layout_kw),
             'bbox': (n*150, n*150),
             'vertex_size': 150,
-            'vertex_label': [x.replace(' ', '\n') for x in self.iG.vs['name']],
+            'vertex_label': [x[:8] for x in self.iG.vs['name']],
             'vertex_label_size': 18,
             'vertex_color': kw.get('vertex_color', [self.v_highlight if v_start_path(v) else 'white' for v in self.iG.vs['name']]),
             'edge_width': kw.get('edge_width', [10 if e_in_path(e) else 1 for e in self.iG.es]),

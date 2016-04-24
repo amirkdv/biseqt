@@ -2,8 +2,8 @@ READS = leishmania/reads.fa
 GENOME = leishmania/genome.fa
 REFERENCE = leishmania/reference.fa
 ASSEMBLY_DB = genome.leishmania.db
-ASSEMBLED_GRAPH = leishmania
-TRUE_GRAPH = leishmania_true
+ASSEMBLED_GRAPH = leishmania/graph
+TRUE_GRAPH = leishmania/true
 MAPPINGS = leishmania/bwa.mappings.txt
 ASSEMBLY_OPTS = DB=$(ASSEMBLY_DB) READS=$(READS) ASSEMBLED_GRAPH=$(ASSEMBLED_GRAPH) TRUE_GRAPH=$(TRUE_GRAPH) MAPPINGS=$(MAPPINGS)
 

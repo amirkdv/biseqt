@@ -1,11 +1,11 @@
-from .discovery import most_signifcant_shift
+from .discovery import most_significant_shift
 import os.path
 from math import sqrt, ceil
 from matplotlib import pyplot as plt
 from .. import ProgressIndicator
 
 # FIXME docs
-def plot_num_seeds_discrimination(path, index, true_overlaps, num_bins=500):
+def plot_num_seeds_discrimination(path, index, true_overlaps, num_bins=500, min_overlap=-1):
     plt.clf()
     seqinfo = index.seqdb.seqinfo()
     ids = seqinfo.keys()
@@ -50,53 +50,9 @@ def plot_num_seeds_discrimination(path, index, true_overlaps, num_bins=500):
     plt.savefig(path)
 
 # FIXME docs
-def plot_seed_extension_rws(path, seqinfo, max_rws=225, draw_type='-+',
-    logfile='scores.txt', true_shifts={}):
-
-    with open(logfile) as f:
-        data = [l.strip().split() for l in f.readlines() if l.strip()[-1] in draw_type]
-
-    data = data[:max_rws]
-    data = [[d[0], eval(d[1]), d[2]] for d in data]
-    indicator = ProgressIndicator('plotting score random walks', len(data))
-    indicator.start()
-    dim = ceil(sqrt(len(data)))
-
-    plt.clf()
-    fig = plt.figure(figsize=(5*dim,5*dim))
-    for idx, datum in enumerate(data):
-        indicator.progress()
-        S_tok, T_tok = datum[0][1:-1].split(',')
-        S_id, S_idx = [int(i) for i in S_tok.split(':')]
-        T_id, T_idx = [int(i) for i in T_tok.split(':')]
-        S_start, T_start = seqinfo[S_id]['start'], seqinfo[T_id]['start']
-        ax = fig.add_subplot(dim, dim, idx+1)
-        ax.set_title('Sequences %d vs %d' % (S_id, T_id))
-        if true_overlaps:
-            edge = tuple(sorted((S_id, T_id)))
-            if edge in true_shifts:
-                color = 'green'
-                ax.set_title(ax.get_title() +
-                    ' (true shift = %d)' % (true_shifts[edge]))
-            else:
-                color = 'red'
-        else:
-            color = 'k'
-
-        xs = [x*50 for x in range(len(datum[1]))]
-        label = ' '.join([str(S_idx - T_idx), datum[2]])
-        ax.plot(xs, datum[1], color=color, label=label)
-        ax.legend()
-
-    indicator.finish()
-    plt.savefig(path)
-
-
-# FIXME docs
-def plot_shift_signifiance_discrimination(path, index, true_overlaps, num_bins=500):
+def plot_shift_signifiance_discrimination(path, index, true_overlaps, num_bins=500, min_overlap=-1):
     seqinfo = index.seqdb.seqinfo()
     ids = seqinfo.keys()
-    #ids = ids[:100]
     pos_pvalues = []
     neg_pvalues = []
     msg = 'Finding most significant shift for all pairs of sequences'
@@ -105,16 +61,15 @@ def plot_shift_signifiance_discrimination(path, index, true_overlaps, num_bins=5
     for S_id_idx in range(len(ids)):
         for T_id_idx in range(S_id_idx+1, len(ids)):
             S_id, T_id = ids[S_id_idx], ids[T_id_idx]
-            if seqinfo[S_id]['name'] == seqinfo[T_id]['name']:
+            if seqinfo[S_id]['name'][:-1] == seqinfo[T_id]['name'][:-1]:
                 continue
             indicator.progress()
-            S_graph_name = seqinfo[S_id]['name'] + ('-' if seqinfo[S_id]['rc'] else '+')
-            T_graph_name = seqinfo[T_id]['name'] + ('-' if seqinfo[T_id]['rc'] else '+')
-            _, significance = most_signifcant_shift(S_id, T_id, index)
-            #_, significance = index.most_signifcant_shift(S_id, T_id)
+            S_name = seqinfo[S_id]['name']
+            T_name = seqinfo[T_id]['name']
+            _, significance = most_significant_shift(S_id, T_id, index, min_overlap=min_overlap)
             if significance is None:
                 continue
-            if set([S_graph_name, T_graph_name]) in true_overlaps:
+            if set([S_name, T_name]) in true_overlaps:
                 pos_pvalues += [significance]
             else:
                 neg_pvalues += [significance]
@@ -147,7 +102,7 @@ def plot_shift_signifiance_discrimination(path, index, true_overlaps, num_bins=5
     plt.tight_layout()
     plt.savefig(path, dpi=300)
 
-def plot_all_seeds(index, rolling_sum_width, basedir='', true_overlaps=[], mappings={}):
+def plot_all_seeds(index, basedir='', true_overlaps=[], mappings={}, min_overlap=-1):
     seqinfo = index.seqdb.seqinfo()
     ids = seqinfo.keys()
     indicator = ProgressIndicator('Plotting all seeds',
@@ -158,23 +113,25 @@ def plot_all_seeds(index, rolling_sum_width, basedir='', true_overlaps=[], mappi
             indicator.progress()
             S_id, T_id = ids[S_id_idx], ids[T_id_idx]
             S_name, T_name = seqinfo[S_id]['name'], seqinfo[T_id]['name']
-            S_start = mappings[S_name].ref_from if mappings[S_name].strand == '+' else mappings[S_name].ref_to
-            T_start = mappings[T_name].ref_from if mappings[T_name].strand == '+' else mappings[T_name].ref_to
-            S_len, T_len = seqinfo[S_id]['length'], seqinfo[T_id]['length']
+            S_hname, T_hname = seqinfo[S_id]['hname'], seqinfo[T_id]['hname']
             seeds = index.seeds(S_id, T_id)
             if not seeds:
                 continue
-            best_shift, log_pvalue = most_signifcant_shift(S_len, T_len,
-                seeds, rolling_sum_width)
-            label = 'Most significant shift = %d\nlog(p-value)=%.2f' % (best_shift, log_pvalue)
+            best_shift, significance = most_significant_shift(S_id, T_id, index, min_overlap=-1)
+            if significance is None:
+                continue
+            # FIXME debug
+            #if significance >= 50 or set([S_name, T_name]) not in true_overlaps:
+                #continue
+            label = 'Most significant shift = %d\nlog(p-value)=%.2f' % (best_shift, significance)
             overlay = [(best_shift, '#333333', label)]
 
-            path = os.path.join(basedir, '%d_%d' % (S_id, T_id))
+            path = os.path.join(basedir, '%s_%s' % (S_hname, T_hname))
             if true_overlaps:
-                if set([S_id, T_id]) in true_overlaps:
+                if set([S_name, T_name]) in true_overlaps:
                     color = 'green'
                     path += '.p.png'
-                    true_shift = T_start - S_start
+                    true_shift = mappings[T_name[:-1]].ref_from - mappings[S_name[:-1]].ref_from
                     overlay += [(true_shift, 'green', 'True shift = %d' % true_shift)]
                 else:
                     path += '.n.png'
@@ -192,25 +149,27 @@ def plot_seeds(path, seeds, seqinfo, color='k', shift_overlay=[]):
     plt.gca().set_aspect('equal')
     plt.scatter([x.tx.S_idx for x in seeds], [x.tx.T_idx for x in seeds],
         marker='o', s=5, color=color)
-    plt.ylim(-1000)
-    plt.xlim(-1000)
+    plt.ylim(0, None)
+    plt.xlim(0, None)
+    plt.rc('text', usetex=True)
     plt.grid(True)
 
     S_id, T_id = seeds[0].S_id, seeds[0].T_id
-    S_name, T_name = seqinfo[S_id]['name'], seqinfo[T_id]['name']
+    S_hname, T_hname = seqinfo[S_id]['hname'], seqinfo[T_id]['hname']
     S_len, T_len = seqinfo[S_id]['length'], seqinfo[T_id]['length']
 
     for shift, color, label in shift_overlay:
         xrange = (max(0, shift), S_len)
         yrange = (max(0, -shift), S_len - shift)
-        plt.plot(xrange, yrange, alpha=0.4, linewidth=5, color=color, label=label)
+        plt.plot(xrange, yrange, alpha=0.2, linewidth=5, color=color, label=label)
 
-    plt.title('%s vs. %s\n%d total seeds' % (S_name, T_name, len(seeds)), fontsize=8)
+    plt.title('\\texttt{%s} vs. \\texttt{%s} (%d seeds)' % (S_hname, T_hname, len(seeds)), fontsize=8)
     plt.axvline(x=0, ymin=plt.ylim()[0], ymax=plt.ylim()[1], color='k')
     plt.axhline(y=0, xmin=plt.xlim()[0], xmax=plt.xlim()[1], color='k')
 
-    plt.xlabel('Position in %s' % S_name)
-    plt.ylabel('Position in %s' % T_name)
-    plt.legend(prop={'size':8})
+    plt.xlabel('\\texttt{%s}' % S_hname)
+    plt.ylabel('\\texttt{%s}' % T_hname)
+    plt.legend(prop={'size':8}, loc='lower left')
+    plt.gca().invert_yaxis()
     plt.ticklabel_format(style='sci', axis='both', scilimits=(0,0))
     plt.savefig(path, dpi=300)
