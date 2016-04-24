@@ -21,8 +21,11 @@ import re
 import sys
 from termcolor import colored
 from contextlib import contextmanager
-from matplotlib import pyplot as plt
 from . import ffi, lib, seq, CffiObject
+try:
+    from matplotlib import pyplot as plt
+except ImportError:
+    pass
 
 # alignment modes
 STD_MODE = lib.STD_MODE
@@ -320,6 +323,8 @@ class AlignTable(CffiObject):
         return super(AlignTable, self).__getattr__(name)
 
     def rasterplot(self, path, transcript, fullview=False):
+        if 'plt' not in globals():
+            raise ImportError('matplotlib is required for rasterplots')
         ts, ss, cs = [transcript.T_idx], [transcript.S_idx], ['k']
         nums = {'M': 0, 'S': 0, '-': 0}
         colormap = {'M': 'g', 'S': 'y', '-': 'r'}
