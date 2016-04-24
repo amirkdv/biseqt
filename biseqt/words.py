@@ -25,7 +25,7 @@ class Index(object):
     .. code-block:: sql
 
         CREATE TABLE words_N (
-          'tuple' integer, -- decimal represetnation of N-tuple taken as a number
+          'tuple' integer primary key, -- decimal represetnation of N-tuple taken as a number
                            -- in base L (see tup_scan()).
           'hits'  varchar, -- '@' delimited string of hits with format (@<id>:<idx>)*
         )
@@ -74,8 +74,7 @@ class Index(object):
             c = conn.cursor()
             q = """
                 CREATE TABLE %s (
-                  'rowid' integer primary key,
-                  'tuple' integer,
+                  'tuple' integer primary key,
                   'hits'  varchar
                 );
             """ % (self.t_words)
@@ -139,6 +138,7 @@ class Index(object):
         digits = {let:idx for idx,let in enumerate(self.seqdb.alphabet.letters)}
         for idx in range(len(string) - self.wordlen + 1):
             tup = string[idx:idx + self.wordlen]
+            # FIXME assumes DNA
             tup = sum(digits[x]*(4**i) for x,i in zip(tup,reversed(range(len(tup)))))
             yield (tup, idx)
 
@@ -160,6 +160,9 @@ class Index(object):
         table) at position 5533 (starting at 0) and in sequence 2 at position
         1436.
         """
+        # NOTE "OR REPLACE" means "ON CONFLICT REPLACE". We need a conflict to
+        # occur for this one-shot query to work so tuple must have a unique
+        # constraint on it.
         hit_ins_q = """
             INSERT OR REPLACE INTO %s (tuple, hits)
             SELECT ?, IFNULL( (SELECT hits FROM %s WHERE tuple = ?), "") || ?
@@ -173,7 +176,7 @@ class Index(object):
             num_seqs = int(seq_c.next()[0])
             msg = 'Scanning %d sequences for %d-mers' \
                 % (num_seqs, self.wordlen)
-            indicator = ProgressIndicator(msg, num_seqs, percentage=False)
+            indicator = ProgressIndicator(msg, num_seqs)
             indicator.start()
 
             # populate the words table:
