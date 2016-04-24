@@ -252,18 +252,16 @@ class Index(object):
                 CREATE INDEX seeds_ids ON %s (S_id, T_id)
             """ % self.t_seeds)
             sys.stderr.write('.\n')
+            # FIXME doesn't it autocommit?
             conn.commit()
 
     def word_pvalue_calculator(self):
+        N = self.num_words
+
         with sqlite3.connect(self.seqdb.db) as conn:
             c = conn.cursor()
-            c.execute('select max(rowid) + 1 from %s' % self.t_words)
-            N = int(c.next()[0]) # total number of words
             c.execute('select sum(length(seq)) from seq')
             L = int(c.next()[0]) # total sequence length of all reads
-
-        # NOTE
-        self.num_words = N
 
         # Normal approximation (mean and standard deviation) of a binomial distribution
         B2N = lambda n, p: (n*p, sqrt(n * p * (1-p)))
@@ -272,6 +270,13 @@ class Index(object):
 
         pvalue_calculator = lambda x: N * 0.5 * (1 - erf((x - mu) / (sd * sqrt(2))))
         return pvalue_calculator
+
+    @property
+    def num_words(self):
+        with sqlite3.connect(self.seqdb.db) as conn:
+            c = conn.cursor()
+            c.execute('select count(*) from %s' % self.t_words)
+            return int(c.next()[0])
 
     def band_radius(self, readlens, d, g):
         # max alignment length
@@ -291,8 +296,9 @@ class Index(object):
     def scan_seeds(self, hit_recs, cursor):
         word_pvalue_calc = self.word_pvalue_calculator()
         seqinfo = self.seqdb.seqinfo()
+        N = self.num_words
         indicator = ProgressIndicator(
-            'Indexing %d observed %d-mers' % (self.num_words, self.wordlen), self.num_words
+            'Indexing seeds from %d observed %d-mers' % (N, self.wordlen), N
         )
         indicator.start()
         for tup, hits in hit_recs:
@@ -393,8 +399,8 @@ def plot_word_pvalues(index, path=None, num_bins=500):
         c = conn.cursor()
         calc = index.word_pvalue_calculator()
         log_pvalues = []
-        msg = 'Calculating p-values for all %d %d-mers' % (index.num_words, index.wordlen)
-        indicator = ProgressIndicator(msg, index.num_words)
+        N = index.num_words
+        indicator = ProgressIndicator('Calculating p-values for all %d %d-mers' % (N, index.wordlen), N)
         indicator.start()
         c.execute('select hits from %s' % index.t_words)
         for row in c:
