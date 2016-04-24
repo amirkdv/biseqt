@@ -2,9 +2,9 @@
 from .. import pw, seq
 
 params = {
-    'go_prob': 0.15, # gap open score
+    'go_prob': 0.1, # gap open score
     'ge_prob': 0.25, # gap extend score
-    'subst_probs': [[0.91 if k==i else 0.03 for k in range(4)] for i in range(4)]
+    'subst_probs': [[0.94 if k==i else 0.02 for k in range(4)] for i in range(4)]
 }
 import os
 A = seq.Alphabet('ACGT')
@@ -41,16 +41,15 @@ print '\n--> optimal global alignment:\n%s\n' % str(transcript)
 if transcript:
     transcript.pretty_print(S, T)
 
-S = A.randseq(800)
-T, m_opseq = seq.Sequence(S[400:], A).mutate(**params)
-#T = seq.Sequence(S[400:] + A.randstr(200) , A)
+S = A.randseq(8000)
+T, _ = seq.Sequence(S[4000:] + A.randstr(1000), A).mutate(**params)
+#T = A.randseq(3000)
 F = pw.AlignFrame(S, T)
-with pw.AlignTable(F, C, alnmode=pw.BANDED_MODE, alntype=pw.B_OVERLAP, dmin=280, dmax=520) as P:
+with pw.AlignTable(F, C, alnmode=pw.BANDED_MODE, alntype=pw.B_OVERLAP, dmin=2800, dmax=5200) as P:
 #with pw.AlignTable(F, C, alnmode=pw.STD_MODE, alntype=pw.OVERLAP) as P:
     score = P.solve()
     transcript = P.traceback()
     #P.rasterplot('debug.png', transcript)
-    #P.rasterplot('debug_true.png', pw.Transcript(S_idx=400, T_idx=0, opseq=m_opseq, score=0))
     #raise
 
 print '\n--> optimal overlap alignment (banded):\n%s\n' % str(transcript)

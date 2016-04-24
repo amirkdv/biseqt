@@ -3,11 +3,11 @@ import sys
 import os
 import igraph
 from .. import pw, words, seq, overlap, mapping, ProgressIndicator
+from ..mapping import Mapping
 
 params = {
     'show_params': False,   # print a summary of parameters
-    'rw_collect': False,      # whether to dump score random walks to 'scores.txt'
-    'wordlen': int(os.environ['WORDLEN']), # 10,          # tuple word length for seed extension
+    'wordlen': int(os.environ['WORDLEN']), # tuple word length for seed extension
     'go_prob': 0.1,        # gap open probability
     'ge_prob': 0.15,         # gap extend probability
     'subst_probs': [[0.97 if k==i else 0.01 for k in range(4)] for i in range(4)],
@@ -15,10 +15,16 @@ params = {
     'min_margin': 500,       # minimum margin required for the direction to be reliable.
     'window': 50,            # rolling window length for tuple extension.
     'max_new_mins': 5,       # how many consecutive drops are allowed.
+    'min_overlap': 500,# minimum length of an alignment
+    # FIXME make it minimum M percentage?
     'min_overlap_score': 500,# minimum score required for an overlap to be reported.
     'min_shift_significance': 50,
     # ------------- Index ----------------
-    'min_seeds_for_homology': 1, # minimum number of seeds for two reads to be considered.
+    # NOTE seems to be ~ 10% of words for wordlen = 6, 8, 10
+    # NOTE wordlen 6 takes ~ 2 G and ~ 1 hr to process seeds and to find best
+    # shifts, whereas 8 and 10 are managable. Also it does not give any better
+    # accuracy in discrimination (see plots)
+    # FIXME could be exposed instead as "ignore the 10% most common words"
     'min_word_log_pvalue': 0, # minimum p-value allowed for a word to be considered a seed
     # ---------------- simulations ------------------
     'genome_length': 70000, # length of randomly generated genome
@@ -97,7 +103,7 @@ def plot_word_pvalues(db, path):
     Idx = words.Index(seqdb=B, **params)
     words.plot_word_pvalues(Idx, path)
 
-def plot_shift_pvalues(db, path, true_path):
+def plot_shift_pvalues(db, path, true_path, min_overlap=-1):
     B = seq.SeqDB(db, alphabet=A)
     Idx = words.Index(seqdb=B, **params)
     G = igraph.read(true_path)
@@ -105,7 +111,8 @@ def plot_shift_pvalues(db, path, true_path):
         path,
         Idx,
         true_overlaps(true_path),
-        num_bins=500
+        num_bins=500,
+        min_overlap=min_overlap,
     )
 
 def plot_num_seeds(db, path, true_path):
@@ -114,18 +121,17 @@ def plot_num_seeds(db, path, true_path):
     overlap.plot_num_seeds_discrimination(path, Idx, true_overlaps(true_path))
 
 # FIXME get rid of shift_rolling_sum_width
-def plot_seeds(db, path, true_path, mappings):
+def plot_seeds(db, path, true_path, mappings, min_overlap=-1):
     B = seq.SeqDB(db, alphabet=A)
     Idx = words.Index(seqdb=B, **params)
     G = igraph.read(true_path)
-    true_overlaps = [set(G.vs[u]['name'], G.vs[v]['name']) for u, v in G.get_edgelist() if G]
     with open(mappings) as f:
         mappings = eval(f.read())
     overlap.plot_all_seeds(
         Idx,
-        params['shift_rolling_sum_width'],
         basedir=path,
-        true_overlaps=true_overlaps,
-        mappings=mappings
+        true_overlaps=true_overlaps(true_path),
+        mappings=mappings,
+        min_overlap=min_overlap,
     )
 
