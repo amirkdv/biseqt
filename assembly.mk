@@ -22,6 +22,9 @@ plots/word_pvalues.$(WORDLEN).png:
 plots/shift_pvalues.$(WORDLEN).png:
 	python -c 'from biseqt.tests import assembly as T; T.plot_shift_pvalues("$(DB)", "$@", "$(TRUE_GRAPH).gml", min_overlap=$(MIN_OVERLAP));'
 
+plots/shift_consistency.$(WORDLEN).png:
+	python -c 'from biseqt.tests import assembly as T; T.plot_shift_consistency("$(DB)", "$@", "$(TRUE_GRAPH).gml", min_overlap=$(MIN_OVERLAP));'
+
 plots/seeds-$(WORDLEN):
 	mkdir -p "$@"
 	python -c 'from biseqt.tests import assembly as T; T.plot_seeds("$(DB)", "$@", "$(TRUE_GRAPH).gml", "$(MAPPINGS)", min_overlap=$(MIN_OVERLAP));'
@@ -29,7 +32,7 @@ plots/seeds-$(WORDLEN):
 plots/num_seeds.$(WORDLEN).png:
 	python -c 'from biseqt.tests import assembly as T; T.plot_num_seeds("$(DB)", "$@", "$(TRUE_GRAPH).gml");'
 
-.PHONY: seeds-$(WORDLEN) shift_pvalues.$(WORDLEN).png word_pvalues.$(WORDLEN).png rw.$(WORDLEN).png num_seeds.$(WORDLEN).png
+.PHONY: plots/seeds-$(WORDLEN) plots/shift_pvalues.$(WORDLEN).png plots/word_pvalues.$(WORDLEN).png plots/shift_consistency.$(WORDLEN).png plots/num_seeds.$(WORDLEN).png
 
 $(ASSEMBLED_GRAPH).gml:
 	python -c 'import biseqt.tests.assembly as T; T.build_denovo_overlap_graph("$(DB)", "$@", "$(TRUE_GRAPH).gml")'

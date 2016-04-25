@@ -89,16 +89,17 @@ class Index(object):
                 );
             """ % (self.t_seeds)
             c.execute(q)
-            q = """
-                CREATE TABLE %s (
-                  'S_id' integer REFERENCES seq(id),
-                  'T_id' integer REFERENCES seq(id),
-                  'shift' integer, -- shift of seed (S_idx - T_idx)
-                  'score' real, --  = -log(p-value)
-                  PRIMARY KEY (S_id, T_id, shift)
-                );
-            """ % (self.t_scores)
-            c.execute(q)
+            # NOTE cf. most_significant_shift
+            #q = """
+                #CREATE TABLE %s (
+                  #'S_id' integer REFERENCES seq(id),
+                  #'T_id' integer REFERENCES seq(id),
+                  #'shift' integer, -- shift of seed (S_idx - T_idx)
+                  #'score' real, --  = -log(p-value)
+                  #PRIMARY KEY (S_id, T_id, shift)
+                #);
+            #""" % (self.t_scores)
+            #c.execute(q)
         sys.stderr.write('Initialized index tables %s, %s, %s.\n'
             % (self.t_words, self.t_seeds, self.t_scores)
         )
@@ -318,7 +319,7 @@ class Index(object):
                         # don't care about seeds from S to S or S'
                         continue
 
-                    # FIXME takes too long; see discovery.most_signifcant_shift
+                    # TODO see most_significant_shift below.
                     #shift = S_hit[1] - T_hit[1]
                     #lengths = [
                         #seqinfo[S_id]['length'],
@@ -339,16 +340,18 @@ class Index(object):
 
         indicator.finish()
 
-    def most_signifcant_shift(self, S_id, T_id):
-        with sqlite3.connect(self.seqdb.db) as conn:
-            q = """
-                SELECT shift, score FROM %s
-                WHERE S_id = ? AND T_id = ? ORDER BY score DESC LIMIT 1
-            """ % self.t_scores
-            c = conn.cursor()
-            c.execute(q, (S_id, T_id))
-            row = c.next()
-            return (int(row[0]), float(row[1]))
+    # FIXME takes too long (also cf. scan_seeds) ; see discovery.most_significant_shift
+    # Would HDF make this faster? http://docs.h5py.org
+    #def most_significant_shift(self, S_id, T_id):
+        #with sqlite3.connect(self.seqdb.db) as conn:
+            #q = """
+                #SELECT shift, score FROM %s
+                #WHERE S_id = ? AND T_id = ? ORDER BY score DESC LIMIT 1
+            #""" % self.t_scores
+            #c = conn.cursor()
+            #c.execute(q, (S_id, T_id))
+            #row = c.next()
+            #return (int(row[0]), float(row[1]))
 
     def seeds(self, S_id, T_id):
         """Given two sequence ids, finds all exactly matching segments
@@ -437,6 +440,8 @@ def maximal_seeds(seeds, S_id, T_id):
     while idx < len(seeds):
         cand = idx + 1
         while cand < len(seeds):
+            # TODO rename this shift_X to something else, this is not "shift" as
+            # everywhere else
             shift_S = seeds[cand].tx.S_idx - seeds[idx].tx.S_idx
             shift_T = seeds[cand].tx.T_idx - seeds[idx].tx.T_idx
             # we know the transcripts are all M's.

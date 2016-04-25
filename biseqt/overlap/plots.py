@@ -2,9 +2,13 @@ from .discovery import most_significant_shift
 import os.path
 from math import sqrt, ceil
 from matplotlib import pyplot as plt
+import igraph
+from scipy.stats import gaussian_kde
 from .. import ProgressIndicator
+from ..mapping import Mapping
 
 # FIXME docs
+# FIXME does this still work?
 def plot_num_seeds_discrimination(path, index, true_overlaps, num_bins=500, min_overlap=-1):
     plt.clf()
     seqinfo = index.seqdb.seqinfo()
@@ -49,6 +53,61 @@ def plot_num_seeds_discrimination(path, index, true_overlaps, num_bins=500, min_
     plt.ylabel('Proportion of read-pairs (cumulative)')
     plt.legend(loc='right')
     plt.savefig(path)
+
+def plot_shift_consistency(path, index, true_overlaps, min_shift_significance=50, num_bins=500, min_overlap=-1):
+    seqinfo = index.seqdb.seqinfo()
+    ids_by_name = {seqinfo[i]['name']: i for i in seqinfo}
+    errs = []
+    offbysign = []
+    msg = 'Finding shift error for overlapping sequences'
+    indicator = ProgressIndicator(msg, len(true_overlaps))
+    indicator.start()
+    safety = 400 # FIXME expose
+    for edge in true_overlaps:
+        indicator.progress()
+        S_name, T_name = tuple(edge)
+        S_id, T_id = ids_by_name[S_name], ids_by_name[T_name]
+        true_shift = seqinfo[S_id]['length'] - true_overlaps[edge]
+        shift, sig = most_significant_shift(S_id, T_id, index, min_overlap=min_overlap)
+        if abs(shift) < safety or sig < min_shift_significance:
+            continue
+        if shift < 0:
+            offbysign += [abs(true_shift)]
+        else:
+            errs += [abs(shift - true_shift)]
+
+    indicator.finish()
+    errs = sorted(errs)
+    offbysign = sorted(offbysign)
+
+    plt.clf()
+
+    density = gaussian_kde(errs)
+    density.covariance_factor = lambda : .2
+    density._compute_covariance()
+    markratio = 0.9
+    plt.plot(errs, density(errs), antialiased=True, color='g',
+        label='Absolue shift error when signs match (shaded up to %%%.0f)' % (100 * markratio))
+    errs = errs[:-int(len(errs)*(1-markratio))]
+    plt.fill_between(errs, density(errs), color='g', alpha=0.2)
+
+    density = gaussian_kde(offbysign)
+    density.covariance_factor = lambda : .2
+    density._compute_covariance()
+    markratio = 0.9
+    plt.plot(offbysign, density(offbysign), antialiased=True, color='r',
+        label='Absolue true shift when signs differ (shaded up to %%%.0f)' % (100 * markratio))
+    offbysign = offbysign[:-int(len(offbysign)*(1-markratio))]
+    plt.fill_between(offbysign, density(offbysign), color='r', alpha=0.2)
+
+    plt.grid(True)
+    plt.xlabel('Error in estimated shift (sgn safety= %d, sig. cutoff=%.1f, word len.=%d, min. overlap=%d)' %
+        (safety, min_shift_significance, index.wordlen, min_overlap))
+    plt.ylabel('Density of read-pairs')
+    plt.legend(fontsize=10)
+    plt.tight_layout()
+    plt.savefig(path, dpi=300)
+
 
 # FIXME docs
 def plot_shift_pvalues(path, index, true_overlaps, num_bins=500, min_overlap=-1):
