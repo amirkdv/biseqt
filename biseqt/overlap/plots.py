@@ -57,7 +57,13 @@ def plot_num_seeds_discrimination(path, index, true_overlaps, num_bins=500, min_
     plt.legend(loc='right')
     plt.savefig(path)
 
-def plot_shift_consistency(path, index, true_overlaps, min_shift_significance=50, num_bins=500, min_overlap=-1):
+def plot_shift_consistency(path, index, true_overlaps, **kwargs):
+    min_overlap = kwargs.get('min_overlap', -1)
+    num_bins = kwargs.get('num_bins', 500)
+
+    min_shift_significance = kwargs['min_shift_significance']
+    min_margin = kwargs['min_margin']
+
     seqinfo = index.seqdb.seqinfo()
     ids_by_name = {seqinfo[i]['name']: i for i in seqinfo}
     errs = []
@@ -65,14 +71,13 @@ def plot_shift_consistency(path, index, true_overlaps, min_shift_significance=50
     msg = 'Finding shift error for overlapping sequences'
     indicator = ProgressIndicator(msg, len(true_overlaps))
     indicator.start()
-    safety = 400 # FIXME expose
     for edge in true_overlaps:
         indicator.progress()
         S_name, T_name = tuple(edge)
         S_id, T_id = ids_by_name[S_name], ids_by_name[T_name]
         true_shift = seqinfo[S_id]['length'] - true_overlaps[edge]
         shift, sig = most_significant_shift(S_id, T_id, index, min_overlap=min_overlap)
-        if abs(shift) < safety or sig < min_shift_significance:
+        if abs(shift) < min_margin or sig < min_shift_significance:
             continue
         if shift < 0:
             offbysign += [abs(true_shift)]
@@ -89,13 +94,14 @@ def plot_shift_consistency(path, index, true_overlaps, min_shift_significance=50
     density.covariance_factor = lambda : .2
     markratio = 0.9
     plt.plot(errs, density(errs), antialiased=True, color='g',
-        label='Absolue shift error when signs match (shaded up to %%%.0f)' % (100 * markratio))
+        label='Absolue shift error when (%%%.2f) signs match (shaded up to %%%.0f)' %
+        (100.0 * len(errs)/(len(errs) + len(offbysign)), 100 * markratio))
     errs = errs[:-int(len(errs)*(1-markratio))]
     plt.fill_between(errs, density(errs), color='g', alpha=0.2)
 
     plt.grid(True)
-    plt.xlabel('Error in estimated shift (sgn safety= %d, sig. cutoff=%.1f, word len.=%d, min. overlap=%d)' %
-        (safety, min_shift_significance, index.wordlen, min_overlap))
+    plt.xlabel('Error in estimated shift (min. margin= %d, sig. cutoff=%.1f, word len.=%d, min. overlap=%d)' %
+        (min_margin, min_shift_significance, index.wordlen, min_overlap))
     plt.ylabel('Density of read-pairs')
     plt.legend(fontsize=10)
     plt.tight_layout()

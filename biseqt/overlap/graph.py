@@ -26,7 +26,6 @@ def overlap_graph_from_mappings(db, mappings_path, min_overlap=-1):
     def overlaps(mappings, S_name, T_name):
         S_mapping, T_mapping = mappings[S_name], mappings[T_name]
         overlap_len = min(S_mapping.ref_to, T_mapping.ref_to) - max(S_mapping.ref_from, T_mapping.ref_from)
-        # FIXME check for and expose min_abs_shift (safety margin)?
         if overlap_len < min_overlap:
             return []
         if S_mapping.rc == T_mapping.rc:
@@ -64,14 +63,12 @@ def overlap_graph_from_mappings(db, mappings_path, min_overlap=-1):
     G.iG.es['weight'] = ws
     return G
 
-def overlap_graph_de_novo(index, **kwargs):
+def overlap_graph_denovo(index, **kwargs):
     vs = set()
     es, ws = [], []
     seqinfo = index.seqdb.seqinfo()
     seqids = seqinfo.keys()
-    #seqids = [1] # FIXME
-    msg = 'Extending seeds on potentially homologous sequences'
-    indicator = ProgressIndicator(msg,
+    indicator = ProgressIndicator('Finding potentially homologous sequences',
         len(seqinfo) * (len(seqinfo) - 2)/2, percentage=False)
     indicator.start()
     for S_id_idx in range(len(seqids)):
@@ -84,8 +81,6 @@ def overlap_graph_de_novo(index, **kwargs):
                 continue
 
             indicator.progress()
-            S_name += '+' if seqinfo[S_id]['rc'] else '-'
-            T_name += '+' if seqinfo[T_id]['rc'] else '-'
             vs = vs.union([S_name, T_name])
 
             tx = discover_overlap(S_id, T_id, index, **kwargs)

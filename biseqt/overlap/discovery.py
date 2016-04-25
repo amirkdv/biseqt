@@ -21,6 +21,7 @@ class SeedExtensionParams(CffiObject):
         else:
             self.c_obj = ffi.new('seedext_params*', {
                 'window': kw['window'],
+                # FIXME should this be in C or pulled out to here?
                 'min_score': kw['min_score'],
                 'max_new_mins': kw['max_new_mins'],
                 'scores': kw['scores'].c_obj
@@ -83,6 +84,8 @@ def most_significant_shift(S_id, T_id, index, min_overlap=-1):
             scores[d] = s0 if d not in scores else scores[d]
             scores[d] += s
 
+    # TODO should we ignore the out-of-range shifts or find the best and return
+    # None if it lands in out-of-range?
     if min_overlap > 0:
         for d in range(- T_len, - T_len + min_overlap):
             scores.pop(d, 0)
@@ -108,6 +111,7 @@ def discover_overlap(S_id, T_id, index, mode='banded alignment', **kwargs):
     """
     assert(mode in ['seed extension', 'banded alignment'])
     min_sig = kwargs['min_shift_significance']
+    min_overlap = kwargs.get('min_overlap', -1)
     seqinfo = index.seqdb.seqinfo()
     S_len, T_len = seqinfo[S_id]['length'], seqinfo[T_id]['length']
     seeds = index.seeds(S_id, T_id)
@@ -115,20 +119,23 @@ def discover_overlap(S_id, T_id, index, mode='banded alignment', **kwargs):
     if not seeds:
         return None
 
-    shift, sig = most_signifcant_shift(S_len, T_len, index)
+    shift, sig = most_significant_shift(S_len, T_len, index, min_overlap=min_overlap)
     if sig is None or sig < min_sig:
         return None
 
     S, T = index.seqdb.loadseq(S_id), index.seqdb.loadseq(T_id)
     tx = None
-    if mode == 'banded_alignment':
+    if mode == 'banded alignment':
         radius = index.band_radius((S_len, T_len), shift, kwargs['gap_prob'])
         F = pw.AlignFrame(S, T)
         assert(isinstance(kwargs['aln_scores'], AlignScores))
-        with pw.AlignTable(F, kwargs['aln_scores'], alnmode=BANDED_MODE, alntype=B_OVERLAP) as T:
+        # FIXME min_score
+        with pw.AlignTable(F, kwargs['aln_scores'], alnmode=BANDED_MODE,
+                alntype=B_OVERLAP, max_new_mins=kw['max_new_mins']) as T:
             score = T.solve()
-            if score is not None and score > kwargs['min_alignment_score']:
+            if score is not None:
                 tx = T.traceback()
+                tx = None if tx == ffi.NULL else tx
     elif mode == 'seed extension':
         seeds = words.maximal_seeds(seeds, S_id, T_id)
         seeds = sorted(seeds, key=lambda x: abs(x.tx.S_idx - x.tx.T_idx - best_shift))
@@ -139,7 +146,7 @@ def discover_overlap(S_id, T_id, index, mode='banded alignment', **kwargs):
         tx = None if tx == ffi.NULL else tx
 
     # starting diagonal of the alignment must be far enough from the 0 diagonal:
-    if tx and abs(tx.S_idx - tx.T_idx) < kwargs.get('min_margin', 1000):
+    if tx and abs(tx.S_idx - tx.T_idx) < kwargs['min_margin'] or tx.score < kwargs['min_score']:
         return None
 
     return tx

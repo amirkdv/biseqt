@@ -12,11 +12,11 @@ params = {
     'ge_prob': 0.15,         # gap extend probability
     'subst_probs': [[0.97 if k==i else 0.01 for k in range(4)] for i in range(4)],
     # ------------ Assembly ---------------
-    'min_margin': 500,       # minimum margin required for the direction to be reliable.
+    'min_margin': 200,       # minimum margin required for the direction to be reliable.
     'window': 50,            # rolling window length for tuple extension.
     'max_new_mins': 5,       # how many consecutive drops are allowed.
     # FIXME make it minimum M percentage?
-    'min_overlap_score': 500,# minimum score required for an overlap to be reported.
+    'min_score': 500,# minimum score required for an overlap to be reported.
     'min_shift_significance': 50,
     # ------------- Index ----------------
     # NOTE seems to be ~ 10% of words for wordlen = 6, 8, 10
@@ -44,7 +44,7 @@ C = pw.AlignScores(
 )
 seed_ext_params = overlap.SeedExtensionParams(
     window=params['window'],
-    min_score=params['min_overlap_score'],
+    min_score=params['min_score'],
     max_new_mins=params['max_new_mins'],
     scores=C
 )
@@ -93,8 +93,13 @@ def build_denovo_overlap_graph(db, path, true_path):
         show_params()
     #G = overlap.overlap_graph_de_novo(Idx, mode='seed extension',
         #seed_ext_params=seed_ext_params, min_margin=params['min_margin'])
-    G = overlap.overlap_graph_de_novo(Idx, mode='banded alignment',
-        aln_scores=C, min_margin=params['min_margin'], min_shift_significance=params['min_shift_significance'])
+    G = overlap.overlap_graph_denovo(
+        Idx,
+        mode='banded alignment',
+        aln_scores=C,
+        min_margin=params['min_margin'],
+        min_overlap=params['min_overlap'],
+        min_shift_significance=params['min_shift_significance'])
     G.save(path)
 
 def plot_word_pvalues(db, path):
@@ -110,6 +115,7 @@ def plot_shift_consistency(db, path, true_path, min_overlap=-1):
         path,
         Idx,
         true_overlaps(true_path),
+        min_margin=params['min_margin'],
         min_shift_significance=params['min_shift_significance'],
         min_overlap=min_overlap,
     )
