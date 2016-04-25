@@ -9,13 +9,17 @@ from ..mapping import Mapping
 
 def overlap_graph_from_mappings(db, mappings_path, min_overlap=-1):
     seqnames = set([x['name'][:-1] for x in db.seqinfo().values()])
+    with open(mappings_path) as f:
+        mappings = eval(f.read())
+    # FIXME blasr does not map all of the sample leishmenia reads, ignore the
+    # unmapped ones:
+    seqnames = set([x for x in seqnames if x in mappings])
+
     indicator = ProgressIndicator(
         'Building true overlap graph from mappings at %s' % mappings_path,
         len(seqnames)*(len(seqnames) - 1)/2.0,
     )
     indicator.start()
-    with open(mappings_path) as f:
-        mappings = eval(f.read())
     vs = set()
     es, ws = [], []
 

@@ -4,7 +4,7 @@ REFERENCE = leishmania/reference.fa
 ASSEMBLY_DB = leishmania/genome.db
 ASSEMBLED_GRAPH = leishmania/graph
 TRUE_GRAPH = leishmania/true
-MAPPINGS = leishmania/bwa.mappings.txt
+MAPPINGS = leishmania/blasr.mappings.txt
 ASSEMBLY_OPTS = DB=$(ASSEMBLY_DB) READS=$(READS) ASSEMBLED_GRAPH=$(ASSEMBLED_GRAPH) TRUE_GRAPH=$(TRUE_GRAPH) MAPPINGS=$(MAPPINGS)
 
 DOCKER_OPTS=-it -v "$$PWD:/mnt" -v /tmp:/tmp -w /mnt
