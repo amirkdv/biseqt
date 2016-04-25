@@ -15,7 +15,6 @@ params = {
     'min_margin': 500,       # minimum margin required for the direction to be reliable.
     'window': 50,            # rolling window length for tuple extension.
     'max_new_mins': 5,       # how many consecutive drops are allowed.
-    'min_overlap': 500,# minimum length of an alignment
     # FIXME make it minimum M percentage?
     'min_overlap_score': 500,# minimum score required for an overlap to be reported.
     'min_shift_significance': 50,

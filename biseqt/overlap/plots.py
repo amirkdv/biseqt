@@ -1,9 +1,12 @@
-from .discovery import most_significant_shift
 import os.path
 from math import sqrt, ceil
 from matplotlib import pyplot as plt
 import igraph
 from scipy.stats import gaussian_kde
+from scipy.integrate import cumtrapz
+import numpy as np
+
+from .discovery import most_significant_shift
 from .. import ProgressIndicator
 from ..mapping import Mapping
 
@@ -84,21 +87,11 @@ def plot_shift_consistency(path, index, true_overlaps, min_shift_significance=50
 
     density = gaussian_kde(errs)
     density.covariance_factor = lambda : .2
-    density._compute_covariance()
     markratio = 0.9
     plt.plot(errs, density(errs), antialiased=True, color='g',
         label='Absolue shift error when signs match (shaded up to %%%.0f)' % (100 * markratio))
     errs = errs[:-int(len(errs)*(1-markratio))]
     plt.fill_between(errs, density(errs), color='g', alpha=0.2)
-
-    density = gaussian_kde(offbysign)
-    density.covariance_factor = lambda : .2
-    density._compute_covariance()
-    markratio = 0.9
-    plt.plot(offbysign, density(offbysign), antialiased=True, color='r',
-        label='Absolue true shift when signs differ (shaded up to %%%.0f)' % (100 * markratio))
-    offbysign = offbysign[:-int(len(offbysign)*(1-markratio))]
-    plt.fill_between(offbysign, density(offbysign), color='r', alpha=0.2)
 
     plt.grid(True)
     plt.xlabel('Error in estimated shift (sgn safety= %d, sig. cutoff=%.1f, word len.=%d, min. overlap=%d)' %
@@ -136,29 +129,32 @@ def plot_shift_pvalues(path, index, true_overlaps, num_bins=500, min_overlap=-1)
 
     indicator.finish()
 
-    plt.clf()
-    # hist returns 3 lists (n, bins, _): n is values at bins, bins is edges.
-    n_neg, bins_neg, _ = plt.hist(neg_pvalues, num_bins, color='red',
-        histtype='step', cumulative=True, normed=True, label='Non-overlapping reads')
-    n_pos, bins_pos, _= plt.hist(pos_pvalues, num_bins, color='green',
-        histtype='step', cumulative=True, normed=True, label='Overlapping reads')
-    xmax = min(
-        bins_neg[len(filter(lambda x: n_neg[x] < 1 - 0.001, range(len(bins_neg)-1)))],
-        bins_pos[len(filter(lambda x: n_pos[x] < 1 - 0.001, range(len(bins_pos)-1)))]
-    )
+    # FIXME refactor all this out (repeated in plot_shift_consistency; but
+    # direction of marking is different and one is cumulative one is not)
+    pos_pvalues = sorted(pos_pvalues)
+    density = gaussian_kde(pos_pvalues)
+    cdf = np.insert(cumtrapz(density(pos_pvalues), pos_pvalues), 0, [0])
+    density.covariance_factor = lambda : .2
+    markratio = 0.9
+    plt.plot(pos_pvalues, cdf, antialiased=True, color='g', label='Overlapping reads')
+    cdf = cdf[int(len(pos_pvalues)*(1-markratio)):]
+    pos_pvalues = pos_pvalues[int(len(pos_pvalues)*(1-markratio)):]
+    plt.fill_between(pos_pvalues, cdf, color='g', alpha=0.2)
+
+    neg_pvalues = sorted(neg_pvalues)
+    density = gaussian_kde(neg_pvalues)
+    cdf = np.insert(cumtrapz(density(neg_pvalues), neg_pvalues), 0, [0])
+    density.covariance_factor = lambda : .2
+    markratio = 0.9
+    plt.plot(neg_pvalues, cdf, antialiased=True, color='r', label='Non-overlapping reads')
+    cdf = cdf[int(len(neg_pvalues)*(1-markratio)):]
+    neg_pvalues = neg_pvalues[int(len(neg_pvalues)*(1-markratio)):]
+    plt.fill_between(neg_pvalues, cdf, color='r', alpha=0.2)
+
     plt.grid(True)
-    plt.xlim(-50, xmax)
-    ymax = max(max(n_neg), max(n_pos))*1.1
-    plt.ylim(ymax*-0.1, ymax)
-    plt.axvline(x=0, ymin=plt.ylim()[0], ymax=plt.ylim()[1], color='k')
-    plt.axhline(y=0, xmin=plt.xlim()[0], xmax=plt.xlim()[1], color='k')
-    x_step = 100
-    y_step = 0.05
-    plt.xticks([int(plt.xlim()[0]) + i*x_step for i in range(int((plt.xlim()[1]-plt.xlim()[0])/x_step) + 1)], rotation=90)
-    plt.yticks([i*y_step for i in range(int(plt.ylim()[1]/y_step))])
     plt.xlabel('largest significance for a shift window on %d-mers' % index.wordlen)
     plt.ylabel('Proportion of read-pairs (cumulative)')
-    plt.legend(loc='upper left', fontsize=10)
+    plt.legend(loc='upper right', fontsize=10)
     plt.tight_layout()
     plt.savefig(path, dpi=300)
 
