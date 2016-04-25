@@ -23,26 +23,38 @@ def overlap_graph_from_mappings(db, mappings_path, min_overlap=-1):
     vs = set()
     es, ws = [], []
 
-    def overlaps(S_mapping, T_mapping):
+    def overlaps(mappings, S_name, T_name):
+        S_mapping, T_mapping = mappings[S_name], mappings[T_name]
         overlap_len = min(S_mapping.ref_to, T_mapping.ref_to) - max(S_mapping.ref_from, T_mapping.ref_from)
-        if overlap_len >= min_overlap:
-            if S_mapping.rc == T_mapping.rc:
-                return [(S_name + '+', T_name + '+', overlap_len),
-                        (S_name + '-', T_name + '-', overlap_len)]
+        # FIXME check for and expose min_abs_shift (safety margin)?
+        if overlap_len < min_overlap:
+            return []
+        if S_mapping.rc == T_mapping.rc:
+            if (S_mapping.rc == 0 and S_mapping.ref_from <= T_mapping.ref_from) or\
+               (S_mapping.rc == 1 and S_mapping.ref_from  > T_mapping.ref_from):
+                return [(S_name + '+', overlap_len, T_name + '+'),
+                        (T_name + '-', overlap_len, S_name + '-')]
             else:
-                return [(S_name + '+', T_name + '-', overlap_len),
-                        (S_name + '-', T_name + '+', overlap_len)]
-        return []
+                return [(S_name + '-', overlap_len, T_name + '-'),
+                        (T_name + '+', overlap_len, S_name + '+')]
+        else:
+            if (S_mapping.rc == 0 and S_mapping.ref_from <= T_mapping.ref_from) or\
+               (S_mapping.rc == 1 and S_mapping.ref_from  > T_mapping.ref_from):
+                return [(S_name + '+', overlap_len, T_name + '-'),
+                        (T_name + '+', overlap_len, S_name + '-')]
+            else:
+                return [(S_name + '-', overlap_len, T_name + '+'),
+                        (T_name + '-', overlap_len, S_name + '+')]
 
     for S_name, T_name in combinations(seqnames, 2):
+        # NOTE the overlap graph is directed from the sequence that begins
+        # first along the genome to the other sequence. Weights are overlap
+        # lengths and are always positive.
+        for u, overlap, v in overlaps(mappings, S_name, T_name):
+            vs = vs.union(set([u, v]))
+            es += [(u,v)]
+            ws += [overlap]
         indicator.progress()
-        S_start, S_end = mappings[S_name].ref_from, mappings[S_name].ref_to
-        T_start, T_end = mappings[T_name].ref_from, mappings[T_name].ref_to
-
-        for o in overlaps(mappings[S_name], mappings[T_name]):
-            vs = vs.union(set(o[:2]))
-            es += [(str(o[0]), str(o[1]))]
-            ws += [o[2]]
 
     indicator.finish()
     G = OverlapGraph()

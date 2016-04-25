@@ -76,7 +76,7 @@ def create_example(db, reads='reads.fa'):
 
 def true_overlaps(true_path):
     G = igraph.read(true_path)
-    return [set([G.vs[u]['name'], G.vs[v]['name']]) for u, v in G.get_edgelist()]
+    return {(G.vs[e.source]['name'], G.vs[e.target]['name']): int(e['weight']) for e in G.es}
 
 def create_denovo_db(db, reads):
     B = seq.SeqDB(db, alphabet=A)
@@ -103,11 +103,23 @@ def plot_word_pvalues(db, path):
     Idx = words.Index(seqdb=B, **params)
     words.plot_word_pvalues(Idx, path)
 
+def plot_shift_consistency(db, path, true_path, min_overlap=-1):
+    B = seq.SeqDB(db, alphabet=A)
+    Idx = words.Index(seqdb=B, **params)
+    G = igraph.read(true_path)
+    overlap.plot_shift_consistency(
+        path,
+        Idx,
+        true_overlaps(true_path),
+        min_shift_significance=params['min_shift_significance'],
+        min_overlap=min_overlap,
+    )
+
 def plot_shift_pvalues(db, path, true_path, min_overlap=-1):
     B = seq.SeqDB(db, alphabet=A)
     Idx = words.Index(seqdb=B, **params)
     G = igraph.read(true_path)
-    overlap.plot_shift_signifiance_discrimination(
+    overlap.plot_shift_pvalues(
         path,
         Idx,
         true_overlaps(true_path),
