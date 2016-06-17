@@ -322,48 +322,6 @@ class AlignTable(CffiObject):
         # TODO look up attributes from self.c_obj or self.aln_prob
         return super(AlignTable, self).__getattr__(name)
 
-    def rasterplot(self, path, transcript, fullview=False):
-        if 'plt' not in globals():
-            raise ImportError('matplotlib is required for rasterplots')
-        ts, ss, cs = [transcript.T_idx], [transcript.S_idx], ['k']
-        nums = {'M': 0, 'S': 0, '-': 0}
-        colormap = {'M': 'g', 'S': 'y', '-': 'r'}
-        for op in transcript.opseq:
-            ts += [ts[-1] + 1 if op in 'MSI' else ts[-1]]
-            ss += [ss[-1] + 1 if op in 'MSD' else ss[-1]]
-            cs += colormap[op if op in 'MS' else '-']
-            nums[op if op in 'MS' else '-'] += 1
-        fig = plt.figure(figsize=(10, 10))
-        ax = fig.add_subplot(1, 1, 1)
-        ax.scatter(ts, ss, color=cs, s=40, alpha=0.7, edgecolors='none')
-        ax.set_aspect('equal')
-        ax.grid(True)
-        if fullview:
-            ax.set_xlim(0, max(ts))
-            ax.set_ylim(0, max(ss))
-        else:
-            ax.set_xlim(min(ts), max(ts))
-            ax.set_ylim(min(ss), max(ss))
-        # include ticks for endpoints
-        ax.set_xticks(list(ax.get_xticks())[1:-1] + [min(ts), max(ts)])
-        ax.set_yticks(list(ax.get_yticks())[1:-1] + [min(ss), max(ss)])
-        ax.set_xlabel('T')
-        ax.set_ylabel('S')
-        ax.invert_yaxis()
-        ax.xaxis.set_tick_params(labeltop='on')
-        ax.xaxis.set_label_position('top')
-        # inset plot: op stats
-        width = 0.07
-        inset = fig.add_axes([0.9 - 4*width, .65, 4*width, 0.2], frameon=False)
-        ind = [width*i for i in range(2)]
-        ind = [width * i * 1.3 for i in range(3)]
-        inset.bar(ind, [nums[i]*1./len(transcript.opseq) for i in 'MS-'], width, color=[colormap[i] for i in 'MS-'])
-        inset.set_aspect('equal')
-        inset.set_xticks([i+width/2. for i in ind])
-        inset.set_xticklabels(['M', 'S', '-'])
-        inset.set_yticks([i * .2 for i in range(1,6)])
-        fig.savefig(path)
-
     def score(self, opseq):
         """Calculates the score for an arbitray opseq. Opseqs are allowed to be
         partial alignments (i.e finishing before reaching the end of frame).::
@@ -472,8 +430,12 @@ class Transcript(CffiObject):
         else:
             return super(Transcript, self).__getattr__(name)
 
-    def __repr__(self):
+    def __str__(self):
         return '(%d,%d),%.2f:%s' \
+            % (self.S_idx, self.T_idx, self.score, self.opseq)
+
+    def __repr__(self):
+        return 'Transcript(S_idx=%d, T_idx=%d, score=%.2f, opseq="%s")' \
             % (self.S_idx, self.T_idx, self.score, self.opseq)
 
     def pretty_print(self, S, T, f=sys.stdout, width=120, margin=20,
@@ -587,3 +549,47 @@ class Segment(object):
     def __repr__(self):
         return 'Segment(S_id=%d,T_id=%d,tx=%s)' \
             % (self.S_id, self.T_id, self.tx)
+
+def rasterplot(path, transcript, S_name='S', T_name='T', fullview=False):
+    if 'plt' not in globals():
+        raise ImportError('matplotlib is required for rasterplots')
+    ts, ss, cs = [transcript.T_idx], [transcript.S_idx], ['k']
+    nums = {'M': 0, 'S': 0, '-': 0}
+    colormap = {'M': 'g', 'S': 'y', '-': 'r'}
+    for op in transcript.opseq:
+        ts += [ts[-1] + 1 if op in 'MSI' else ts[-1]]
+        ss += [ss[-1] + 1 if op in 'MSD' else ss[-1]]
+        cs += colormap[op if op in 'MS' else '-']
+        nums[op if op in 'MS' else '-'] += 1
+
+    plt.rc('text', usetex=True)
+    fig = plt.figure(figsize=(10,10))
+    ax = fig.add_subplot(1, 1, 1)
+    ax.scatter(ts, ss, color=cs, s=40, alpha=0.7, edgecolors='none')
+    ax.set_aspect('equal')
+    ax.grid(True)
+    if fullview:
+        ax.set_xlim(0, max(ts))
+        ax.set_ylim(0, max(ss))
+    else:
+        ax.set_xlim(min(ts), max(ts))
+        ax.set_ylim(min(ss), max(ss))
+    # include ticks for endpoints
+    ax.set_xticks(list(ax.get_xticks())[1:-2] + [min(ts), max(ts)])
+    ax.set_yticks(list(ax.get_yticks())[1:-1] + [min(ss), max(ss)])
+    ax.set_ylabel(S_name)
+    ax.xaxis.set_tick_params(labeltop='on')
+    ax.xaxis.set_label_position('top')
+    ax.invert_yaxis()
+    ax.set_xlabel(T_name)
+    # inset plot: op stats
+    width = 0.07
+    inset = fig.add_axes([0.9 - 4*width, .65, 4*width, 0.2], frameon=False)
+    ind = [width*i for i in range(2)]
+    ind = [width * i * 1.3 for i in range(3)]
+    inset.bar(ind, [nums[i]*1./len(transcript.opseq) for i in 'MS-'], width, color=[colormap[i] for i in 'MS-'])
+    inset.set_aspect('equal')
+    inset.set_xticks([i+width/2. for i in ind])
+    inset.set_xticklabels(['M', 'S', '-'])
+    inset.set_yticks([i * .2 for i in range(1,6)])
+    fig.savefig(path)
