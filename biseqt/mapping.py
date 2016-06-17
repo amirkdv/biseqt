@@ -23,6 +23,7 @@ def save_mappings(path, mappings):
             f.write('%s: %s,\n' % (repr(read), repr(mapping)))
         f.write('\n}\n')
 
+# FIXME merge with "name" lambda in seq.populate()
 def _identify(path):
     recs = SeqIO.parse(path, 'fasta')
     return {rec.id: sha1(str(rec.seq)).hexdigest() for rec in recs}

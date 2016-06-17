@@ -8,7 +8,7 @@ import numpy as np
 
 from .discovery import most_significant_shift
 from .. import ProgressIndicator
-from ..mapping import Mapping
+#from ..mapping import Mapping
 
 # FIXME docs
 # FIXME does this still work?
@@ -117,6 +117,16 @@ def plot_shift_pvalues(path, index, true_overlaps, num_bins=500, min_overlap=-1)
     msg = 'Finding most significant shift for all pairs of sequences'
     indicator = ProgressIndicator(msg, len(ids) * (len(ids)-1) / 2.0)
     indicator.start()
+    #f = open('shift_sigs.txt', 'w')
+    #f.write('{\n')
+    #print
+    #print 'evaling'
+    #with open('shift_sigs.50000.txt') as f:
+        #shift_sigs = eval(f.read())
+    #print 'done evaling'
+
+    #for S_id, T_id in shift_sigs:
+        #shift, significance = shift_sigs[(S_id, T_id)]
     for S_id_idx in range(len(ids)):
         for T_id_idx in range(S_id_idx+1, len(ids)):
             S_id, T_id = ids[S_id_idx], ids[T_id_idx]
@@ -125,24 +135,29 @@ def plot_shift_pvalues(path, index, true_overlaps, num_bins=500, min_overlap=-1)
             indicator.progress()
             S_name = seqinfo[S_id]['name']
             T_name = seqinfo[T_id]['name']
-            _, significance = most_significant_shift(S_id, T_id, index, min_overlap=min_overlap)
+            # FIXME don't calculate here, recieve input
+            #shift, significance = most_significant_shift(S_id, T_id, index, **kwargs)
             if significance is None:
                 continue
+            #f.write('  (%d,%d):(%d,%.2f), \n' % (S_id, T_id, shift, significance))
             if (S_name, T_name) in true_overlaps or (T_name, S_name) in true_overlaps:
                 pos_pvalues += [significance]
             else:
                 neg_pvalues += [significance]
+        #f.write('}\n')
 
     indicator.finish()
 
     # FIXME refactor all this out (repeated in plot_shift_consistency; but
     # direction of marking is different and one is cumulative one is not)
+    #plt.hist(pos_pvalues, num_bins, 'g', cumulative=True, normed=True, histstyle='step')
+    #plt.hist(neg_pvalues, num_bins, 'r', cumulative=True, normed=True, histstyle='step')
     pos_pvalues = sorted(pos_pvalues)
     density = gaussian_kde(pos_pvalues)
     cdf = np.insert(cumtrapz(density(pos_pvalues), pos_pvalues), 0, [0])
     density.covariance_factor = lambda : .2
-    markratio = 0.9
-    plt.plot(pos_pvalues, cdf, antialiased=True, color='g', label='Overlapping reads')
+    markratio = 0.95
+    plt.plot(pos_pvalues, cdf, antialiased=True, color='g', label='Overlapping reads (shaded mass = %.2f)' % markratio)
     cdf = cdf[int(len(pos_pvalues)*(1-markratio)):]
     pos_pvalues = pos_pvalues[int(len(pos_pvalues)*(1-markratio)):]
     plt.fill_between(pos_pvalues, cdf, color='g', alpha=0.2)
@@ -151,22 +166,24 @@ def plot_shift_pvalues(path, index, true_overlaps, num_bins=500, min_overlap=-1)
     density = gaussian_kde(neg_pvalues)
     cdf = np.insert(cumtrapz(density(neg_pvalues), neg_pvalues), 0, [0])
     density.covariance_factor = lambda : .2
-    markratio = 0.9
-    plt.plot(neg_pvalues, cdf, antialiased=True, color='r', label='Non-overlapping reads')
-    cdf = cdf[int(len(neg_pvalues)*(1-markratio)):]
-    neg_pvalues = neg_pvalues[int(len(neg_pvalues)*(1-markratio)):]
+    markratio = 0.99
+    plt.plot(neg_pvalues, cdf, antialiased=True, color='r', label='Non-overlapping reads (shaded mass = %.2f)' % markratio)
+    cdf = cdf[:-int(len(neg_pvalues)*(1-markratio))]
+    neg_pvalues = neg_pvalues[:-int(len(neg_pvalues)*(1-markratio))]
     plt.fill_between(neg_pvalues, cdf, color='r', alpha=0.2)
 
     plt.grid(True)
     plt.xlabel('largest significance for a shift window on %d-mers' % index.wordlen)
     plt.ylabel('Proportion of read-pairs (cumulative)')
-    plt.legend(loc='upper right', fontsize=10)
+    plt.legend(loc='lower right', fontsize=10)
     plt.tight_layout()
     plt.savefig(path, dpi=300)
 
-def plot_all_seeds(index, basedir='', true_overlaps={}, mappings={}, min_overlap=-1):
+def plot_all_seeds(index, basedir='', true_overlaps={}, mappings={}, min_overlap=-1, gap_prob=None):
+    assert(gap_prob > 0 and gap_prob < 1)
     seqinfo = index.seqdb.seqinfo()
     ids = seqinfo.keys()
+    #ids = [870, 1759]
     indicator = ProgressIndicator('Plotting all seeds',
         len(ids) * (len(ids) - 1) / 2.0, percentage=False)
     indicator.start()
@@ -177,19 +194,19 @@ def plot_all_seeds(index, basedir='', true_overlaps={}, mappings={}, min_overlap
             S_name, T_name = seqinfo[S_id]['name'], seqinfo[T_id]['name']
             S_hname, T_hname = seqinfo[S_id]['hname'], seqinfo[T_id]['hname']
             # FIXME debug
-            if (S_name, T_name) not in true_overlaps and (T_name, S_name) not in true_overlaps:
-                continue
+            #if (S_name, T_name) not in true_overlaps and (T_name, S_name) not in true_overlaps:
+                #continue
 
             seeds = index.seeds(S_id, T_id)
             if not seeds:
                 continue
-            best_shift, significance = most_significant_shift(S_id, T_id, index, min_overlap=-1)
+            best_shift, significance = most_significant_shift(S_id, T_id, index, min_overlap=-1, gap_prob=gap_prob)
             if significance is None:
                 continue
             label = 'Most significant shift = %d\nlog(p-value)=%.2f' % (best_shift, significance)
             overlay = [(best_shift, '#333333', label)]
 
-            path = os.path.join(basedir, '%s_%s' % (S_hname, T_hname))
+            path = '%s_%s' % (S_hname, T_hname)
             if true_overlaps:
                 # find the true shift:
                 color = 'green'
@@ -197,16 +214,17 @@ def plot_all_seeds(index, basedir='', true_overlaps={}, mappings={}, min_overlap
                     # if S -> T then true shift for (S, T) is |S| - |overlap|.
                     true_shift = seqinfo[S_id]['length'] - true_overlaps[(S_name,T_name)]
                     overlay += [(true_shift, 'green', 'True shift = %d' % true_shift)]
-                    path += '.p.png'
+                    path = 'p.%s.png' % path
                 elif (T_name, S_name) in true_overlaps:
                     # if T -> S then true shift for (S, T) is |overlap| - |T|
                     true_shift = - seqinfo[T_id]['length'] + true_overlaps[(T_name, S_name)]
                     overlay += [(true_shift, 'green', 'True shift = %d' % true_shift)]
-                    path += '.p.png'
+                    path = 'p.%s.png' % path
                 else:
-                    path += '.n.png'
+                    path = 'n.%s.png' % path
                     color = 'red'
 
+                path = os.path.join(basedir, path)
                 plot_seeds(path, seeds, seqinfo, color=color, shift_overlay=overlay)
             else:
                 path += '.png'
@@ -241,5 +259,5 @@ def plot_seeds(path, seeds, seqinfo, color='k', shift_overlay=[]):
     plt.ylabel('\\texttt{%s}' % S_hname)
     plt.legend(prop={'size':8}, loc='lower left')
     plt.gca().invert_yaxis()
-    plt.ticklabel_format(style='sci', axis='both', scilimits=(0,0))
-    plt.savefig(path, dpi=300)
+    #plt.ticklabel_format(style='sci', axis='both', scilimits=(0,0))
+    plt.savefig(path, dpi=300, bbox_inches='tight', pad_inches=0)

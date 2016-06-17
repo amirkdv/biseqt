@@ -310,7 +310,7 @@ class SeqDB(object):
             """
             c.execute(q)
 
-    def populate(self, fasta_src, seq_type):
+    def populate(self, fasta_src, seq_type, max_seqs=-1, rc=True):
         """Given a FASTA source file, loads all the sequences into the database.
 
         Args:
@@ -326,11 +326,13 @@ class SeqDB(object):
         """
         name = lambda x: sha1(str(x)).hexdigest()
         seqgen = lambda: enumerate(SeqIO.parse(fasta_src, 'fasta'))
-        # FIXME debug
+        lt_max = lambda i: max_seqs < 0 or i < max_seqs
+        clean = lambda string: ''.join(s if s != 'N' else self.alphabet.randstr(1) for s in str(string).upper())
         recs = chain(
-            ((name(r.seq), seq_type, r.id, 0, str(r.seq)) for idx,r in seqgen()), # if idx < 100),
-            ((name(r.seq), seq_type, r.id, 1, str(r.reverse_complement().seq)) for idx,r in seqgen()) # if idx < 100)
+            ((name(r.seq), seq_type, r.id, 0, clean(r.seq)) for idx,r in seqgen() if lt_max(idx)),
+            ((name(r.seq), seq_type, r.id, 1, clean(r.reverse_complement().seq)) for idx,r in seqgen() if rc and lt_max(idx))
         )
+
         with sqlite3.connect(self.db) as conn:
             c = conn.cursor()
             c.executemany(q, recs)

@@ -2,7 +2,8 @@ from collections import namedtuple
 from math import log
 import os.path
 import sys
-from .. import pw, words, lib, ffi, ProgressIndicator, CffiObject
+from .. import seq, pw, words, lib, ffi, ProgressIndicator, CffiObject
+from ..mapping import Mapping
 
 class SeedExtensionParams(CffiObject):
     """Wraps the C struct ``seedext_params``, see ``pwlib.h``.
@@ -27,7 +28,7 @@ class SeedExtensionParams(CffiObject):
                 'scores': kw['scores'].c_obj
             })
 
-def most_significant_shift(S_id, T_id, index, min_overlap=-1):
+def most_significant_shift(S_id, T_id, index, **kwargs):
     """Builds a smoothed distribution (via a rolling sum of known width) of
     shifts for the provided seeds of a pair of sequences of known lengths and
     returns the shift with most number of seeds and its p-value.
@@ -71,6 +72,7 @@ def most_significant_shift(S_id, T_id, index, min_overlap=-1):
         (mode_shift, log_pvalue): A tuple of the form ``(int, float)``.
 
     """
+    min_overlap = kwargs.pop('min_overlap', -1)
     seeds = index.seeds(S_id, T_id)
     if not seeds:
         return None, None
@@ -79,7 +81,8 @@ def most_significant_shift(S_id, T_id, index, min_overlap=-1):
     scores = {}
     for seed in seeds:
         shift = seed.tx.S_idx - seed.tx.T_idx
-        r, s, s0 = index.seed_pvalue_contribution((S_len, T_len), shift)
+        r, s, s0 = index.seed_pvalue_contribution((S_len, T_len), shift,
+            gap_prob=kwargs['gap_prob'])
         for d in range(shift - r, shift + r + 1):
             scores[d] = s0 if d not in scores else scores[d]
             scores[d] += s
@@ -98,7 +101,8 @@ def most_significant_shift(S_id, T_id, index, min_overlap=-1):
     return max(scores.items(), key=lambda x: scores[x[0]])
 
 # FIXME docs
-def discover_overlap(S_id, T_id, index, mode='banded alignment', **kwargs):
+# FIXME hack args: shift, sig
+def discover_overlap(S_id, T_id, index, shift, sig, mode='banded alignment', **kwargs):
     """
     Args:
         S_id (int):
@@ -119,19 +123,22 @@ def discover_overlap(S_id, T_id, index, mode='banded alignment', **kwargs):
     if not seeds:
         return None
 
-    shift, sig = most_significant_shift(S_len, T_len, index, min_overlap=min_overlap)
-    if sig is None or sig < min_sig:
-        return None
+    # FIXME hack
+    #shift, sig = most_significant_shift(S_id, T_id, index, **kwargs)
+    #if sig is None or sig < min_sig:
+        #return None
 
     S, T = index.seqdb.loadseq(S_id), index.seqdb.loadseq(T_id)
     tx = None
     if mode == 'banded alignment':
+        # FIXME most_significant_shift should return the radius as well
         radius = index.band_radius((S_len, T_len), shift, kwargs['gap_prob'])
         F = pw.AlignFrame(S, T)
-        assert(isinstance(kwargs['aln_scores'], AlignScores))
-        # FIXME min_score
-        with pw.AlignTable(F, kwargs['aln_scores'], alnmode=BANDED_MODE,
-                alntype=B_OVERLAP, max_new_mins=kw['max_new_mins']) as T:
+        assert(isinstance(kwargs['aln_scores'], pw.AlignScores))
+        # FIXME min_score ?
+        with pw.AlignTable(F, kwargs['aln_scores'], alnmode=pw.BANDED_MODE,
+                alntype=pw.B_OVERLAP, max_new_mins=kwargs['max_new_mins'],
+                dmin=shift-radius, dmax=shift+radius) as T:
             score = T.solve()
             if score is not None:
                 tx = T.traceback()
@@ -145,9 +152,60 @@ def discover_overlap(S_id, T_id, index, mode='banded alignment', **kwargs):
         tx = lib.extend(txs, len(txs), F.c_obj, kwargs['seed_ext_params'].c_obj)
         tx = None if tx == ffi.NULL else tx
 
-    # starting diagonal of the alignment must be far enough from the 0 diagonal:
-    if tx and abs(tx.S_idx - tx.T_idx) < kwargs['min_margin'] or tx.score < kwargs['min_score']:
-        return None
-
+    # FIXME accepting criteria: min score or min ratio of matches? min.margin
+    # for sign mistakes? for now nothing:
+    #if tx and abs(tx.S_idx - tx.T_idx) < kwargs['min_margin'] or tx.score < kwargs['min_score']:
+    #   return None
     return tx
+
+def map_reads_to_refs(index, **kwargs):
+    seqinfo = index.seqdb.seqinfo()
+    # FIXME assumes one reference
+    refid = [i for i in seqinfo if seqinfo[i]['type'] == seq.REFERENCE][0]
+    ref = index.seqdb.loadseq(refid)
+    refchecksum = seqinfo[refid]['name'][:-1] # TODO clean up what seq.SeqDB gives back
+    mappings = {}
+    readids = [seqid for seqid in seqinfo if seqinfo[seqid]['type'] == seq.READ]
+    indicator = ProgressIndicator(
+        'Finding best shift estimates for %d sequences' %
+            len(readids), len(readids), percentage=False
+    )
+
+    indicator.start()
+    for seqid in readids:
+        # FIXME compare b/w seq and its rc
+        shift, sig = most_significant_shift(refid, seqid, index, **kwargs)
+        checksum = seqinfo[seqid]['name'][:-1]
+        indicator.progress()
+        if checksum not in mappings or sig > mappings[checksum][1]:
+            mappings[checksum] = (seqid, shift, sig)
+
+    indicator.finish()
+    indicator = ProgressIndicator(
+        'Mapping %d reads' % (len(readids)/2), len(readids)/2, percentage=False
+    )
+    indicator.start()
+
+    for checksum in mappings:
+        seqid, shift, _ = mappings[checksum]
+        radius = index.band_radius((seqinfo[refid]['length'],
+            seqinfo[seqid]['length']), shift, kwargs['gap_prob'])
+        F = pw.AlignFrame(ref, index.seqdb.loadseq(seqid))
+        assert(isinstance(kwargs['aln_scores'], pw.AlignScores))
+        with pw.AlignTable(F, kwargs['aln_scores'], alnmode=pw.BANDED_MODE,
+                alntype=pw.B_OVERLAP, max_new_mins=-1,
+                dmin=shift-radius, dmax=shift+radius) as T:
+            score = T.solve()
+            if score is None:
+                print "error mapping %s (seqid=%d)" % (checksum, seqid)
+                continue
+            tx = T.traceback()
+            if tx == ffi.NULL or tx is None:
+                print "error mapping %s (seqid=%d)" % (checksum, seqid)
+                continue
+            mappings[checksum] = Mapping(ref=refchecksum, ref_from=tx.S_idx,
+                ref_to=tx.S_idx + len(tx.opseq) - tx.opseq.count('I'), rc=seqinfo[seqid]['rc'])
+            yield checksum, mappings[checksum]
+            indicator.progress()
+    indicator.finish()
 

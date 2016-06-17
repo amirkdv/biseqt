@@ -2,8 +2,8 @@
 import sys
 import os
 import igraph
-from .. import pw, words, seq, overlap, mapping, ProgressIndicator
-from ..mapping import Mapping
+from .. import pw, words, seq, overlap, ProgressIndicator
+from ..mapping import Mapping, save_mappings
 
 params = {
     'show_params': False,   # print a summary of parameters
@@ -14,7 +14,7 @@ params = {
     # ------------ Assembly ---------------
     'min_margin': 200,       # minimum margin required for the direction to be reliable.
     'window': 50,            # rolling window length for tuple extension.
-    'max_new_mins': 5,       # how many consecutive drops are allowed.
+    'max_new_mins': 10,       # how many consecutive drops are allowed.
     # FIXME make it minimum M percentage?
     'min_score': 500,# minimum score required for an overlap to be reported.
     'min_shift_significance': 50,
@@ -86,7 +86,28 @@ def create_denovo_db(db, reads):
     Idx.initdb()
     Idx.index()
 
-def build_denovo_overlap_graph(db, path, true_path):
+def create_mapping_db(db, reads, ref):
+    B = seq.SeqDB(db, alphabet=A)
+    B.initdb()
+    B.populate(reads, seq_type=seq.READ, max_seqs=-1)
+    B.populate(ref, seq_type=seq.REFERENCE, rc=False)
+
+    Idx = words.Index(seqdb=B, **params)
+    Idx.initdb()
+    Idx.index()
+
+def map_to_refs(path, db):
+    B = seq.SeqDB(db, alphabet=A)
+    Idx = words.Index(seqdb=B, **params)
+    save_mappings(path, overlap.map_reads_to_refs(
+        Idx,
+        aln_scores=C,
+        gap_prob=params['ge_prob'],
+        sensitivity_erfinv = 0.99,
+    ))
+
+
+def build_denovo_overlap_graph(db, path, min_overlap=-1):
     B = seq.SeqDB(db, alphabet=A)
     Idx = words.Index(seqdb=B, **params)
     if params['show_params']:
@@ -98,7 +119,10 @@ def build_denovo_overlap_graph(db, path, true_path):
         mode='banded alignment',
         aln_scores=C,
         min_margin=params['min_margin'],
-        min_overlap=params['min_overlap'],
+        min_overlap=min_overlap,
+        # FIXME means something different for banded-aln vs see-ext.
+        max_new_mins=params['max_new_mins'],
+        gap_prob=params['ge_prob'],
         min_shift_significance=params['min_shift_significance'])
     G.save(path)
 
@@ -150,5 +174,6 @@ def plot_seeds(db, path, true_path, mappings, min_overlap=-1):
         true_overlaps=true_overlaps(true_path),
         mappings=mappings,
         min_overlap=min_overlap,
+        gap_prob=params['ge_prob'],
     )
 

@@ -6,6 +6,7 @@ from .graph import overlap_graph_from_mappings
 from .discovery import SeedExtensionParams
 from .discovery import discover_overlap
 from .discovery import most_significant_shift
+from .discovery import map_reads_to_refs
 from .plots import plot_shift_pvalues
 from .plots import plot_shift_consistency
 from .plots import plot_all_seeds
@@ -18,7 +19,7 @@ __all__ = [
     'overlap_graph_from_mappings',
     'overlap_graph_denovo',
     'most_significant_shift',
-    'overlap_graph',
+    'map_reads_to_refs',
     'plot_shift_pvalues',
     'plot_shift_consistency',
     'plot_all_seeds',

@@ -286,7 +286,8 @@ class Index(object):
         r = 2 * self.sensitivity_erfinv * sqrt(g * (1-g) * K)
         return int(r)
 
-    def seed_pvalue_contribution(self, readlens, shift, gap_prob=0.1):
+    def seed_pvalue_contribution(self, readlens, shift, gap_prob=None):
+        assert(gap_prob > 0 and gap_prob < 1)
         r = self.band_radius(readlens, shift, gap_prob)
         A = 2 * r * sqrt(sum((l - abs(shift))**2 for l in readlens))
         # (radius, contribution of one seed, starting value)

@@ -55,6 +55,15 @@ leishmania/blasr.mappings.txt: $(REFERENCE) $(READS)
 	python -c 'from biseqt.mapping import parse_mappings, save_mappings; \
 		save_mappings("$@", parse_mappings("$(REFERENCE)", "$(READS)", "$(BLASR_SAM)", blasr=1));'
 
+
+MAPPING_DB = leishmania/genome.mapping.db
+$(MAPPING_DB):
+	python -c 'import biseqt.tests.assembly as T; T.create_mapping_db("$@", "$(READS)", "$(REFERENCE)")'
+
+MAPPING_TO_REFS=leishmania/our.mappings.txt
+$(MAPPING_TO_REFS):
+	python -c 'import biseqt.tests.assembly as T; T.map_to_refs("$@", "$(MAPPING_DB)")'
+
 ASSEMBLY_TARGET = leishmania.gml
 assembly:
 	$(MAKE) -f assembly.mk $(ASSEMBLY_TARGET) $(ASSEMBLY_OPTS)
