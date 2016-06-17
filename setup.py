@@ -9,6 +9,16 @@ here = path.abspath(path.dirname(__file__))
 with open(path.join(here, 'README.md')) as f:
     long_description = f.read()
 
+# FIXME manual instructions:
+# * cffi:
+#   * backend: apt-get install python-cffi libffi-dev
+#   * frontend: pip install cffi==A.B.C where A.B.C comes from: apt-cache policy python-cffi
+# * igraph:
+#   * apt-get install python-igraph (via pip requires c dependencies)
+# * matplotlib:
+#   * apt-get install python-matplotlib (via pip requires many dependencies)
+#   * apt-get install dvipng (for latex in images)
+
 setup(
     name='biseqt',
     version='0.0.1',
