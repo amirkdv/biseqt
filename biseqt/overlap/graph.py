@@ -68,32 +68,63 @@ def overlap_graph_denovo(index, **kwargs):
     es, ws = [], []
     seqinfo = index.seqdb.seqinfo()
     seqids = seqinfo.keys()
+    print 'evaling'
+    with open('shift_sigs_significant.txt') as f:
+        shift_sigs = eval(f.read())
+    print 'done evaling'
+
     indicator = ProgressIndicator('Finding potentially homologous sequences',
-        len(seqinfo) * (len(seqinfo) - 2)/2, percentage=False)
+        #len(seqinfo) * (len(seqinfo) - 2)/2, percentage=False)
+        len(shift_sigs), percentage=False)
     indicator.start()
-    for S_id_idx in range(len(seqids)):
-        for T_id_idx in range(S_id_idx, len(seqids)):
-            #if T_id not in [13]:
-                #continue
-            S_id, T_id = seqids[S_id_idx], seqids[T_id_idx]
-            S_name, T_name = seqinfo[S_id]['name'], seqinfo[T_id]['name']
-            if S_name == T_name:
-                continue
 
-            indicator.progress()
-            vs = vs.union([S_name, T_name])
+    #FIXME hack
+    #f = open('alns.txt', 'w')
+    #f.write('{\n')
 
-            tx = discover_overlap(S_id, T_id, index, **kwargs)
-            if not tx:
-                continue
-            assert(tx.T_idx * tx.S_idx == 0)
-            S_tx_len = lib.tx_seq_len(tx.c_obj, 'S')
-            T_tx_len = lib.tx_seq_len(tx.c_obj, 'T')
-            # at this point exactly one of tx.S_idx or tx.T_idx is zero.
-            es += [(S_name, T_name)] if tx.T_idx == 0 else [(T_name, S_name)]
-            ws += [seg.tx.score]
+    from ..pw import Transcript
+    alns = eval(open('alns.txt').read())
+    print
+    print 'loaded!'
+
+    for S_id, T_id in sorted(shift_sigs.keys()):
+        shift, sig = shift_sigs[(S_id, T_id)]
+        #print S_id, T_id
+    #for S_id_idx in range(len(seqids)):
+        #for T_id_idx in range(S_id_idx, len(seqids)):
+            #S_id, T_id = seqids[S_id_idx], seqids[T_id_idx]
+        S_name, T_name = seqinfo[S_id]['name'], seqinfo[T_id]['name']
+        if S_name[:-1] == T_name[:-1]:
+            continue
+
+        #f.write('  (%d, %d):' % (S_id, T_id))
+
+        indicator.progress()
+        vs = vs.union([S_name, T_name])
+
+        #FIXME hack
+        #tx = discover_overlap(S_id, T_id, index, shift, sig, **kwargs)
+        #f.write(' %s,\n' % repr(tx))
+        tx = alns[(S_id, T_id)]
+        if not tx:
+            continue
+
+        assert(tx.T_idx * tx.S_idx == 0)
+
+        # FIXME handtuned:
+        if tx.opseq.count('M') < .65 * len(tx.opseq):
+            continue
+        if max(tx.S_idx, tx.T_idx) < 200:
+            continue
+
+        # at this point exactly one of tx.S_idx or tx.T_idx is zero.
+        es += [(S_name, T_name)] if tx.T_idx == 0 else [(T_name, S_name)]
+        ws += [tx.score]
 
     indicator.finish()
+
+    #f.write('}\n')
+    #f.close()
 
     G = OverlapGraph()
     G.iG.add_vertices(list(vs))

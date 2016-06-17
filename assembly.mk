@@ -3,6 +3,7 @@ ASSEMBLED_GRAPH = overlap
 DB = genome.db
 READS = reads.fa
 MAPPINGS =
+# FIXME this should be moved out of here
 MIN_OVERLAP = 500
 
 clean:
@@ -35,7 +36,7 @@ plots/num_seeds.$(WORDLEN).png:
 .PHONY: plots/seeds-$(WORDLEN) plots/shift_pvalues.$(WORDLEN).png plots/word_pvalues.$(WORDLEN).png plots/shift_consistency.$(WORDLEN).png plots/num_seeds.$(WORDLEN).png
 
 $(ASSEMBLED_GRAPH).gml:
-	python -c 'import biseqt.tests.assembly as T; T.build_denovo_overlap_graph("$(DB)", "$@", "$(TRUE_GRAPH).gml")'
+	python -c 'import biseqt.tests.assembly as T; T.build_denovo_overlap_graph("$(DB)", "$@", min_overlap=$(MIN_OVERLAP))'
 	$(MAKE) -f assembly.mk diff SUMMARY_ONLY=True
 
 SUMMARY_ONLY = False
