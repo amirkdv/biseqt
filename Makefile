@@ -22,6 +22,9 @@ tests: $(LIBDIR)/pwlib.so
 loc:
 	find biseqt -type f -regex '.*\(\.py\|\.c\|\.h\)' | xargs wc -l
 
+todo:
+	find biseqt -type f -regex '.*\(\.py\|\.c\|\.h\)' | xargs grep -niP --color 'FIXME|TODO|BUG'
+
 CAIRO=$(shell python -c 'import site, os.path; print filter(lambda e:os.path.isdir(e + "/cairo"), site.getsitepackages())[0] + "/cairo"')
 env:
 	virtualenv --system-site-packages $@
