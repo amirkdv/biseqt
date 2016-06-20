@@ -34,6 +34,10 @@ env:
 DOCS_EXCLUDE = biseqt/tests
 DOCS_OUT = _build
 # in RTD docs/doxygen is built by docs/conf.py
+# FIXME depends on doxygen
+# FIXME use sphinx entrypoints from virtualenv
+# FIXME who is creating the latex dir?
+# FIXME need to explicitly announce sphinx_rtd_theme as dependency, cf. https://github.com/EUDAT-B2SAFE/B2HANDLE/pull/63/commits
 docs: $(LIBDIR)/pwlib.so docs/docs.rst docs/doxygen
 	sphinx-apidoc -e -o $@ biseqt/ $(DOCS_EXCLUDE)
 	python docs/cdocs.py $(LIBDIR)/pwlib.h > docs/biseqt.pwlib.rst
