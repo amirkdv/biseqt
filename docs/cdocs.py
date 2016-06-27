@@ -1,5 +1,7 @@
 #!/usr/bin/env python
 
+# TODO documentation
+
 from pycparser import c_ast, parse_file
 import sys
 

@@ -1,4 +1,8 @@
 //FIXME docs
+//TODO The C component could be hacked using "define" to override any of the
+//functions in here. document it and expose the user's additional c|h files
+//to CLI so that they can be incorporated in the CLI.
+//cf. http://stackoverflow.com/a/11758777
 
 /**
  * Any pair of integers.

@@ -23,7 +23,7 @@ loc:
 	find biseqt -type f -regex '.*\(\.py\|\.c\|\.h\)' | xargs wc -l
 
 todo:
-	find biseqt -type f -regex '.*\(\.py\|\.c\|\.h\)' | xargs grep -niP --color 'FIXME|TODO|BUG'
+	find biseqt Makefile *.mk *.py -type f -regex '.*\(\.py\|\.c\|\.h\|Makefile\|\.mk\)' | xargs grep -A2 -nP --color 'FIXME|TODO|BUG'
 
 CAIRO=$(shell python -c 'import site, os.path; print filter(lambda e:os.path.isdir(e + "/cairo"), site.getsitepackages())[0] + "/cairo"')
 env:
@@ -51,4 +51,4 @@ docs/doxygen:
 docs/docs.rst:
 	pandoc -f markdown -t rst -o $@ -i docs.md
 
-.PHONY: clean tests *.pdf loc docs docs/docs.rst docs/doxygen
+.PHONY: clean tests *.pdf loc docs todo docs/docs.rst docs/doxygen

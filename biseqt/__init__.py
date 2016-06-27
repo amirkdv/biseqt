@@ -8,6 +8,7 @@ lib = ffi.dlopen(os.path.join(os.path.dirname(__file__), 'pwlib', 'pwlib.so'))
 with open(os.path.join(os.path.dirname(__file__), 'pwlib', 'pwlib.h')) as f:
     ffi.cdef(f.read())
     # so we can call strlen from python:
+    # FIXME used only once in pw.py, can we get rid of it?
     ffi.cdef('size_t strlen(const char*);');
 
 class CffiObject(object):

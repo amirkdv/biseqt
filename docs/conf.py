@@ -21,7 +21,7 @@ from mock import Mock as MagicMock
 # Since Python 3.3 this can be done via:
 # from unittest.mock import MagicMock
 
-# Mock classes that require "arbitrary" binaries for building on rtfd.org
+# Hacks to make it work on readthedocs.org
 if os.environ.get('READTHEDOCS', None) == 'True':
     class Mock(MagicMock):
         @classmethod
@@ -29,6 +29,7 @@ if os.environ.get('READTHEDOCS', None) == 'True':
             return Mock()
 
     subprocess.call('cd .. && pip install breathe && doxygen docs/doxygen.conf', shell=True)
+    # Mock classes that require "arbitrary" binaries for building on rtfd.org
     MOCK_MODULES = ['cffi', 'igraph', 'numpy', 'termcolor', 'Bio', 'Bio.SeqIO']
     sys.modules.update((mod_name, Mock()) for mod_name in MOCK_MODULES)
 
