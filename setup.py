@@ -3,53 +3,46 @@
 from setuptools import setup
 from os import path
 
-here = path.abspath(path.dirname(__file__))
-
-# Get the long description from the README file
-with open(path.join(here, 'README.md')) as f:
-    long_description = f.read()
-
-# FIXME manual instructions:
-# * cffi:
-#   * backend: apt-get install python-cffi libffi-dev
-#   * frontend: pip install cffi==A.B.C where A.B.C comes from: apt-cache policy python-cffi
-# * igraph:
-#   * apt-get install python-igraph (via pip requires c dependencies)
-# * matplotlib:
-#   * apt-get install python-matplotlib (via pip requires many dependencies)
-#   * apt-get install dvipng (for latex in images)
+with open(path.join(path.abspath(path.dirname(__file__)), 'README.md')) as f:
+    README = f.read()
 
 setup(
     name='biseqt',
     version='0.0.1',
-    description='Oval is an overlap alignment search tool',
-    long_description=long_description,
+    description='Biseqt is a biological sequence analysis tool',
+    long_description=README,
     url='https://github.com/amirkdv/biseqt',
     author='Amir Kadivar',
     author_email='amir@amirkdv.ca',
-    #license='MIT',
-    #keywords='sequence DNA overlap alignment fragment assembly',
+    license='BSD',
     packages=['biseqt'],
-    setup_requires=[
-        'cffi',
-        'biopython',
+    # NOTE numpy has some weirdness with setuptools (cf. open issue
+    # https://github.com/numpy/numpy/issues/2434). We need it because it's a
+    # dependency of scipy but has to be installed either manually before our
+    # setup.py or as part of setup_requires (cf.
+    # https://github.com/numpy/numpy/issues/2434#issuecomment-65252402)
+    # However, it is still much faster to install numpy separately via pip
+    # because the following way wants to compile all the fortran and C/C++ code.
+    setup_requires=[ # these are the packages that must be installed or
+        'numpy',
     ],
     install_requires=[
-        'biopython',
-        'termcolor',
-        'cffi',
-        'python-igraph',
-        # 'pycairo', can't be done yet; see https://bugs.freedesktop.org/show_bug.cgi?id=58772
+        'scipy',
+        'matplotlib',
+        'biopython',    # for sequence IO
+        'termcolor',    # for colored text output
+        'cffi',         # for the C component
+        'python-igraph',# for bindings to igraph
+        'cairocffi',    # for igraph plots
     ],
     extras_require={
-        'DOCS': [
-            'pycparser', # used to generate C component docs index
+        'docs': [
             'sphinx',
-            'sphinx.ext.napoleon',
-            'sphinx.rdt.theme',
-            'sphinx.ext.mathjax',
+            'pycparser', # used to generate C component docs index
+            'sphinx_rtd_theme',
+            'sphinxcontrib-wiki',
             'breathe',
-            'mock' # only used on rtfd.org to mock packages with binary dependencies
-        ]
+            'mock', # only used on rtfd.org to mock packages with binary dependencies
+        ],
     }
 )

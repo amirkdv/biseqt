@@ -25,19 +25,17 @@ loc:
 todo:
 	find biseqt Makefile *.mk *.py -type f -regex '.*\(\.py\|\.c\|\.h\|Makefile\|\.mk\)' | xargs grep -A2 -nP --color 'FIXME|TODO|BUG'
 
-CAIRO=$(shell python -c 'import site, os.path; print filter(lambda e:os.path.isdir(e + "/cairo"), site.getsitepackages())[0] + "/cairo"')
 env:
-	virtualenv --system-site-packages $@
-	. env/bin/activate && python setup.py install
-	ln -s "$(CAIRO)" env/lib/python2.7/cairo
+	# install numpy separately before, cf. setup.py
+	virtualenv $@
+	. env/bin/activate && \
+		pip install numpy && \
+		pip install -e . && \
+		pip install -e .[docs]
 
 DOCS_EXCLUDE = biseqt/tests
 DOCS_OUT = _build
 # in RTD docs/doxygen is built by docs/conf.py
-# FIXME depends on doxygen
-# FIXME use sphinx entrypoints from virtualenv
-# FIXME who is creating the latex dir?
-# FIXME need to explicitly announce sphinx_rtd_theme as dependency, cf. https://github.com/EUDAT-B2SAFE/B2HANDLE/pull/63/commits
 docs: $(LIBDIR)/pwlib.so docs/docs.rst docs/doxygen
 	sphinx-apidoc -e -o $@ biseqt/ $(DOCS_EXCLUDE)
 	python docs/cdocs.py $(LIBDIR)/pwlib.h > docs/biseqt.pwlib.rst
@@ -50,5 +48,10 @@ docs/doxygen:
 
 docs/docs.rst:
 	pandoc -f markdown -t rst -o $@ -i docs.md
+
+DOCKER_IMG=amirkdv/biseqt-base
+docker_build:
+	cat Dockerfile | docker build -t $(DOCKER_IMG) -
+
 
 .PHONY: clean tests *.pdf loc docs todo docs/docs.rst docs/doxygen
