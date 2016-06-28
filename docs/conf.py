@@ -28,6 +28,7 @@ if os.environ.get('READTHEDOCS', None) == 'True':
         def __getattr__(cls, name):
             return Mock()
 
+    # Call doxygen
     subprocess.call('cd .. && pip install breathe && doxygen docs/doxygen.conf', shell=True)
     # Mock classes that require "arbitrary" binaries for building on rtfd.org
     MOCK_MODULES = ['cffi', 'igraph', 'numpy', 'termcolor', 'Bio', 'Bio.SeqIO']
@@ -66,6 +67,7 @@ extensions = [
     'sphinx.ext.napoleon',
     'sphinx.ext.mathjax',
     'sphinx.ext.viewcode',
+    'sphinxcontrib.wiki',
     'breathe',
 ]
 
