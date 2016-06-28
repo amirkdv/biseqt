@@ -1,7 +1,11 @@
+machine:
+  services:
+    - docker
+
 dependencies:
   override:
-    - python setup.py install
+    - make docker_build
 
 test:
   override:
-    - make tests
+    - docker run -it -v $PWD:/biseqt amirkdv/biseqt-base sh -c '. $SCI_PY_ENV/bin/activate && cd /biseqt && make deps docs tests'

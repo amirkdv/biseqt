@@ -25,13 +25,14 @@ loc:
 todo:
 	find biseqt Makefile *.mk *.py -type f -regex '.*\(\.py\|\.c\|\.h\|Makefile\|\.mk\)' | xargs grep -A2 -nP --color 'FIXME|TODO|BUG'
 
-env:
+deps:
 	# install numpy separately before, cf. setup.py
+	pip install numpy && \
+	pip install -e .  && \
+	pip install -e .[docs]
+
+env:
 	virtualenv $@
-	. env/bin/activate && \
-		pip install numpy && \
-		pip install -e . && \
-		pip install -e .[docs]
 
 DOCS_EXCLUDE = biseqt/tests
 DOCS_OUT = _build

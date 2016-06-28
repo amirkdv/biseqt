@@ -33,14 +33,12 @@ F = pw.AlignFrame(S, T)
 with pw.AlignTable(F, C, alnmode=pw.STD_MODE, alntype=pw.GLOBAL) as P:
     score = P.solve()
     transcript = P.traceback()
-    pw.rasterplot('debug.png', transcript)
+    pw.rasterplot('debug_small.png', transcript)
     #P.rasterplot('debug_true.png', pw.Transcript(S_idx=0, T_idx=0, opseq=m_opseq, score=0))
 
 print '\n--> optimal global alignment:\n%s\n' % str(transcript)
 if transcript:
     transcript.pretty_print(S, T)
-
-raise
 
 S = A.randseq(8000)
 T, _ = seq.Sequence(S[4000:] + A.randstr(1000), A).mutate(**params)
@@ -50,7 +48,7 @@ with pw.AlignTable(F, C, alnmode=pw.BANDED_MODE, alntype=pw.B_OVERLAP, dmin=2800
 #with pw.AlignTable(F, C, alnmode=pw.STD_MODE, alntype=pw.OVERLAP) as P:
     score = P.solve()
     transcript = P.traceback()
-    #pw.rasterplot('debug.png', transcript)
+    pw.rasterplot('debug_large.png', transcript)
     #raise
 
 print '\n--> optimal overlap alignment (banded):\n%s\n' % str(transcript)
