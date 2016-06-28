@@ -10,11 +10,11 @@ $(LIBDIR)/pwlib.so: $(CFILES) $(LIBDIR)/pwlib.h
 	$(GCC) $(CFILES) -o $@
 
 clean:
-	@find . -regextype posix-extended -regex '.*.(pyc|swp|egg|egg-info)' | grep -v '^./.git' | tee /dev/stderr  | while read f; do rm -rf $$f; done
+	@find biseqt -regextype posix-extended -regex '.*.(pyc|swp|egg|egg-info)' | \
+		grep -v '^./.git' | tee /dev/stderr  | while read f; do rm -rf $$f; done
 	rm -rf build dist env
-	rm -f biseqt/pwlib/pwlib.so core
-	find docs/$(DOCS_OUT) -maxdepth 1 -mindepth 1 | grep -v _static | xargs rm -rf
-	rm -rf docs/doxygen
+	rm -f core biseqt/pwlib/pwlib.so
+	rm -rf docs/biseqt*.rst docs/_build docs/doxygen
 
 tests: $(LIBDIR)/pwlib.so
 	python -m biseqt.tests.pw
