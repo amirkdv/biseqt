@@ -19,9 +19,8 @@ alignment problem:
 from math import log
 import re
 import sys
-from termcolor import colored
 from contextlib import contextmanager
-from . import ffi, lib, seq, CffiObject
+from . import ffi, lib, sequence, CffiObject
 try:
     from matplotlib import pyplot as plt
 except ImportError:

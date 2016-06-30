@@ -1,7 +1,6 @@
 import cffi
 import os
 import sys
-import re
 
 ffi = cffi.FFI()
 lib = ffi.dlopen(os.path.join(os.path.dirname(__file__), 'pwlib', 'pwlib.so'))
@@ -9,7 +8,8 @@ with open(os.path.join(os.path.dirname(__file__), 'pwlib', 'pwlib.h')) as f:
     ffi.cdef(f.read())
     # so we can call strlen from python:
     # FIXME used only once in pw.py, can we get rid of it?
-    ffi.cdef('size_t strlen(const char*);');
+    ffi.cdef('size_t strlen(const char*);')
+
 
 class CffiObject(object):
     """Generic cffi wrapper for C structs, delegates all unknown attributes to
@@ -27,28 +27,28 @@ class CffiObject(object):
 
 
 class ProgressIndicator(object):
-    def __init__(self, msg, num_total, percentage=True):
-        self.msg, self.num_total = msg, int(num_total)
-        self.freq = max(self.num_total/100, 1)
+    def __init__(self, msg, num, percentage=True):
+        self.msg, self.num = msg, int(num)
+        self.freq = max(self.num/100, 1)
         self.progress_cnt = 0
         self.percentage = percentage
-        if self.percentage and self.num_total == 0:
-            raise ValueError('Cannot make a percentage progress indicator with num_total=0')
+        if self.percentage and self.num == 0:
+            raise ValueError('Percentage progress indicator needs > 0 rounds')
 
     def start(self):
         self.status()
 
     def finish(self):
-        self.status();
-        sys.stderr.write('.\n');
+        self.status()
+        sys.stderr.write('.\n')
 
     def status(self):
         if self.percentage:
             sys.stderr.write('\r%s: %d%%' %
-                (self.msg, (self.progress_cnt * 100)/self.num_total))
+                             (self.msg, (self.progress_cnt * 100) / self.num))
         else:
             sys.stderr.write('\r%s: %d/%d' %
-                (self.msg, self.progress_cnt, self.num_total))
+                             (self.msg, self.progress_cnt, self.num))
 
     def progress(self, num=1):
         self.progress_cnt += num

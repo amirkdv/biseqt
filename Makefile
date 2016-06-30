@@ -1,4 +1,3 @@
-# FIXME actually use the virtualenv
 GCC = gcc -shared -Wall -fPIC -std=c99 -g
 # To get coredumps:
 # 	$ ulimit -c unlimited
@@ -16,8 +15,11 @@ clean:
 	rm -f core biseqt/pwlib/pwlib.so
 	rm -rf docs/biseqt*.rst docs/_build docs/doxygen
 
+CLEANED=biseqt/__init__.py biseqt/sequence.py tests/test_sequence.py # biseqt/random.py
 tests: $(LIBDIR)/pwlib.so
-	python -m biseqt.tests.pw
+	flake8 $(CLEANED)
+	cd tests && PYTHONPATH=.. py.test -s -v
+	#python -m biseqt.tests.pw
 
 loc:
 	find biseqt -type f -regex '.*\(\.py\|\.c\|\.h\)' | xargs wc -l

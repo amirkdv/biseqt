@@ -45,5 +45,10 @@ setup(
             'breathe',
             'mock', # only used on rtfd.org to mock packages with binary dependencies
         ],
+        'tests': [
+            'flake8',
+            'pytest',
+            'tox'
+        ]
     }
 )
