@@ -15,7 +15,7 @@ clean:
 	rm -f core biseqt/pwlib/pwlib.so
 	rm -rf docs/biseqt*.rst docs/_build docs/doxygen
 
-CLEANED=biseqt/__init__.py biseqt/sequence.py tests/test_sequence.py # biseqt/random.py
+CLEANED=biseqt/__init__.py biseqt/sequence.py tests/test_sequence.py biseqt/io.py tests/test_io.py # biseqt/random.py
 tests: $(LIBDIR)/pwlib.so
 	flake8 $(CLEANED)
 	cd tests && PYTHONPATH=.. py.test -s -v
