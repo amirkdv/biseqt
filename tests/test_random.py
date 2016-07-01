@@ -3,7 +3,7 @@ import pytest
 import mock
 
 from biseqt.sequence import Alphabet
-from biseqt.random import rand_seq, MutationProcess
+from biseqt.random import rand_seq, MutationProcess, rand_reads
 from biseqt.random import np  # to mock
 
 
@@ -13,6 +13,31 @@ def test_rand_seq():
     A = Alphabet('ACGT')
     assert rand_seq(A, 10) == A.parse('AAA')
     np.random.choice = _bak
+
+
+def test_lossless_reads():
+    A = Alphabet('ACGT')
+    S = rand_seq(A, 100)
+    with pytest.raises(AssertionError):
+        next(rand_reads(S, len_mean=200, num=1))  # len_mean must be < len(S)
+    with pytest.raises(AssertionError):
+        # at least one of num or expected_coverage given
+        next(rand_reads(S, len_mean=50))
+    with pytest.raises(AssertionError):
+        # at most one of num or expected_coverage given
+        next(rand_reads(S, len_mean=50, num=1, expected_coverage=1))
+
+    # there should be no noise added
+    read, pos = next(rand_reads(S, len_mean=40, num=1))
+    assert S[pos:pos+len(read)] == read
+
+    # index edge cases
+    A = Alphabet(['00', '01'])
+    S = A.parse('01' * 10)
+    _bak = np.random.normal
+    np.random.normal = mock.Mock(return_value=[1])
+    assert next(rand_reads(S, len_mean=1, num=1))[0] == A.parse('01')
+    np.random.normal = _bak
 
 
 def test_mutation_process():
