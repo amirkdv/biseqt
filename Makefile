@@ -31,7 +31,7 @@ deps:
 	# install numpy separately before, cf. setup.py
 	pip install numpy && \
 	pip install -e .  && \
-	pip install -e .[docs]
+	pip install -e .[docs] .[tests]
 
 env:
 	virtualenv $@
