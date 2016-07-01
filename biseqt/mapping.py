@@ -3,7 +3,6 @@ from subprocess import Popen
 from subprocess import PIPE
 from tempfile import NamedTemporaryFile
 from collections import namedtuple
-from Bio import SeqIO
 from re import finditer
 from hashlib import sha1
 import sqlite3
@@ -11,6 +10,8 @@ import sys
 import os
 
 from . import seq, words, lib, ProgressIndicator
+from .sequence import Alphabet
+from .io import load_fasta
 
 # FIXME docs
 # rc is whether the read is reverse complemented to match the reference
@@ -25,8 +26,9 @@ def save_mappings(path, mappings):
 
 # FIXME merge with "name" lambda in seq.populate()
 def _identify(path):
-    recs = SeqIO.parse(path, 'fasta')
-    return {rec.id: sha1(str(rec.seq)).hexdigest() for rec in recs}
+    with open(path) as f:
+        recs = load_fasta(f, Alphabet('ACGT'))
+        return {rec.content_id: sha1(str(rec.seq)).hexdigest() for rec in recs}
 
 def parse_mappings(ref, reads, sam_output, blasr=0):
     proc = Popen(['grep', '^>', reads], stdout=PIPE)

@@ -29,7 +29,6 @@ setup(
     install_requires=[
         'scipy',
         'matplotlib',
-        'biopython',    # for sequence IO
         'pysqlite',     # for kmer handling with sqlite3
         'termcolor',    # for colored text output
         'cffi',         # for the C component

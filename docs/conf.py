@@ -32,7 +32,7 @@ if os.environ.get('READTHEDOCS', None) == 'True':
     # Call doxygen
     subprocess.call('cd .. && pip install breathe && doxygen docs/doxygen.conf', shell=True)
     # Mock classes that require "arbitrary" binaries for building on rtfd.org
-    MOCK_MODULES = ['cffi', 'igraph', 'numpy', 'termcolor', 'Bio', 'Bio.SeqIO']
+    MOCK_MODULES = ['cffi', 'igraph', 'numpy', 'termcolor']
     sys.modules.update((mod_name, Mock()) for mod_name in MOCK_MODULES)
 
     # add theme hacks, cf. http://stackoverflow.com/a/32898444
