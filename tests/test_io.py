@@ -3,7 +3,7 @@ import pytest
 from tempfile import NamedTemporaryFile
 
 from biseqt.sequence import Alphabet, NamedSequence, EditTranscript
-from biseqt.io import pw_render_term, load_fasta
+from biseqt.io import pw_render_term, load_fasta, write_fasta
 
 
 def test_load_fasta():
@@ -32,6 +32,28 @@ def test_load_fasta():
         tmp.seek(0)
         with pytest.raises(AssertionError):
             [s for s in load_fasta(tmp, A)]  # duplicate names not allowed
+
+
+def test_write_fasta():
+    A = Alphabet('ACGT')
+    with NamedTemporaryFile() as tmp:
+        S = A.parse('AAA', name='foo')
+        T = A.parse('TTT', name='bar')
+        write_fasta(tmp, [S, T])
+        tmp.seek(0)
+        assert [s for s in load_fasta(tmp, A)] == [S, T], \
+            'load_fasta(write_fasta()) should be identity'
+
+    with NamedTemporaryFile() as tmp:
+        S = A.parse('AAA', name='foo')
+        with pytest.raises(AssertionError):
+            write_fasta(tmp, [S, S])
+
+    with NamedTemporaryFile() as tmp:
+        S = A.parse('AAATTT', name='foo')
+        write_fasta(tmp, [S], width=3)  # should take 3 lines
+        tmp.seek(0)
+        assert sum(1 for _ in tmp) == 3, 'FASTA width should be modifiable'
 
 
 def test_pw_render_basic():

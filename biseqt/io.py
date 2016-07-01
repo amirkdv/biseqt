@@ -11,7 +11,9 @@ def load_fasta(f, alphabet):
     <biseqt.sequence.NamedSequence>` objects loaded from a FASTA source.
 
     Args:
-        f (file): A readable open file handle.
+        f (file): A readable open file handle. Note that ``f.read()`` is not
+            used; instead, lines of the file are read lazily by using the file
+            object as an iterator.
         alphabet (sequence.Alphabet): The alphabet of the sequences.
 
     Yields:
@@ -24,29 +26,52 @@ def load_fasta(f, alphabet):
     def _parse(seq, name):
         if cur_seq and cur_name:
             assert cur_name not in observed_names, \
-                'Duplicate sequence name in %s: %s' % (path, cur_name)
+                'Duplicate sequence name: %s' % cur_name
             observed_names.append(cur_name)
             return alphabet.parse(cur_seq, name=cur_name)
 
-    with open(path) as f:
-        cur_name = ''
-        cur_seq = ''
-        for line in f:
-            line = line.strip()
-            if not line:
-                continue
-            if line[0] == '>':
-                seq = _parse(cur_seq, cur_name)
-                if seq:
-                    yield seq
-                cur_name = line[1:].strip()
-                cur_seq = ''
-            else:
-                cur_seq += line
-
+    cur_name = ''
+    cur_seq = ''
+    for line in f:
+        line = line.strip()
+        if not line:
+            continue
+        if line[0] == '>':
+            seq = _parse(cur_seq, cur_name)
+            if seq:
+                yield seq
+            cur_name = line[1:].strip()
+            cur_seq = ''
+        else:
+            cur_seq += line
     seq = _parse(cur_seq, cur_name)
     if seq:
         yield seq
+
+
+def write_fasta(f, seqs, width=80):
+    """Writes the given sequence in FASTA format.
+
+    Args:
+        f (file): A writable open file handle or anything that responds to
+            ``write()``.
+        seqs (iterable): An iterable of :class:`NamedSequence
+            <biseqt.sequence.NamedSequence>` objects.
+    """
+    observed_names = []
+    for seq in seqs:
+        assert isinstance(seq, NamedSequence), \
+            'Can only write named sequences'
+        name = seq.name if seq.name else seq.content_id
+
+        assert name not in observed_names, 'Duplicate sequence name: %s' % name
+        observed_names.append(name)
+
+        contents = str(seq)
+        if width is not None:
+            contents = '\n'.join(textwrap.wrap(contents, width))
+        f.write('>%s\n%s\n' % (name, contents))
+        f.flush()
 
 
 def pw_render_term(tx, origin, mutant, origin_start=0, mutant_start=0,
