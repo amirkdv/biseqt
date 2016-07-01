@@ -8,4 +8,6 @@ dependencies:
 
 test:
   override:
-    - docker run -it -v $PWD:/biseqt amirkdv/biseqt-base sh -c '. $SCI_PY_ENV/bin/activate && cd /biseqt && make deps docs tests'
+    # - docker run -it -v $PWD:/biseqt amirkdv/biseqt-base sh -c '. $SCI_PY_ENV/bin/activate && cd /biseqt && make deps docs tests'
+    # FIXME temporarily disable `make docs` in CI
+    - docker run -it -v $PWD:/biseqt amirkdv/biseqt-base sh -c '. $SCI_PY_ENV/bin/activate && cd /biseqt && make deps tests'
