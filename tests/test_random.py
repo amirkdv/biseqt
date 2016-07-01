@@ -24,6 +24,8 @@ def test_lossless_reads():
         # at most one of num or expected_coverage given
         next(rand_read(S, len_mean=50, num=1, expected_coverage=1))
 
+    assert sum(1 for _ in rand_read(S, len_mean=50, num=10)) == 10, \
+        'The number of sampled reads should be controllable'
     assert sum(1 for _ in rand_read(S, len_mean=50)) == 1, \
         'If neither num or expected coverage is given only one sample is read'
 
@@ -54,7 +56,7 @@ def test_lossy_reads():
     S = A.parse('ACT' * 100)
     gap_kw = {'go_prob': 0.2, 'ge_prob': 0.3}
     M = MutationProcess(A, subst_probs=0.3, **gap_kw)
-    read, pos, tx = next(M.noisy_read(S, len_mean=10, num=1))
+    read, pos, tx = next(M.noisy_read(S, len_mean=50, num=1))
     assert tx.count('S') > 0 and tx.count('I') + tx.count('D') > 0, \
         'Random mutations should be performed to get lossy reads'
 
