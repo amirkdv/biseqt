@@ -28,6 +28,7 @@ if os.environ.get('READTHEDOCS', None) == 'True':
         def __getattr__(cls, name):
             return Mock()
 
+    # TODO clone sphinxcontrib-wiki and put it in python's path
     # Call doxygen
     subprocess.call('cd .. && pip install breathe && doxygen docs/doxygen.conf', shell=True)
     # Mock classes that require "arbitrary" binaries for building on rtfd.org
@@ -46,6 +47,7 @@ else:
     def setup(app):
         app.add_stylesheet('theme_hacks.css')
 
+autodoc_member_order = 'bysource'
 
 # If extensions (or modules to document with autodoc) are in another directory,
 # add these directories to sys.path here. If the directory is relative to the
@@ -154,7 +156,7 @@ todo_include_todos = False
 
 # The theme to use for HTML and HTML Help pages.  See the documentation for
 # a list of builtin themes.
-html_theme = 'sphinx_rtd_theme'
+html_theme = 'alabaster'
 
 # Theme options are theme-specific and customize the look and feel of a theme
 # further.  For a list of options available for each theme, see the
