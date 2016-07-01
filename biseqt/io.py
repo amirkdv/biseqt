@@ -1,6 +1,52 @@
 # -*- coding: utf-8 -*-
 import termcolor
+import textwrap
 from collections import namedtuple
+
+from .sequence import NamedSequence
+
+
+def load_fasta(f, alphabet):
+    """Generator for content-identifiable :class:`NamedSequence
+    <biseqt.sequence.NamedSequence>` objects loaded from a FASTA source.
+
+    Args:
+        f (file): A readable open file handle.
+        alphabet (sequence.Alphabet): The alphabet of the sequences.
+
+    Yields:
+        NamedSequence:
+            The :attr:`name <biseqt.sequence.NamedSequence.name>` of which is
+            the FASTA record name.
+    """
+    observed_names = []
+
+    def _parse(seq, name):
+        if cur_seq and cur_name:
+            assert cur_name not in observed_names, \
+                'Duplicate sequence name in %s: %s' % (path, cur_name)
+            observed_names.append(cur_name)
+            return alphabet.parse(cur_seq, name=cur_name)
+
+    with open(path) as f:
+        cur_name = ''
+        cur_seq = ''
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            if line[0] == '>':
+                seq = _parse(cur_seq, cur_name)
+                if seq:
+                    yield seq
+                cur_name = line[1:].strip()
+                cur_seq = ''
+            else:
+                cur_seq += line
+
+    seq = _parse(cur_seq, cur_name)
+    if seq:
+        yield seq
 
 
 def pw_render_term(tx, origin, mutant, origin_start=0, mutant_start=0,

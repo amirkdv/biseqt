@@ -1,8 +1,37 @@
 # -*- coding: utf-8 -*-
 import pytest
+from tempfile import NamedTemporaryFile
 
-from biseqt.sequence import Alphabet, EditTranscript
-from biseqt.io import pw_render_term
+from biseqt.sequence import Alphabet, NamedSequence, EditTranscript
+from biseqt.io import pw_render_term, load_fasta
+
+
+def test_load_fasta():
+    A = Alphabet('ACGT')
+    with NamedTemporaryFile() as tmp:
+        tmp.write('> name1\nAAA\n\nTTT')
+        tmp.flush()
+        tmp.seek(0)
+        seqs = [s for s in load_fasta(tmp, A)]
+        assert len(seqs) == 1
+        assert seqs[0] == A.parse('AAATTT', name='name1')
+        assert isinstance(seqs[0], NamedSequence)
+
+    with NamedTemporaryFile() as tmp:
+        tmp.write('>name1\nAAA\n\n>name2\nTTT\n')
+        tmp.flush()
+        tmp.seek(0)
+
+        seqs = [s for s in load_fasta(tmp, A)]
+        assert len(seqs) == 2
+        assert seqs[1] == A.parse('TTT', name='name2')
+
+    with NamedTemporaryFile() as tmp:
+        tmp.write('>name2\nAAA\n> name2\nTTT\n')
+        tmp.flush()
+        tmp.seek(0)
+        with pytest.raises(AssertionError):
+            [s for s in load_fasta(tmp, A)]  # duplicate names not allowed
 
 
 def test_pw_render_basic():

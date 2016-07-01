@@ -160,7 +160,7 @@ class NamedSequence(Sequence):
 
     Attributes:
         name (str): The name of the sequence which need not be unique.
-        content_id (str): The SHA1 of the contents of the sequence.
+        content_id (str): The sha1 of the contents of the sequence.
     """
     def __init__(self, alphabet, contents=(), name=''):
         super(NamedSequence, self).__init__(alphabet, contents)
@@ -178,8 +178,8 @@ class NamedSequence(Sequence):
 
 
 class EditTranscript(str):
-    """Represents a edit transcript without reference to the original or mutant
-    sequence."""
+    """Represents an edit transcript without reference to the original or
+    mutant sequences."""
     def __new__(cls, content):
         obj = str.__new__(cls, content.upper())
         assert all(c in 'MSID' for c in obj)
