@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 import pytest
-from biseqt.sequence import Alphabet, Sequence, EditTranscript
+from biseqt.sequence import Alphabet, Sequence, NamedSequence, EditTranscript
 
 
 def test_alphabet():
@@ -61,6 +61,18 @@ def test_sequence_parsing():
     S = A.parse('001011')
     assert len(S) == 3 and S == Sequence(A, [0, 2, 3]), \
         'alphabets with > 1 long letters should be able to parse strings'
+
+
+def test_named_sequence():
+    A = Alphabet('ACGT')
+    S = A.parse('AACT', name='foo')
+    assert isinstance(S, NamedSequence)
+    assert eval(repr(S)) == S, 'repr() should provide eval-able string'
+    assert S.name == 'foo'
+    assert S.content_id == A.parse(str(S), name='bar').content_id, \
+        'content id should only depend on the contents of the sequence'
+    assert S == A.parse(str(S), name='foo'), \
+        'equality should work'
 
 
 def test_transcript():

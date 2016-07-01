@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 # FIXME add code snippets
 # FIXME figure out how to run code snippets
+from hashlib import sha1
 """
 .. code-block:: python
 
@@ -35,7 +36,7 @@ class Alphabet(object):
             'All alphabet letters must have the same length'
         self._idx_by_letter = {l: idx for idx, l in enumerate(self._letters)}
 
-    def to_idx(self, letters):
+    def letter_to_idx(self, letters):
         """Translates provided letters to the integer sequence corresponding
         to the index of each letter in this alphabet.
 
@@ -49,10 +50,19 @@ class Alphabet(object):
         """
         return tuple(self._idx_by_letter[l] for l in letters)
 
-    def parse(self, string):
+    def parse(self, string, name=None):
         """Given a string representation of a sequence returns a corresponding
         :class:`Sequence` object.
+
+        Args:
+            string (str): The raw sequence represented as a string.
+            name (str): The name for the sequence; default is None in which
+                case a :class:`NamedSequence` will be returned.
+
+        Returns:
+            Sequence
         """
+        assert isinstance(string, str), 'Raw sequence must be in string form'
         assert len(string) % self._letlen == 0, 'String representation ' + \
             'of sequence must be a multiple of the alphabet letter length'
         contents = []
@@ -60,7 +70,11 @@ class Alphabet(object):
         while idx < len(string):
             contents.append(string[idx:idx + self._letlen])
             idx += self._letlen
-        return Sequence(self, self.to_idx(contents))
+        contents = self.letter_to_idx(contents)
+        if name is None:
+            return Sequence(self, contents)
+        else:
+            return NamedSequence(self, contents, name=name)
 
     def __len__(self):
         return len(self._letters)
@@ -111,8 +125,8 @@ class Sequence(object):
         return ''.join(self.alphabet[idx] for idx in self.contents)
 
     def __repr__(self):
-        return 'Sequence(%s, %s)' % (repr(self.alphabet), repr(self.contents))
-        return ''.join([self.__getitem__(i) for i in range(len(self))])
+        return 'Sequence(%s, contents=%s)' % \
+            (repr(self.alphabet), repr(self.contents))
 
     def __len__(self):
         return len(self.contents)
@@ -135,8 +149,32 @@ class Sequence(object):
             assert self.alphabet == other.alphabet
             contents = other.contents
         else:
-            other = self.alphabet.to_idx(other)
+            other = self.alphabet.letter_to_idx(other)
         return Sequence(self.alphabet, self.contents + contents)
+
+
+class NamedSequence(Sequence):
+    """A named version of :class:`Sequence`. The main differences are the
+    additional attributes which allow for faster equality comparison for large
+    sequences.
+
+    Attributes:
+        name (str): The name of the sequence which need not be unique.
+        content_id (str): The SHA1 of the contents of the sequence.
+    """
+    def __init__(self, alphabet, contents=(), name=''):
+        super(NamedSequence, self).__init__(alphabet, contents)
+        self.content_id = sha1(str(self)).hexdigest()
+        self.name = name
+
+    def __eq__(self, other):
+        return isinstance(other, NamedSequence) and \
+               self.content_id == other.content_id and \
+               self.name == other.name
+
+    def __repr__(self):
+        return 'NamedSequence(%s, name=%s, contents=%s)' % \
+            (repr(self.alphabet), repr(self.name), repr(self.contents))
 
 
 class EditTranscript(str):
