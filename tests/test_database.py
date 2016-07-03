@@ -72,7 +72,12 @@ def test_database_populate_fasta():
             assert [db.load_from_record(rec) for rec in retrieved] == [S, T], \
                 'should be able to retrieve sequences by position in source'
 
-    # with rc
+
+def test_database_populate_fasta_rc():
+    A = Alphabet('ACGT')
+    S = A.parse('AACT', name='S')
+    T = A.parse('GCAT', name='T')
+
     with NamedTemporaryFile() as tmp_db:
         db = DB(tmp_db.name, A)
         with NamedTemporaryFile() as tmp_fa:
