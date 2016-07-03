@@ -70,6 +70,59 @@ class Alphabet(object):
         else:
             return NamedSequence(self, contents, name=name)
 
+    def transform(self, seq, mappings={}):
+        """Transforms the given sequence to another sequence in the same
+        alphabet according to provided letter-to-letter mappings.
+
+        Args:
+            seq (Sequence): The original sequence.
+            mappings (list|dict): If a dictionary is given, each entry
+                represents a translation rule from the key to the value. If a
+                list is given, each entry must have two elements and is taken
+                to represent a bidirectional translation rule between those two
+                elements. Each element in either a dictionary or a list can
+                either be a letter in string format or an integer representing
+                the position of the letter.
+        Returns:
+            Sequence
+
+        For example, to get the complement of a DNA sequence::
+
+            >>> from biseqt.sequence import Alphabet, complement
+            >>> A = Alphabet('ACGT')
+            >>> S = A.parse('AGGGT')
+            >>> print A.transform(S, mappings=['AT', 'CG'])
+            'TCCCA'
+
+        whereas to get the same effect with a dictionary::
+
+            >>> mappings = {'A': 'T', 'T': 'A', 'C': 'G', 'G': 'C'}
+            >>> print A.complement(S, mappings)
+            'TCCCA'
+
+        """
+        if mappings is None:
+            mappings = {}
+
+        if isinstance(mappings, list):
+            assert all(len(m) == 2 for m in mappings)
+            mappings = dict(chain.from_iterable(
+                [(rule[0], rule[1]), (rule[1], rule[0])] for rule in mappings
+            ))
+
+        # for any letter (as int) c, pair_of[c] determines what its mapped to.
+        pair_of = range(len(self))  # do not modify by default
+
+        for key, val in mappings.items():
+            if not isinstance(key, int):
+                key = self._idx_by_letter[key]
+            if not isinstance(val, int):
+                val = self._idx_by_letter[val]
+            pair_of[key] = val
+
+        assert all(isinstance(idx, int) for idx in pair_of)
+        return Sequence(self, tuple(pair_of[c] for c in seq))
+
     def __len__(self):
         return len(self._letters)
 
@@ -125,54 +178,8 @@ class Sequence(object):
         return Sequence(self.alphabet, tuple(reversed(self.contents)))
 
     def transform(self, mappings={}):
-        """Translates the sequence to another sequence according to provided
-        mappings.
-
-        Args:
-            mappings (list|dict): If a dictionary is given, each entry
-                represents a translation rule from the key to the value. If a
-                list is given, each entry must have two elements and is taken
-                to represent a bidirectional translation rule between those two
-                elements. Each element in either a dictionary or a list can
-                either be a letter in string format or an integer representing
-                the position of the letter.
-        Returns:
-            Sequence
-
-        For example, to get the complement of a DNA sequence::
-
-            >>> from biseqt.sequence import Alphabet, complement
-            >>> S = Alphabet('ACGT').parse('AGGGT')
-            >>> print S.complement(mappings=['AT', 'CG'])
-            'TCCCA'
-
-        whereas to get the same effect with a dictionary::
-
-            >>> mappings = {'A': 'T', 'T': 'A', 'C': 'G', 'G': 'C'}
-            >>> print S.complement(mappings)
-            'TCCCA'
-
-        """
-        if mappings is None:
-            mappings = {}
-
-        if isinstance(mappings, list):
-            assert all(len(m) == 2 for m in mappings)
-            mappings = dict(chain.from_iterable(
-                [(rule[0], rule[1]), (rule[1], rule[0])] for rule in mappings
-            ))
-
-        pair_of = range(len(self.alphabet))  # do not modify by default
-
-        for key, val in mappings.items():
-            if not isinstance(key, int):
-                key = self.alphabet.letter_to_idx([key])[0]
-            if not isinstance(val, int):
-                val = self.alphabet.letter_to_idx([val])[0]
-            pair_of[key] = val
-
-        assert all(isinstance(idx, int) for idx in pair_of)
-        return Sequence(self.alphabet, tuple(pair_of[c] for c in self))
+        """Wraps :func:`Alphabet.transform` for convenience."""
+        return self.alphabet.transform(self, mappings=mappings)
 
     def __str__(self):
         return ''.join(self.alphabet[idx] for idx in self.contents)
