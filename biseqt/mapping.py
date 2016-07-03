@@ -11,7 +11,7 @@ import os
 
 from . import seq, words, lib, ProgressIndicator
 from .sequence import Alphabet
-from .io import load_fasta
+from .io import read_fasta
 
 # FIXME docs
 # rc is whether the read is reverse complemented to match the reference
@@ -28,7 +28,7 @@ def save_mappings(path, mappings):
 def _identify(path):
     with open(path) as f:
         recs = load_fasta(f, Alphabet('ACGT'))
-        return {rec.content_id: sha1(str(rec.seq)).hexdigest() for rec in recs}
+        return {rec.content_id: sha1(str(rec.seq)).hexdigest() for rec,_ in recs}
 
 def parse_mappings(ref, reads, sam_output, blasr=0):
     proc = Popen(['grep', '^>', reads], stdout=PIPE)

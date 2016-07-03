@@ -6,20 +6,26 @@ from collections import namedtuple
 from .sequence import NamedSequence
 
 
-def load_fasta(f, alphabet):
-    """Generator for content-identifiable :class:`NamedSequence
+def read_fasta(f, alphabet, num=-1):
+    """Lazy generator for content-identifiable :class:`NamedSequence
     <biseqt.sequence.NamedSequence>` objects loaded from a FASTA source.
 
     Args:
-        f (file): A readable open file handle. Note that ``f.read()`` is not
-            used; instead, lines of the file are read lazily by using the file
-            object as an iterator.
+        f (file): A readable open file or equivalent (e.g.
+            :class:`StringIO.StringIO`). The file position is only modified by
+            reading; namely, sequences are read starting from the current
+            position of the file and after this function returns the file
+            position points at the last character of the last yielded sequence.
         alphabet (sequence.Alphabet): The alphabet of the sequences.
+        num (int): The number of sequences to read from the file; default is -1
+            in which case all sequences are read until end-of-file is reached.
 
     Yields:
-        NamedSequence:
-            The :attr:`name <biseqt.sequence.NamedSequence.name>` of which is
-            the FASTA record name.
+        tuple:
+            A :class:`NamedSequence <biseqt.sequence.NamedSequence>` whose
+            :attr:`name <biseqt.sequence.NamedSequence.name>` is the FASTA
+            record name, and the starting position of the sequence in ``f`` as
+            an integer.
     """
     observed_names = []
 
@@ -30,23 +36,30 @@ def load_fasta(f, alphabet):
             observed_names.append(cur_name)
             return alphabet.parse(cur_seq, name=cur_name)
 
-    cur_name = ''
-    cur_seq = ''
-    for line in f:
-        line = line.strip()
+    count = cur_pos = 0
+    cur_name = cur_seq = ''
+    # NOTE `for raw_line in f` uses a read-ahead buffer which makes `f.tell()`
+    # useless for remembering where a sequence begins.
+    # cf. https://docs.python.org/2/library/stdtypes.html#file.next
+    for raw_line in iter(f.readline, ''):
+        line = raw_line.strip()
         if not line:
             continue
         if line[0] == '>':
             seq = _parse(cur_seq, cur_name)
             if seq:
-                yield seq
+                yield seq, cur_pos
+                count += 1
+                if num > 0 and count >= num:
+                    return
+            cur_pos = f.tell() - len(raw_line)
             cur_name = line[1:].strip()
             cur_seq = ''
         else:
             cur_seq += line
     seq = _parse(cur_seq, cur_name)
     if seq:
-        yield seq
+        yield seq, cur_pos
 
 
 def write_fasta(f, seqs, width=80):
