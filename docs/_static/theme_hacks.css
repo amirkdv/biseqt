@@ -71,7 +71,22 @@ div.highlight > pre {
 }
 
 div.document {
-  width: 65% !important;
+  width: 70% !important;
+}
+
+div.sphinxsidebar {
+  width: 25% !important;
+}
+
+div.bodywrapper {
+  margin: 0 0 0 25% !important;
+  border-left: #eee solid 2px !important;
+}
+
+div.sphinxsidebarwrapper h3 {
+  border-top: #eee solid 2px !important;
+  margin-top: 20px !important;
+  padding-top: 10px !important;
 }
 
 body {
