@@ -53,6 +53,22 @@ def test_sequence_magic():
     assert S + A.parse('TT') == A.parse('HTHTTT'), 'add by appending'
 
 
+def test_sequence_transforms():
+    A = Alphabet(['00', '01', '11'])
+    S = A.parse('0001')
+    assert S.transform(mappings={'00': '01'}) == A.parse('0101'), \
+        'dict mappings are unidirectional'
+    assert S.transform(mappings=[('00', '01')]) == A.parse('0100'), \
+        'list mappings are bidirectional'
+    assert S.transform(mappings=[(0, 1)]) == A.parse('0100'), \
+        'list mappings are bidirectional'
+
+    S = A.parse('0011')
+    assert S.transform(mappings={'00': '01'}) == A.parse('0111'), \
+        'unmapped letters remain untouched'
+    assert S.reverse() == A.parse('1100'), 'reverse() works'
+
+
 def test_sequence_parsing():
     A = Alphabet(['00', '01', '10', '11'])
     with pytest.raises(AssertionError):
@@ -73,6 +89,16 @@ def test_named_sequence():
         'content id should only depend on the contents of the sequence'
     assert S == A.parse(str(S), name='foo'), \
         'equality should work'
+
+
+def test_named_sequence_tranforms():
+    A = Alphabet('ACGT')
+    S = A.parse('AACT', name='foo')
+    assert S.reverse(name='bar') == A.parse('TCAA', name='bar'), \
+        'reverse of named sequences should be a named sequence'
+    complement = S.transform(mappings=['AT', 'CG'], name='bar')
+    assert complement == A.parse('TTGA', name='bar'), \
+        'result of transforming a named sequence is a named sequence'
 
 
 def test_transcript():
