@@ -16,15 +16,18 @@ setup(
     author_email='amir@amirkdv.ca',
     license='BSD',
     packages=['biseqt'],
-    # NOTE numpy has some weirdness with setuptools (cf. open issue
-    # https://github.com/numpy/numpy/issues/2434). We need it because it's a
-    # dependency of scipy but has to be installed either manually before our
-    # setup.py or as part of setup_requires (cf.
-    # https://github.com/numpy/numpy/issues/2434#issuecomment-65252402)
+    # NOTE numpy has some weirdness with setuptools; cf. open issue:
+    #   https://github.com/numpy/numpy/issues/2434
+    #
+    # We need it because it's a dependency of scipy but has to be installed
+    # either manually before our setup.py or declared as setup_requires, cf.
+    #   https://github.com/numpy/numpy/issues/2434#issuecomment-65252402.
+    #
     # However, it is still much faster to install numpy separately via pip
-    # because the following way wants to compile all the fortran and C/C++ code.
-    setup_requires=[ # these are the packages that must be installed or
-        'numpy',
+    # because installing by setup_requires wants to compile all the fortran and
+    # C/C++ code.
+    setup_requires=[
+        'numpy',        # for setup.py to work at all
     ],
     install_requires=[
         'scipy',
@@ -38,13 +41,14 @@ setup(
     extras_require={
         'docs': [
             'sphinx',
-            'pycparser', # used to generate C component docs index
-            'sphinx_rtd_theme',
-            'sphinxcontrib-wiki',
-            'breathe',
-            'mock', # only used on rtfd.org to mock packages with binary dependencies
+            'pycparser', # for generating C component docs index, cf. cdocs.py
+            'alabaster', # our theme
+            'sphinxcontrib-wiki', # for breaking down doc pages to sections
+            'breathe',   # for doxygen integration
+            'mock',      # for rtfd.org to skip installing system dependencies
         ],
         'tests': [
+            'mock',
             'flake8',
             'pytest',
             'tox'
