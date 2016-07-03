@@ -227,24 +227,39 @@ class NamedSequence(Sequence):
         self.content_id = sha1(str(self)).hexdigest()
         self.name = name
 
-    def reverse(self, name=''):
+    def reverse(self, name=None):
         """Wraps :func:`Sequence.reverse` to make sure a named sequence is
         returned.
+
+        Args:
+            name(str): The name to give to the new sequence. Default is None
+                in which case ``(reversed) `` is preprended to the original
+                sequence name.
 
         Returns:
             NamedSequence
         """
         rev = super(NamedSequence, self).reverse()
+        if name is None:
+            name = '(reversed) ' + self.name
         return NamedSequence(rev.alphabet, rev.contents, name=name)
 
-    def transform(self, mappings={}, name=''):
+    def transform(self, mappings={}, name=None):
         """Wraps :func:`Sequence.transform` to make sure a named sequence is
         returned.
+
+        Args:
+            mappings (dict|list): As in :func:`Sequence.transform`.
+            name (str): The name to give to the new sequence. Default is None
+                in which case ``(transformed) `` is prependended to the
+                original sequence name.
 
         Returns:
             NamedSequence
         """
         seq = super(NamedSequence, self).transform(mappings=mappings)
+        if name is None:
+            name = '(transformed) ' + self.name
         return NamedSequence(seq.alphabet, seq.contents, name=name)
 
     def __eq__(self, other):
