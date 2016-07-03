@@ -84,7 +84,7 @@ def write_fasta(f, seqs, width=80):
         if width is not None:
             contents = '\n'.join(textwrap.wrap(contents, width))
         f.write('>%s\n%s\n' % (name, contents))
-        f.flush()
+    f.flush()
 
 
 def pw_render_term(tx, origin, mutant, origin_start=0, mutant_start=0,
