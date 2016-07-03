@@ -3,7 +3,7 @@ import pytest
 from tempfile import NamedTemporaryFile
 from sqlite3 import IntegrityError
 
-from biseqt.io import read_fasta, write_fasta
+from biseqt.io import write_fasta
 from biseqt.sequence import Alphabet
 from biseqt.database import DB, create_record
 
@@ -69,7 +69,7 @@ def test_database_populate_fasta():
                 'source file of sequence records must be set'
             retrieved_T = retrieved[1]
             tmp_fa.seek(retrieved_T.source_pos)
-            assert next(read_fasta(tmp_fa, A, num=1))[0] == T, \
+            assert [db.load_from_record(rec) for rec in retrieved] == [S, T], \
                 'should be able to retrieve sequences by position in source'
 
     # with rc
@@ -83,16 +83,12 @@ def test_database_populate_fasta():
             def cond_T(r): return r.attrs['name'] == 'T'
 
             retrieved_T = next(db.find(condition=cond_T))
-            tmp_fa.seek(retrieved_T.source_pos)
-            assert next(read_fasta(tmp_fa, A, num=1))[0] == T, \
+            assert db.load_from_record(retrieved_T) == T, \
                 'should be able to retrieve sequences by position in source'
 
-            def cond_Trc(r): return r.attrs.get('rc_of', None) == T.content_id
+            def cond_T_rc(r): return r.attrs.get('rc_of', None) == T.content_id
 
-            retrieved_Trc = next(db.find(condition=cond_Trc))
-            tmp_fa.seek(retrieved_Trc.source_pos)
-            assert next(read_fasta(tmp_fa, A, num=1))[0] == T, \
-                'should be able to retrieve sequences by position in source'
-            Trc = T.reverse().transform(['AT', 'CG'])
-            assert Trc.content_id == retrieved_Trc.content_id, \
-                'the stored content_id of reverse complement should be correct'
+            retrieved_T_rc = next(db.find(condition=cond_T_rc))
+            T_rc = T.reverse().transform(['AT', 'CG'], name='(rc) ' + T.name)
+            assert db.load_from_record(retrieved_T_rc) == T_rc, \
+                'reverse complements should load properly from a record'

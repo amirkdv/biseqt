@@ -81,6 +81,7 @@ class DB(object):
       attrs         VARCHAR  -- arbitrary attributes in JSON format
     );
     """
+
     def __init__(self, path, alphabet):
         assert isinstance(alphabet, Alphabet)
         self.alphabet = alphabet
@@ -199,3 +200,28 @@ class DB(object):
             for record in cursor:
                 if not condition or condition(record):
                     yield record
+
+    def load_from_record(self, record):
+        """Loads a sequence from the original source file given a corresponding
+        database :class:`Record`.
+
+        Args:
+            record (Record): Record from the sequence table containing an
+                accessible :attr:`source_file <Record.source_file>` and
+                the right :attr:`source_pos <Record.source_pos>`. If
+                :attr:`attrs <Record.attrs>` indicates that the given record
+                belongs to a reverse complement, the reverse complement of the
+                loaded sequence is returned.
+        """
+        source_file = record.source_file
+        with open(source_file) as f:
+            f.seek(record.source_pos)
+            seq, pos = next(read_fasta(f, self.alphabet, num=1))
+            assert pos == record.source_pos
+            if 'rc_of' in record.attrs:
+                assert record.attrs['rc_of'] == seq.content_id
+                seq = seq.reverse().transform(['AT', 'CG'],
+                                              name=record.attrs['name'])
+                assert record.content_id == seq.content_id
+            assert record.content_id == seq.content_id
+            return seq
