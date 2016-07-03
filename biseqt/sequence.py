@@ -220,7 +220,7 @@ class NamedSequence(Sequence):
 
     Attributes:
         name (str): The name of the sequence which need not be unique.
-        content_id (str): The sha1 of the contents of the sequence.
+        content_id (str): The SHA1 of the sequence contents in integer form.
     """
     def __init__(self, alphabet, contents=(), name=''):
         super(NamedSequence, self).__init__(alphabet, contents)

@@ -48,6 +48,7 @@ else:
         app.add_stylesheet('theme_hacks.css')
 
 autodoc_member_order = 'bysource'
+autoclass_content = 'both' # appends `__init__.__doc__` to class docstring.
 
 # If extensions (or modules to document with autodoc) are in another directory,
 # add these directories to sys.path here. If the directory is relative to the

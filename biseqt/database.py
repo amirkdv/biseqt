@@ -9,18 +9,41 @@ from .io import read_fasta
 from .sequence import Alphabet, NamedSequence
 
 
-# cf. http://stackoverflow.com/a/1606478
-# cf. http://bugs.python.org/issue16669
+# NOTE The following is the cleanest way of documenting namedtuple classes
+# in python 2.7.
+#   cf. http://stackoverflow.com/a/1606478
+#   cf. http://bugs.python.org/issue16669
 class Record(namedtuple('Record', ['id', 'content_id', 'source_file',
                                    'source_pos', 'attrs'])):
-    """FIXME
+    """Wraps an SQL record from the ``sequence`` table of a :class:`DB`. All
+    fields are intended to map directly to columns of the table; cf.
+    :class:`DB`.
+
     Attributes:
-        content_id (str): Blah
+        id (int): The integer identifier assigned by the database.
+        content_id (str): The content identifier of the sequence, cf.
+            :attr:`NamedSequence.content_id
+            <biseqt.sequence.NamedSequence.content_id>`
+        source_file (str): The path to the file where this sequence was read.
+        source_pos (int): The position in the file where this sequence begins.
+        attrs (dict): A dict of arbitrary attributes (stored as JSON and
+            unpacked upon load from database).
     """
 
 
 def create_record(seq, **kw):
-    """FIXME
+    """Creates a :class:`Record` from a given :class:`NamedSequence
+    <biseqt.sequence.NamedSequence>`.
+
+    Args:
+        seq (NamedSequence): Original sequence.
+
+    Keyword Args:
+        source_file (str): populates :attr:`Record.source_file`.
+        source_pos (str): populates :attr:`Record.source_pos`.
+        attrs (dict): populates :attr:`Record.attrs`; default is a dictionary
+            containing only the name of the sequence (name is always added if
+            not present in the dictionary).
     """
     assert isinstance(seq, NamedSequence)
     assert 'source_file' in kw
@@ -35,10 +58,11 @@ def create_record(seq, **kw):
 class DB(object):
     """Wraps an SQLite database containing sequences and related information.
     This class is responsible for maintaining and initializing database files,
-    as well as populating the ``sequence`` table.
+    as well as populating the ``sequence`` table. The initialization operation
+    is idempotant, i.e initializing an initialized database has no side effect.
 
     Attributes:
-        path (string): Path to the SQLite datbase.
+        path (str): Path to the SQLite datbase.
         alphabet (Alphabet): The alphabet for sequences in the database.
     """
 
@@ -57,12 +81,7 @@ class DB(object):
       attrs         VARCHAR  -- arbitrary attributes in JSON format
     );
     """
-
     def __init__(self, path, alphabet):
-        """Initializes a database at the given location. The initialization
-        operation is idempotant, i.e initializing and initialized database has
-        no side effects.
-        """
         assert isinstance(alphabet, Alphabet)
         self.alphabet = alphabet
 
@@ -78,7 +97,7 @@ class DB(object):
 
     # add the initialization SQL query to docstring so we don't have to
     # duplicate it.
-    __init__.__doc__ += '\n\n.. code-block:: sql\n' + _init_script
+    __init__.__doc__ = '\n\n.. code-block:: sql\n' + _init_script
 
     def connect(self):
         """Provides a context manager for an SQLite database connection:
@@ -123,7 +142,7 @@ class DB(object):
         FASTA format.
 
         Args:
-            f (file): Open file to read from, passed as is to
+            f (file): Open file to read from; passed as is to
                 :func:`read_fasta <biseqt.io.read_fasta>`.
             num (int): Number of sequences to read from ``f``; passed as is to
                 :func:`read_fasta <biseqt.io.read_fasta>`.
@@ -155,9 +174,9 @@ class DB(object):
         self.populate(records)
 
     def find(self, condition=None, sql_condition=None):
-        """Loads sequence :class:`Record` objects satisfying the given
-        conditions. Conditions can be specified either as python filtering
-        callables or an SQL ``WHERE`` clause.
+        """Loads :class:`Record` objects satisfying the given conditions.
+        Conditions can be specified either as python filtering callables or an
+        SQL ``WHERE`` clause.
 
         Args:
             condition(callable): A python callable that determines whether a
