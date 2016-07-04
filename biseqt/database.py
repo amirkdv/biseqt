@@ -85,22 +85,6 @@ class DB(object):
         'called back'
     """
 
-    _init_script = """
-    -- Database initialization script
-
-    PRAGMA journal_mode = OFF; -- turn off journaling for performance, this
-                               -- means the contents of database cannot be
-                               -- trusted after an unexpected crash.
-
-    CREATE TABLE IF NOT EXISTS sequence (
-      id            INTEGER PRIMARY KEY ASC, -- internal integer identifier
-      content_id    VARCHAR UNIQUE, -- hash of sequence contents
-      source_file   VARCHAR, -- path to file containing the sequence
-      source_pos    INT,     -- file position where the sequence begins
-      attrs         VARCHAR  -- arbitrary attributes in JSON format
-    );
-    """
-
     def __init__(self, path, alphabet):
         assert isinstance(alphabet, Alphabet)
         self.alphabet = alphabet
@@ -120,6 +104,23 @@ class DB(object):
             ','.join(self._update_fields),
             ','.join('?' for _ in self._update_fields)
         )
+
+    _init_script = """
+    -- Database initialization script
+
+    PRAGMA journal_mode = OFF; -- turn off journaling for performance, this
+                               -- means the contents of database cannot be
+                               -- trusted after an unexpected crash.
+
+    CREATE TABLE IF NOT EXISTS sequence (
+      id            INTEGER PRIMARY KEY ASC, -- internal integer identifier
+      content_id    VARCHAR UNIQUE, -- hash of sequence contents
+      source_file   VARCHAR, -- path to file containing the sequence
+      source_pos    INT,     -- file position where the sequence begins
+      attrs         VARCHAR  -- arbitrary attributes in JSON format
+    );
+    """
+
 
     def initialize(self):
         """Initialize the database and emit the ``initialize`` event (cf.
