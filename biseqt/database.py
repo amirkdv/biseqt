@@ -1,4 +1,28 @@
 # -*- coding: utf-8 -*-
+"""This module provides tools for storing sequence metadata (and not contents)
+for analyses spanning many sequences. The main entry point is through the
+:class:`DB` class. For instance if the file ``example.fa`` contains::
+
+    > S
+    AATCGG
+
+we can say:
+
+>>> from biseqt.database import DB
+>>> from biseqt.sequence import Alphabet
+>>> A = Alphabet('ACGT')
+>>> db = DB('example.db', A)
+>>> db.initialize()
+>>> with open('example.fa') as f:
+...     db.load_fasta(f)
+>>> for record in db.find(condition=lambda r: r.attrs['name'] == 'S'):
+...     print(record)
+...     print(db.load_from_record(record))
+Record(id=1, content_id=u'e690f18fc98d4afcba4b8518b88f4d0387a17380', \
+source_file=u'example.fa', source_pos=0, attrs={u'name': u'S'})
+AATCGG
+"""
+
 import os
 import sqlite3
 import json
