@@ -80,6 +80,7 @@ class DB(object):
     def __init__(self, path, alphabet):
         assert isinstance(alphabet, Alphabet)
         self.alphabet = alphabet
+        self.processors = {event: [] for event in self.events}
 
         path = os.path.abspath(path)
         if os.path.exists(path):
@@ -89,6 +90,7 @@ class DB(object):
                 'Database %s cannot be created' % path
 
         self.path = path
+        # names of non-id fields of Record
         self._update_fields = [f for f in Record._fields if f != 'id']
         self.insert_q = 'INSERT INTO sequence (%s) VALUES (%s)' % (
             ','.join(self._update_fields),
@@ -135,8 +137,8 @@ class DB(object):
         return tuple(row)
 
     def insert(self, seq, source_file=None, source_pos=0, attrs={}):
-        """Populates the database from an iterable of :class:`Record` objects
-        created by :func:`create_record`.
+        """Inserts a sequence in the database and emits ``insert-sequence``
+        (cf. :attr:`events`).
 
         Args:
             seq (sequence.NamedSequence): The sequence to be inserted.
@@ -145,6 +147,11 @@ class DB(object):
             attrs (dict): populates :attr:`Record.attrs`; default is a
                 dictionary containing only the name of the sequence (name is
                 always added if not present in the dictionary).
+
+        Returns:
+            Record:
+                The record inserted in the database with its :attr:`Record.id`
+                populated with the newly assigned primary key.
         """
         assert isinstance(seq, NamedSequence) and seq.alphabet == self.alphabet
         kw = {
@@ -257,3 +264,24 @@ class DB(object):
                 assert record.content_id == seq.content_id
             assert record.content_id == seq.content_id
             return seq
+
+    def register(self, event, func):
+        """Registers a callback for the given event.
+
+        Args:
+            event (str): A string in :attr:`events`.
+            func (callable): The callable to be invoked, for argument list for
+                each event see :attr:`events`.
+        """
+        assert event in self.events
+        self.processors[event].append(func)
+
+    def emit(self, event, *args):
+        """Emits an event by executing all registered callbacks for it.
+
+        Args:
+            event (str): A string in :attr:`events`.
+            args (list): The arguments to pass to the callback.
+        """
+        for func in self.processors[event]:
+            func(*args)

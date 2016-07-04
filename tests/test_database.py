@@ -40,6 +40,12 @@ def test_database_insert():
                            (rec.id,))
             assert next(cursor) == (S.content_id,), \
                 'correct id must be populated'
+            T = A.parse('GCTG', name='bar')
+            rec = db.insert(T)
+            cursor.execute('SELECT content_id FROM sequence WHERE id = ?',
+                           (rec.id,))
+            assert next(cursor) == (T.content_id,), \
+                'correct id must be populated'
 
         with pytest.raises(IntegrityError):
             db.insert(S)
@@ -111,3 +117,27 @@ def test_database_populate_fasta_rc():
             T_rc = T.reverse().transform(['AT', 'CG'], name='(rc) ' + T.name)
             assert db.load_from_record(found_T_rc) == T_rc, \
                 'reverse complements should load properly from a record'
+
+
+def test_database_events():
+    A = Alphabet('ACGT')
+    S = A.parse('AACT', name='S')
+
+    # NOTE python 2 does not support non-local, non-global variables, put it in
+    # the function object.
+    test_database_events.callback_called = 0
+
+    def callback(self, *args):
+        test_database_events.callback_called += 1
+
+    with NamedTemporaryFile() as tmp_db:
+        db = DB(tmp_db.name, A)
+        db.register('initialize', callback)
+        db.register('insert-sequence', callback)
+        db.initialize()
+        assert test_database_events.callback_called == 1, \
+            'registered callbacks for "initialize" should be executed'
+
+        db.insert(S)
+        assert test_database_events.callback_called == 2, \
+            'registered callbacks for "insert-sequence" should be executed'
