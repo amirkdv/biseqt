@@ -128,7 +128,7 @@ class DB(object):
         """
         with self.connect() as conn:
             conn.cursor().executescript(self._init_script)
-            self.emit('initialize', self, conn)
+            self.emit('initialize', conn)
 
     # put the initialization script in the docs
     initialize.__doc__ += '\n\n\t.. code-block:: sql\n\t%s\n' % \
@@ -194,7 +194,7 @@ class DB(object):
             # populate the id of the record
             rec = Record(id=cursor.lastrowid,
                          **{k: getattr(rec, k) for k in self._update_fields})
-            self.emit('insert-sequence', self, conn, seq, rec)
+            self.emit('insert-sequence', conn, seq, rec)
         return rec
 
     def load_fasta(self, f, num=-1, rc=False):
