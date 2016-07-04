@@ -222,9 +222,12 @@ class NamedSequence(Sequence):
         name (str): The name of the sequence which need not be unique.
         content_id (str): The SHA1 of the sequence contents in integer form.
     """
-    def __init__(self, alphabet, contents=(), name=''):
+    def __init__(self, alphabet, contents=(), name='', content_id=None):
         super(NamedSequence, self).__init__(alphabet, contents)
         self.content_id = sha1(str(self)).hexdigest()
+        if content_id is not None:
+            assert self.content_id == content_id, \
+                'Provided content identifier does not match sequence contents'
         self.name = name
 
     def reverse(self, name=None):
@@ -233,7 +236,7 @@ class NamedSequence(Sequence):
 
         Args:
             name(str): The name to give to the new sequence. Default is None
-                in which case ``(reversed) `` is preprended to the original
+                in which case ``(reversed)`` is preprended to the original
                 sequence name.
 
         Returns:
@@ -251,7 +254,7 @@ class NamedSequence(Sequence):
         Args:
             mappings (dict|list): As in :func:`Sequence.transform`.
             name (str): The name to give to the new sequence. Default is None
-                in which case ``(transformed) `` is prependended to the
+                in which case ``(transformed)`` is prependended to the
                 original sequence name.
 
         Returns:
@@ -268,8 +271,12 @@ class NamedSequence(Sequence):
                self.name == other.name
 
     def __repr__(self):
-        return 'NamedSequence(%s, name=%s, contents=%s)' % \
-            (repr(self.alphabet), repr(self.name), repr(self.contents))
+        return 'NamedSequence(%s, name=%s, contents=%s, content_id=%s)' % (
+            repr(self.alphabet),
+            repr(self.name),
+            repr(self.contents),
+            repr(self.content_id),
+        )
 
 
 class EditTranscript(str):
