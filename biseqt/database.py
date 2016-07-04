@@ -3,7 +3,6 @@ import os
 import sqlite3
 import json
 from collections import namedtuple
-from itertools import chain
 
 from .io import read_fasta
 from .sequence import Alphabet, NamedSequence
@@ -31,39 +30,35 @@ class Record(namedtuple('Record', ['id', 'content_id', 'source_file',
     """
 
 
-def create_record(seq, **kw):
-    """Creates a :class:`Record` from a given :class:`NamedSequence
-    <biseqt.sequence.NamedSequence>`.
-
-    Args:
-        seq (NamedSequence): Original sequence.
-
-    Keyword Args:
-        source_file (str): populates :attr:`Record.source_file`.
-        source_pos (str): populates :attr:`Record.source_pos`.
-        attrs (dict): populates :attr:`Record.attrs`; default is a dictionary
-            containing only the name of the sequence (name is always added if
-            not present in the dictionary).
-    """
-    assert isinstance(seq, NamedSequence)
-    assert 'source_file' in kw
-    assert 'source_pos' in kw
-    if 'attrs' not in kw:
-        kw['attrs'] = {}
-    if 'name' not in kw:
-        kw['attrs']['name'] = seq.name
-    return Record(id=None, content_id=seq.content_id, **kw)
-
-
 class DB(object):
     """Wraps an SQLite database containing sequences and related information.
     This class is responsible for maintaining and initializing database files,
-    as well as populating the ``sequence`` table. The initialization operation
-    is idempotant, i.e initializing an initialized database has no side effect.
+    as well as populating the ``sequence`` table
 
     Attributes:
         path (str): Path to the SQLite datbase.
         alphabet (Alphabet): The alphabet for sequences in the database.
+    """
+
+    events = ['initialize', 'insert-sequence']
+    """Events emitted upon special events, cf. :func:`register` and
+    :func:`emit`. Currently supported events are:
+
+        * ``initialize(db, conn)``: emitted when the initialization script has
+          executed; use this event to execute other initialization scripts that
+          create tables or configure the database in an idempotent manner.
+        * ``insert-sequence(db, conn, seq, rec)``: emitted after a sequence is
+          inserted in the sequence table; use this event to perform further
+          processing on arriving sequences.
+
+    Example usage:
+        >>> from biseqt.database import DB
+        >>> from biseqt.sequence import Alphabet
+        >>> def callback(db, conn): print('called back')
+        >>> db = DB('example.db', Alphabet('ACGT'))
+        >>> db.register('initialize', callback)
+        >>> db.initialize()
+        'called back'
     """
 
     _init_script = """
@@ -86,6 +81,7 @@ class DB(object):
         assert isinstance(alphabet, Alphabet)
         self.alphabet = alphabet
 
+        path = os.path.abspath(path)
         if os.path.exists(path):
             assert os.access(path, os.W_OK), 'Database %s not writable' % path
         else:
@@ -93,12 +89,24 @@ class DB(object):
                 'Database %s cannot be created' % path
 
         self.path = path
+        self._update_fields = [f for f in Record._fields if f != 'id']
+        self.insert_q = 'INSERT INTO sequence (%s) VALUES (%s)' % (
+            ','.join(self._update_fields),
+            ','.join('?' for _ in self._update_fields)
+        )
+
+    def initialize(self):
+        """Initialize the database and emit the ``initialize`` event (cf.
+        :attr:`events`). The initialization operation is idempotant, i.e
+        initializing an initialized database has no side effect.
+        """
         with self.connect() as conn:
             conn.cursor().executescript(self._init_script)
+            self.emit('initialize', self, conn)
 
-    # add the initialization SQL query to docstring so we don't have to
-    # duplicate it.
-    __init__.__doc__ = '\n\n.. code-block:: sql\n' + _init_script
+    # put the initialization script in the docs
+    initialize.__doc__ += '\n\n\t.. code-block:: sql\n\t%s\n' % \
+                          '\n\t'.join(_init_script.split('\n'))
 
     def connect(self):
         """Provides a context manager for an SQLite database connection:
@@ -115,30 +123,50 @@ class DB(object):
         """
         return sqlite3.connect(self.path)
 
-    def populate(self, records):
-        """Populates the database from an iterable of :class:`Record` objects.
+    def record_to_row(self, record):
+        """Converts a :class:`Record` to a tuple that can be inserted in the
+        sequence table."""
+        row = []
+        for field in self._update_fields:
+            value = getattr(record, field)
+            if field == 'attrs':
+                value = json.dumps(value)
+            row.append(value)
+        return tuple(row)
+
+    def insert(self, seq, source_file=None, source_pos=0, attrs={}):
+        """Populates the database from an iterable of :class:`Record` objects
+        created by :func:`create_record`.
 
         Args:
-            records (iterable): Records to put in the sequence table; their
-                :attr:`Record.id` is ignored.
+            seq (sequence.NamedSequence): The sequence to be inserted.
+            source_file(str): Used to populate :attr:`Record.source_file`.
+            source_pos (int): Used to populate :attr:`Record.source_pos`.
+            attrs (dict): populates :attr:`Record.attrs`; default is a
+                dictionary containing only the name of the sequence (name is
+                always added if not present in the dictionary).
         """
-        fields = Record._fields[1:]  # skip id
+        assert isinstance(seq, NamedSequence) and seq.alphabet == self.alphabet
+        kw = {
+            'source_file': source_file,
+            'source_pos': source_pos,
+            'content_id': seq.content_id,
+            'attrs': {k: attrs[k] for k in attrs},
+        }
+        if 'name' not in kw['attrs']:
+            kw['attrs']['name'] = seq.name
 
-        def _to_row(record):
-            row = []
-            for field in fields:
-                value = getattr(record, field)
-                if field == 'attrs':
-                    value = json.dumps(value)
-                row.append(value)
-            return tuple(row)
-
-        q = 'INSERT INTO sequence (%s) VALUES (%s)' % \
-            (','.join(fields), ','.join('?' for _ in fields))
+        rec = Record(id=None, **kw)
         with self.connect() as conn:
-            conn.cursor().executemany(q, (_to_row(r) for r in records))
+            cursor = conn.execute(self.insert_q, self.record_to_row(rec))
+            conn.commit()
+            # populate the id of the record
+            rec = Record(id=cursor.lastrowid,
+                         **{k: getattr(rec, k) for k in self._update_fields})
+            self.emit('insert-sequence', self, conn, seq, rec)
+        return rec
 
-    def populate_from_fasta(self, f, num=-1, rc=False):
+    def load_fasta(self, f, num=-1, rc=False):
         """Populates the database from an open file containing sequences in
         FASTA format.
 
@@ -150,6 +178,11 @@ class DB(object):
             rc (bool): Whether to also include the reverse complement of each
                 sequence read from ``f``; default is False and is only allowed
                 to be True for DNA sequences.
+
+        Returns:
+            list: The :class:`Record` objects corresponding to inserted
+                sequences in the database with their :attr:`Record.id`
+                populated.
         """
         try:
             path = os.path.abspath(f.name)
@@ -160,19 +193,18 @@ class DB(object):
         if rc:
             assert all(l in self.alphabet for l in 'ACGT')
 
+        inserted = []
         # TODO what if the source contains reverse complements?
-        def _recs_from_seq(seq, pos):
-            rec = create_record(seq, source_file=path, source_pos=pos)
-            yield rec
+        for seq, pos in read_fasta(f, self.alphabet, num=num):
+            kw = {'source_file': path, 'source_pos': pos}
+            inserted.append(self.insert(seq, **kw))
             if rc:
-                compl = seq.reverse().transform(['AT', 'CG'],
-                                                name='(rc) ' + seq.name)
-                yield create_record(compl, source_file=path, source_pos=pos,
-                                    attrs={'rc_of': rec.content_id})
+                seq_rc = seq.reverse().transform(['AT', 'CG'],
+                                                 name='(rc) ' + seq.name)
+                kw['attrs'] = {'rc_of': seq.content_id}
+                inserted.append(self.insert(seq_rc, **kw))
 
-        records = chain(*(_recs_from_seq(seq, pos) for seq, pos
-                          in read_fasta(f, self.alphabet, num=num)))
-        self.populate(records)
+        return inserted
 
     def find(self, condition=None, sql_condition=None):
         """Loads :class:`Record` objects satisfying the given conditions.

@@ -5,50 +5,65 @@ from sqlite3 import IntegrityError
 
 from biseqt.io import write_fasta
 from biseqt.sequence import Alphabet
-from biseqt.database import DB, create_record
+from biseqt.database import DB, Record
 
 
 def test_database_basic():
     A = Alphabet('ACGT')
     with NamedTemporaryFile() as tmp:
         db = DB(tmp.name, A)
+        db.initialize()
+        db.initialize()  # should be able to call it twice
         assert db.path == tmp.name
         with db.connect() as conn:
             # a sequence table should be created
             conn.cursor().execute('SELECT * FROM sequence LIMIT 1;')
 
-        # initialization script must be idempotent
-        db = DB(tmp.name, A)
 
-
-def test_database_record():
+def test_database_insert():
     A = Alphabet('ACGT')
     with NamedTemporaryFile() as tmp:
         db = DB(tmp.name, A)
-        rec = create_record(A.parse('AACT', name='foo'),
-                            source_file='source.fa', source_pos=0,
-                            attrs={'key': 'value'})
-        db.populate([rec])
-        retrieved = next(db.find())
-        assert isinstance(retrieved[0], int), 'an integer id must be set'
-        assert rec[1:] == retrieved[1:], \
-            'aside from id we should get what we put in'
+        db.initialize()
+        S = A.parse('AACT', name='foo')
+        attrs = {'key': 'value'}
+        rec = db.insert(S, source_file='source.fa', source_pos=10, attrs=attrs)
+        assert isinstance(rec.id, int)
+        assert rec.content_id == S.content_id
+        assert rec.source_pos == 10
+        assert rec.source_file == 'source.fa'
+        assert 'key' in rec.attrs and rec.attrs['key'] == 'value', \
+            'attributes must be populated correctly'
+        with db.connect() as conn:
+            cursor = conn.cursor()
+            cursor.execute('SELECT content_id FROM sequence WHERE id = ?',
+                           (rec.id,))
+            assert next(cursor) == (S.content_id,), \
+                'correct id must be populated'
 
         with pytest.raises(IntegrityError):
-            db.populate([rec])
+            db.insert(S)
 
-        rec = create_record(A.parse('AGCT', name='bar'),
-                            source_file='source.fa', source_pos=10)
-        db.populate([rec])
+
+def test_database_find():
+    A = Alphabet('ACGT')
+    S = A.parse('AACT', name='foo')
+    T = A.parse('GGCT', name='bar')
+    with NamedTemporaryFile() as tmp:
+        db = DB(tmp.name, A)
+        db.initialize()
+        db.insert(S)
+        db.insert(T)
+
         sql_condition = "attrs LIKE '%s'" % '%"name": "bar"%'
-        retrieved = [r for r in db.find(sql_condition=sql_condition)]
-        assert len(retrieved) == 1 and rec[1:] == retrieved[0][1:], \
+        found = [rec for rec in db.find(sql_condition=sql_condition)]
+        assert len(found) == 1 and found[0].content_id == T.content_id, \
             'find() should work with sql_condition'
 
-        def condition(r): return r.attrs['name'] == 'bar'
+        def condition(rec): return rec.attrs['name'] == 'foo'
 
-        retrieved = [r for r in db.find(condition=condition)]
-        assert len(retrieved) == 1 and rec[1:] == retrieved[0][1:], \
+        found = [rec for rec in db.find(condition=condition)]
+        assert len(found) == 1 and found[0].content_id == S.content_id, \
             'find() should work with callable condition'
 
 
@@ -59,17 +74,16 @@ def test_database_populate_fasta():
 
     with NamedTemporaryFile() as tmp_db:
         db = DB(tmp_db.name, A)
+        db.initialize()
         with NamedTemporaryFile() as tmp_fa:
             write_fasta(tmp_fa, [S, T])
             tmp_fa.seek(0)
-            db.populate_from_fasta(tmp_fa, rc=False)
-            retrieved = [x for x in db.find()]
-            assert len(retrieved) == 2
-            assert all(rec.source_file == tmp_fa.name for rec in retrieved), \
+            inserted = db.load_fasta(tmp_fa, rc=False)
+            assert len(inserted) == 2
+            assert all(isinstance(r, Record) for r in inserted)
+            assert all(rec.source_file == tmp_fa.name for rec in inserted), \
                 'source file of sequence records must be set'
-            retrieved_T = retrieved[1]
-            tmp_fa.seek(retrieved_T.source_pos)
-            assert [db.load_from_record(rec) for rec in retrieved] == [S, T], \
+            assert [db.load_from_record(rec) for rec in inserted] == [S, T], \
                 'should be able to retrieve sequences by position in source'
 
 
@@ -80,20 +94,20 @@ def test_database_populate_fasta_rc():
 
     with NamedTemporaryFile() as tmp_db:
         db = DB(tmp_db.name, A)
+        db.initialize()
         with NamedTemporaryFile() as tmp_fa:
             write_fasta(tmp_fa, [S, T])
             tmp_fa.seek(0)
-            db.populate_from_fasta(tmp_fa, rc=True)
+            inserted = db.load_fasta(tmp_fa, rc=True)
 
-            def cond_T(r): return r.attrs['name'] == 'T'
-
-            retrieved_T = next(db.find(condition=cond_T))
-            assert db.load_from_record(retrieved_T) == T, \
-                'should be able to retrieve sequences by position in source'
+            assert len(inserted) == 4
+            assert [r.attrs['rc_of'] for r in inserted if 'rc_of' in r.attrs] \
+                == [S.content_id, T.content_id], \
+                'reverse complements should know what their origin is'
 
             def cond_T_rc(r): return r.attrs.get('rc_of', None) == T.content_id
 
-            retrieved_T_rc = next(db.find(condition=cond_T_rc))
+            found_T_rc = next(db.find(condition=cond_T_rc))
             T_rc = T.reverse().transform(['AT', 'CG'], name='(rc) ' + T.name)
-            assert db.load_from_record(retrieved_T_rc) == T_rc, \
+            assert db.load_from_record(found_T_rc) == T_rc, \
                 'reverse complements should load properly from a record'
