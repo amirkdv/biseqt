@@ -49,6 +49,7 @@ else:
 
 autodoc_member_order = 'bysource'
 autoclass_content = 'both' # appends `__init__.__doc__` to class docstring.
+wiki_enabled = True
 
 # If extensions (or modules to document with autodoc) are in another directory,
 # add these directories to sys.path here. If the directory is relative to the

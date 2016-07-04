@@ -4,6 +4,9 @@
  Documentation for ``biseqt``
 ===============================
 
+.. wikipage:: dev
+    :title: Developer Notes
+
 .. toctree::
   :hidden:
 

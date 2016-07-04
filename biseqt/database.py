@@ -32,15 +32,11 @@ from .io import read_fasta
 from .sequence import Alphabet, NamedSequence
 
 
-# NOTE The following is the cleanest way of documenting namedtuple classes
-# in python 2.7.
-#   cf. http://stackoverflow.com/a/1606478
-#   cf. http://bugs.python.org/issue16669
 class Record(namedtuple('Record', ['id', 'content_id', 'source_file',
                                    'source_pos', 'attrs'])):
-    """Wraps an SQL record from the ``sequence`` table of a :class:`DB`. All
-    fields are intended to map directly to columns of the table; cf.
-    :class:`DB`.
+    """A ``namedtuple`` which wraps an SQL record from the ``sequence`` table
+    of a :class:`DB`. All fields are intended to map directly to columns of the
+    table; cf. :func:`DB.initialize`.
 
     Attributes:
         id (int): The integer identifier assigned by the database.
@@ -51,6 +47,43 @@ class Record(namedtuple('Record', ['id', 'content_id', 'source_file',
         source_pos (int): The position in the file where this sequence begins.
         attrs (dict): A dict of arbitrary attributes (stored as JSON and
             unpacked upon load from database).
+
+    .. wikisection:: dev
+        :title: Documenting namedtuples
+
+        Namedtuples do not have docstrings by default. There are a variety of
+        hacks to make them work with ``help()`` and sphinx.  The following is
+        the cleanest way of documenting namedtuple classes in python 2.7 and
+        is used throughout ``biseqt``:
+
+        .. code-block:: python
+
+            from collections import namedtuple
+
+            class Example(namedtuple('Example', ['field1', 'field2'])):
+                \"\"\"docstring for Example. \"\"\"
+
+        Note that this kills ``__slots__`` but presumably our performance will
+        remain unaffected with reasonable usage patterns (i.e as long as we
+        don't start writing to ``__dict__`` and only use the namedtuple
+        fields). If found necessary, redeclaring ``__slots__`` is necessary
+        since it is not inherited by default from ``tuple``:
+
+        .. code-block:: python
+
+            from collections import namedtuple
+
+            class Example(namedtuple('Example', ['field1', 'field2'])):
+                \"\"\"docstring for Example. \"\"\"
+                __slots__ = ()
+
+        Note that using ``pass`` in the class body voids the docstring.
+
+        .. rubric:: References
+
+        * http://stackoverflow.com/a/1606478
+        * http://bugs.python.org/issue16669
+
     """
 
 
@@ -120,7 +153,6 @@ class DB(object):
       attrs         VARCHAR  -- arbitrary attributes in JSON format
     );
     """
-
 
     def initialize(self):
         """Initialize the database and emit the ``initialize`` event (cf.
@@ -226,7 +258,9 @@ class DB(object):
             assert all(l in self.alphabet for l in 'ACGT')
 
         inserted = []
-        # TODO what if the source contains reverse complements?
+        # FIXME what if the source contains reverse complements?
+        # similarly, what to do with duplicate records (e.g. reloading a
+        # half-loaded fasta file).
         for seq, pos in read_fasta(f, self.alphabet, num=num):
             kw = {'source_file': path, 'source_pos': pos}
             inserted.append(self.insert(seq, **kw))
