@@ -224,6 +224,7 @@ class SeedIndex(object):
 
         for _diag in range(prev_diag, len(seed_count)):
             seed_count[_diag] = seed_count[prev_diag]
+
         return seed_count, diags
 
     def score_seeds(self, only_missing=True, gap_prob=None, sensitivity=None):
@@ -292,7 +293,6 @@ class SeedIndex(object):
             scanned_sequences = self.kmer_index.scanned_sequences()
             for (id0, len0), (id1, len1) in combinations(scanned_sequences, 2):
                 seed_count, diags = self.cum_seed_count(id0, id1, len0, len1)
-                # update scores
                 for diag in diags:
                     radius = band_radius(len0, len1, diag, **band_radius_kw)
                     center_idx = diag + len1

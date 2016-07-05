@@ -40,20 +40,24 @@ def test_kmer_as_int_limitations():
 
 @pytest.fixture(ids=['one-letter alphabet', 'two-letter alphabet'],
                 params=[Alphabet('ACGT'), Alphabet(['00', '01', '11'])])
-def sequence_db(request):
-    """Creates a sequence database (i.e ``biseqt.database.DB``) with
-    parametrized alphabet (single letter and double letter) stored in a
-    temporary file."""
+def db_gen(request):
+    """Returns a function that generates a sequence database (i.e
+    ``biseqt.database.DB``) with parametrized alphabet (single letter and
+    double letter) stored in a temporary file."""
     A = request.param
-    with NamedTemporaryFile() as tmp:
-        db = DB(tmp.name, A)
-        return db
+
+    def f():
+        with NamedTemporaryFile() as tmp:
+            db = DB(tmp.name, A)
+            yield db
+    return f
 
 
 @pytest.mark.parametrize('wordlen', [3, 6, 9],
                          ids=['k = %d' % i for i in [3, 6, 9]])
-def test_kmer_as_int(sequence_db, wordlen):
-    A, db = sequence_db.alphabet, sequence_db
+def test_kmer_as_int(db_gen, wordlen):
+    db = next(db_gen())
+    A = db.alphabet
     kmer_index = KmerIndex(db, wordlen)
     kmers = product(range(len(A)), repeat=wordlen)
     as_ints = [kmer_index.kmer_as_int(kmer) for kmer in kmers]
@@ -63,8 +67,9 @@ def test_kmer_as_int(sequence_db, wordlen):
 
 @pytest.mark.parametrize('wordlen', [3, 6, 9],
                          ids=['k = %d' % i for i in [3, 6, 9]])
-def test_scan_kmers(sequence_db, wordlen):
-    A, db = sequence_db.alphabet, sequence_db
+def test_scan_kmers(db_gen, wordlen):
+    db = next(db_gen())
+    A = db.alphabet
     kmer_index = KmerIndex(db, wordlen)
     S = rand_seq(A, 50)
     assert sum(1 for _ in kmer_index.scan_kmers(S)) == len(S) - wordlen + 1, \

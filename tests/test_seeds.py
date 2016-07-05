@@ -43,21 +43,50 @@ def test_band_radius():
         'band radius must be decreasing with increasing diag if diag > 0'
 
 
-def test_index_seeds():
+@pytest.fixture
+def seed_index_gen():
+    """Returns a context manager that creates a database, a kmer index, and a
+    seed index with word length 5 stored in a temporary file. The database is
+    populated with 3 sequences of length 100 and all kmers and seeds are
+    indexed.
+    """
     A = Alphabet('ACGT')
-    with NamedTemporaryFile() as tmp:
-        db = DB(tmp.name, A)
-        kmer_index = KmerIndex(db, 5)
-        seed_index = SeedIndex(kmer_index)
+    num_seqs = 3
+    seq_len = 100
+    wordlen = 5
 
-        kmer_index.db.initialize()
-        records = []
-        for i in range(3):
-            seq = rand_seq(A, 100).to_named('#%d' % i)
-            records.append(kmer_index.db.insert(seq))
+    class context(object):
+        def __enter__(self):
+            self.tmp = NamedTemporaryFile()
+            db = DB(self.tmp.name, A)
+            seed_index = SeedIndex(KmerIndex(db, wordlen))
+            seed_index.db.initialize()
+            for i in range(num_seqs):
+                seq = rand_seq(A, seq_len).to_named('#%d' % i)
+                db.insert(seq)
+            seed_index.index_seeds()
+            return seed_index
 
-        seed_index.index_seeds()
-        scanned_sequences = kmer_index.scanned_sequences()
+        def __exit__(self, *args):
+            self.tmp.close()
+
+    return context
+
+
+def test_index_seeds(seed_index_gen):
+    with seed_index_gen() as seed_index:
+        scanned_sequences = seed_index.kmer_index.scanned_sequences()
+        for (id0, len0), (id1, len1) in combinations(scanned_sequences, 2):
+            for seed, score in seed_index.seeds(id0, id1):
+                assert seed.id0 == id0 and seed.id1 == id1
+                diag = seed.pos0 - seed.pos1
+                assert diag <= len0 - seed_index.wordlen and \
+                    diag >= -len1 + seed_index.wordlen
+
+
+def test_seed_count(seed_index_gen):
+    with seed_index_gen() as seed_index:
+        scanned_sequences = seed_index.kmer_index.scanned_sequences()
         for (id0, len0), (id1, len1) in combinations(scanned_sequences, 2):
             count, diags = seed_index.cum_seed_count(id0, id1, len0, len1)
             assert all(x <= y for x, y in zip(count, count[1:])), \
@@ -70,12 +99,12 @@ def test_index_seeds():
 
 # Parameters for fixture parameterization
 _gaps = {
-    'gap prob 1e-3': 1e-2,
-    'gap prob 1e-1': 1e-1,
+    'gap prob 1e-3': 1e-3,
+    'gap prob 1e-2': 1e-2,
 }
 _substs = {
-    'subst prob 1e-3': 1e-2,
-    'subst prob 1e-1': 1e-1,
+    'subst prob 1e-3': 1e-3,
+    'subst prob 1e-2': 1e-2,
 }
 _words = {
     'k = 5': 5,
@@ -87,15 +116,13 @@ _params = product(_gaps.values(), _substs.values(), _words.values())
 
 @pytest.fixture(ids=[x for x in _ids], params=[x for x in _params])
 def sequencing_sample(request):
-    """Creates a random sequence of length 2000, and generates reads, with
-    parameterized mutation probabilities, of length 500 starting at whole
-    multiples of 250, i.e 0-500, 250-750, ..., 1500-2000. It is expected that
-    successive reads have an overlap starting at position 250, upto 50
-    positions of error should be tolerated in tests.
+    """Creates a context manager that creates a random sequence, generates
+    reads, with parameterized mutation probabilities, of equal length starting
+    at whole multiples of half of read length. It is expected that successive
+    reads have an overlap starting at their halfway position.
 
-    Returns:
-        tuple:
-            full genome sequence, list of reads, gap probability, kmer index.
+    Upon invocation a tuple is returned containing: full genome sequence, a
+    list of lossy reads, inserted records, gap probability, and the seed index.
     """
     A = Alphabet('ACGT')
     gap_prob, subst_prob, wordlen = request.param
@@ -108,33 +135,53 @@ def sequencing_sample(request):
         read, _ = mutation_process.mutate(seq[i: i + read_len])
         reads += [read.to_named('read#%d' % i)]
 
-    with NamedTemporaryFile() as tmp:
-        db = DB(tmp.name, A)
-        kmer_index = KmerIndex(db, wordlen)
-        return seq, reads, gap_prob, kmer_index
+    class context(object):
+        def __enter__(self):
+            self.tmp = NamedTemporaryFile()
+            db = DB(self.tmp.name, A)
+            kmer_index = KmerIndex(db, wordlen)
+            seed_index = SeedIndex(kmer_index)
+            seed_index.db.initialize()
+            records = [db.insert(read) for read in reads]
+            seed_index.index_seeds()
+            seed_index.score_seeds(sensitivity=1-1e-4, gap_prob=gap_prob)
+            return seq, reads, records, gap_prob, seed_index
+
+        def __exit__(self, *args):
+            self.tmp.close()
+
+    return context
 
 
-def test_score_seeds(sequencing_sample):
-    seq, reads, gap_prob, kmer_index = sequencing_sample
-    seed_index = SeedIndex(kmer_index)
-    seed_index.db.initialize()
+def _test_score_seeds(sequencing_sample):
+    with sequencing_sample() as sample:
+        seq, reads, records, gap_prob, seed_index = sample
+        num_reads = len(reads)
+        scanned_sequences = seed_index.kmer_index.scanned_sequences()
+        assert sum(1 for _ in scanned_sequences) == num_reads
 
-    num_reads = len(reads)
-    avg_read_len = sum(len(read) for read in reads)/num_reads
-    records = [seed_index.db.insert(read) for read in reads]
-    assert sum(1 for _ in kmer_index.scanned_sequences()) == num_reads
+        with seed_index.db.connect() as conn:
+            cursor = conn.cursor()
+            query = 'SELECT COUNT(*) FROM seeds_%d WHERE score IS NULL' % \
+                seed_index.wordlen
+            cursor.execute(query)
+            assert next(cursor)[0] == 0
 
-    seed_index.index_seeds()
-    seed_index.score_seeds(sensitivity=1-1e-4, gap_prob=gap_prob)
 
-    for i in range(num_reads - 1):
-        id0, id1 = records[i].id, records[i + 1].id
-        best_diag = seed_index.highest_scoring_band(id0, id1)
-        assert best_diag is not None, 'there should be a most dense diagonal'
-        min_diag, max_diag = best_diag
-        expected = avg_read_len/2
-        err = avg_read_len/5
-        assert expected >= min_diag - err and expected <= max_diag + err, \
-            'Should find the most dense diagonal band upto %d' % err
+def test_highest_scoring_seeds(sequencing_sample):
+    with sequencing_sample() as sample:
+        seq, reads, records, gap_prob, seed_index = sample
+        num_reads = len(reads)
+        avg_read_len = sum(len(read) for read in reads)/num_reads
+        for i in range(num_reads - 1):
+            id0, id1 = records[i].id, records[i + 1].id
+            best_diag = seed_index.highest_scoring_band(id0, id1)
+            assert best_diag is not None, \
+                'there should always be a most dense diagonal'
+            min_diag, max_diag = best_diag
+            expected = avg_read_len/2
+            err = avg_read_len/5
+            assert expected >= min_diag - err and expected <= max_diag + err, \
+                'Should find the most dense diagonal band upto %d' % err
 
-        assert isinstance(next(seed_index.seeds(id0, id1))[0], Seed)
+            assert isinstance(next(seed_index.seeds(id0, id1))[0], Seed)
