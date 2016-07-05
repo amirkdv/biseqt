@@ -48,10 +48,10 @@ setup(
             'mock',      # for rtfd.org to skip installing system dependencies
         ],
         'tests': [
-            'mock',
-            'flake8',
-            'pytest',
-            'tox'
+            'mock',      # for mocking external functions
+            'flake8',    # for style enforcement
+            'pytest',    # to run and manage tests
+            'pytest-cov',# to get coverage reports from tests
         ]
     }
 )

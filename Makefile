@@ -21,7 +21,7 @@ CLEANED=biseqt/__init__.py biseqt/sequence.py tests/test_sequence.py \
 	biseqt/seeds.py tests/test_seeds.py
 tests: $(LIBDIR)/pwlib.so
 	flake8 $(CLEANED)
-	cd tests && PYTHONPATH=.. py.test -s -v
+	cd tests && PYTHONPATH=.. py.test --cov biseqt --capture=no --verbose
 
 loc:
 	find biseqt -type f -regex '.*\(\.py\|\.c\|\.h\)' | xargs wc -l
