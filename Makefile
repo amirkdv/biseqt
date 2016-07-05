@@ -24,7 +24,7 @@ tests: $(LIBDIR)/pwlib.so
 	cd tests && PYTHONPATH=.. py.test --cov biseqt --capture=no --verbose
 
 loc:
-	find biseqt -type f -regex '.*\(\.py\|\.c\|\.h\)' | xargs wc -l
+	find biseqt tests -type f -regex '.*\(\.py\|\.c\|\.h\)' | xargs wc -l
 
 todo:
 	find biseqt Makefile *.mk *.py -type f -regex '.*\(\.py\|\.c\|\.h\|Makefile\|\.mk\)' | xargs grep -A2 -nP --color 'FIXME|TODO|BUG'
