@@ -181,6 +181,18 @@ class Sequence(object):
         """Wraps :func:`Alphabet.transform` for convenience."""
         return self.alphabet.transform(self, mappings=mappings)
 
+    def to_named(self, name):
+        """Names this sequence, i.e a :class:`NamedSequence` is returned with
+        identical raw contents.
+
+        Args:
+            name (str): The name to give the sequence.
+
+        Returns:
+            NamedSequence
+        """
+        return NamedSequence(self.alphabet, self.contents, name=name)
+
     def __str__(self):
         return ''.join(self.alphabet[idx] for idx in self.contents)
 
