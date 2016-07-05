@@ -1,7 +1,7 @@
-biseqt.words module
+biseqt.kmers module
 ===================
 
-.. automodule:: biseqt.words
+.. automodule:: biseqt.kmers
     :members:
     :undoc-members:
     :show-inheritance:

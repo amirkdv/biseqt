@@ -17,7 +17,8 @@ clean:
 
 CLEANED=biseqt/__init__.py biseqt/sequence.py tests/test_sequence.py \
 	biseqt/io.py tests/test_io.py biseqt/random.py tests/test_random.py \
-	biseqt/database.py tests/test_database.py
+	biseqt/database.py tests/test_database.py biseqt/kmers.py tests/test_kmers.py \
+	biseqt/seeds.py tests/test_seeds.py
 tests: $(LIBDIR)/pwlib.so
 	flake8 $(CLEANED)
 	cd tests && PYTHONPATH=.. py.test -s -v

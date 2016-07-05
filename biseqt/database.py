@@ -260,7 +260,8 @@ class DB(object):
         inserted = []
         # FIXME what if the source contains reverse complements?
         # similarly, what to do with duplicate records (e.g. reloading a
-        # half-loaded fasta file).
+        # half-loaded fasta file). Note that KmerIndex expects that we only
+        # emit insert-sequence when new stuff come in.
         for seq, pos in read_fasta(f, self.alphabet, num=num):
             kw = {'source_file': path, 'source_pos': pos}
             inserted.append(self.insert(seq, **kw))
