@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 import pytest
 import mock
+from itertools import combinations
 
 from biseqt.sequence import Alphabet
 from biseqt.random import rand_seq, MutationProcess, rand_read
@@ -83,3 +84,26 @@ def test_mutation_process():
     T, tx = MutationProcess(A, subst_probs=0, **gap_kw).mutate(S)
     indels = sum(1 for op in tx if op in 'ID')
     assert indels > 0 and indels < 0.5 * len(S), 'gap probabilities work'
+
+
+def test_log_odds_scores():
+    A = Alphabet('ACGT')
+    # linear gap model
+    P = MutationProcess(A, subst_probs=.1, ge_prob=.1, go_prob=.1)
+    subst_scores, (go_score, ge_score) = P.log_odds_scores()
+    assert go_score == 0. and ge_score < 0
+    match_pos = [(i, i) for i in range(len(A))]
+    mismatch_pos = [(i, j) for i, j in combinations(range(len(A)), 2)]
+    assert all(subst_scores[i][j] < 0 for i, j in mismatch_pos)
+    assert all(subst_scores[i][j] > 0 for i, j in match_pos)
+
+    # affine gap model
+    P = MutationProcess(A, subst_probs=.1, ge_prob=.2, go_prob=.1)
+    subst_scores, (go_score, ge_score) = P.log_odds_scores()
+    assert ge_score < 0
+
+    # do mismatch scores go down if subst probs are decreased?
+    P = MutationProcess(A, subst_probs=.01, ge_prob=.2, go_prob=.1)
+    new_subst_scores, _ = P.log_odds_scores()
+    assert new_subst_scores[0][1] < subst_scores[0][1], \
+        'mismatch scores become more negative with lower mismatch probs'

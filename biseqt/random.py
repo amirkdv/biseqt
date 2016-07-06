@@ -25,6 +25,8 @@ mutant[0]: ATCTGGATCAT
 
 """
 import numpy as np
+from math import log
+from itertools import product
 
 from .sequence import Sequence, Alphabet, EditTranscript
 
@@ -111,10 +113,15 @@ class MutationProcess(object):
                 \\begin{pmatrix} 0.8 & 0.1 & 0.1 \\\\ 0.1 & 0.8 & 0.1 \\\\
                                  0.1 & 0.1 & 0.8 \\end{pmatrix}
 
-        go_prob (float): probability of a gap starting at any
-            position, default is 0 (use 1 for linear gap penalty).
-        ge_prob (float): The probability of an open gap to be extended (must
-            be at least as large as the gap open probability); default is 0.
+        go_prob (float): probability of a single indel following a subtitution,
+            a match, or an indel of a different kind (i.e from insertion to
+            deletion); default is 0 (cf. :attr:`ge_prob`).
+        ge_prob (float): The probability of an open gap to be extended by an
+            indel of the same kind; default is 0. For consistency, it is always
+            required that the gap-extend probability to be at least as large as
+            the gap-open probability with equality implying a linear model
+            which translates to a linear gap penalty scheme in
+            :func:`log_odds_scores`.
         insert_dist (list): the probability distribution for inserted
             content; default is None which is taken to mean uniform.
     """
@@ -230,3 +237,81 @@ class MutationProcess(object):
         for read, start in rand_read(seq, **kw):
             read, tx = self.mutate(read)
             yield read, start, tx
+
+    def log_odds_scores(self, null_hypothesis=None):
+        """Converts the mutation probabilities (substitution and gap) to
+        log-odds scores usable for sequence alignment (cf.
+        :class:`AlignScores`).
+
+        Keyword Args:
+            null_hypothesis(list): The probability distribution of letters to
+                use as the null hypothesis; default is None which is taken to
+                mean uniform distribution.
+
+        Returns:
+            tuple:
+                The substitution score matrix (a list of length equal to the
+                alphabet containing lists each of the same length containing
+                the substitution scores) and the gap scores as a tuple of
+                gap-open and gap-extend scores.
+
+        .. rubric:: Substitution scores
+
+        The scores are natural logs of odds ratios, namely the substitution
+        score of letter :math:`a_i` to letter :math:`a_j` is:
+
+        .. math::
+
+            S(a_i\\rightarrow a_j) = \log[(1-g)\Pr(a_j|a_i)] - \log[\Pr(a_j)]
+
+        where :math:`g` is the gap-extend
+        probability (see below), :math:`\Pr(a_j|a_i)` is the :attr:`substution
+        probability <subst_probs>`, and :math:`\Pr(a_j)` is the null hypothesis
+        distribution.
+
+        .. rubric:: Gap scores
+
+        Gap :attr:`open <go_prob>` and :attr:`extend <ge_prob>` probabilities
+        are converted to an affine gap penalty scheme (but reported values are
+        "scores" not penalties, i.e they are negative). The probabilitstic
+        model is as described in :func:`MutationProcess` (also cf.
+        :func:`mutate`).  Accordingly, given the gap-open and gap-extend
+        probabilities :math:`g_o, g_e`, the score of a gap of length :math:`n
+        \\ge 1` is
+
+        .. math::
+            \\log g_o + (n-1)\\log g_e =
+            \\log\\left( \\frac{g_o}{g_e} \\right) + n\\log g_e
+
+        where the first term in the RHS is the reported gap-score and the
+        coefficient of :math:`n` in the second term is the reported gap-extend
+        score.
+
+        Note:
+            * In the calculation of substitution scores the gap-open
+              probability is ignored and a linear model, with its sole
+              parameter equal to the gap-extend probability, is assumed. This
+              is because under an affine model where the probability of opening
+              a gap differs from that of extending a gap, the substitution
+              probabilities also become context-dependent (see where :math:`g`
+              appears in the formula above) which is not supported by
+              ``pwlib``.
+            * The above formula for gap scores is the technical reason why we
+              always demand that :math:`g_e\\ge g_o` so that the gap score is
+              not positive, with equality implying linear gap penalties (i.e
+              the gap-open *score* is 0 when the gap-open and gap-extend
+              *probabilities* are identical).
+        """
+        if null_hypothesis is None:
+            null_hypothesis = [1./len(self.alphabet)] * len(self.alphabet)
+        err = 'Zero probabilities are not allowed for score calculation'
+        assert all(x > 0 and x < 1 for x in null_hypothesis), err
+        assert all(x > 0 and x < 1 for y in self.subst_probs for x in y), err
+        assert self.ge_prob > 0 and self.go_prob > 0, err
+
+        subst_scores = [[0] * len(self.alphabet) for _ in self.alphabet]
+        for i, j in product(range(len(self.alphabet)), repeat=2):
+            subst_scores[i][j] = log(1 - self.ge_prob) + \
+                log(self.subst_probs[i][j]) - log(null_hypothesis[j])
+        gap_scores = log(self.go_prob) - log(self.ge_prob), log(self.ge_prob)
+        return subst_scores, gap_scores
