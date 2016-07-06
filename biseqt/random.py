@@ -1,5 +1,29 @@
 # -*- coding: utf-8 -*-
-"""A collection of tools for simulating random processes."""
+"""A collection of tools for simulating random processes.
+
+>>> from biseqt.sequence import Alphabet
+>>> from biseqt.random import rand_seq, MutationProcess
+>>> A = Alphabet('ACGT')
+>>> seq = rand_seq(A, 10)
+>>> seq
+Sequence(Alphabet(["A","C","G","T"]), contents=(1, 3, 3, 2, 2, 0, 0, 0, 0, 0))
+>>> print(seq)
+CTTGGAAAAA
+
+>>> P = MutationProcess(A, go_prob=.1, ge_prob=.2, subst_probs=.3)
+>>> mutant, transcript = P.mutate(seq)
+>>> mutant
+Sequence(Alphabet(["A","C","G","T"]), \
+contents=(0, 3, 1, 3, 2, 2, 0, 3, 1, 0, 3))
+>>> transcript
+EditTranscript("SMIMMMMSSMS")
+
+>>> from biseqt.io import pw_render_term
+>>> print(pw_render_term(transcript, seq, mutant, colored=False))
+origin[0]: CT-TGGAAAAA
+mutant[0]: ATCTGGATCAT
+
+"""
 import numpy as np
 
 from .sequence import Sequence, Alphabet, EditTranscript
@@ -67,11 +91,6 @@ def rand_read(seq, len_mean=None, len_sd=1, expected_coverage=None, num=None):
         read = seq[start:start + length]
         yield read, start
 
-
-# TODO implement no-mutation rand_read; wrap it in MutationProcess's
-# rand_read
-# TODO deal with sequencing fixture, all tools are ready now.
-# TODO does strand info go into NamedSequence?
 
 class MutationProcess(object):
     """
