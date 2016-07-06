@@ -1,10 +1,28 @@
 #!/usr/bin/env python
 
 from setuptools import setup
-from os import path
+from os import path, environ
 
 with open(path.join(path.abspath(path.dirname(__file__)), 'README.md')) as f:
     README = f.read()
+
+install_requires = [
+    'scipy',
+    'matplotlib',
+    'pysqlite',     # for kmer handling with sqlite3
+    'termcolor',    # for colored text output
+    'cffi',         # for the C component
+    'python-igraph',# for bindings to igraph
+    'cairocffi',    # for igraph plots
+]
+
+# so we don't install anything on readthedocs.io
+if environ.get('READTHEDOCS', None) == 'True':
+    install_requires = [
+        'alabaster', # our theme
+        'sphinxcontrib-wiki', # for breaking down doc pages to sections
+        'breathe',   # for doxygen integration, doxygen is executed in conf.py
+    ]
 
 setup(
     name='biseqt',
@@ -29,15 +47,7 @@ setup(
     setup_requires=[
         'numpy',        # for setup.py to work at all
     ],
-    install_requires=[
-        'scipy',
-        'matplotlib',
-        'pysqlite',     # for kmer handling with sqlite3
-        'termcolor',    # for colored text output
-        'cffi',         # for the C component
-        'python-igraph',# for bindings to igraph
-        'cairocffi',    # for igraph plots
-    ],
+    install_requires=install_requires,
     extras_require={
         'docs': [
             'sphinx',

@@ -28,9 +28,11 @@ if os.environ.get('READTHEDOCS', None) == 'True':
         def __getattr__(cls, name):
             return Mock()
 
-    # TODO clone sphinxcontrib-wiki and put it in python's path
+    MOCK_MODULES = ['cffi', 'igraph', 'numpy', 'scipy', 'sqlite3']
+    sys.modules.update((mod_name, Mock()) for mod_name in MOCK_MODULES)
+
     # Call doxygen
-    subprocess.call('cd .. && pip install breathe && doxygen docs/doxygen.conf', shell=True)
+    subprocess.call('cd .. && doxygen docs/doxygen.conf', shell=True)
     # Mock classes that require "arbitrary" binaries for building on rtfd.org
     MOCK_MODULES = ['cffi', 'igraph', 'numpy', 'scipy', 'pysqlite', 'termcolor']
     sys.modules.update((mod_name, Mock()) for mod_name in MOCK_MODULES)
@@ -38,8 +40,6 @@ if os.environ.get('READTHEDOCS', None) == 'True':
     # add theme hacks, cf. http://stackoverflow.com/a/32898444
     html_context = {
         'css_files': [
-            'https://media.readthedocs.org/css/sphinx_rtd_theme.css',
-            'https://media.readthedocs.org/css/readthedocs-doc-embed.css',
             '_static/theme_hacks.css',
         ],
       }

@@ -97,3 +97,10 @@ div.sphinxsidebarwrapper h3 {
 body {
   font-family: 'Libre Baskerville', serif !important;
 }
+
+/**
+ * Broken lower left menu on readthedocs.rog
+ */
+div.rst-versions.rst-badge {
+  display: none;
+}

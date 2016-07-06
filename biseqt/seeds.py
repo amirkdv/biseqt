@@ -25,7 +25,7 @@
 
 from collections import namedtuple
 from itertools import combinations
-from scipy.special import erfinv
+import scipy
 from math import sqrt, log
 
 from .kmers import KmerIndex
@@ -90,7 +90,7 @@ def band_radius(len0, len1, diag, gap_prob=None, sensitivity=None):
     max_alignment_length = min(len0 - diag, len1) + min(diag, 0)
     expected_alignment_length = (2. / (2 - gap_prob)) * max_alignment_length
     assert expected_alignment_length >= 0
-    radius = 2 * erfinv(sensitivity) * sqrt(
+    radius = 2 * scipy.special.erfinv(sensitivity) * sqrt(
         gap_prob * (1 - gap_prob) * expected_alignment_length
     )
     return max(1, int(radius))

@@ -2,8 +2,7 @@ import os.path
 from math import sqrt, ceil
 from matplotlib import pyplot as plt
 import igraph
-from scipy.stats import gaussian_kde
-from scipy.integrate import cumtrapz
+import scipy
 import numpy as np
 
 from .discovery import most_significant_shift
@@ -90,7 +89,7 @@ def plot_shift_consistency(path, index, true_overlaps, **kwargs):
 
     plt.clf()
 
-    density = gaussian_kde(errs)
+    density = scipy.stats.gaussian_kde(errs)
     density.covariance_factor = lambda : .2
     markratio = 0.9
     plt.plot(errs, density(errs), antialiased=True, color='g',
@@ -153,8 +152,8 @@ def plot_shift_pvalues(path, index, true_overlaps, num_bins=500, min_overlap=-1)
     #plt.hist(pos_pvalues, num_bins, 'g', cumulative=True, normed=True, histstyle='step')
     #plt.hist(neg_pvalues, num_bins, 'r', cumulative=True, normed=True, histstyle='step')
     pos_pvalues = sorted(pos_pvalues)
-    density = gaussian_kde(pos_pvalues)
-    cdf = np.insert(cumtrapz(density(pos_pvalues), pos_pvalues), 0, [0])
+    density = scipy.stats.gaussian_kde(pos_pvalues)
+    cdf = np.insert(scipy.integrate.cumtrapz(density(pos_pvalues), pos_pvalues), 0, [0])
     density.covariance_factor = lambda : .2
     markratio = 0.95
     plt.plot(pos_pvalues, cdf, antialiased=True, color='g', label='Overlapping reads (shaded mass = %.2f)' % markratio)
@@ -163,8 +162,8 @@ def plot_shift_pvalues(path, index, true_overlaps, num_bins=500, min_overlap=-1)
     plt.fill_between(pos_pvalues, cdf, color='g', alpha=0.2)
 
     neg_pvalues = sorted(neg_pvalues)
-    density = gaussian_kde(neg_pvalues)
-    cdf = np.insert(cumtrapz(density(neg_pvalues), neg_pvalues), 0, [0])
+    density = scipy.stats.gaussian_kde(neg_pvalues)
+    cdf = np.insert(scipy.integrate.cumtrapz(density(neg_pvalues), neg_pvalues), 0, [0])
     density.covariance_factor = lambda : .2
     markratio = 0.99
     plt.plot(neg_pvalues, cdf, antialiased=True, color='r', label='Non-overlapping reads (shaded mass = %.2f)' % markratio)

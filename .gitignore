@@ -20,5 +20,8 @@ docs/_build
 docs/_templates
 docs/doxygen
 
+latex/
+html/
+
 workspace/
 matplotlibrc

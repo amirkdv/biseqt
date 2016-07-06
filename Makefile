@@ -40,8 +40,9 @@ env:
 DOCS_EXCLUDE = biseqt/tests
 DOCS_OUT = _build
 # in RTD docs/doxygen is built by docs/conf.py
-docs: $(LIBDIR)/pwlib.so docs/docs.rst docs/doxygen
-	sphinx-apidoc -e -o $@ biseqt/ $(DOCS_EXCLUDE)
+docs: $(LIBDIR)/pwlib.so docs/doxygen
+	rm -rf docs/$(DOCS_OUT)
+	# sphinx-apidoc -e -o $@ biseqt/ $(DOCS_EXCLUDE)
 	python docs/cdocs.py $(LIBDIR)/pwlib.h > docs/biseqt.pwlib.rst
 	cd $@ && sphinx-build -b html . $(DOCS_OUT)
 	cd $@ && sphinx-build -b latex . $(DOCS_OUT)
@@ -51,12 +52,9 @@ docs/doxygen:
 	rm -rf $@
 	doxygen docs/doxygen.conf
 
-docs/docs.rst:
-	pandoc -f markdown -t rst -o $@ -i docs.md
-
 DOCKER_IMG=amirkdv/biseqt-base
 docker_build:
 	cat Dockerfile | docker build -t $(DOCKER_IMG) -
 
 
-.PHONY: clean tests *.pdf loc docs todo docs/docs.rst docs/doxygen flake8
+.PHONY: clean tests *.pdf loc docs todo docs/doxygen flake8
