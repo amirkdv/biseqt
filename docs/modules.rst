@@ -5,4 +5,4 @@ API Reference
    :maxdepth: 4
 
    biseqt
-   biseqt.pwlib.rst
+   biseqt.pwlib

@@ -49,6 +49,7 @@ docs: $(LIBDIR)/pwlib.so docs/docs.rst docs/doxygen
 	@echo "Find the docs at file://`readlink -f $@/$(DOCS_OUT)/index.html`"
 
 docs/doxygen:
+	rm -rf $@
 	doxygen docs/doxygen.conf
 
 docs/docs.rst:

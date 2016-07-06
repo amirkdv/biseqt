@@ -32,9 +32,9 @@ def generate(filename):
     ast = parse_file(filename, use_cpp=True, cpp_args=r'-Iutils/fake_libc_include')
     d = DocItemCollector()
     d.visit(ast)
-    enum = '\n.. doxygenenum:: '.join([''] + sorted(d.collected['enum']))
-    func = '\n.. doxygenfunction:: '.join([''] + sorted(d.collected['func']))
-    struct = '\n.. doxygenstruct:: '.join([''] + sorted(d.collected['struct']))
+    enum = '\n.. doxygenenum:: '.join([''] + d.collected['enum'])
+    func = '\n.. doxygenfunction:: '.join([''] + d.collected['func'])
+    struct = '\n.. doxygenstruct:: '.join([''] + d.collected['struct'])
 
     enum = '\n\nConstants\n---------\n' + enum
     func = '\n\n\nFunctions\n---------\n' + func

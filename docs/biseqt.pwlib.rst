@@ -5,32 +5,32 @@ Constants
 ---------
 
 .. doxygenenum:: alnmode
-.. doxygenenum:: banded_alntype
 .. doxygenenum:: std_alntype
+.. doxygenenum:: banded_alntype
 
 
 Data Structures
 ---------------
 
-.. doxygenstruct:: alnchoice
-.. doxygenstruct:: alnframe
-.. doxygenstruct:: alnprob
+.. doxygenstruct:: intpair
 .. doxygenstruct:: alnscores
+.. doxygenstruct:: alnframe
+.. doxygenstruct:: std_alnparams
 .. doxygenstruct:: banded_alnparams
+.. doxygenstruct:: alnprob
+.. doxygenstruct:: alnchoice
 .. doxygenstruct:: dpcell
 .. doxygenstruct:: dptable
-.. doxygenstruct:: intpair
-.. doxygenstruct:: seedext_params
-.. doxygenstruct:: std_alnparams
 .. doxygenstruct:: transcript
+.. doxygenstruct:: seedext_params
 
 
 Functions
 ---------
 
-.. doxygenfunction:: dptable_free
 .. doxygenfunction:: dptable_init
+.. doxygenfunction:: dptable_free
 .. doxygenfunction:: dptable_solve
 .. doxygenfunction:: dptable_traceback
-.. doxygenfunction:: extend
 .. doxygenfunction:: tx_seq_len
+.. doxygenfunction:: extend

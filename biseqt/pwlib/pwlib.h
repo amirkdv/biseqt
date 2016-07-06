@@ -1,19 +1,24 @@
-//FIXME docs
-//TODO The C component could be hacked using "define" to override any of the
-//functions in here. document it and expose the user's additional c|h files
-//to CLI so that they can be incorporated in the CLI.
-//cf. http://stackoverflow.com/a/11758777
+// TODO The C component could be hacked using "define" to override any of the
+// functions in here. document it and expose the user's additional c|h files.
+// cf. http://stackoverflow.com/a/11758777
+//
+// TODO _pw_internals.c requires better documentation
+//
+// TODO consider exposing the start and end positions of the alignment
+// instead of defining new types in code. This can simply be an array of
+// intpairs for either of start and end that are looped through in _alnchoice_B
+// and _std_find_optimal or _banded_find_optimal.
 
 /**
  * Any pair of integers.
  */
 typedef struct {
-  int i;
-  int j;
+  int i; /**< The "first" element. **/
+  int j; /**< The "second" element. **/
 } intpair;
 
 /**
- * Indicates which of the pairwise alignment algorithms should be used, cf.
+ * Indicates which of the pairwise alignment algorithms should be used, see
  * ::dptable.  There are two available variations of the standard dynamic
  * programming algorithm.
  *
@@ -83,8 +88,8 @@ typedef struct {
 typedef struct {
   int* S; /**< The "from" sequence as an array of integers.*/
   int* T; /**< The "to" sequence as an array of integers.*/
-  intpair S_range; /** Vertical span of the frame in [min, max) format. */
-  intpair T_range; /** Horizontal span of the frame in [min, max) format. */
+  intpair S_range; /**< Vertical span of the frame in [min, max) format. */
+  intpair T_range; /**< Horizontal span of the frame in [min, max) format. */
 } alnframe;
 
 /**
@@ -105,12 +110,17 @@ typedef struct {
   int dmax; /**< The lower diagonal bounding the band. */
 } banded_alnparams;
 
+/**
+ * The definition of a pairwise alignment problem the contents of which
+ * is enough to define and solve an alignment.
+ */
 typedef struct {
   alnframe *frame; /**< The skeleton of the DP table. */
   alnscores *scores; /**< The parameters defining an optimal solution.*/
   int max_new_mins; /**< Maximum number of times a new minimum score is
-    tolerated before alignment is aborted (only operative if positive). **/
-  alnmode mode; /**< Indicates which of standard or overlap alignment this is. */
+    tolerated before alignment is aborted (only operative if positive). Not
+    to be confused with ::seedext_params.max_new_mins. **/
+  alnmode mode; /**< Indicates which of standard or banded alignment this is. */
   union {
     std_alnparams* std_params; /**< The parameters for standard algorithms. */
     banded_alnparams* banded_params; /**< The parameters for banded algorithms. */
@@ -118,17 +128,17 @@ typedef struct {
 } alnprob;
 
 /**
- * The fundamental unit of solving standard pairwise alignment problems. Each
+ * The fundamental unit of solving pairwise alignment problems. Each
  * cell of the dynamic programming table corrsponds to a subproblem of the
  * overall alignment problem. For each subproblem, a "choice" corresponds to a
  * single edit operation (which applies to the very last positions of the
- * subproblem) and a "base" which is a choice for the cell to which the op
- * points (the "base" is `NULL` for the choice of starting an alignment at a
+ * subproblem) and a "base" which is a choice residing at the cell to which the
+ * op points (the "base" is `NULL` for the choice of starting an alignment at a
  * given position).
  *
  * Each choice can thus be traced all the way back via the chain of "base"
- * pointers to the beginning of the alignment it corresponds to. It is the total
- * score of this alignment that is stored at each cell for each choice.
+ * pointers to the beginning of the alignment to which it belongs. It is the
+ * total score of this alignment that is stored at each cell for each choice.
  *
  * This architecture allows us to easily capture path-dependent scoring schemes,
  * for example, the affine gap penalty.
@@ -181,13 +191,19 @@ typedef struct {
     that defines the alignment.*/
 } transcript;
 
-// TODO clarify the distinction between this max_new_min and the one in alnprob
+/**
+ * Groups together seed extension parameters.
+ */
 typedef struct {
-  alnscores* scores; /** Substitution and gap scores. **/
+  alnscores* scores; /**< Substitution and gap scores. **/
   int window; /**< The width of the rolling window of alignment. **/
   double min_score; /**< The minimum required score for an overlap to be reported. **/
   int max_new_mins; /**< Maximum number of times a new minimum score is
-    tolerated before alignment is aborted. **/
+    tolerated before alignment is aborted. This differs from
+    ::alnprob.max_new_mins in that this parameter applies to the number of
+    times the score over an entire rolling frame reaches new minima and not
+    single edit operations.
+    **/
 } seedext_params;
 
 int dptable_init(dptable* T);

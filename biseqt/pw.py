@@ -1,21 +1,7 @@
-"""Provides various pairwise sequence alignment algorithms. The following class
-constants are inherited from ``libalign`` and are used to indicate the type of
-alignment problem:
+# -*- coding: utf-8 -*-
+"""This modules provides various pairwise sequence alignment algorithms
+implemented in `pwlib <biseqt.pwlib.html>`_."""
 
-- ``GLOBAL``: Global alignment problem, i.e Needeman-Wunsch.
-- ``LOCAL``: Local alignment problem, i.e Smith-Waterman.
-- ``OVERLAP``: Find a suffix-prefix alignment in any direction; this includes
-  alignments where a prefix of either sequence matches a suffix of the other
-  and alignments where one sequence is a substring of the other.
-- ``START_ANCHORED``: Find a local alignment demanding that it begins at the
-  start of frame of both sequences.
-- ``END_ANCHORED``: Find a local alignment demanding that it ends at the end
-  of frame of both sequences.
-- ``START_ANCHORED_OVERLAP``: Find a suffix-prefix alignment demanding that it
-  begins at the start of frame of both sequences.
-- ``END_ANCHORED_OVERLAP``:  Find a suffix-prefix alignment demanding that it
-  ends at the end of frame of both sequences.
-"""
 from math import log
 import re
 import sys
@@ -28,20 +14,42 @@ except ImportError:
 
 # alignment modes
 STD_MODE = lib.STD_MODE
+"""Standard alignment type; time and memory complexity is quadratic in sequence
+lengths."""
 BANDED_MODE = lib.BANDED_MODE
+"""Banded alignment type; time and memory complexity is linear in sequence
+lengths with a constant proportional to band width. This mode is incompatible
+with local alignments."""
 
 # standard alignment types:
 GLOBAL = lib.GLOBAL
+"""Standard global alignment problem, i.e Needeman-Wunsch."""
 LOCAL = lib.LOCAL
+"""Standard local alignment problem, i.e Smith-Waterman."""
 START_ANCHORED = lib.START_ANCHORED
+"""Standard local alignment demanding that it begins at the start of frame of
+both sequences."""
 END_ANCHORED = lib.END_ANCHORED
+"""Standard local alignment demanding that it ends at the end of frame of both
+sequences."""
 OVERLAP = lib.OVERLAP
+"""Standard suffix-prefix alignment in any direction; this includes alignments
+where a prefix of either sequence matches a suffix of the other and alignments
+where one sequence is a substring of the other."""
 START_ANCHORED_OVERLAP = lib.START_ANCHORED_OVERLAP
+"""Standard suffix-prefix alignment demanding that it begins at the start of
+frame of both sequences."""
 END_ANCHORED_OVERLAP = lib.END_ANCHORED_OVERLAP
+"""Standard suffix-prefix alignment demanding that it ends at the end of frame
+of both sequences."""
 
 # banded alignment types:
 B_GLOBAL = lib.GLOBAL
+"""Banded global alignment problem; may not be well-defined (end points of the
+table may not lie in band)."""
 B_OVERLAP = lib.B_OVERLAP
+"""Banded suffix-prefix alignment problem in either direction including
+substring alignments."""
 
 def hp_tokenize(string):
     """Generates (yields) homopolymeric stretches of the given sequences in
@@ -99,12 +107,12 @@ class AlignScores(CffiObject):
         :math:`a_i` to letter :math:`a_j` and :math:`g` is the gap probability.
 
         Args:
-            alphabet(seq.Alphabet): the underlying alphabet, needed since
+            alphabet(sequence.Alphabet): the underlying alphabet, needed since
                 probabilities are in order of letter index in alphabet.
 
         Keyword Args:
             subst_probs(List[List[float]]): As in
-                :func:`biseqt.seq.Sequence.mutate`.
+                :func:`biseqt.sequence.Sequence.mutate`.
             letter_dist(Optional[List[float]]): Probability distributions of
                 each letter of the alphabet in the null (random) hypothesis,
                 default is uniform.
@@ -185,8 +193,8 @@ class AlignScores(CffiObject):
             C.score('ACCTT', 'AGCTTA', 'MSMMMD')
 
         Args:
-            S (seq.Sequence): The "from" sequence of alignment.
-            T (seq.Sequence): The "to" sequence of alignment.
+            S (sequence.Sequence): The "from" sequence of alignment.
+            T (sequence.Sequence): The "to" sequence of alignment.
             opseq  (str): The edit transcript of the form ``(M|S|I|D)+``.
 
         Keyword Args:
@@ -218,8 +226,8 @@ class AlignScores(CffiObject):
 class AlignFrame(CffiObject):
     """FIXME
     Args:
-        S (seq.Sequence): The "from" sequence.
-        T (seq.Sequence): The "to" sequence.
+        S (sequence.Sequence): The "from" sequence.
+        T (sequence.Sequence): The "to" sequence.
 
     Keyword Args:
         S_min_idx (int): Starting position of frame for ``S``, default is 0.
@@ -231,7 +239,7 @@ class AlignFrame(CffiObject):
 
     """
     def __init__(self, S, T, **kw):
-        assert(isinstance(S, seq.Sequence) and isinstance(T, seq.Sequence))
+        assert(isinstance(S, sequence.Sequence) and isinstance(T, sequence.Sequence))
         S_min_idx = kw.pop('S_min_idx', 0)
         T_min_idx = kw.pop('T_min_idx', 0)
         S_max_idx = kw.pop('S_max_idx', S.length)
@@ -253,9 +261,9 @@ class AlignTable(CffiObject):
     ``alnprob`` or ``banded_alnprob`` is contained in this class as well.
     Example::
 
-        A = seq.Alphabet('ACGT')
+        A = sequence.Alphabet('ACGT')
         S, T = A.randseq(100), A.randseq(100)
-        C = biseqt.AlignScores(
+        C = pw.AlignScores(
             ... # snip
         )
         with biseqt.AlignTable(S, T, C, align_type=biseqt.GLOBAL) as P:
@@ -442,8 +450,8 @@ class Transcript(CffiObject):
         """Pretty prints a transcript to f.
 
         Args:
-            S (seq.Sequence): The "from" sequence.
-            T (seq.Sequence): The "to" sequence.
+            S (sequence.Sequence): The "from" sequence.
+            T (sequence.Sequence): The "to" sequence.
             f (file): Open file handle to write the output to; for standard
                 output use ``sys.stdout``.
             width (Optional[int]): Terminal width used for wrapping;
@@ -536,8 +544,8 @@ class Segment(object):
     two sequences.
 
     Attributes:
-        S_id (int): The id of the "from" sequence as found in ``seq``.
-        T_id (int): The id of the "to" sequence as found in ``seq``.
+        S_id (int): The id of the "from" sequence.
+        T_id (int): The id of the "to" sequence.
         tx (biseqt.pw.Transcript): The alignment transctipt.
     """
     def __init__(self, S_id, T_id, tx):

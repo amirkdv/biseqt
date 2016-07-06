@@ -115,7 +115,7 @@ int extend_1d_once(transcript* tx, alnframe* frame, seedext_params* params, int 
  * of the sequences.
  *
  * @param res Extended segment to be populated here.
- * @param seg The original segment.
+ * @param tx The original segment.
  * @param frame The frame defining the alignment of the original sequences.
  * @param params Seed extension parameters.
  * @param forward Either of 0 or 1 indicating the direction of extension.

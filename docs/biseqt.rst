@@ -1,22 +1,18 @@
 biseqt package
 ==============
 
-Subpackages
------------
-
-.. toctree::
-
-    biseqt.overlap
-
 Submodules
 ----------
 
 .. toctree::
 
-   biseqt.mapping
+   biseqt.sequence
+   biseqt.io
+   biseqt.random
    biseqt.pw
-   biseqt.seq
-   biseqt.words
+   biseqt.database
+   biseqt.kmers
+   biseqt.seeds
 
 Module contents
 ---------------
