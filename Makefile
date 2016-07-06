@@ -15,12 +15,11 @@ clean:
 	rm -f core biseqt/pwlib/pwlib.so
 	rm -rf docs/biseqt*.rst docs/_build docs/doxygen
 
-CLEANED=biseqt/__init__.py biseqt/sequence.py tests/test_sequence.py \
-	biseqt/io.py tests/test_io.py biseqt/random.py tests/test_random.py \
-	biseqt/database.py tests/test_database.py biseqt/kmers.py tests/test_kmers.py \
-	biseqt/seeds.py tests/test_seeds.py
-tests: $(LIBDIR)/pwlib.so
-	flake8 $(CLEANED)
+FLAKE8_EXCLUDE = biseqt/overlap,biseqt/mapping.py
+flake8:
+	flake8 biseqt tests --exclude=$(FLAKE8_EXCLUDE)
+
+tests: $(LIBDIR)/pwlib.so flake8
 	cd tests && PYTHONPATH=.. py.test --cov biseqt --capture=no --verbose
 
 loc:
@@ -60,4 +59,4 @@ docker_build:
 	cat Dockerfile | docker build -t $(DOCKER_IMG) -
 
 
-.PHONY: clean tests *.pdf loc docs todo docs/docs.rst docs/doxygen
+.PHONY: clean tests *.pdf loc docs todo docs/docs.rst docs/doxygen flake8
