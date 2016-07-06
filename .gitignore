@@ -19,10 +19,6 @@ env/
 docs/_build
 docs/_templates
 docs/doxygen
-latex/
-html/
 
-leishmania/
-plots/
-
-lastz-distrib-*
+workspace/
+matplotlibrc
