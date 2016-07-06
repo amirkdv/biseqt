@@ -250,11 +250,11 @@ alignment* dptable_traceback(dptable* T, intpair end);
  * Given an alignment with allocated DP table, solves the alignment problem (i.e
  * populates the alignment table) and returns the optimal ending point for the
  * alignment.  The optimal score and edit transcript can then be obtained by
- * using ::dptable_traceback. Half of the constraints imposed by an alignment
+ * using `dptable_traceback`. Half of the constraints imposed by an alignment
  * type are implemented here where we decide what positions on the table can be
  * starting positions of alignments. The other half of the constraints
  * concerning the ending position of the alignment on the table are enforced
- * in ::dptable_traceback.
+ * in `dptable_traceback`.
  *
  * @param T The dynamic programming table.
  * @return The optimal cell for the alignment to end at or {-1,-1} if error.
