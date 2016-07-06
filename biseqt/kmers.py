@@ -1,5 +1,19 @@
 # -*- coding: utf-8 -*-
-"""This module provides tools for k-mer analysis. TODO"""
+"""This module provides tools for k-mer analysis.
+
+>>> from biseqt.database import DB
+>>> from biseqt.sequence import Alphabet
+>>> from biseqt.kmers import KmerIndex
+>>> A = Alphabet('ACGT')
+>>> db = DB('example.db', A)
+>>> kmer_index = KmerIndex(db)
+>>> db.initialize()
+>>> with open('example.fa') as f:
+...     db.load_fasta(f)
+>>> kmer_index.kmers()  # yields (kmer, hits)
+>>> kmer_index.score_kmers()  # repetitive kmers get higher scores
+>>> kmer_index.kmers(max_score=10)  # exclude high scoring kmers
+"""
 
 from math import sqrt, erf, log
 import struct
