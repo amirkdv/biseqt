@@ -4,6 +4,9 @@
  Documentation for ``biseqt``
 ===============================
 
+.. wikipage:: overview
+    :title: Overview
+
 .. wikipage:: dev
     :title: Developer Notes
 
@@ -13,5 +16,4 @@
   docs
   API Reference <modules>
 
-``BiSeqt`` is a biological sequence alignment tool. Use the left pane to
-navigate the `docs <docs.html>`__.
+``BiSeqt`` is a biological sequence analysis tool.

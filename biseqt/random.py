@@ -1,28 +1,30 @@
 # -*- coding: utf-8 -*-
-"""A collection of tools for simulating random processes.
+"""
+.. wikisection:: overview
+    :title: Random Processes
 
->>> from biseqt.sequence import Alphabet
->>> from biseqt.random import rand_seq, MutationProcess
->>> A = Alphabet('ACGT')
->>> seq = rand_seq(A, 10)
->>> seq
-Sequence(Alphabet(["A","C","G","T"]), contents=(1, 3, 3, 2, 2, 0, 0, 0, 0, 0))
->>> print(seq)
-CTTGGAAAAA
+    The :mod:`biseqt.random` module provides a collection of tools for
+    simulating random processes.
 
->>> P = MutationProcess(A, go_prob=.1, ge_prob=.2, subst_probs=.3)
->>> mutant, transcript = P.mutate(seq)
->>> mutant
-Sequence(Alphabet(["A","C","G","T"]), \
-contents=(0, 3, 1, 3, 2, 2, 0, 3, 1, 0, 3))
->>> transcript
-EditTranscript("SMIMMMMSSMS")
+    >>> from biseqt.sequence import Alphabet
+    >>> from biseqt.random import rand_seq, MutationProcess
+    >>> A = Alphabet('ACGT')
+    >>> seq = rand_seq(A, 10)
+    >>> seq
+    Sequence(Alphabet(["A","C","G","T"]), \
+    contents=(1, 3, 3, 2, 2, 0, 0, 0, 0, 0))
+    >>> print(seq)
+    CTTGGAAAAA
 
->>> from biseqt.io import pw_render_term
->>> print(pw_render_term(transcript, seq, mutant, colored=False))
-origin[0]: CT-TGGAAAAA
-mutant[0]: ATCTGGATCAT
+    >>> P = MutationProcess(A, go_prob=.1, ge_prob=.2, subst_probs=.3)
+    >>> mutant, transcript = P.mutate(seq)
+    >>> transcript
+    EditTranscript("SMIMMMMSSMS")
 
+    >>> from biseqt.io import pw_render_term
+    >>> print(pw_render_term(transcript, seq, mutant, colored=False))
+    origin[0]: CT-TGGAAAAA
+    mutant[0]: ATCTGGATCAT
 """
 import numpy as np
 from math import log

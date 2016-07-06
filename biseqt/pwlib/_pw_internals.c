@@ -5,8 +5,6 @@
 
 #include "pwlib.h"
 
-//FIXME docs
-//
 int _std_table_init_dims(dptable* T) {
   int xmax = T->prob->frame->S_range.j - T->prob->frame->S_range.i,
       ymax = T->prob->frame->T_range.j - T->prob->frame->T_range.i;
