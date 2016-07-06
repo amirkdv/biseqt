@@ -189,7 +189,7 @@ typedef struct {
     corresponding ::alnscores.*/
   char* opseq; /**< The sequence of edit operations, as in ::alnchoice
     that defines the alignment.*/
-} transcript;
+} alignment;
 
 /**
  * Groups together seed extension parameters.
@@ -206,14 +206,102 @@ typedef struct {
     **/
 } seedext_params;
 
+/**
+ * Given a ::dptable containing the alignment problem definition and the mode of
+ * alignment, the table's dimensions are calculated and the appropriate amount of
+ * memory is allocated with initialized ::dpcell entries.
+ *
+ * In banded mode the region of interest, which is not rectangular in the
+ * default (x,y) coordinate system, is mapped to an alternative coordinate
+ * system (refered to as (d,a)-coordinates).
+ *
+ * @param T
+ *    Table to be initialized. The only fields that must be
+ *    already populated are the alignment mode and the problem definition.
+ *
+ * @return 0 if successful and -1 if an error occurs.
+ */
 int dptable_init(dptable* T);
+
+/**
+ * Frees the allocated memory for the cells of a given ::dptable.
+ *
+ * @param T the dynamic programming table containing all the info.
+ */
 void dptable_free(dptable* T);
+
+/**
+ * Traces back *an* alignment (and not all alignments with identical scores)
+ * from a given cell all the way back to a cell with a `NULL` base (i.e an
+ * alignment start cell).
+ *
+ * @param T The *solved* dynamic programming table.
+ * @param end The desired ending point of alignment which becomes the starting
+ *    point of traceback.
+ *
+ * @note
+ *    Finding more than one optimal alignment is a nontrivial search problem,
+ *    and requires some sort of global state keeping to avoid convoluted
+ *    recursions. I couldn't get it right in the first go; leave for later.
+ */
+alignment* dptable_traceback(dptable* T, intpair end);
+
+/**
+ * Given an alignment with allocated DP table, solves the alignment problem (i.e
+ * populates the alignment table) and returns the optimal ending point for the
+ * alignment.  The optimal score and edit transcript can then be obtained by
+ * using ::dptable_traceback. Half of the constraints imposed by an alignment
+ * type are implemented here where we decide what positions on the table can be
+ * starting positions of alignments. The other half of the constraints
+ * concerning the ending position of the alignment on the table are enforced
+ * in ::dptable_traceback.
+ *
+ * @param T The dynamic programming table.
+ * @return The optimal cell for the alignment to end at or {-1,-1} if error.
+ */
 intpair dptable_solve(dptable* T);
-transcript* dptable_traceback(dptable* T, intpair end);
 
-int tx_seq_len(transcript* tx, char on);
-transcript* extend(transcript** txs, int num_txs, alnframe* frame, seedext_params* params);
+/**
+ * Given an array of segments tries to extend all in both directions and returns
+ * a fully extended segment as soon as it finds one.
+ *
+ * @param alns The original segments.
+ * @param num_alns The number of provided segments.
+ * @param frame The frame defining the alignment of the original sequences.
+ * @param params Seed extension parameters.
+ *
+ * @return 0 if the seed successfully extends to the boundary of either of
+ *   the sequences and -1 otherwise.
+ */
+alignment* extend(alignment** alns, int num_alns, alnframe* frame, seedext_params* params);
 
+/**
+ * Given a segment fully extends it in one direction. A fully extended segment
+ * (in one direction) is one that hits the boundary (beginning or end) of either
+ * of the sequences.
+ *
+ * @param res Extended segment to be populated here.
+ * @param aln The original segment.
+ * @param frame The frame defining the alignment of the original sequences.
+ * @param params Seed extension parameters.
+ * @param forward Either of 0 or 1 indicating the direction of extension.
+ *
+ * @return 0 if the seed successfully extends to the boundary of either of
+ *   the sequences and -1 otherwise.
+ */
+int extend_1d(alignment* res, alignment* aln, alnframe* frame, seedext_params* params, int forward);
+
+/**
+ * Given an alignment, extends it in the given direction by one window.
+ *
+ * @param aln The alignment to be extended.
+ * @param frame The frame defining the alignment of the original sequences.
+ * @param params Seed extension parameters.
+ * @param forward Either of 0 or 1 indicating the direction of extension.
+ *
+ * @return -1 if an error occurs and 0 otherwise.
+ */
+int extend_1d_once(alignment* aln, alnframe* frame, seedext_params* params, int forward);
 // --------------------- Internals ---------------------
 int _alnchoice_B(dptable *T, int x, int y, alnchoice* choice);
 int _alnchoice_M(dptable *T, int x, int y, alnchoice* choice);

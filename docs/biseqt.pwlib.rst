@@ -21,7 +21,7 @@ Data Structures
 .. doxygenstruct:: alnchoice
 .. doxygenstruct:: dpcell
 .. doxygenstruct:: dptable
-.. doxygenstruct:: transcript
+.. doxygenstruct:: alignment
 .. doxygenstruct:: seedext_params
 
 
@@ -30,7 +30,8 @@ Functions
 
 .. doxygenfunction:: dptable_init
 .. doxygenfunction:: dptable_free
-.. doxygenfunction:: dptable_solve
 .. doxygenfunction:: dptable_traceback
-.. doxygenfunction:: tx_seq_len
+.. doxygenfunction:: dptable_solve
 .. doxygenfunction:: extend
+.. doxygenfunction:: extend_1d
+.. doxygenfunction:: extend_1d_once

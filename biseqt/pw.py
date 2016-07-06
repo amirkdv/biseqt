@@ -256,21 +256,6 @@ class AlignTable(CffiObject):
     """Wraps the C struct ``dptable`` and provides a context manager to
     solve and potentially traceback an alignment problem. The corresponding
     ``alnprob`` or ``banded_alnprob`` is contained in this class as well.
-    Example::
-
-        A = sequence.Alphabet('ACGT')
-        S, T = A.randseq(100), A.randseq(100)
-        C = pw.AlignScores(
-            ... # snip
-        )
-        with biseqt.AlignTable(S, T, C, align_type=biseqt.GLOBAL) as P:
-            score = P.solve()
-            transcript = P.traceback()
-
-        transcript.pretty_print(S, T, sys.stdout)
-
-    All arguments (keyword and not) become attributes with identical names.
-
     Args:
         frame (pw.AlignFrame): Alignment frame.
         scores (pw.AlignScores): Alignment parameters.
@@ -358,45 +343,39 @@ class AlignTable(CffiObject):
         """Traces back any optimal alignment found via ``solve()``.
 
         Returns:
-            biseqt.pw.Transcript:
-                The transcript corresponding to the alignment.
+            Alignment
         """
         if self.opt is None:
             return None
 
-        transcript = lib.dptable_traceback(self.c_obj, self.opt)
-        if transcript == ffi.NULL:
+        alignment = lib.dptable_traceback(self.c_obj, self.opt)
+        if alignment == ffi.NULL:
             return None
-        return Transcript(c_obj=transcript)
+        return Alignment(c_obj=alignment)
 
 
-class Transcript(CffiObject):
-    """Wrapps alignment transcripts represented as C `transcript*`.
+class Alignment(CffiObject):
+    """Wraps alignment solutions represented as C ``alignment*``.
     All keyword arguments become attributes with identical names.
 
     Keyword Args:
         S_idx (int): The starting position in the "from" sequence.
         T_idx (int): The starting position in the "to" sequence.
         score (float): The score of the alignment.
-        opseq (str): The sequence of edit "ops" defined as follows where
-            insertion/deletions are meant to mean *from S to T*::
-
-                M match
-                S substitution
-                I insert
-                D delete
-
-        c_obj (Optional[cffi.cdata]): If provided all other arguments are
+        opseq (str): The sequence of edit "ops", see :class:`EditTranscript
+            <biseqt.sequence.EditTranscript>` for format.
+        c_obj (cffi.cdata): If provided all other arguments are
             ignored and instead this is used as the underlying C
-            ``transcript *``.
+            ``alignment *``.
     """
+    # FIXME make opseq our EditTranscript?
     def __init__(self, **kw):
         if 'c_obj' in kw:
             self.c_obj = kw['c_obj']
             self.c_opseq = self.c_obj.opseq
         else:
             self.c_opseq = ffi.new('char[]', kw['opseq'])
-            self.c_obj = ffi.new('transcript*', {
+            self.c_obj = ffi.new('alignment*', {
                 'S_idx': kw['S_idx'],
                 'T_idx': kw['T_idx'],
                 'score': kw['score'],
@@ -408,24 +387,24 @@ class Transcript(CffiObject):
             length = lib.strlen(self.c_opseq)
             return ''.join([self.c_opseq[i] for i in range(length)])
         else:
-            return super(Transcript, self).__getattr__(name)
+            return super(Alignment, self).__getattr__(name)
 
     def __str__(self):
         return '(%d,%d),%.2f:%s' \
             % (self.S_idx, self.T_idx, self.score, self.opseq)
 
     def __repr__(self):
-        return 'Transcript(S_idx=%d, T_idx=%d, score=%.2f, opseq="%s")' \
+        return 'Alignment(S_idx=%d, T_idx=%d, score=%.2f, opseq="%s")' \
             % (self.S_idx, self.T_idx, self.score, self.opseq)
 
 
-def rasterplot(path, transcript, S_name='S', T_name='T', fullview=False):
+def rasterplot(path, alignment, S_name='S', T_name='T', fullview=False):
     if 'plt' not in globals():
         raise ImportError('matplotlib is required for rasterplots')
-    ts, ss, cs = [transcript.T_idx], [transcript.S_idx], ['k']
+    ts, ss, cs = [alignment.T_idx], [alignment.S_idx], ['k']
     nums = {'M': 0, 'S': 0, '-': 0}
     colormap = {'M': 'g', 'S': 'y', '-': 'r'}
-    for op in transcript.opseq:
+    for op in alignment.opseq:
         ts += [ts[-1] + 1 if op in 'MSI' else ts[-1]]
         ss += [ss[-1] + 1 if op in 'MSD' else ss[-1]]
         cs += colormap[op if op in 'MS' else '-']
@@ -458,7 +437,7 @@ def rasterplot(path, transcript, S_name='S', T_name='T', fullview=False):
     ind = [width * i * 1.3 for i in range(3)]
     inset.bar(
         ind,
-        [nums[i]*1./len(transcript.opseq) for i in 'MS-'],
+        [nums[i]*1./len(alignment.opseq) for i in 'MS-'],
         width,
         color=[colormap[i] for i in 'MS-']
     )

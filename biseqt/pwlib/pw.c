@@ -7,23 +7,6 @@
 
 #include "pwlib.h"
 
-//FIXME docs
-
-/**
- * Given a ::dptable containing the alignment problem definition and the mode of
- * alignment, the table's dimensions are calculated and the appropriate amount of
- * memory is allocated with initialized ::dpcell entries.
- *
- * In banded mode the region of interest, which is not rectangular in the
- * default (x,y) coordinate system, is mapped to an alternative coordinate
- * system (refered to as (d,a)-coordinates).
- *
- * @param T
- *    Table to be initialized. The only fields that must be
- *    already populated are the alignment mode and the problem definition.
- *
- * @return 0 if successful and -1 if an error occurs.
- */
 int dptable_init(dptable* T) {
   switch(T->prob->mode) {
     case STD_MODE:
@@ -42,11 +25,6 @@ int dptable_init(dptable* T) {
   return _table_init_cells(T);
 }
 
-/**
- * Frees the allocated memory for the cells of a given ::dptable.
- *
- * @param T the dynamic programming table containing all the info.
- */
 void dptable_free(dptable* T) {
   if (T == NULL) {
     return;
@@ -66,18 +44,6 @@ void dptable_free(dptable* T) {
   free(T->cells);
 }
 
-/**
- * Given an alignment with allocated DP table, solves the alignment problem (i.e
- * populates the alignment table) and returns the optimal ending point for the
- * alignment.  The optimal score and transcript can then be obtained by using
- * `traceback`. Half of the constraints imposed by an alignment type are
- * implemented here where we decide what positions on the table can be starting
- * positions of alignments. The other half of the constraints concerning the
- * ending position of the alignment on the table is encapsulated in `traceback`.
- *
- * @param T The dynamic programming table.
- * @return The optimal cell for the alignment to end at or {-1,-1} if error.
- */
 intpair dptable_solve(dptable* T) {
   int num_choices, num_max_scores;
   intpair cellpos; // dpcell position in the table, could be either xy/da
@@ -154,24 +120,10 @@ intpair dptable_solve(dptable* T) {
   return (T->prob->mode == STD_MODE ? _std_find_optimal(T) : _banded_find_optimal(T));
 }
 
-/**
- * Traces back *an* alignment (and not all alignments with identical scores)
- * from a given cell all the way back to a cell with a `NULL` base (i.e an
- * alignment start cell).
- *
- * @param T The *solved* dynamic programming table.
- * @param end The desired ending point of alignment which becomes the starting
- *    point of traceback.
- *
- * @note
- *    Finding more than one optimal alignment is a nontrivial search problem,
- *    and requires some sort of global state keeping to avoid convoluted
- *    recursions. I couldn't get it right in the first go; leave for later.
- */
-transcript* dptable_traceback(dptable* T, intpair end) {
+alignment* dptable_traceback(dptable* T, intpair end) {
   char *opseq;
-  transcript* tx = malloc(sizeof(transcript));
-  if (tx == NULL) {
+  alignment* aln = malloc(sizeof(alignment));
+  if (aln == NULL) {
     _panick("Failed to allocate memory.");
   }
   intpair xy = _xy_from_cellpos(T->prob, end.i, end.j);
@@ -201,9 +153,9 @@ transcript* dptable_traceback(dptable* T, intpair end) {
   // strncpy does not null terminate:
   opseq[len] = '\0';
 
-  tx->S_idx = xy.i + T->prob->frame->S_range.i;
-  tx->T_idx = xy.j + T->prob->frame->T_range.i;
-  tx->score=T->cells[end.i][end.j].choices[0].score;
-  tx->opseq=opseq;
-  return tx;
+  aln->S_idx = xy.i + T->prob->frame->S_range.i;
+  aln->T_idx = xy.j + T->prob->frame->T_range.i;
+  aln->score=T->cells[end.i][end.j].choices[0].score;
+  aln->opseq=opseq;
+  return aln;
 }
