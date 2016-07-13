@@ -86,7 +86,8 @@ def test_index_kmers():
 
         S = A.parse('ATGCA', name='foo')
         S_id = db.insert(S).id
-        assert kmer_index.num_kmers() == 3
+        assert next(kmer_index.scanned_sequences()) == (S_id, len(S))
+        assert kmer_index.num_kmers() == len(S) - wordlen + 1
 
         T = A.parse('ATGCC', name='bar')
         T_id = db.insert(T).id
