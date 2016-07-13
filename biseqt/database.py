@@ -26,6 +26,112 @@
     Record(id=1, content_id=u'e690f18fc98d4afcba4b8518b88f4d0387a17380', \
     source_file=u'example.fa', source_pos=0, attrs={u'name': u'S'})
     AATCGG
+
+.. wikisection:: dev
+    :title: Insert-or-Append Queries
+
+    You may need to perform an SQL query which either inserts a new record or
+    appends the given value to some column in case of conflict. This is achived
+    by using one of SQLite's conflict resolution mechanisms_ ``ON CONFLICT
+    REPLACE`` or in short ``OR REPLACE``. For instance, consider a table::
+
+        id | field
+        1  | foo
+
+    where we wish ``INSERT INTO ... (id, field) VALUES (2, 'bar')`` to give::
+
+        id | field
+        1  | foo
+        2  | bar
+
+    and ``INSERT INTO ... (id, field) VALUES (1, 'bar')`` to give::
+
+        id | field
+        1  | foo,bar
+
+    This can be implemented by using the following query format:
+
+    .. code-block:: sql
+
+        INSERT INTO ... (id, field) VALUES
+        SELECT ?, IFNULL(SELECT field FROM ... WHERE id = ?, "") || ?
+
+    invoked like this:
+
+    .. code-block:: python
+
+        id, field = ...
+        cursor = sqlite3.connect(...).cursor()
+        cursor.execute(query, (id, id, ',' + field))
+
+    Note that this pattern only works if the ``id`` column has a unique
+    constraint on it. Otherwise, no conflict will arise to be resolved and new
+    values will appear in new records instead of being appended to old ones.
+
+    .. _mechanisms: https://www.sqlite.org/lang_conflict.html
+
+.. wikisection:: dev
+    :title: SQLite Performance Tuning
+
+    Tuning strategy naturally depends on the balance between the volume of
+    insert vs. select queries and the concurrency requirements. Here we will
+    assume:
+
+    * The volume of inserts is much larger than selects,
+    * Application logic can be trusted with respecting unique constraints (i.e
+      the code creating data does not violate semantic constraints).
+    * Usage pattern consists of bulk of inserts followed by bulk of selects
+      (e.g. not interleaved).
+
+    Under these circumstances, the following guidelines are suggested:
+
+    * Create indices after bulk inserts not before. For instance, instead of:
+
+      .. code-block:: sql
+
+        CREATE TABLE foo ('f1' int, 'f2' int, UNIQUE(f1, f2))
+        -- INSERT INTO foo VALUES ...
+
+      it's more performant to say:
+
+      .. code-block:: sql
+
+        CREATE TABLE foo ('f1' int, 'f2' int)
+        -- INSERT INTO foo VALUES ...
+        CREATE UNIQUE INDEX foo_index ON foo (f1, f2)
+
+    * If there is no concern about data corruption upon application or
+      operating sytem crash journaling can be turned off as well, from `docs
+      <journaling_docs>`_:
+
+          | If the application crashes in the middle of a transaction when the
+          | OFF journaling mode is set, then the database file will very likely
+          | go corrupt.
+
+      To turn off journaling:
+
+      .. code-block:: sql
+
+        PRAGMA journaling_mode = OFF
+
+    * When a table has a unique integer key it should be declared as ``INTEGER
+      PRIMARY KEY`` so that it would take over the default ``rowid`` field.
+      This saves space (and thus a small amount of time) on both the field and
+      the corresponding index.
+    * Larger `page sizes <pagesize_docs>`_ can marginally improve read/write
+      performance. To increase the page size:
+
+      .. code-block:: sql
+
+        PRAGMA page_size = 65536
+
+    .. _journaling_docs: https://www.sqlite.org/pragma.html#pragma_journal_mode
+    .. _pagesize_docs: https://www.sqlite.org/pragma.html#pragma_page_size
+    .. rubric: References
+
+        * http://stackoverflow.com/a/1712873
+        * http://codereview.stackexchange.com/q/26822
+        * http://stackoverflow.com/q/3134900
 """
 
 import os

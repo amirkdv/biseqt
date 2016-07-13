@@ -227,53 +227,8 @@ class KmerIndex(object):
             rec (database.Record): The record object corresponding to the
                 insertion of ``seq`` with the :attr:`id
                 <biseqt.database.Record.id>` field populated.
-
-        .. wikisection:: dev
-            :title: Insert-or-Append Queries
-
-            In many places we need to perform an SQL query which either
-            inserts a new record or appends the given value to some column
-            in case of conflict. This is achived by using one of SQLite's
-            conflict resolution mechanisms_ ``ON CONFLICT REPLACE`` or in short
-            ``OR REPLACE``. For instance, consider a table::
-
-                id | field
-                1  | foo
-
-            where we wish ``INSERT INTO ... (id, field) VALUES (2, 'bar')``
-            to give::
-
-                id | field
-                1  | foo
-                2  | bar
-
-            and ``INSERT INTO ... (id, field) VALUES (1, 'bar')`` to give::
-
-                id | field
-                1  | foo,bar
-
-            This can be implemented by using the following query format:
-
-            .. code-block:: sql
-
-                INSERT INTO ... (id, field) VALUES
-                SELECT ?, IFNULL(SELECT field FROM ... WHERE id = ?, "") || ?
-
-            invoked like this:
-
-            .. code-block:: python
-
-                id, field = ...
-                cursor = sqlite3.connect(...).cursor()
-                cursor.execute(query, (id, id, ',' + field))
-
-            Note that this pattern only works if the ``id`` column has a unique
-            constraint on it. Otherwise, no conflict will arise to be resolved
-            and new values will appear in new records instead of being
-            appended to old ones.
-
-            .. _mechanisms: https://www.sqlite.org/lang_conflict.html
         """
+        # FIXME only scan those sequences that are not already scanned.
         # this only works if there is a unique constraint on the kmer column.
         hit_query = """
             INSERT OR REPLACE INTO kmers_%d (kmer, hits)
