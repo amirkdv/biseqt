@@ -146,12 +146,12 @@ def test_database_events():
 
     with NamedTemporaryFile() as tmp_db:
         db = DB(tmp_db.name, A)
-        db.register('initialize', callback)
-        db.register('insert-sequence', callback)
+        db.add_event_listener('initialize', callback)
+        db.add_event_listener('insert-sequence', callback)
         db.initialize()
         assert test_database_events.callback_called == 1, \
-            'registered callbacks for "initialize" should be executed'
+            'event callbacks for "initialize" should be executed'
 
         db.insert(S)
         assert test_database_events.callback_called == 2, \
-            'registered callbacks for "insert-sequence" should be executed'
+            'event callbacks for "insert-sequence" should be executed'

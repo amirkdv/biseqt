@@ -97,8 +97,8 @@ class KmerIndex(object):
         assert isinstance(db, DB)
         self.db = db
         self.wordlen = wordlen
-        db.register('initialize', self.initialize)
-        db.register('insert-sequence', self.index_kmers)
+        db.add_event_listener('initialize', self.initialize)
+        db.add_event_listener('insert-sequence', self.index_kmers)
 
         self._digits = '0123456789abcdefghijklmnopqrstuvwxyz'
         assert len(self.db.alphabet) <= len(self._digits), \

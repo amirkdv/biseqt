@@ -103,7 +103,7 @@ class DB(object):
     """
 
     events = ['initialize', 'insert-sequence']
-    """Events emitted upon special events, cf. :func:`register` and
+    """Events emitted upon special events, cf. :func:`add_event_listener` and
     :func:`emit`. Currently supported events are:
 
         * ``initialize(db, conn)``: emitted when the initialization script has
@@ -118,7 +118,7 @@ class DB(object):
         >>> from biseqt.sequence import Alphabet
         >>> def callback(db, conn): print('called back')
         >>> db = DB('example.db', Alphabet('ACGT'))
-        >>> db.register('initialize', callback)
+        >>> db.add_event_listener('initialize', callback)
         >>> db.initialize()
         'called back'
     """
@@ -334,7 +334,7 @@ class DB(object):
             assert record.content_id == seq.content_id
             return seq
 
-    def register(self, event, func):
+    def add_event_listener(self, event, func):
         """Registers a callback for the given event.
 
         Args:

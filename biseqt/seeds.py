@@ -131,7 +131,7 @@ class SeedIndex(object):
         self.kmer_index = kmer_index
         self.wordlen = self.kmer_index.wordlen
         self.db = self.kmer_index.db
-        self.db.register('initialize', self.initialize)
+        self.db.add_event_listener('initialize', self.initialize)
 
     _init_script = """
         CREATE TABLE IF NOT EXISTS seeds_%d (
