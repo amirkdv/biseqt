@@ -118,6 +118,19 @@
       PRIMARY KEY`` so that it would take over the default ``rowid`` field.
       This saves space (and thus a small amount of time) on both the field and
       the corresponding index.
+    * Foreign key constraints, if enforced, slow down bulk inserts
+      significantly. However, by default, `foreign key checks`_ are turned off.
+      To turn it on:
+
+      .. code-block:: sql
+
+        PRAGMA foreign_keys = ON;
+
+      Note that this default maybe modified by compile time flags (i.e foreign
+      keys may be turned on by default). Furthermore, if foreign keys are turned
+      on, consider deferring_ foreign key enforcement to transaction commits
+      and and keep in mind that ``pysqlite`` (following python's DB-API) fudges
+      with transaction beginning and ends.
     * Larger `page sizes <pagesize_docs>`_ can marginally improve read/write
       performance. To increase the page size:
 
@@ -127,6 +140,8 @@
 
     .. _journaling_docs: https://www.sqlite.org/pragma.html#pragma_journal_mode
     .. _pagesize_docs: https://www.sqlite.org/pragma.html#pragma_page_size
+    .. _foreign key checks: https://www.sqlite.org/foreignkeys.html#fk_enable
+    .. _deferring: https://www.sqlite.org/foreignkeys.html#fk_deferred
     .. rubric: References
 
         * http://stackoverflow.com/a/1712873
