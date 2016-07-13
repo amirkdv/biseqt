@@ -1,7 +1,5 @@
 # -*- coding: utf-8 -*-
-import pytest
 from tempfile import NamedTemporaryFile
-from sqlite3 import IntegrityError
 
 from biseqt.io import write_fasta
 from biseqt.sequence import Alphabet
@@ -22,10 +20,10 @@ def test_database_basic():
 
 def test_database_insert():
     A = Alphabet('ACGT')
+    S = A.parse('AACT', name='foo')
     with NamedTemporaryFile() as tmp:
         db = DB(tmp.name, A)
         db.initialize()
-        S = A.parse('AACT', name='foo')
         attrs = {'key': 'value'}
         rec = db.insert(S, source_file='source.fa', source_pos=10, attrs=attrs)
         assert isinstance(rec.id, int)
@@ -47,8 +45,24 @@ def test_database_insert():
             assert next(cursor) == (T.content_id,), \
                 'correct id must be populated'
 
-        with pytest.raises(IntegrityError):
-            db.insert(S)
+
+def test_database_overwrite():
+    A = Alphabet('ACGT')
+    S = A.parse('AACT', name='foo')
+    with NamedTemporaryFile() as tmp:
+        db = DB(tmp.name, A)
+        db.initialize()
+        db.insert(S, source_file='source.fa')
+        db.insert(S, source_file='new_source.fa')
+        with db.connect() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                'SELECT source_file FROM sequence WHERE content_id = ?',
+                (S.content_id,)
+            )
+            res = [x[0] for x in cursor]
+            assert len(res) == 1 and res[0] == 'new_source.fa', \
+                'Inserting a sequence with an observed content id overwrites'
 
 
 def test_database_find():
