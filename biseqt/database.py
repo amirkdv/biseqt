@@ -138,7 +138,9 @@ class DB(object):
         self.path = path
         # names of non-id fields of Record
         self._update_fields = [f for f in Record._fields if f != 'id']
-        self.insert_q = 'INSERT INTO sequence (%s) VALUES (%s)' % (
+        # can only conflict (and thus replace) if content_id already exists
+        # which means we will override its metadata.
+        self.insert_q = 'INSERT OR REPLACE INTO sequence (%s) VALUES (%s)' % (
             ','.join(self._update_fields),
             ','.join('?' for _ in self._update_fields)
         )
@@ -200,7 +202,9 @@ class DB(object):
 
     def insert(self, seq, source_file=None, source_pos=0, attrs={}):
         """Inserts a sequence in the database and emits ``insert-sequence``
-        (cf. :attr:`events`).
+        (cf. :attr:`events`). If the :attr:`content address
+        <Record.content_id>` of the sequence matches that of an existing
+        sequence, the old record will be overwritten.
 
         Args:
             seq (sequence.NamedSequence): The sequence to be inserted.
