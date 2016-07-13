@@ -243,12 +243,16 @@ class DB(object):
             assert os.access(os.path.dirname(path), os.W_OK), \
                 'Database %s cannot be created' % path
 
+        logging.basicConfig()
+        self.logger = logging.getLogger('DB @ .. %s' % path.split('/')[-1])
+        self.logger.setLevel(log_level)
+
         self.path = path
         # names of non-id fields of Record
         self._update_fields = [f for f in Record._fields if f != 'id']
         # can only conflict (and thus replace) if content_id already exists
         # which means we will override its metadata.
-        self.insert_q = 'INSERT OR REPLACE INTO sequence (%s) VALUES (%s)' % (
+        self.insert_q = 'INSERT INTO sequence (%s) VALUES (%s)' % (
             ','.join(self._update_fields),
             ','.join('?' for _ in self._update_fields)
         )
@@ -339,7 +343,14 @@ class DB(object):
 
         rec = Record(id=None, **kw)
         with self.connect() as conn:
-            cursor = conn.execute(self.insert_q, self.record_to_row(rec))
+            try:
+                cursor = conn.execute(self.insert_q, self.record_to_row(rec))
+            except sqlite3.IntegrityError:
+                self.logger.warning(
+                    'ignoring duplicate sequence %s in .. %s' % \
+                    (seq.name, rec.source_file.split('/')[-1])
+                )
+                return None
             conn.commit()
             # populate the id of the record
             rec = Record(id=cursor.lastrowid,

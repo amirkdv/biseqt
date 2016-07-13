@@ -9,7 +9,9 @@ from biseqt.database import DB, Record
 def test_database_basic():
     A = Alphabet('ACGT')
     with NamedTemporaryFile() as tmp:
-        db = DB(tmp.name, A)
+        # Set log level to critical only:
+        # https://docs.python.org/2/library/logging.html#logging-levels
+        db = DB(tmp.name, A, log_level=50)
         db.initialize()
         db.initialize()  # should be able to call it twice
         assert db.path == tmp.name
@@ -22,7 +24,7 @@ def test_database_insert():
     A = Alphabet('ACGT')
     S = A.parse('AACT', name='foo')
     with NamedTemporaryFile() as tmp:
-        db = DB(tmp.name, A)
+        db = DB(tmp.name, A, log_level=50)
         db.initialize()
         attrs = {'key': 'value'}
         rec = db.insert(S, source_file='source.fa', source_pos=10, attrs=attrs)
@@ -50,9 +52,9 @@ def test_database_overwrite():
     A = Alphabet('ACGT')
     S = A.parse('AACT', name='foo')
     with NamedTemporaryFile() as tmp:
-        db = DB(tmp.name, A)
+        db = DB(tmp.name, A, log_level=50)
         db.initialize()
-        db.insert(S, source_file='source.fa')
+        db.insert(S, source_file='old_source.fa')
         db.insert(S, source_file='new_source.fa')
         with db.connect() as conn:
             cursor = conn.cursor()
@@ -61,8 +63,8 @@ def test_database_overwrite():
                 (S.content_id,)
             )
             res = [x[0] for x in cursor]
-            assert len(res) == 1 and res[0] == 'new_source.fa', \
-                'Inserting a sequence with an observed content id overwrites'
+            assert len(res) == 1 and res[0] == 'old_source.fa', \
+                'Sequences with observed content id should be ignored'
 
 
 def test_database_find():
@@ -70,7 +72,7 @@ def test_database_find():
     S = A.parse('AACT', name='foo')
     T = A.parse('GGCT', name='bar')
     with NamedTemporaryFile() as tmp:
-        db = DB(tmp.name, A)
+        db = DB(tmp.name, A, log_level=50)
         db.initialize()
         db.insert(S)
         db.insert(T)
@@ -93,7 +95,7 @@ def test_database_populate_fasta():
     T = A.parse('GCAT', name='T')
 
     with NamedTemporaryFile() as tmp_db:
-        db = DB(tmp_db.name, A)
+        db = DB(tmp_db.name, A, log_level=50)
         db.initialize()
         with NamedTemporaryFile() as tmp_fa:
             write_fasta(tmp_fa, [S, T])
@@ -113,7 +115,7 @@ def test_database_populate_fasta_rc():
     T = A.parse('GCAT', name='T')
 
     with NamedTemporaryFile() as tmp_db:
-        db = DB(tmp_db.name, A)
+        db = DB(tmp_db.name, A, log_level=50)
         db.initialize()
         with NamedTemporaryFile() as tmp_fa:
             write_fasta(tmp_fa, [S, T])
@@ -145,7 +147,7 @@ def test_database_events():
         test_database_events.callback_called += 1
 
     with NamedTemporaryFile() as tmp_db:
-        db = DB(tmp_db.name, A)
+        db = DB(tmp_db.name, A, log_level=50)
         db.add_event_listener('initialize', callback)
         db.add_event_listener('insert-sequence', callback)
         db.initialize()
