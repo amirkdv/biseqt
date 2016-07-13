@@ -27,28 +27,39 @@ class CffiObject(object):
 
 
 class ProgressIndicator(object):
-    def __init__(self, msg, num, percentage=True):
-        self.msg, self.num = msg, int(num)
-        self.freq = max(self.num/100, 1)
-        self.progress_cnt = 0
+    def __init__(self, quiet=False, f=sys.stderr, num_total=None, percentage=False):
+        self.f = f
+        self.quiet = quiet
         self.percentage = percentage
-        if self.percentage and self.num == 0:
-            raise ValueError('Percentage progress indicator needs > 0 rounds')
+        if self.percentage:
+            assert isinstance(num_total, int) and num_total > 0
+            self.num_total = num_total
+            self.freq = max(self.num_total/100, 1)
+        else:
+            self.num_total = num_total
+            self.freq = None
+
+        self.progress_cnt = 0
 
     def start(self):
+        if self.quiet:
+            self
         self.status()
 
     def finish(self):
+        if self.quiet:
+            return
         self.status()
-        sys.stderr.write('.\n')
+        self.f.write('\r')
 
     def status(self):
+        if self.quiet:
+            return
         if self.percentage:
-            sys.stderr.write('\r%s: %d%%' %
-                             (self.msg, (self.progress_cnt * 100) / self.num))
+            self.f.write('\r%d%% ' % (self.progress_cnt * 100. / self.num_total))
         else:
-            sys.stderr.write('\r%s: %d/%d' %
-                             (self.msg, self.progress_cnt, self.num))
+            num = str(self.num_total) if self.num_total else ''
+            self.f.write('\r%d/%s ' % (self.progress_cnt, num))
 
     def progress(self, num=1):
         self.progress_cnt += num
