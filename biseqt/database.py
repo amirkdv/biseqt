@@ -137,8 +137,10 @@
 import os
 import sqlite3
 import json
+import logging
 from collections import namedtuple
 
+from . import ProgressIndicator
 from .io import read_fasta
 from .sequence import Alphabet, NamedSequence
 
@@ -229,7 +231,7 @@ class DB(object):
         'called back'
     """
 
-    def __init__(self, path, alphabet):
+    def __init__(self, path, alphabet, log_level=logging.INFO):
         assert isinstance(alphabet, Alphabet)
         self.alphabet = alphabet
         self.processors = {event: [] for event in self.events}
@@ -369,6 +371,12 @@ class DB(object):
             # e.g. StringIO
             path = None
 
+        self.logger.info('Loading sequences from %s' % str(path))
+        quiet = self.logger.getEffectiveLevel() > logging.INFO
+        indic = ProgressIndicator(num_total=(num if num > 0 else None),
+                                  quiet=quiet)
+        indic.start()
+
         if rc:
             assert all(l in self.alphabet for l in 'ACGT')
 
@@ -385,6 +393,9 @@ class DB(object):
                                                  name='(rc) ' + seq.name)
                 kw['attrs'] = {'rc_of': seq.content_id}
                 inserted.append(self.insert(seq_rc, **kw))
+            indic.progress()
+
+        indic.finish()
 
         return inserted
 
