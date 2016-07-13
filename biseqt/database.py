@@ -242,12 +242,13 @@ class DB(object):
         else:
             assert os.access(os.path.dirname(path), os.W_OK), \
                 'Database %s cannot be created' % path
-
-        logging.basicConfig()
-        self.logger = logging.getLogger('DB @ .. %s' % path.split('/')[-1])
-        self.logger.setLevel(log_level)
-
         self.path = path
+
+        logging.basicConfig(format='%(asctime)s %(header)s %(message)s')
+        self._logger = logging.getLogger('biseqt')
+        self._logger.setLevel(log_level)
+        self._log_header = os.path.relpath(self.path, os.getcwd())
+
         # names of non-id fields of Record
         self._update_fields = [f for f in Record._fields if f != 'id']
         # can only conflict (and thus replace) if content_id already exists
@@ -285,6 +286,10 @@ class DB(object):
     # put the initialization script in the docs
     initialize.__doc__ += '\n\n\t.. code-block:: sql\n\t%s\n' % \
                           '\n\t'.join(_init_script.split('\n'))
+
+    def log(self, message, level=logging.INFO):
+        """Logs a message of given severity level."""
+        self._logger.log(level, message, extra={'header': self._log_header})
 
     def connect(self):
         """Provides a context manager for an SQLite database connection:
@@ -346,10 +351,8 @@ class DB(object):
             try:
                 cursor = conn.execute(self.insert_q, self.record_to_row(rec))
             except sqlite3.IntegrityError:
-                self.logger.warning(
-                    'ignoring duplicate sequence %s in .. %s' % \
-                    (seq.name, rec.source_file.split('/')[-1])
-                )
+                self.log('ignoring duplicate sequence %s' % seq.name,
+                         level=logging.WARN)
                 return None
             conn.commit()
             # populate the id of the record
@@ -382,20 +385,14 @@ class DB(object):
             # e.g. StringIO
             path = None
 
-        self.logger.info('Loading sequences from %s' % str(path))
-        quiet = self.logger.getEffectiveLevel() > logging.INFO
-        indic = ProgressIndicator(num_total=(num if num > 0 else None),
-                                  quiet=quiet)
+        self.log('Loading sequences from %s ...' % str(path))
+        indic = ProgressIndicator(num_total=(num if num > 0 else None))
         indic.start()
 
         if rc:
             assert all(l in self.alphabet for l in 'ACGT')
 
         inserted = []
-        # FIXME what if the source contains reverse complements?
-        # similarly, what to do with duplicate records (e.g. reloading a
-        # half-loaded fasta file). Note that KmerIndex expects that we only
-        # emit insert-sequence when new stuff come in.
         for seq, pos in read_fasta(f, self.alphabet, num=num):
             kw = {'source_file': path, 'source_pos': pos}
             inserted.append(self.insert(seq, **kw))
@@ -407,6 +404,7 @@ class DB(object):
             indic.progress()
 
         indic.finish()
+        self.log('Done loading sequences from %s.' % str(path))
 
         return inserted
 
