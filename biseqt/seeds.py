@@ -197,8 +197,6 @@ class SeedIndex(object):
             kmers = self.kmer_index.kmers(max_score=max_kmer_score)
             for kmer, hits, _ in kmers:
                 for (id0, pos0), (id1, pos1) in combinations(hits, 2):
-                    if id0 == id1:
-                        continue
                     diag = pos0 - pos1
                     unique = (id0, id1, diag)
                     yield unique + unique + ('%d:%d,' % (pos0, pos1),)
