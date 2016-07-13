@@ -31,15 +31,17 @@ from math import sqrt, log
 from .kmers import KmerIndex
 
 
+# TODO implement band_radius_calculator to avoid calling erfinv too many times.
 def band_radius(len0, len1, diag, gap_prob=None, sensitivity=None):
     """Calculates the smallest band radius such an overlap alignment, with the
     given gap probability, stays entirely within the diagonal band centered at
     the given diagonal. This is given by:
 
     .. math::
-        r = 2\\mathrm{erf}^{-1}(\\rho)\\sqrt{g(1-g)K}
+        r = 2\\sqrt{g(1-g)K}
+            \\mathrm{erf}^{-1}\\left(1-\\frac{2\\epsilon}{3}\\right)
 
-    where :math:`g` is the gap probability, :math:`\\rho` is the desired
+    where :math:`g` is the gap probability, :math:`1-\\epsilon` is the desired
     sensitivity, and :math:`K` is the "expected" length of the alignment given
     by:
 
@@ -84,13 +86,12 @@ def band_radius(len0, len1, diag, gap_prob=None, sensitivity=None):
     assert sensitivity > 0 and sensitivity < 1
     assert gap_prob > 0 and gap_prob < 1
 
-    # FIXME document
-    sensitivity = 1./3 + sensitivity * 2./3
+    adjusted_sensitivity = 1 - 2 * (1. - sensitivity) / 3
 
     max_alignment_length = min(len0 - diag, len1) + min(diag, 0)
-    expected_alignment_length = (2. / (2 - gap_prob)) * max_alignment_length
+    expected_alignment_length = (2 / (2. - gap_prob)) * max_alignment_length
     assert expected_alignment_length >= 0
-    radius = 2 * scipy.special.erfinv(sensitivity) * sqrt(
+    radius = 2 * scipy.special.erfinv(adjusted_sensitivity) * sqrt(
         gap_prob * (1 - gap_prob) * expected_alignment_length
     )
     return max(1, int(radius))
