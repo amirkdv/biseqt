@@ -77,11 +77,12 @@ def normal_neg_log_pvalue(mu, sd, x):
     Returns:
         float: A positive real number.
     """
+    z_score = (x - mu) / float(sd)
     try:
-        return - log(0.5) - log(1 - erf((x - mu) / (sd * sqrt(2))))
+        return - log((1 - erf(z_score/sqrt(2))) / 2.)
     except ValueError:
-        # can only happen if the argument to second log is 0
-        return float('-inf')
+        # can only happen if the argument to log is 0
+        return float('+inf')
 
 
 class KmerIndex(object):
