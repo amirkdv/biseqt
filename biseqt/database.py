@@ -308,7 +308,7 @@ class DB(object):
         """Logs a message of given severity level."""
         self._logger.log(level, message, extra={'header': self._log_header})
 
-    def connect(self):
+    def connection(self):
         """Provides a SQLite database connection that can be used as a context
         manager. The returned object is always the same connection object
         belonging to the :class:`DB` instance (otherwise in-memory connections
@@ -320,7 +320,7 @@ class DB(object):
         ::
 
             >>> from biseqt.database import DB
-            >>> with DB('example.db').connect() as conn:
+            >>> with DB('example.db').connection() as conn:
             ...     conn.cursor().execute('SELECT * FROM sequence')
         """
         if self._connection is None:
@@ -368,7 +368,7 @@ class DB(object):
             rec_kw['attrs']['name'] = seq.name
 
         rec = Record(id=None, **rec_kw)
-        with self.connect() as conn:
+        with self.connection() as conn:
             cursor = conn.cursor()
             try:
                 cursor.execute(self.insert_q, self.record_to_row(rec))
@@ -448,7 +448,7 @@ class DB(object):
             kw['attrs'] = json.loads(kw['attrs'])
             return Record(**kw)
 
-        with self.connect() as conn:
+        with self.connection() as conn:
             cursor = conn.cursor()
             cursor.setrowtrace(_record_factory)
             for record in cursor.execute(q):

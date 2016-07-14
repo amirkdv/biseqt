@@ -252,7 +252,7 @@ class KmerIndex(object):
         Returns:
             int
         """
-        with self.db.connect() as conn:
+        with self.db.connection() as conn:
             cursor = conn.cursor()
             q = 'SELECT SUM(length) FROM kmer_indexed_%d' % self.wordlen
             cursor.execute(q)
@@ -264,7 +264,7 @@ class KmerIndex(object):
         Returns:
             int
         """
-        with self.db.connect() as conn:
+        with self.db.connection() as conn:
             cursor = conn.cursor()
             cursor.execute('SELECT COUNT(*) FROM kmers_%d' % self.wordlen)
             return int(cursor.next()[0])
@@ -297,7 +297,7 @@ class KmerIndex(object):
                  ('WHERE score IS NULL' if only_missing else '')
 
         update = 'UPDATE kmers_%d SET score = ? WHERE kmer = ?' % self.wordlen
-        with self.db.connect() as conn:
+        with self.db.connection() as conn:
             select_cursor, insert_cursor = conn.cursor(), conn.cursor()
             select_cursor.execute(select)
             for kmer, hits in select_cursor:
@@ -337,7 +337,7 @@ class KmerIndex(object):
         if max_score is not None:
             query += ' WHERE score < %f' % max_score
 
-        with self.db.connect() as conn:
+        with self.db.connection() as conn:
             cursor = conn.cursor()
             cursor.execute(query)
             for kmer, hits, score in cursor:

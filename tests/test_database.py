@@ -16,7 +16,7 @@ def test_database_basic():
     db = DB(':memory:', A)
     db.initialize()
     db.initialize()  # should be able to call it twice
-    with db.connect() as conn:
+    with db.connection() as conn:
         # a sequence table should be created
         conn.cursor().execute('SELECT * FROM sequence LIMIT 1;')
 
@@ -34,7 +34,7 @@ def test_database_insert():
     assert rec.source_file == 'source.fa'
     assert 'key' in rec.attrs and rec.attrs['key'] == 'value', \
         'attributes must be populated correctly'
-    with db.connect() as conn:
+    with db.connection() as conn:
         cursor = conn.cursor()
         cursor.execute('SELECT content_id FROM sequence WHERE id = ?',
                        (rec.id,))
@@ -48,7 +48,7 @@ def test_database_insert():
     T = A.parse('GCTG', name='bar')
     new_rec = db.insert(T)
     assert new_rec.id != rec.id, 'new ids are assigned to new sequences'
-    with db.connect() as conn:
+    with db.connection() as conn:
         cursor = conn.cursor()
         cursor.execute('SELECT content_id FROM sequence WHERE id = ?',
                        (new_rec.id,))
@@ -63,7 +63,7 @@ def test_database_overwrite():
     db.initialize()
     db.insert(S, source_file='old_source.fa')
     db.insert(S, source_file='new_source.fa')
-    with db.connect() as conn:
+    with db.connection() as conn:
         cursor = conn.cursor()
         cursor.execute(
             'SELECT source_file FROM sequence WHERE content_id = ?',

@@ -157,7 +157,7 @@ def _test_score_seeds(sequencing_sample):
         scanned_sequences = seed_index.kmer_index.scanned_sequences()
         assert sum(1 for _ in scanned_sequences) == num_reads
 
-        with seed_index.db.connect() as conn:
+        with seed_index.db.connection() as conn:
             cursor = conn.cursor()
             query = 'SELECT COUNT(*) FROM seeds_%d WHERE score IS NULL' % \
                 seed_index.wordlen
