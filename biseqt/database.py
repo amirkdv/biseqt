@@ -114,6 +114,12 @@
 
         PRAGMA journaling_mode = OFF
 
+      Note that turning off journaling breaks rollbacks:
+
+        | The OFF journaling mode disables the rollback journal completely. No
+        | rollback journal is ever created and hence there is never a rollback
+        | journal to delete. The OFF journaling mode disables the atomic commit
+        | and rollback capabilities of SQLite.
     * When a table has a unique integer key it should be declared as ``INTEGER
       PRIMARY KEY`` so that it would take over the default ``rowid`` field.
       This saves space (and thus a small amount of time) on both the field and
@@ -127,10 +133,10 @@
         PRAGMA foreign_keys = ON;
 
       Note that this default maybe modified by compile time flags (i.e foreign
-      keys may be turned on by default). Furthermore, if foreign keys are turned
-      on, consider deferring_ foreign key enforcement to transaction commits
-      and and keep in mind that ``pysqlite`` (following python's DB-API) fudges
-      with transaction beginning and ends.
+      keys may be turned on by default). Furthermore, if foreign keys are
+      turned on, consider deferring_ foreign key enforcement to transaction
+      commits and and keep in mind that ``pysqlite`` (following python's
+      DB-API) fudges with transaction beginning and ends.
     * Larger `page sizes <pagesize_docs>`_ can marginally improve read/write
       performance. To increase the page size:
 
@@ -275,10 +281,6 @@ class DB(object):
 
     _init_script = """
     -- Database initialization script
-
-    PRAGMA journal_mode = OFF; -- turn off journaling for performance, this
-                               -- means the contents of database cannot be
-                               -- trusted after an unexpected crash.
 
     CREATE TABLE IF NOT EXISTS sequence (
       id            INTEGER PRIMARY KEY ASC, -- internal integer identifier
