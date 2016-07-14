@@ -257,18 +257,19 @@ class DB(object):
         self.alphabet = alphabet
         self.processors = {event: [] for event in self.events}
 
-        path = os.path.abspath(path)
-        if os.path.exists(path):
-            assert os.access(path, os.W_OK), 'Database %s not writable' % path
+        if path == ':memory:':
+            self.path = path
         else:
-            assert os.access(os.path.dirname(path), os.W_OK), \
-                'Database %s cannot be created' % path
-        self.path = path
+            self.path = os.path.abspath(path)
+            assert os.path.exists(self.path) or \
+                os.access(os.path.dirname(self.path), os.W_OK), \
+                'Database %s is not writable' % self.path
 
         logging.basicConfig(format='%(asctime)s %(header)s %(message)s')
         self._logger = logging.getLogger('biseqt')
         self._logger.setLevel(log_level)
         self._log_header = os.path.relpath(self.path, os.getcwd())
+        self._connection = None
 
         # names of non-id fields of Record
         self._update_fields = [f for f in Record._fields if f != 'id']
@@ -308,7 +309,10 @@ class DB(object):
         self._logger.log(level, message, extra={'header': self._log_header})
 
     def connect(self):
-        """Provides a context manager for an SQLite database connection:
+        """Provides a SQLite database connection that can be used as a context
+        manager. The returned object is always the same connection object
+        belonging to the :class:`DB` instance (otherwise in-memory connections
+        would reset the database contents upon every invocation).
 
         Returns:
             apsw.Connection
@@ -319,7 +323,9 @@ class DB(object):
             >>> with DB('example.db').connect() as conn:
             ...     conn.cursor().execute('SELECT * FROM sequence')
         """
-        return apsw.Connection(self.path)
+        if self._connection is None:
+            self._connection = apsw.Connection(self.path)
+        return self._connection
 
     def record_to_row(self, record):
         """Converts a :class:`Record` to a tuple that can be inserted in the
