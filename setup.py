@@ -9,7 +9,7 @@ with open(path.join(path.abspath(path.dirname(__file__)), 'README.md')) as f:
 install_requires = [
     'scipy',
     'matplotlib',
-    'pysqlite',     # for kmer handling with sqlite3
+    'apsw',         # for speaking to SQLite databases
     'termcolor',    # for colored text output
     'cffi',         # for the C component
     'python-igraph',# for bindings to igraph

@@ -165,7 +165,7 @@ class SeedIndex(object):
             conn (sqlite3.Connection): An open connection to operate on.
         """
         init_script = self._init_script % self.wordlen
-        conn.cursor().executescript(init_script)
+        conn.cursor().execute(init_script)
 
     # put the initialization script in the docs
     initialize.__doc__ += '\n\n\t.. code-block:: sql\n\t%s\n' % \

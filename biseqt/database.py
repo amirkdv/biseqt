@@ -61,8 +61,8 @@
     .. code-block:: python
 
         id, field = ...
-        cursor = sqlite3.connect(...).cursor()
-        cursor.execute(query, (id, id, ',' + field))
+        conn = apsw.Connection('example.db')
+        conn.cursor().execute(query, (id, id, ',' + field))
 
     Note that this pattern only works if the ``id`` column has a unique
     constraint on it. Otherwise, no conflict will arise to be resolved and new
@@ -156,7 +156,7 @@
 """
 
 import os
-import sqlite3
+import apsw
 import json
 import logging
 from collections import namedtuple
@@ -272,12 +272,11 @@ class DB(object):
 
         # names of non-id fields of Record
         self._update_fields = [f for f in Record._fields if f != 'id']
-        # can only conflict (and thus replace) if content_id already exists
-        # which means we will override its metadata.
-        self.insert_q = 'INSERT INTO sequence (%s) VALUES (%s)' % (
-            ','.join(self._update_fields),
-            ','.join('?' for _ in self._update_fields)
-        )
+        self.insert_q = """
+            INSERT INTO sequence (%s) VALUES (%s);
+            SELECT last_insert_rowid() FROM sequence;
+        """ % (','.join(self._update_fields),
+               ','.join('?' for _ in self._update_fields))
 
     _init_script = """
     -- Database initialization script
@@ -297,7 +296,7 @@ class DB(object):
         initializing an initialized database has no side effect.
         """
         with self.connect() as conn:
-            conn.cursor().executescript(self._init_script)
+            conn.cursor().execute(self._init_script)
             self.emit('initialize', conn)
 
     # put the initialization script in the docs
@@ -312,16 +311,15 @@ class DB(object):
         """Provides a context manager for an SQLite database connection:
 
         Returns:
-            sqlite3.Connection
+            apsw.Connection
 
         ::
 
             >>> from biseqt.database import DB
             >>> with DB('example.db').connect() as conn:
-            ...     cursor = conn.cursor()
-            ...     cursor.execute('SELECT * FROM sequence')
+            ...     conn.cursor().execute('SELECT * FROM sequence')
         """
-        return sqlite3.connect(self.path)
+        return apsw.Connection(self.path)
 
     def record_to_row(self, record):
         """Converts a :class:`Record` to a tuple that can be inserted in the
@@ -354,27 +352,26 @@ class DB(object):
                 populated with the newly assigned primary key.
         """
         assert isinstance(seq, NamedSequence) and seq.alphabet == self.alphabet
-        kw = {
+        rec_kw = {
             'source_file': source_file,
             'source_pos': source_pos,
             'content_id': seq.content_id,
             'attrs': {k: attrs[k] for k in attrs},
         }
-        if 'name' not in kw['attrs']:
-            kw['attrs']['name'] = seq.name
+        if 'name' not in rec_kw['attrs']:
+            rec_kw['attrs']['name'] = seq.name
 
-        rec = Record(id=None, **kw)
+        rec = Record(id=None, **rec_kw)
         with self.connect() as conn:
+            cursor = conn.cursor()
             try:
-                cursor = conn.execute(self.insert_q, self.record_to_row(rec))
-            except sqlite3.IntegrityError:
+                cursor.execute(self.insert_q, self.record_to_row(rec))
+                # populate the id of the record
+                rec = Record(id=next(cursor)[0], **rec_kw)
+            except apsw.ConstraintError:
                 self.log('ignoring duplicate sequence %s' % seq.name,
                          level=logging.WARN)
                 return None
-            conn.commit()
-            # populate the id of the record
-            rec = Record(id=cursor.lastrowid,
-                         **{k: getattr(rec, k) for k in self._update_fields})
             self.emit('insert-sequence', conn, seq, rec)
         return rec
 
@@ -446,9 +443,9 @@ class DB(object):
             return Record(**kw)
 
         with self.connect() as conn:
-            conn.row_factory = _record_factory
-            cursor = conn.execute(q)
-            for record in cursor:
+            cursor = conn.cursor()
+            cursor.setrowtrace(_record_factory)
+            for record in cursor.execute(q):
                 if not condition or condition(record):
                     yield record
 

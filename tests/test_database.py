@@ -1,19 +1,22 @@
 # -*- coding: utf-8 -*-
 from tempfile import NamedTemporaryFile
-from mock import patch, PropertyMock
 
 from biseqt import ProgressIndicator
 from biseqt.io import write_fasta
 from biseqt.sequence import Alphabet
 from biseqt.database import DB, Record
 
+# skip all logging
 ProgressIndicator.write = lambda *args: None
 DB.log = lambda *args, **kwargs: None
+
 
 def test_database_basic():
     A = Alphabet('ACGT')
     with NamedTemporaryFile() as tmp:
         db = DB(tmp.name, A)
+        with db.connect() as conn:
+            conn.cursor().execute(db._init_script)
         db.initialize()
         db.initialize()  # should be able to call it twice
         assert db.path == tmp.name
@@ -40,12 +43,20 @@ def test_database_insert():
             cursor = conn.cursor()
             cursor.execute('SELECT content_id FROM sequence WHERE id = ?',
                            (rec.id,))
-            assert next(cursor) == (S.content_id,), \
-                'correct id must be populated'
-            T = A.parse('GCTG', name='bar')
-            rec = db.insert(T)
+            # NOTE for some reason if we just say next(cursor) ==  ...
+            # the cursor remains open after the context is over (which should
+            # not happen as per docs). This leads to BusyError further down.
+            assert cursor.fetchall() == [(S.content_id,)], \
+                'content identifier is properly populated'
+
+        # add a second sequence
+        T = A.parse('GCTG', name='bar')
+        new_rec = db.insert(T)
+        assert new_rec.id != rec.id, 'new ids are assigned to new sequences'
+        with db.connect() as conn:
+            cursor = conn.cursor()
             cursor.execute('SELECT content_id FROM sequence WHERE id = ?',
-                           (rec.id,))
+                           (new_rec.id,))
             assert next(cursor) == (T.content_id,), \
                 'correct id must be populated'
 
