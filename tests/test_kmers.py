@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
 import pytest
-from tempfile import NamedTemporaryFile
 from itertools import product
 from scipy.stats import norm, binom
 from math import log
@@ -44,12 +43,8 @@ def db_gen(request):
     """Returns a function that generates a sequence database (i.e
     ``biseqt.database.DB``) with parametrized alphabet (single letter and
     double letter) stored in a temporary file."""
-    A = request.param
-
     def f():
-        with NamedTemporaryFile() as tmp:
-            db = DB(tmp.name, A)
-            yield db
+        yield DB(':memory:', request.param)
     return f
 
 
@@ -79,37 +74,36 @@ def test_scan_kmers(db_gen, wordlen):
 def test_index_kmers():
     A = Alphabet('ACGT')
     wordlen = 3
-    with NamedTemporaryFile() as tmp:
-        db = DB(tmp.name, A)
-        kmer_index = KmerIndex(db, wordlen)
-        db.initialize()
+    db = DB(':memory:', A)
+    kmer_index = KmerIndex(db, wordlen)
+    db.initialize()
 
-        S = A.parse('ATGCA', name='foo')
-        S_id = db.insert(S).id
-        assert next(kmer_index.scanned_sequences()) == (S_id, len(S))
-        assert kmer_index.num_kmers() == len(S) - wordlen + 1
+    S = A.parse('ATGCA', name='foo')
+    S_id = db.insert(S).id
+    assert next(kmer_index.scanned_sequences()) == (S_id, len(S))
+    assert kmer_index.num_kmers() == len(S) - wordlen + 1
 
-        T = A.parse('ATGCC', name='bar')
-        T_id = db.insert(T).id
-        assert kmer_index.num_kmers() == 4
-        assert kmer_index.total_length_indexed() == len(S) + len(T)
+    T = A.parse('ATGCC', name='bar')
+    T_id = db.insert(T).id
+    assert kmer_index.num_kmers() == 4
+    assert kmer_index.total_length_indexed() == len(S) + len(T)
 
-        # find the occurences of 'ATG'
-        atg_int = kmer_index.kmer_as_int((0, 3, 2))
-        atg_hits = [(hits, score) for kmer, hits, score in kmer_index.kmers()
-                    if kmer == atg_int]
-        assert len(atg_hits) == 1 and atg_hits[0][0] == [(S_id, 0), (T_id, 0)]
+    # find the occurences of 'ATG'
+    atg_int = kmer_index.kmer_as_int((0, 3, 2))
+    atg_hits = [(hits, score) for kmer, hits, score in kmer_index.kmers()
+                if kmer == atg_int]
+    assert len(atg_hits) == 1 and atg_hits[0][0] == [(S_id, 0), (T_id, 0)]
 
-        # calculate scores
-        assert atg_hits[0][1] is None
-        kmer_index.score_kmers()
-        atg_hits = [(hits, score) for kmer, hits, score in kmer_index.kmers()
-                    if kmer == atg_int]
-        atg_score = atg_hits[0][1]
-        assert atg_score is not None and score > 0
+    # calculate scores
+    assert atg_hits[0][1] is None
+    kmer_index.score_kmers()
+    atg_hits = [(hits, score) for kmer, hits, score in kmer_index.kmers()
+                if kmer == atg_int]
+    atg_score = atg_hits[0][1]
+    assert atg_score is not None and score > 0
 
-        # ATG is the most common kmer, it most have the highest score:
-        assert all(atg_score >= score for _, _, score in kmer_index.kmers())
+    # ATG is the most common kmer, it most have the highest score:
+    assert all(atg_score >= score for _, _, score in kmer_index.kmers())
 
-        # shouldn't do anything
-        kmer_index.score_kmers(only_missing=True)
+    # shouldn't do anything
+    kmer_index.score_kmers(only_missing=True)

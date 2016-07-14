@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
 import pytest
-from tempfile import NamedTemporaryFile
 from itertools import product, combinations
 
 from biseqt.sequence import Alphabet
@@ -57,8 +56,7 @@ def seed_index_gen():
 
     class context(object):
         def __enter__(self):
-            self.tmp = NamedTemporaryFile()
-            db = DB(self.tmp.name, A)
+            db = DB(':memory:', A)
             seed_index = SeedIndex(KmerIndex(db, wordlen))
             seed_index.db.initialize()
             for i in range(num_seqs):
@@ -68,7 +66,7 @@ def seed_index_gen():
             return seed_index
 
         def __exit__(self, *args):
-            self.tmp.close()
+            pass
 
     return context
 
@@ -137,8 +135,7 @@ def sequencing_sample(request):
 
     class context(object):
         def __enter__(self):
-            self.tmp = NamedTemporaryFile()
-            db = DB(self.tmp.name, A)
+            db = DB(':memory:', A)
             kmer_index = KmerIndex(db, wordlen)
             seed_index = SeedIndex(kmer_index)
             seed_index.db.initialize()
@@ -148,7 +145,7 @@ def sequencing_sample(request):
             return seq, reads, records, gap_prob, seed_index
 
         def __exit__(self, *args):
-            self.tmp.close()
+            pass
 
     return context
 
