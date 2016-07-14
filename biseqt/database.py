@@ -20,9 +20,9 @@
     >>> db.initialize()
     >>> with open('example.fa') as f:
     ...     db.load_fasta(f)
-    >>> for record in db.find(condition=lambda r: r.attrs['name'] == 'S'):
-    ...     print(record)
-    ...     print(db.load_from_record(record))
+    ...     for record in db.find(condition=lambda r: r.attrs['name'] == 'S'):
+    ...         print(record)
+    ...         print(db.load_from_record(record, f))
     Record(id=1, content_id=u'e690f18fc98d4afcba4b8518b88f4d0387a17380', \
     source_file=u'example.fa', source_pos=0, attrs={u'name': u'S'})
     AATCGG
@@ -449,30 +449,39 @@ class DB(object):
                 if not condition or condition(record):
                     yield record
 
-    def load_from_record(self, record):
+    def load_from_record(self, record, f=None):
         """Loads a sequence from the original source file given a corresponding
         database :class:`Record`.
 
         Args:
-            record (Record): Record from the sequence table containing an
-                accessible :attr:`source_file <Record.source_file>` and
-                the right :attr:`source_pos <Record.source_pos>`. If
-                :attr:`attrs <Record.attrs>` indicates that the given record
-                belongs to a reverse complement, the reverse complement of the
-                loaded sequence is returned.
+            record (Record): Record from the sequence table containing
+                the right :attr:`source_pos <Record.source_pos>` in the source
+                file. If :attr:`attrs <Record.attrs>` indicates that the given
+                record belongs to a reverse complement, the reverse complement
+                of the loaded sequence is returned.
+            f (file): An open file handle for the :attr:`source_file
+                <Record.source_file>` where the record is to be found. Default
+                is None in which case the file will be openned and closed here.
         """
-        source_file = record.source_file
-        with open(source_file) as f:
-            f.seek(record.source_pos)
-            seq, pos = next(read_fasta(f, self.alphabet, num=1))
-            assert pos == record.source_pos
-            if 'rc_of' in record.attrs:
-                assert record.attrs['rc_of'] == seq.content_id
-                seq = seq.reverse().transform(['AT', 'CG'],
-                                              name=record.attrs['name'])
-                assert record.content_id == seq.content_id
+        was_open = False
+        if f is None:
+            was_open = True
+            f = open(record.source_file)
+
+        f.seek(record.source_pos)
+        seq, pos = next(read_fasta(f, self.alphabet, num=1))
+        assert pos == record.source_pos
+        if 'rc_of' in record.attrs:
+            assert record.attrs['rc_of'] == seq.content_id
+            seq = seq.reverse().transform(['AT', 'CG'],
+                                          name=record.attrs['name'])
             assert record.content_id == seq.content_id
-            return seq
+        assert record.content_id == seq.content_id
+
+        if was_open:
+            f.close()
+
+        return seq
 
     def add_event_listener(self, event, func):
         """Registers a callback for the given event.
