@@ -161,7 +161,7 @@ import json
 import logging
 from collections import namedtuple
 
-from . import ProgressIndicator
+from . import Logger, ProgressIndicator
 from .io import read_fasta
 from .sequence import Alphabet, NamedSequence
 
@@ -267,12 +267,8 @@ class DB(object):
                 'Database %s is not writable' % self.path
 
         # TODO pull out to top level biseqt
-        logging.basicConfig(
-            format='%(levelname)s [%(asctime)s] %(header)s %(message)s'
-        )
-        self._logger = logging.getLogger('biseqt')
-        self._logger.setLevel(log_level)
-        self._log_header = os.path.relpath(self.path, os.getcwd())
+        self._logger = Logger(log_level=log_level,
+                              header=os.path.relpath(self.path, os.getcwd()))
         self._connection = None
 
         # names of non-id fields of Record
@@ -308,9 +304,9 @@ class DB(object):
     initialize.__doc__ += '\n\n\t.. code-block:: sql\n\t%s\n' % \
                           '\n\t'.join(_init_script.split('\n'))
 
-    def log(self, message, level=logging.INFO):
-        """Logs a message of given severity level."""
-        self._logger.log(level, message, extra={'header': self._log_header})
+    def log(self, *args, **kwargs):
+        """Wraps :class:`Logger.log`."""
+        self._logger.log(*args, **kwargs)
 
     def connection(self):
         """Provides a SQLite database connection that can be used as a context

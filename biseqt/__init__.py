@@ -1,6 +1,24 @@
 import cffi
 import os
 import sys
+import logging
+
+
+class Logger(object):
+    logging.basicConfig(
+        format='%(levelname)s [%(asctime)s] %(header)s %(message)s'
+    )
+
+    def __init__(self, log_level=logging.INFO, header=''):
+        """Creates an instance of :class:`Logger` with the given verbosity
+        level and optional header."""
+        self._logger = logging.getLogger('biseqt')
+        self._logger.setLevel(log_level)
+        self._header = header
+
+    def log(self, message, level=logging.INFO):
+        """Logs a message of given severity level."""
+        self._logger.log(level, message, extra={'header': self._header})
 
 ffi = cffi.FFI()
 lib = ffi.dlopen(os.path.join(os.path.dirname(__file__), 'pwlib', 'pwlib.so'))
