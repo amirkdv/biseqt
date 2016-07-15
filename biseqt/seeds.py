@@ -126,56 +126,110 @@ class SeedIndex(object):
         kmer_index (KmerIndex): The kmer index to operate on.
         db (database.DB): The database inherited from :attr:`kmer_index`.
         wordlen (int): The word length inherited from :attr:`kmer_index`.
+        seeds_table (str): ``seeds_N`` contains 3-tuples of ``(id0, id1, pos)``
+            for all seeds between each pair of scanned sequences (``N`` is the
+                :attr:`word length <wordlen>`).
+        diagonals_table (str): ``diagonals_N`` contains scores and radii for
+            each diagonal of the edit graph of each pair of scanned sequences
+            (``N`` is the :attr:`word length <wordlen>`).
     """
     def __init__(self, kmer_index):
         assert isinstance(kmer_index, KmerIndex)
         self.kmer_index = kmer_index
         self.wordlen = self.kmer_index.wordlen
         self.db = self.kmer_index.db
+        self.seeds_table = 'seeds_%d' % self.wordlen
+        self.diagonals_table = 'diagonals_%d' % self.wordlen
+
+        def drop_all_indices(*args, **kwargs):
+            self.drop_sql_index(self.seeds_table)
+            self.drop_sql_index(self.diagonals_table)
+
         self.db.add_event_listener('db-initialized', self.initialize)
+        self.db.add_event_listener('sequences-loading', drop_all_indices)
 
     _init_script = """
-        CREATE TABLE IF NOT EXISTS seeds_%d (
+        CREATE TABLE IF NOT EXISTS %s ( -- seeds table
           'id0'   INTEGER,              -- REFERENCES sequence(id)
                                         -- but do not declare it to save time
                                         -- on checking referential integrity.
-          'id1'   INTEGER,              -- REFERENCES sequence(id), same.
+          'id1'   INTEGER,              -- REFERENCES kmers_N_hits(id), same.
+          'pos0'  INTEGER,              -- starting position in sequence 0.
+          'pos1'  INTEGER               -- starting position in sequence 1.
+        );
+        CREATE TABLE IF NOT EXISTS %s ( -- diagonals table
+          'id0'   INTEGER,              -- REFERENCES sequence(id)
+                                        -- but do not declare it to save time
+                                        -- on checking referential integrity.
+          'id1'   INTEGER,              -- REFERENCES kmers_N_hits(id), same.
           'diag'  INTEGER,              -- a single diagonal in the edit graph.
-          'radius'INTEGER DEFAULT NULL, -- the diagonal band radius for the two
-                                        -- sequences with diag as center.
-          'score' REAL DEFAULT NULL,    -- the log(p-value) for the number of
+          'count' INTEGER DEFAULT NULL, -- number of seeds in this diagonal
+          'radius'INTEGER DEFAULT NULL, -- the band radius for the optimal band
+                                        -- with this diagonal as center.
+          'score' REAL DEFAULT NULL     -- the log(p-value) for the number of
                                         -- seeds on the band centered at this
                                         -- diagonal.
-          'seeds' VARCHAR,              -- all seeds on this diagonal separated
-                                        -- by ",". Each seed is denoted by
-                                        -- "pos0:pos1" containing the starting
-                                        -- position on id0 and id1.
-          UNIQUE (id0, id1, diag)       -- needed for insert-or-append queries.
         );
     """
 
     def initialize(self, conn):
         """Event handler for "db-initialized" (cf. :attr:`DB.events
-        <biseqt.database.DB.events>`). Creates a single table:
+        <biseqt.database.DB.events>`). Creates two tables:
 
-        * ``seeds_N`` keeping track of all observed :class:`seeds <Seed>`
-          between pairs of sequences.
+        * :attr:`seeds_table`,
+        * :attr:`diagonals_table`,
 
         Args:
             conn (sqlite3.Connection): An open connection to operate on.
         """
-        init_script = self._init_script % self.wordlen
-        conn.cursor().execute(init_script)
+        conn.cursor().execute(
+            self._init_script % (self.seeds_table, self.diagonals_table)
+        )
 
     # put the initialization script in the docs
     initialize.__doc__ += '\n\n\t.. code-block:: sql\n\t%s\n' % \
                           '\n\t'.join(_init_script.split('\n'))
+
+    def create_sql_index(self, table=None):
+        """Creates a ``(id0, id1)`` SQL index over a given table.
+
+        Args:
+            table (str): Either of :attr:`seeds_table` or
+                :attr:`diagonals_table`.
+        """
+        assert table in [self.seeds_table, self.diagonals_table]
+        self.log('Creating SQL indices for %s.' % table)
+        with self.db.connection() as conn:
+            conn.cursor().execute("""
+                CREATE INDEX IF NOT EXISTS %s_seqpair ON %s (id0, id1)
+            """ % (self.seeds_table, self.seeds_table))
+
+    def drop_sql_index(self, table=None):
+        """Drops SQL indices created by :func:`create_sql_index`.
+        Args:
+            table (str): Either of :attr:`seeds_table` or
+                :attr:`diagonals_table`.
+        """
+        self.log('Dropping SQL indices for kmers.')
+        assert table in [self.seeds_table, self.diagonals_table]
+        self.log('Dropping SQL indices for %s.' % table)
+        with self.db.connection() as conn:
+            conn.cursor().execute("""
+                DROP INDEX IF EXISTS %s_seqpair;
+            """ % (self.seeds_table))
+
+    def log(self, *args, **kwargs):
+        """Wraps :func:`log <biseqt.database.DB.log>` of :attr:`db`."""
+        self.db.log(*args, **kwargs)
 
     def index_seeds(self, max_kmer_score=None):
         """Indexes all seeds and their diagonal positions. For each kmer with
         :math:`n` hits from *distinct* sequences :math:`n\\choose2` seeds
         are created. If a kmer occurs multiple times in a sequence seeds
         between different positions of the same sequence are not considered.
+        If a minimum kmer score is required it is assumed that
+        :func:`score_kmers <biseqt.kmers.KmerIndex.score_kmers>` has already
+        been called.
 
         Keyword Args:
             max_kmer_score: The maximum score beyond which kmers are not
@@ -184,30 +238,24 @@ class SeedIndex(object):
                 <biseqt.kmers.KmerIndex.score_kmers>`). Default is None in
                 which case all kmers are considered.
         """
-        # this only works if there is a unique constraint on (id0, id1, diag)
-        query = """
-            INSERT OR REPLACE INTO seeds_%d (id0, id1, diag, seeds)
-                SELECT ?, ?, ?,
-                    IFNULL(
-                        (SELECT seeds FROM seeds_%d
-                         WHERE id0 = ? AND id1 = ? AND diag = ?), ""
-                    ) || ?
-        """ % (self.wordlen, self.wordlen)
-
         def _records():
             kmers = self.kmer_index.kmers(max_score=max_kmer_score)
             for kmer, hits, _ in kmers:
                 for (id0, pos0), (id1, pos1) in combinations(hits, 2):
-                    diag = pos0 - pos1
-                    unique = (id0, id1, diag)
-                    yield unique + unique + ('%d:%d,' % (pos0, pos1),)
+                    yield id0, id1, pos0, pos1
 
-        self.kmer_index.score_kmers(only_missing=True)
+        self.log('Indexing seeds (max_kmer_score=%s)' % max_kmer_score)
         with self.db.connection() as conn:
-            conn.cursor().executemany(query, _records())
+            conn.cursor().executemany(
+                """INSERT INTO %s (id0, id1, pos0, pos1) VALUES (?, ?, ?, ?)
+                """ % self.seeds_table,
+                _records()
+            )
 
     def cum_seed_count(self, id0, id1, len0, len1):
-        """Returns the cumulative count of seeds per diagonals.
+        """Returns the cumulative count of seeds per diagonals. It is assumed
+        that :attr:`diagonals table <diagonals_table>` is populated with seed
+        counts on each diagonal by :func:`count_seeds_on_diagonals`.
 
         Args:
             id0 (int): The identifier for the first (vertical) sequence.
@@ -217,14 +265,16 @@ class SeedIndex(object):
 
         Returns:
             tuple:
-                A list of length ``len0 + len1 + 1`` containing the cumulative
-                count of seeds upto each diagonal from ``-len1`` to ``+len0``,
-                and a list of all diagonals containing seeds.
+                A tuple of a list of length ``len0 + len1 + 1`` containing the
+                cumulative count of seeds upto each diagonal from ``-len1`` to
+                ``+len0``, and a list of tuples containing the diagonals and
+                their respective radii as already set in the :attr:`digonals
+                table <diagonals_table>`.
         """
         query = """
-            SELECT diag, seeds FROM seeds_%d
+            SELECT diag, radius, count FROM %s
             WHERE id0 = ? AND id1 = ? ORDER BY diag ASC
-        """ % self.wordlen
+        """ % self.diagonals_table
 
         diags = []
         seed_count = [0] * (len1 + len0 + 1)
@@ -232,14 +282,13 @@ class SeedIndex(object):
         with self.db.connection() as conn:
             cursor = conn.cursor()
             cursor.execute(query, (id0, id1))
-            # count seeds in diagonal band
-            for diag, seeds in cursor:
-                diags.append(diag)
+            for diag, radius, count in cursor:
+                diags.append((diag, radius))
 
                 diag += len1
                 for _diag in range(prev_diag, diag + 1):
                     seed_count[_diag] = seed_count[prev_diag]
-                seed_count[diag] += seeds.count(':')
+                seed_count[diag] += count
                 prev_diag = diag
 
         for _diag in range(prev_diag, len(seed_count)):
@@ -247,10 +296,64 @@ class SeedIndex(object):
 
         return seed_count, diags
 
-    def score_seeds(self, only_missing=True, gap_prob=None, sensitivity=None):
+    # FIXME the sequence is:
+    # 1. index_seeds()
+    # 2. count_seeds_on_diagonals()
+    # 3. calculate_band_radii()
+    # 4. score_diagonals()
+    # simplify it!
+    def count_seeds_on_diagonals(self):
+        """Populates the :attr:`diagonals table <diagonals_table>` form the
+        contents of the :attr:`seeds table <seeds_table>`. Radius and score
+        information are left blank."""
+        self.create_sql_index(self.seeds_table)
+        self.log('Counting seeds on each diagonal of each sequence pair')
+        with self.db.connection() as conn:
+            conn.cursor().execute("""
+                INSERT INTO %s (id0, id1, diag, count)
+                SELECT id0, id1, pos0 - pos1, COUNT(*) FROM %s
+                GROUP BY id0, id1, pos0 - pos1
+            """ % (self.diagonals_table, self.seeds_table))
+
+    def calculate_band_radii(self, gap_prob=None, sensitivity=None):
+        """Calculates the diagonal band radius for each entry in the
+        :attr:`diagonals table <diagonals_table>` using :func:`band_radius`.
+
+        Keyword Args:
+            gap_prob (float): Passed as is to :func:`band_radius`.
+            sensitivity (float): Passed as is to :func:`band_radius`.
+        """
+        assert sensitivity > 0 and sensitivity < 1
+        assert gap_prob > 0 and gap_prob < 1
+
+        band_radius_kw = {'gap_prob': gap_prob, 'sensitivity': sensitivity}
+
+        select = """
+            SELECT diag FROM %s WHERE id0 = ? AND id1 = ?
+        """ % self.diagonals_table
+
+        update = """
+            UPDATE %s SET radius = ? WHERE id0 = ? AND id1 = ? AND diag = ?
+        """ % self.diagonals_table
+
+        self.log('Calculating band radii (gap_prob=%s, sensitivity=%s)' %
+                 (str(gap_prob), str(sensitivity)))
+        # each entry is a pair of (id, len) tuples
+        seqpairs = combinations(self.kmer_index.scanned_sequences(), 2)
+        self.create_sql_index(self.diagonals_table)
+        with self.db.connection() as conn:
+            cursor = conn.cursor()
+            for (id0, len0), (id1, len1) in seqpairs:
+                cursor = conn.cursor()
+                diags = [x[0] for x in cursor.execute(select, (id0, id1))]
+                recs = ((band_radius(len0, len1, diag, **band_radius_kw),
+                         id0, id1, diag) for diag in diags)
+                conn.cursor().executemany(update, recs)
+
+    def score_diagonals(self):
         """Scores all diagonal bands containing seeds for each pair of sequences.
-        The radius for each diagonal band is calculated using
-        :func:`band_radius` and the score for a band is the negative log
+        The radius for each diagonal band is assumed to be calculated by
+        :func:`calculate_band_radii`. The score for a band is the negative log
         p-value of the observed number of seeds in it under the null hypothesis
         that seeds occur randomly throughout the dynamic programming table.
 
@@ -281,18 +384,10 @@ class SeedIndex(object):
 
         A high scoring diagonal band is less likely to be accidental and more
         likely to indicate an overlap between the two sequences.
-
-        Keyword Args:
-            gap_prob (float): Passed as is to :func:`band_radius`.
-            sensitivity (float): Passed as is to :func:`band_radius`.
         """
-        assert sensitivity > 0 and sensitivity < 1
-        assert gap_prob > 0 and gap_prob < 1
-
         query = """
-            UPDATE seeds_%d SET score = ?, radius = ?
-            WHERE id0 = ? AND id1 = ? AND diag = ?
-        """ % self.wordlen
+            UPDATE %s SET score = ? WHERE id0 = ? AND id1= ? AND diag = ?
+        """ % self.diagonals_table
 
         def score_calculator(len0, len1, diag, radius, num_seeds):
             band_width = 2 * radius
@@ -307,22 +402,22 @@ class SeedIndex(object):
             # len0 and len1, and not on what differentiates bands.
             return - log(len0 + len1) - num_seeds * seed_contribution
 
-        band_radius_kw = {'gap_prob': gap_prob, 'sensitivity': sensitivity}
+        self.log('Scoring all diagonals for each pair of sequences.')
+        # each entry is a pair of (id, len) tuples
+        seqpairs = combinations(self.kmer_index.scanned_sequences(), 2)
+        self.create_sql_index(self.diagonals_table)
         with self.db.connection() as conn:
             cursor = conn.cursor()
-            scanned_sequences = self.kmer_index.scanned_sequences()
-            for (id0, len0), (id1, len1) in combinations(scanned_sequences, 2):
+            for (id0, len0), (id1, len1) in seqpairs:
                 seed_count, diags = self.cum_seed_count(id0, id1, len0, len1)
-                for diag in diags:
-                    radius = band_radius(len0, len1, diag, **band_radius_kw)
+                for diag, radius in diags:
                     center_idx = diag + len1
                     upper_idx = min(center_idx + radius, len(seed_count) - 1)
                     lower_idx = max(center_idx - radius - 1, 0)
                     num_seeds = seed_count[upper_idx] - seed_count[lower_idx]
                     score = score_calculator(len0, len1, diag, radius,
                                              num_seeds)
-                    args = (score, radius, id0, id1, diag)
-                    cursor.execute(query, args)
+                    cursor.execute(query, (score, id0, id1, diag))
 
     def highest_scoring_band(self, id0, id1, min_band_score=None):
         """Returns the diagonal range with the highest score (i.e lowest
@@ -346,11 +441,10 @@ class SeedIndex(object):
         """
         assert isinstance(id0, int) and isinstance(id1, int) and id0 < id1
         query = """
-            SELECT diag - radius, diag + radius FROM seeds_%d
+            SELECT diag - radius, diag + radius FROM %s
             WHERE id0 = ? AND id1 = ?
-        """ % self.wordlen
+        """ % self.diagonals_table
         args = (id0, id1)
-
         if min_band_score is not None:
             query += ' AND score >= ?'
             args += (float(min_band_score), )
@@ -362,7 +456,7 @@ class SeedIndex(object):
             for min_diag, max_diag in cursor:
                 return min_diag, max_diag
 
-            return None
+        return None
 
     def seeds(self, id0, id1, diag_range=None):
         """Yields the :class:`seeds <Seed>` and their respective scores for a
@@ -387,22 +481,19 @@ class SeedIndex(object):
         assert isinstance(id0, int) and isinstance(id1, int) and id0 < id1
 
         query = """
-            SELECT seeds, score FROM seeds_%d
+            SELECT pos0, pos1 FROM %s
             WHERE id0 = ? AND id1 = ?
-        """ % (self.wordlen)
+        """ % (self.seeds_table)
         args = (id0, id1)
         if diag_range is not None:
             assert isinstance(diag_range, tuple)
             assert len(diag_range) == 2 and diag_range[0] <= diag_range[1]
-            query += ' AND diag BETWEEN ? AND ?'
+            query += ' AND pos0 - pos1 BETWEEN ? AND ?'
             args += diag_range
 
         seed_kw = {'id0': id0, 'id1': id1, 'length': self.wordlen}
         with self.db.connection() as conn:
             cursor = conn.cursor()
             cursor.execute(query, args)
-            for seeds, score in cursor:
-                seeds = tuple(tuple(int(i) for i in seed.split(':'))
-                              for seed in seeds.split(',') if seed)
-                for pos0, pos1 in seeds:
-                    yield Seed(pos0=pos0, pos1=pos1, **seed_kw), score
+            for pos0, pos1 in cursor:
+                yield Seed(pos0=pos0, pos1=pos1, **seed_kw)
