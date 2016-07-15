@@ -39,19 +39,17 @@ def test_kmer_as_int_limitations():
 
 @pytest.fixture(ids=['one-letter alphabet', 'two-letter alphabet'],
                 params=[Alphabet('ACGT'), Alphabet(['00', '01', '11'])])
-def db_gen(request):
-    """Returns a function that generates a sequence database (i.e
-    ``biseqt.database.DB``) with parametrized alphabet (single letter and
-    double letter) stored in a temporary file."""
-    def f():
-        yield DB(':memory:', request.param)
-    return f
+def seq_db(request):
+    """Returns a a sequence database (i.e ``biseqt.database.DB``) with
+    parametrized alphabet (single letter and double letter) stored in
+    memory."""
+    return DB(':memory:', request.param)
 
 
 @pytest.mark.parametrize('wordlen', [3, 6, 9],
                          ids=['k = %d' % i for i in [3, 6, 9]])
-def test_kmer_as_int(db_gen, wordlen):
-    db = next(db_gen())
+def test_kmer_as_int(seq_db, wordlen):
+    db = seq_db
     A = db.alphabet
     kmer_index = KmerIndex(db, wordlen)
     kmers = product(range(len(A)), repeat=wordlen)
@@ -62,8 +60,8 @@ def test_kmer_as_int(db_gen, wordlen):
 
 @pytest.mark.parametrize('wordlen', [3, 6, 9],
                          ids=['k = %d' % i for i in [3, 6, 9]])
-def test_scan_kmers(db_gen, wordlen):
-    db = next(db_gen())
+def test_scan_kmers(seq_db, wordlen):
+    db = seq_db
     A = db.alphabet
     kmer_index = KmerIndex(db, wordlen)
     S = rand_seq(A, 50)
@@ -71,12 +69,18 @@ def test_scan_kmers(db_gen, wordlen):
         'correct number of kmers should be scanned'
 
 
-def test_index_kmers():
-    A = Alphabet('ACGT')
-    wordlen = 3
-    db = DB(':memory:', A)
-    kmer_index = KmerIndex(db, wordlen)
-    db.initialize()
+@pytest.fixture(ids=['wordlen 3'], params=[3])
+def dna_kmer_index(request):
+    """Returns a kmer index created on top of a sequence database (i.e
+    ``biseqt.database.DB``) with DNA alphabet, parameterized word length,
+    stored in memory."""
+    return KmerIndex(DB(':memory:', Alphabet('ACGT')), request.param)
+
+
+def test_index_kmers(dna_kmer_index):
+    kmer_index = dna_kmer_index
+    db, A, wordlen = kmer_index.db, kmer_index.db.alphabet, kmer_index.wordlen
+    kmer_index.db.initialize()
 
     S = A.parse('ATGCA', name='foo')
     S_id = db.insert(S).id
@@ -84,7 +88,9 @@ def test_index_kmers():
     assert kmer_index.num_kmers() == len(S) - wordlen + 1
 
     T = A.parse('ATGCC', name='bar')
-    T_id = db.insert(T).id
+    T_rec = db.insert(T)
+    assert T_rec is not None
+    T_id = T_rec.id
     assert kmer_index.num_kmers() == 4
     assert kmer_index.total_length_indexed() == len(S) + len(T)
 
@@ -95,7 +101,8 @@ def test_index_kmers():
     assert len(atg_hits) == 1 and atg_hits[0][0] == [(S_id, 0), (T_id, 0)]
 
     # calculate scores
-    assert atg_hits[0][1] is None
+    assert atg_hits[0][1] is None, \
+        'score should be left None until explicitly calculated'
     kmer_index.score_kmers()
     atg_hits = [(hits, score) for kmer, hits, score in kmer_index.kmers()
                 if kmer == atg_int]

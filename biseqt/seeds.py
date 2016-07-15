@@ -132,7 +132,7 @@ class SeedIndex(object):
         self.kmer_index = kmer_index
         self.wordlen = self.kmer_index.wordlen
         self.db = self.kmer_index.db
-        self.db.add_event_listener('initialize', self.initialize)
+        self.db.add_event_listener('db-initialized', self.initialize)
 
     _init_script = """
         CREATE TABLE IF NOT EXISTS seeds_%d (
@@ -155,7 +155,7 @@ class SeedIndex(object):
     """
 
     def initialize(self, conn):
-        """Event handler for "initialize" (cf. :attr:`DB.events
+        """Event handler for "db-initialized" (cf. :attr:`DB.events
         <biseqt.database.DB.events>`). Creates a single table:
 
         * ``seeds_N`` keeping track of all observed :class:`seeds <Seed>`
@@ -203,7 +203,7 @@ class SeedIndex(object):
                     yield unique + unique + ('%d:%d,' % (pos0, pos1),)
 
         self.kmer_index.score_kmers(only_missing=True)
-        with self.db.connect() as conn:
+        with self.db.connection() as conn:
             conn.cursor().executemany(query, _records())
 
     def cum_seed_count(self, id0, id1, len0, len1):
@@ -229,7 +229,7 @@ class SeedIndex(object):
         diags = []
         seed_count = [0] * (len1 + len0 + 1)
         prev_diag = 0
-        with self.db.connect() as conn:
+        with self.db.connection() as conn:
             cursor = conn.cursor()
             cursor.execute(query, (id0, id1))
             # count seeds in diagonal band
@@ -308,7 +308,7 @@ class SeedIndex(object):
             return - log(len0 + len1) - num_seeds * seed_contribution
 
         band_radius_kw = {'gap_prob': gap_prob, 'sensitivity': sensitivity}
-        with self.db.connect() as conn:
+        with self.db.connection() as conn:
             cursor = conn.cursor()
             scanned_sequences = self.kmer_index.scanned_sequences()
             for (id0, len0), (id1, len1) in combinations(scanned_sequences, 2):
@@ -356,7 +356,7 @@ class SeedIndex(object):
             args += (float(min_band_score), )
         query += ' ORDER BY score DESC limit 1'
 
-        with self.db.connect() as conn:
+        with self.db.connection() as conn:
             cursor = conn.cursor()
             cursor.execute(query, args)
             for min_diag, max_diag in cursor:
@@ -398,7 +398,7 @@ class SeedIndex(object):
             args += diag_range
 
         seed_kw = {'id0': id0, 'id1': id1, 'length': self.wordlen}
-        with self.db.connect() as conn:
+        with self.db.connection() as conn:
             cursor = conn.cursor()
             cursor.execute(query, args)
             for seeds, score in cursor:

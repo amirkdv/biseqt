@@ -154,8 +154,8 @@ def test_database_events():
         test_database_events.callback_called += 1
 
     db = DB(':memory:', A)
-    db.add_event_listener('initialize', callback)
-    db.add_event_listener('insert-sequence', callback)
+    db.add_event_listener('db-initialized', callback)
+    db.add_event_listener('sequence-inserted', callback)
     db.initialize()
     assert test_database_events.callback_called == 1, \
         'event callbacks for "initialize" should be executed'

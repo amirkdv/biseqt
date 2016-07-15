@@ -92,17 +92,31 @@ class KmerIndex(object):
     Attributes:
         db (database.DB): The sequence :class:`database <biseqt.database.DB>`.
         wordlen (int): Length of kmers of interest to this index.
+        hits_table (str): ``kmers_N_hits`` contains occurences of each kmer
+            where ``N`` is the :attr:`word length <wordlen>`.
+        scores_table (str): ``kmers_N_scores`` contains scores of each kmer
+            where ``N`` is the :attr:`word length <wordlen>`.
+        status_table (str): ``kmers_N_indexed`` contains metadata about scanned
+            sequences where ``N`` is the :attr:`word length <wordlen>`.
     """
     def __init__(self, db, wordlen):
         assert isinstance(db, DB)
         self.db = db
         self.wordlen = wordlen
-        db.add_event_listener('initialize', self.initialize)
-        db.add_event_listener('insert-sequence', self.index_kmers)
+
+        self.hits_table = 'kmers_%d_hits' % self.wordlen
+        self.scores_table = 'kmers_%d_scores' % self.wordlen
+        self.status_table = 'kmers_%d_indexed' % self.wordlen
+
+        db.add_event_listener('db-initialized', self.initialize)
+        db.add_event_listener('sequence-inserted', self.index_kmers)
+        db.add_event_listener('sequences-loading',
+                              lambda *args: self.delete_sql_index())
 
         self._digits = '0123456789abcdefghijklmnopqrstuvwxyz'
         assert len(self.db.alphabet) <= len(self._digits), \
             'Maximum alphabet size of %d exceeded' % len(self._digits)
+
         int_size = 8 * struct.calcsize('P')
         assert self.wordlen < (int_size - 1)/2., \
             'Maximum kmer length %d for %d-bit integers exceeded' % \
@@ -110,16 +124,19 @@ class KmerIndex(object):
 
     _init_script = """
     -- Kmer index initialization script
-        CREATE TABLE IF NOT EXISTS kmers_%d (
+        CREATE TABLE IF NOT EXISTS kmers_%d_hits (
+          'kmer'  INTEGER,              -- The kmer in integer representation.
+          'seq'   INTEGER,              -- REFERENCES sequence(id)
+                                        -- but do not declare it to save time
+                                        -- on checking referential integrity.
+          'pos'   INTEGER               -- the position of kmer in sequence.
+        );
+        CREATE TABLE IF NOT EXISTS kmers_%d_scores (
           'kmer'  INTEGER PRIMARY KEY,  -- The kmer in integer representation.
-          'hits'  VARCHAR,              -- The positions where the kmer has
-                                        -- been observed; each hit is denoted
-                                        -- by "id:pos" and hits are separated
-                                        -- by ",".
-          'score' REAL DEFAULT NULL     -- The log(p-value) for the number of
+          'score' REAL DEFAULT NULL     -- The -log(p-value) for the number of
                                         -- occurences of this kmer.
         );
-        CREATE TABLE IF NOT EXISTS kmer_indexed_%d (
+        CREATE TABLE IF NOT EXISTS kmers_%d_indexed (
           'id'     INTEGER REFERENCES sequence(id),
                                         -- the id of an indexed sequence
           'length' INTEGER              -- the length of the sequence
@@ -127,25 +144,26 @@ class KmerIndex(object):
     """
 
     def initialize(self, conn):
-        """Event handler for "initialize" (cf. :attr:`DB.events
-        <biseqt.database.DB.events>`). Creates two tables:
+        """Event handler for "db-initialized" (cf. :attr:`DB.events
+        <biseqt.database.DB.events>`). Creates three tables:
 
-        * ``kmer_indexed_N`` keeping track of those sequences that have already
-          been scanned for kmers.
-        * ``kmers_N`` keeping track of observed kmers and their position of
-          occurrence in each sequence.
-
-        where ``N`` is the :attr:`word length <wordlen>`.
+        * :attr:`hits_table`,
+        * :attr:`scores_table`,
+        * :attr:`status_table`.
 
         Args:
             conn (sqlite3.Connection): An open connection to operate on.
         """
-        init_script = self._init_script % (self.wordlen, self.wordlen)
+        init_script = self._init_script % ((self.wordlen,) * 3)
         conn.cursor().execute(init_script)
 
     # put the initialization script in the docs
     initialize.__doc__ += '\n\n\t.. code-block:: sql\n\t%s\n' % \
                           '\n\t'.join(_init_script.split('\n'))
+
+    def log(self, *args, **kwargs):
+        """Wraps :func:`log <biseqt.database.DB.log>` of :attr:`db`."""
+        self.db.log(*args, **kwargs)
 
     def kmer_as_int(self, contents):
         """Calculates the integer representation of a kmer by treating its
@@ -194,31 +212,23 @@ class KmerIndex(object):
         return int(as_str, len(self.db.alphabet))
 
     def scan_kmers(self, seq):
-        """A generator for kmer hit tuples of the form ``(kmer, pos)``.
+        """A generator for kmer hit tuples of the form ``(kmer, pos)``. Kmers
+        are represented in integer form (cf. :func:`kmer_as_int`).
 
         Args:
             seq (sequence.Sequence): The sequence to be scanned.
 
         Yields:
-            tuple:
-                The first element is the kmer in integer form (cf.
-                :func:`kmer_as_int`) and the second element is the starting
-                position of the kmer in ``seq``.
+            tuple: a kmer and its starting position in ``seq``.
         """
-
-        for idx in range(len(seq) - self.wordlen + 1):
-            kmer = self.kmer_as_int(seq.contents[idx: idx + self.wordlen])
-            yield (kmer, idx)
+        for pos in range(len(seq) - self.wordlen + 1):
+            kmer = self.kmer_as_int(seq.contents[pos: pos + self.wordlen])
+            yield (kmer, pos)
 
     def index_kmers(self, conn, seq, rec):
-        """Event handler for "insert-sequence" (cf. :attr:`database.events
+        """Event handler for "sequence-inserted" (cf. :attr:`database.events
         <biseqt.database.events>`). Indexes all kmers observed in the given
-        sequence in ``kmers_N``. For example, for word length 3 and a DNA
-        sequence ``ACACAC`` with identifier 1 we get::
-
-            kmer| hits          | score
-            4   | 1:0,1:2,1:4   | NULL
-            34  | 1:1,1:3,1:4   | NULL
+        sequence in :attr:`hits_table`.
 
         Args:
             conn (sqlite3.Connection): SQLite connection to operate on.
@@ -228,46 +238,42 @@ class KmerIndex(object):
                 insertion of ``seq`` with the :attr:`id
                 <biseqt.database.Record.id>` field populated.
         """
-        # FIXME only scan those sequences that are not already scanned.
-        # this only works if there is a unique constraint on the kmer column.
-        hit_query = """
-            INSERT OR REPLACE INTO kmers_%d (kmer, hits)
-                SELECT ?, IFNULL(
-                            (SELECT hits FROM kmers_%d WHERE kmer = ?), ""
-                          ) || ?
-        """ % (self.wordlen, self.wordlen)
-        records = ((kmer, kmer, '%d:%d,' % (rec.id, pos))
-                   for kmer, pos in self.scan_kmers(seq))
-        conn.cursor().executemany(hit_query, records)
+        cursor = conn.cursor()
+        q = 'SELECT * FROM %s WHERE id = ?' % self.status_table
+        cursor.execute(q, (rec.id,))
+        if sum(1 for _ in cursor) > 0:
+            return
 
-        status_query = """
-            INSERT INTO kmer_indexed_%d (id, length) VALUES (?, ?)
-        """ % self.wordlen
-        conn.cursor().execute(status_query, (rec.id, len(seq)))
+        cursor.executemany(
+            'INSERT INTO %s (kmer, seq, pos) VALUES (?,?,?)' % self.hits_table,
+            ((kmer, rec.id, pos) for kmer, pos in self.scan_kmers(seq))
+        )
+        cursor.execute(
+            'INSERT INTO %s (id, length) VALUES (?, ?)' % self.status_table,
+            (rec.id, len(seq))
+        )
 
     def total_length_indexed(self):
-        """The total number of letters, among all sequences, indexed so far for
-        kmers.
+        """The total number of letters, among all sequences, indexed so far.
 
         Returns:
             int
         """
         with self.db.connection() as conn:
             cursor = conn.cursor()
-            q = 'SELECT SUM(length) FROM kmer_indexed_%d' % self.wordlen
+            q = 'SELECT SUM(length) FROM kmers_%d_indexed' % self.wordlen
             cursor.execute(q)
             return int(cursor.next()[0])
 
     def num_kmers(self):
-        """The total number of kmers observed so far.
+        """The total number of kmers, among all sequences, observed so far.
 
         Returns:
             int
         """
         with self.db.connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute('SELECT COUNT(*) FROM kmers_%d' % self.wordlen)
-            return int(cursor.next()[0])
+            q = 'SELECT COUNT(DISTINCT kmer) FROM %s' % self.hits_table
+            return conn.cursor().execute(q).next()[0]
 
     def score_kmers(self, only_missing=True):
         """Calculates the negative log p-value for the number of occurences of
@@ -290,18 +296,27 @@ class KmerIndex(object):
         mu, sd = binomial_to_normal(L, kmer_probability)
 
         def score_calculator(num_occurrences):
-            # bonferroni correction
+            # Bonferroni correction:
             return - log(N) + normal_neg_log_pvalue(mu, sd, num_occurrences)
 
-        select = 'SELECT kmer, hits FROM kmers_%d ' % self.wordlen + \
-                 ('WHERE score IS NULL' if only_missing else '')
-
-        update = 'UPDATE kmers_%d SET score = ? WHERE kmer = ?' % self.wordlen
+        if only_missing:
+            select = """
+                SELECT hits.kmer, COUNT(*) FROM %s AS hits
+                INNER JOIN %s AS scores ON scores.kmer = hits.kmer
+                WHERE score is NULL
+                GROUP BY hits.kmer
+            """ % (self.hits_table, self.scores_table)
+        else:
+            select = """
+                SELECT kmer, COUNT(*) FROM %s GROUP BY kmer
+            """ % self.hits_table
+        update = 'UPDATE %s SET score = ? WHERE kmer = ?' % self.scores_table
+        self.log('Scoring all observed kmers by repetition.')
         with self.db.connection() as conn:
             select_cursor, insert_cursor = conn.cursor(), conn.cursor()
             select_cursor.execute(select)
-            for kmer, hits in select_cursor:
-                score = score_calculator(hits.count(':'))
+            for kmer, count in select_cursor:
+                score = score_calculator(count)
                 insert_cursor.execute(update, (score, kmer))
 
     def scanned_sequences(self):
@@ -312,12 +327,48 @@ class KmerIndex(object):
             tuple:
                 The sequence integer identifier and the length of the sequence.
         """
-        query = 'SELECT id, length FROM kmer_indexed_%d' % self.wordlen
-        with self.db.connect() as conn:
+        query = 'SELECT id, length FROM kmers_%d_indexed' % self.wordlen
+        with self.db.connection() as conn:
             cursor = conn.cursor()
             cursor.execute(query)
             for _id, _len in cursor:
                 yield _id, _len
+
+    def create_sql_index(self):
+        """Creates SQL indices over :attr:`hits_table`."""
+        self.log('Creating SQL indices for kmers.')
+        with self.db.connection() as conn:
+            conn.cursor().execute("""
+                CREATE INDEX IF NOT EXISTS kmers_%d_kmer ON %s (kmer);
+                CREATE INDEX IF NOT EXISTS kmers_%d_seq ON %s (seq);
+            """ % ((self.wordlen, self.hits_table) * 2))
+
+    def delete_sql_index(self):
+        """Drops SQL indices created by :func:`create_sql_index`."""
+        self.log('Dropping SQL indices for kmers.')
+        with self.db.connection() as conn:
+            conn.cursor().execute("""
+                DROP INDEX IF EXISTS kmers_%d_kmer;
+                DROP INDEX IF EXISTS kmers_%d_seq;
+            """ % (self.wordlen, self.wordlen))
+
+    def hits(self, kmer):
+        """Returns all hits of a given kmer, represented as an integer or a
+        tuple of sequence :attr:`contents <biseqt.sequence.Sequence.contents>`.
+
+        Args:
+            kmer (int|tuple): The kmer of interest.
+
+        Returns:
+            list:
+                A list of 2-tuples containing sequence ids (as in the
+                ``sequence`` table) and positions.
+        """
+        if isinstance(kmer, tuple):
+            kmer = self.kmer_as_int(kmer)
+        query = 'SELECT seq, pos FROM %s WHERE kmer = ?' % self.hits_table
+        with self.db.connection() as conn:
+            return list(conn.cursor().execute(query, (kmer,)))
 
     def kmers(self, max_score=None):
         """Lazy-loads the observed kmers, their occurences, and their score.
@@ -333,14 +384,15 @@ class KmerIndex(object):
                 each occurence is a tuple of sequence id and position, and
                 the score for the kmer.
         """
-        query = 'SELECT kmer, hits, score from kmers_%s' % self.wordlen
+        self.create_sql_index()
+        query = 'SELECT kmer, score FROM %s' % self.scores_table
         if max_score is not None:
             query += ' WHERE score < %f' % max_score
 
         with self.db.connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute(query)
-            for kmer, hits, score in cursor:
-                hits = [tuple(int(i) for i in hit.split(':'))
-                        for hit in hits.split(',') if hit]
-                yield kmer, hits, score
+            conn.cursor().execute("""
+                INSERT OR IGNORE INTO %s (kmer)
+                SELECT DISTINCT kmer FROM %s
+            """ % (self.scores_table, self.hits_table))
+            for kmer, score in conn.cursor().execute(query):
+                yield kmer, self.hits(kmer), score

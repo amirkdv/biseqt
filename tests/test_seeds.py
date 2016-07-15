@@ -45,7 +45,7 @@ def test_band_radius():
 @pytest.fixture
 def seed_index_gen():
     """Returns a context manager that creates a database, a kmer index, and a
-    seed index with word length 5 stored in a temporary file. The database is
+    seed index with word length 5 stored in memory. The database is
     populated with 3 sequences of length 100 and all kmers and seeds are
     indexed.
     """

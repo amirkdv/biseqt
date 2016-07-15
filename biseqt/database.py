@@ -231,14 +231,15 @@ class DB(object):
         alphabet (Alphabet): The alphabet for sequences in the database.
     """
 
-    events = ['initialize', 'insert-sequence']
+    events = ['db-initialized', 'sequence-inserted', 'sequences-loading']
     """Events emitted upon special events, cf. :func:`add_event_listener` and
     :func:`emit`. Currently supported events are:
 
-        * ``initialize(db, conn)``: emitted when the initialization script has
+        * ``db-initialized(conn)``: emitted after the initialization script has
           executed; use this event to execute other initialization scripts that
           create tables or configure the database in an idempotent manner.
-        * ``insert-sequence(db, conn, seq, rec)``: emitted after a sequence is
+        * ``sequences-loading(f)``: emitted before bulk loading sequences.
+        * ``sequence-inserted(conn, seq, rec)``: emitted after a sequence is
           inserted in the sequence table; use this event to perform further
           processing on arriving sequences.
 
@@ -247,7 +248,7 @@ class DB(object):
         >>> from biseqt.sequence import Alphabet
         >>> def callback(db, conn): print('called back')
         >>> db = DB('example.db', Alphabet('ACGT'))
-        >>> db.add_event_listener('initialize', callback)
+        >>> db.add_event_listener('db-initialized', callback)
         >>> db.initialize()
         'called back'
     """
@@ -265,7 +266,10 @@ class DB(object):
                 os.access(os.path.dirname(self.path), os.W_OK), \
                 'Database %s is not writable' % self.path
 
-        logging.basicConfig(format='%(asctime)s %(header)s %(message)s')
+        # TODO pull out to top level biseqt
+        logging.basicConfig(
+            format='%(levelname)s [%(asctime)s] %(header)s %(message)s'
+        )
         self._logger = logging.getLogger('biseqt')
         self._logger.setLevel(log_level)
         self._log_header = os.path.relpath(self.path, os.getcwd())
@@ -292,13 +296,13 @@ class DB(object):
     """
 
     def initialize(self):
-        """Initialize the database and emit the ``initialize`` event (cf.
+        """Initialize the database and emit the ``db-initialized`` event (cf.
         :attr:`events`). The initialization operation is idempotant, i.e
         initializing an initialized database has no side effect.
         """
-        with self.connect() as conn:
+        with self.connection() as conn:
             conn.cursor().execute(self._init_script)
-            self.emit('initialize', conn)
+            self.emit('db-initialized', conn)
 
     # put the initialization script in the docs
     initialize.__doc__ += '\n\n\t.. code-block:: sql\n\t%s\n' % \
@@ -339,7 +343,7 @@ class DB(object):
         return tuple(row)
 
     def insert(self, seq, source_file=None, source_pos=0, attrs={}):
-        """Inserts a sequence in the database and emits ``insert-sequence``
+        """Inserts a sequence in the database and emits ``sequence-inserted``
         (cf. :attr:`events`). If the :attr:`content address
         <Record.content_id>` of the sequence matches that of an existing
         sequence, the old record will be overwritten.
@@ -378,7 +382,7 @@ class DB(object):
                 self.log('ignoring duplicate sequence %s' % seq.name,
                          level=logging.WARN)
                 return None
-            self.emit('insert-sequence', conn, seq, rec)
+            self.emit('sequence-inserted', conn, seq, rec)
         return rec
 
     def load_fasta(self, f, num=-1, rc=False):
@@ -405,6 +409,7 @@ class DB(object):
             # e.g. StringIO
             path = None
 
+        self.emit('sequences-loading', f)
         self.log('Loading sequences from %s ...' % str(path))
         indic = ProgressIndicator(num_total=(num if num > 0 else None))
         indic.start()
@@ -497,7 +502,7 @@ class DB(object):
             func (callable): The callable to be invoked, for argument list for
                 each event see :attr:`events`.
         """
-        assert event in self.events
+        assert event in self.events, 'unrecognized event %s' % event
         self.processors[event].append(func)
 
     def emit(self, event, *args):
