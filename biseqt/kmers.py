@@ -95,9 +95,9 @@ class KmerIndex(object):
         hits_table (str): ``kmers_N_hits`` contains occurences of each kmer
             where ``N`` is the :attr:`word length <wordlen>`.
         scores_table (str): ``kmers_N_scores`` contains scores of each kmer
-            where ``N`` is the :attr:`word length <wordlen>`.
+            (``N`` is the :attr:`word length <wordlen>`).
         status_table (str): ``kmers_N_indexed`` contains metadata about scanned
-            sequences where ``N`` is the :attr:`word length <wordlen>`.
+            sequences (``N`` is the :attr:`word length <wordlen>`).
     """
     def __init__(self, db, wordlen):
         assert isinstance(db, DB)
@@ -111,7 +111,7 @@ class KmerIndex(object):
         db.add_event_listener('db-initialized', self.initialize)
         db.add_event_listener('sequence-inserted', self.index_kmers)
         db.add_event_listener('sequences-loading',
-                              lambda *args: self.delete_sql_index())
+                              lambda *args: self.drop_sql_index())
 
         self._digits = '0123456789abcdefghijklmnopqrstuvwxyz'
         assert len(self.db.alphabet) <= len(self._digits), \
@@ -124,19 +124,19 @@ class KmerIndex(object):
 
     _init_script = """
     -- Kmer index initialization script
-        CREATE TABLE IF NOT EXISTS kmers_%d_hits (
+        CREATE TABLE IF NOT EXISTS %s ( -- hits table
           'kmer'  INTEGER,              -- The kmer in integer representation.
           'seq'   INTEGER,              -- REFERENCES sequence(id)
                                         -- but do not declare it to save time
                                         -- on checking referential integrity.
           'pos'   INTEGER               -- the position of kmer in sequence.
         );
-        CREATE TABLE IF NOT EXISTS kmers_%d_scores (
+        CREATE TABLE IF NOT EXISTS %s ( -- scores table
           'kmer'  INTEGER PRIMARY KEY,  -- The kmer in integer representation.
           'score' REAL DEFAULT NULL     -- The -log(p-value) for the number of
                                         -- occurences of this kmer.
         );
-        CREATE TABLE IF NOT EXISTS kmers_%d_indexed (
+        CREATE TABLE IF NOT EXISTS %s ( -- status table
           'id'     INTEGER REFERENCES sequence(id),
                                         -- the id of an indexed sequence
           'length' INTEGER              -- the length of the sequence
@@ -154,8 +154,8 @@ class KmerIndex(object):
         Args:
             conn (sqlite3.Connection): An open connection to operate on.
         """
-        init_script = self._init_script % ((self.wordlen,) * 3)
-        conn.cursor().execute(init_script)
+        conn.cursor().execute(self._init_script % (self.hits_table,
+                              self.scores_table, self.status_table))
 
     # put the initialization script in the docs
     initialize.__doc__ += '\n\n\t.. code-block:: sql\n\t%s\n' % \
@@ -287,8 +287,7 @@ class KmerIndex(object):
 
         Keyword Args:
             only_missing (bool): Whether to re-score all kmers or only those
-                with a ``NULL`` score. Default is True in which case kmers
-                with a score are not re-evaluated.
+                with a ``NULL`` score; default is True.
         """
         N = self.num_kmers()
         L = self.total_length_indexed()
@@ -313,6 +312,8 @@ class KmerIndex(object):
             """ % self.hits_table
         update = 'UPDATE %s SET score = ? WHERE kmer = ?' % self.scores_table
         self.log('Scoring all observed kmers by repetition.')
+
+        self.create_sql_index()
         with self.db.connection() as conn:
             select_cursor, insert_cursor = conn.cursor(), conn.cursor()
             select_cursor.execute(select)
@@ -337,21 +338,21 @@ class KmerIndex(object):
 
     def create_sql_index(self):
         """Creates SQL indices over :attr:`hits_table`."""
-        self.log('Creating SQL indices for kmers.')
+        self.log('Creating SQL indices for %s.' % self.hits_table)
         with self.db.connection() as conn:
             conn.cursor().execute("""
-                CREATE INDEX IF NOT EXISTS kmers_%d_kmer ON %s (kmer);
-                CREATE INDEX IF NOT EXISTS kmers_%d_seq ON %s (seq);
-            """ % ((self.wordlen, self.hits_table) * 2))
+                CREATE INDEX IF NOT EXISTS %s_kmer ON %s (kmer);
+                CREATE INDEX IF NOT EXISTS %s_seq ON %s (seq);
+            """ % ((self.hits_table,) * 4))
 
-    def delete_sql_index(self):
+    def drop_sql_index(self):
         """Drops SQL indices created by :func:`create_sql_index`."""
-        self.log('Dropping SQL indices for kmers.')
+        self.log('Dropping SQL indices for %s.' % self.hits_table)
         with self.db.connection() as conn:
             conn.cursor().execute("""
-                DROP INDEX IF EXISTS kmers_%d_kmer;
-                DROP INDEX IF EXISTS kmers_%d_seq;
-            """ % (self.wordlen, self.wordlen))
+                DROP INDEX IF EXISTS %s_kmer;
+                DROP INDEX IF EXISTS %s_seq;
+            """ % ((self.hits_table,) * 2))
 
     def hits(self, kmer):
         """Returns all hits of a given kmer, represented as an integer or a
@@ -392,13 +393,13 @@ class KmerIndex(object):
                 each occurence is a tuple of sequence id and position, and
                 the score for the kmer.
         """
-        self.create_sql_index()
         query = 'SELECT kmer, score FROM %s' % self.scores_table
         args = ()
         if max_score is not None:
             query += ' WHERE score < ?'
             args += (max_score,)
 
+        self.create_sql_index()
         self._update_score_table()
         with self.db.connection() as conn:
             for kmer, score in conn.cursor().execute(query, args):
