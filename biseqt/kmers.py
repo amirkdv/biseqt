@@ -394,10 +394,12 @@ class KmerIndex(object):
         """
         self.create_sql_index()
         query = 'SELECT kmer, score FROM %s' % self.scores_table
+        args = ()
         if max_score is not None:
-            query += ' WHERE score < %f' % max_score
+            query += ' WHERE score < ?'
+            args += (max_score,)
 
         self._update_score_table()
         with self.db.connection() as conn:
-            for kmer, score in conn.cursor().execute(query):
+            for kmer, score in conn.cursor().execute(query, args):
                 yield kmer, self.hits(kmer), score
