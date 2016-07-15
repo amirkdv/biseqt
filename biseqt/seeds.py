@@ -197,11 +197,11 @@ class SeedIndex(object):
                 :attr:`diagonals_table`.
         """
         assert table in [self.seeds_table, self.diagonals_table]
-        self.log('Creating SQL indices for %s.' % table)
+        self.log('Creating SQL index for %s.' % table)
         with self.db.connection() as conn:
             conn.cursor().execute("""
                 CREATE INDEX IF NOT EXISTS %s_seqpair ON %s (id0, id1)
-            """ % (self.seeds_table, self.seeds_table))
+            """ % (table, table))
 
     def drop_sql_index(self, table=None):
         """Drops SQL indices created by :func:`create_sql_index`.
@@ -210,11 +210,11 @@ class SeedIndex(object):
                 :attr:`diagonals_table`.
         """
         assert table in [self.seeds_table, self.diagonals_table]
-        self.log('Dropping SQL indices for %s.' % table)
+        self.log('Dropping SQL index for %s.' % table)
         with self.db.connection() as conn:
             conn.cursor().execute("""
                 DROP INDEX IF EXISTS %s_seqpair;
-            """ % (self.seeds_table))
+            """ % (table))
 
     def log(self, *args, **kwargs):
         """Wraps :func:`log <biseqt.database.DB.log>` of :attr:`db`."""
