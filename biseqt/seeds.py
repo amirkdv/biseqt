@@ -242,7 +242,7 @@ class SeedIndex(object):
                 for (id0, pos0), (id1, pos1) in combinations(hits, 2):
                     yield id0, id1, pos0, pos1
 
-        self.log('Indexing seeds (max_kmer_score=%s)' % max_kmer_score)
+        self.log('Indexing seeds (max_kmer_score=%s).' % max_kmer_score)
         with self.db.connection() as conn:
             conn.cursor().executemany(
                 """INSERT INTO %s (id0, id1, pos0, pos1) VALUES (?, ?, ?, ?)
@@ -433,12 +433,13 @@ class SeedIndex(object):
 
         Returns:
             tuple:
-                Inclusive upper and lower bounds of the highest scoring
-                diagonal band, or None if no acceptable band is found.
+                A 2-tuple containing a diagonal range (as a tuple of inclusive
+                upper and lower bounds) with the highest score and its score.
+                If no acceptable band is found ``(None, None)`` is returned.
         """
         assert isinstance(id0, int) and isinstance(id1, int) and id0 < id1
         query = """
-            SELECT diag - radius, diag + radius FROM %s
+            SELECT diag - radius, diag + radius, score FROM %s
             WHERE id0 = ? AND id1 = ?
         """ % self.diagonals_table
         args = (id0, id1)
@@ -450,10 +451,10 @@ class SeedIndex(object):
         with self.db.connection() as conn:
             cursor = conn.cursor()
             cursor.execute(query, args)
-            for min_diag, max_diag in cursor:
-                return min_diag, max_diag
+            for min_diag, max_diag, score in cursor:
+                return (min_diag, max_diag), score
 
-        return None
+        return (None, None)
 
     def seeds(self, id0, id1, diag_range=None):
         """Yields the :class:`seeds <Seed>` and their respective scores for a
