@@ -23,9 +23,9 @@
     >>> seed_index.seeds(1, 2, diag_range)  # only yields seeds in best band
 """
 
+from scipy.special import erfinv
 from collections import namedtuple
 from itertools import combinations
-import scipy
 from math import sqrt, log
 
 from .kmers import KmerIndex
@@ -91,7 +91,7 @@ def band_radius(len0, len1, diag, gap_prob=None, sensitivity=None):
     max_alignment_length = min(len0 - diag, len1) + min(diag, 0)
     expected_alignment_length = (2 / (2. - gap_prob)) * max_alignment_length
     assert expected_alignment_length >= 0
-    radius = 2 * scipy.special.erfinv(adjusted_sensitivity) * sqrt(
+    radius = 2 * erfinv(adjusted_sensitivity) * sqrt(
         gap_prob * (1 - gap_prob) * expected_alignment_length
     )
     return max(1, int(radius))
@@ -209,7 +209,6 @@ class SeedIndex(object):
             table (str): Either of :attr:`seeds_table` or
                 :attr:`diagonals_table`.
         """
-        self.log('Dropping SQL indices for kmers.')
         assert table in [self.seeds_table, self.diagonals_table]
         self.log('Dropping SQL indices for %s.' % table)
         with self.db.connection() as conn:
@@ -306,7 +305,7 @@ class SeedIndex(object):
         contents of the :attr:`seeds table <seeds_table>`. Radius and score
         information are left blank."""
         self.create_sql_index(self.seeds_table)
-        self.log('Counting seeds on each diagonal of each sequence pair')
+        self.log('Counting seeds on each diagonal of each sequence pair.')
         with self.db.connection() as conn:
             conn.cursor().execute("""
                 INSERT INTO %s (id0, id1, diag, count)
@@ -404,7 +403,6 @@ class SeedIndex(object):
         self.log('Scoring all diagonals for each pair of sequences.')
         # each entry is a pair of (id, len) tuples
         seqpairs = combinations(self.kmer_index.scanned_sequences(), 2)
-        self.create_sql_index(self.diagonals_table)
         with self.db.connection() as conn:
             cursor = conn.cursor()
             for (id0, len0), (id1, len1) in seqpairs:
