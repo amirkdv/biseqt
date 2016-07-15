@@ -127,3 +127,14 @@ def test_bulk_index_kmers(dna_kmer_index):
 
     # shouldn't do anything
     kmer_index.score_kmers(only_missing=True)
+
+
+def test_inf_score_kmers(dna_kmer_index):
+    kmer_index = dna_kmer_index
+    db, A = kmer_index.db, kmer_index.db.alphabet
+    db.initialize()
+
+    db.insert(A.parse('A' * 1000, name='foo'))
+    kmer_index.score_kmers()
+    _, _, score = kmer_index.kmers().next()
+    assert score == float('+inf')

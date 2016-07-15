@@ -81,7 +81,7 @@ def normal_neg_log_pvalue(mu, sd, x):
     try:
         return - log((1 - erf(z_score/sqrt(2))) / 2.)
     except ValueError:
-        # can only happen if the argument to log is 0
+        # can only happen if the argument to log is 0, i.e z_score >> 1.
         return float('+inf')
 
 
@@ -300,6 +300,7 @@ class KmerIndex(object):
             return - log(N) + normal_neg_log_pvalue(mu, sd, num_occurrences)
 
         if only_missing:
+            self._update_score_table()
             select = """
                 SELECT hits.kmer, COUNT(*) FROM %s AS hits
                 INNER JOIN %s AS scores ON scores.kmer = hits.kmer
@@ -370,6 +371,13 @@ class KmerIndex(object):
         with self.db.connection() as conn:
             return list(conn.cursor().execute(query, (kmer,)))
 
+    def _update_score_table(self):
+        with self.db.connection() as conn:
+            conn.cursor().execute("""
+                INSERT OR IGNORE INTO %s (kmer)
+                SELECT DISTINCT kmer FROM %s
+            """ % (self.scores_table, self.hits_table))
+
     def kmers(self, max_score=None):
         """Lazy-loads the observed kmers, their occurences, and their score.
 
@@ -389,10 +397,7 @@ class KmerIndex(object):
         if max_score is not None:
             query += ' WHERE score < %f' % max_score
 
+        self._update_score_table()
         with self.db.connection() as conn:
-            conn.cursor().execute("""
-                INSERT OR IGNORE INTO %s (kmer)
-                SELECT DISTINCT kmer FROM %s
-            """ % (self.scores_table, self.hits_table))
             for kmer, score in conn.cursor().execute(query):
                 yield kmer, self.hits(kmer), score
