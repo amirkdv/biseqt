@@ -126,12 +126,11 @@ class SeedIndex(object):
         kmer_index (KmerIndex): The kmer index to operate on.
         db (database.DB): The database inherited from :attr:`kmer_index`.
         wordlen (int): The word length inherited from :attr:`kmer_index`.
-        seeds_table (str): ``seeds_N`` contains 3-tuples of ``(id0, id1, pos)``
-            for all seeds between each pair of scanned sequences (``N`` is the
-                :attr:`word length <wordlen>`).
+        seeds_table (str): ``seeds_N`` contains all seeds for each pair of
+            scanned sequences (``N`` is :attr:`wordlen`).
         diagonals_table (str): ``diagonals_N`` contains scores and radii for
             each diagonal of the edit graph of each pair of scanned sequences
-            (``N`` is the :attr:`word length <wordlen>`).
+            (``N`` is :attr:`wordlen`).
     """
     def __init__(self, kmer_index):
         assert isinstance(kmer_index, KmerIndex)

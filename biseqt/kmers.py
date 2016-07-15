@@ -93,11 +93,11 @@ class KmerIndex(object):
         db (database.DB): The sequence :class:`database <biseqt.database.DB>`.
         wordlen (int): Length of kmers of interest to this index.
         hits_table (str): ``kmers_N_hits`` contains occurences of each kmer
-            where ``N`` is the :attr:`word length <wordlen>`.
+            where ``N`` is :attr:`wordlen`.
         scores_table (str): ``kmers_N_scores`` contains scores of each kmer
-            (``N`` is the :attr:`word length <wordlen>`).
+            (``N`` is :attr:`wordlen`).
         status_table (str): ``kmers_N_indexed`` contains metadata about scanned
-            sequences (``N`` is the :attr:`word length <wordlen>`).
+            sequences (``N`` is :attr:`wordlen`).
     """
     def __init__(self, db, wordlen):
         assert isinstance(db, DB)
