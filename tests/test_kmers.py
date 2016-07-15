@@ -3,6 +3,7 @@ import pytest
 from itertools import product
 from scipy.stats import norm, binom
 from math import log
+from StringIO import StringIO
 import numpy as np
 
 from biseqt.random import rand_seq
@@ -10,6 +11,7 @@ from biseqt.sequence import Alphabet
 from biseqt.database import DB
 from biseqt.kmers import binomial_to_normal, normal_neg_log_pvalue
 from biseqt.kmers import KmerIndex
+from biseqt.io import write_fasta
 
 
 def test_binomial_to_normal():
@@ -80,21 +82,32 @@ def dna_kmer_index(request):
 def test_index_kmers(dna_kmer_index):
     kmer_index = dna_kmer_index
     db, A, wordlen = kmer_index.db, kmer_index.db.alphabet, kmer_index.wordlen
-    kmer_index.db.initialize()
+    db.initialize()
 
     S = A.parse('ATGCA', name='foo')
     S_id = db.insert(S).id
     assert next(kmer_index.scanned_sequences()) == (S_id, len(S))
     assert kmer_index.num_kmers() == len(S) - wordlen + 1
 
+
+def test_bulk_index_kmers(dna_kmer_index):
+    kmer_index = dna_kmer_index
+    db, A = kmer_index.db, kmer_index.db.alphabet
+    db.initialize()
+
+    S = A.parse('ATGCA', name='foo')
     T = A.parse('ATGCC', name='bar')
-    T_rec = db.insert(T)
-    assert T_rec is not None
-    T_id = T_rec.id
+    fasta = StringIO()
+    write_fasta(fasta, [S, T])
+    fasta.seek(0)
+
+    S_rec, T_rec = db.load_fasta(fasta)
+    assert S_rec is not None and T_rec is not None
     assert kmer_index.num_kmers() == 4
     assert kmer_index.total_length_indexed() == len(S) + len(T)
 
     # find the occurences of 'ATG'
+    S_id, T_id = S_rec.id, T_rec.id
     atg_int = kmer_index.kmer_as_int((0, 3, 2))
     atg_hits = [(hits, score) for kmer, hits, score in kmer_index.kmers()
                 if kmer == atg_int]
