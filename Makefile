@@ -20,7 +20,7 @@ flake8:
 	flake8 biseqt tests --exclude=$(FLAKE8_EXCLUDE)
 
 tests: $(LIBDIR)/pwlib.so flake8
-	cd tests && PYTHONPATH=.. py.test --cov biseqt --capture=no --verbose
+	cd tests && PYTHONPATH=.. py.test --cov biseqt --capture=no --cov-report=term-missing --verbose
 
 loc:
 	find biseqt tests -type f -regex '.*\(\.py\|\.c\|\.h\)' | xargs wc -l
