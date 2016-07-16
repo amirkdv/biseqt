@@ -3,7 +3,7 @@ import pytest
 from itertools import product
 from StringIO import StringIO
 
-from biseqt.random import rand_seq
+from biseqt.stochastics import rand_seq
 from biseqt.sequence import Alphabet
 from biseqt.database import DB
 from biseqt.kmers import KmerIndex
