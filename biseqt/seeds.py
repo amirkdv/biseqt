@@ -28,7 +28,7 @@ from itertools import combinations
 from math import sqrt
 
 from .kmers import KmerIndex
-from .stochastics import binomial_to_normal, band_radius
+from .stochastics import binomial_to_normal, band_radius_calculator
 
 
 class Seed(namedtuple('Seed', ['id0', 'id1', 'pos0', 'pos1', 'length'])):
@@ -260,11 +260,8 @@ class SeedIndex(object):
             sensitivity (float): Passed as is, must be strictly between 0 and
                 1.
         """
-        assert sensitivity > 0 and sensitivity < 1
-        assert gap_prob > 0 and gap_prob < 1
-
-        band_radius_kw = {'gap_prob': gap_prob, 'sensitivity': sensitivity}
-
+        radius = band_radius_calculator(gap_prob=gap_prob,
+                                        sensitivity=sensitivity)
         select = """
             SELECT diag FROM %s WHERE id0 = ? AND id1 = ?
         """ % self.diagonals_table
@@ -273,19 +270,20 @@ class SeedIndex(object):
             UPDATE %s SET radius = ? WHERE id0 = ? AND id1 = ? AND diag = ?
         """ % self.diagonals_table
 
-        self.log('Calculating band radii (gap_prob=%s, sensitivity=%s)' %
-                 (str(gap_prob), str(sensitivity)))
         # each entry is a pair of (id, len) tuples
         seqpairs = combinations(self.kmer_index.scanned_sequences(), 2)
         self.create_sql_index(self.diagonals_table)
+        self.log('Calculating band radii (gap_prob=%s, sensitivity=%s)' %
+                 (str(gap_prob), str(sensitivity)))
         with self.db.connection() as conn:
             cursor = conn.cursor()
             for (id0, len0), (id1, len1) in seqpairs:
                 cursor = conn.cursor()
                 diags = [x[0] for x in cursor.execute(select, (id0, id1))]
-                recs = ((band_radius(len0, len1, diag, **band_radius_kw),
-                         id0, id1, diag) for diag in diags)
+                recs = ((radius(len0, len1, diag), id0, id1, diag)
+                        for diag in diags)
                 conn.cursor().executemany(update, recs)
+        self.log('Done calculating band radii.')
 
     def score_diagonals(self):
         """Scores all diagonal bands containing seeds for each pair of sequences.
