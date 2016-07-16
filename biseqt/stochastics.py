@@ -214,13 +214,41 @@ def band_radius(len0, len1, diag, gap_prob=None, sensitivity=None):
 
     adjusted_sensitivity = 1 - 2 * (1. - sensitivity) / 3
 
-    max_alignment_length = min(len0 - diag, len1) + min(diag, 0)
-    expected_alignment_length = (2 / (2. - gap_prob)) * max_alignment_length
-    assert expected_alignment_length >= 0
+    max_len = min(len0 - diag, len1) + min(diag, 0)
+    expected_len = (2. / (2 - gap_prob)) * max_len
+    assert expected_len >= 0
     radius = 2 * erfinv(adjusted_sensitivity) * sqrt(
-        gap_prob * (1 - gap_prob) * expected_alignment_length
+        gap_prob * (1 - gap_prob) * expected_len
     )
     return max(1, int(radius))
+
+
+def band_radius_calculator(gap_prob=None, sensitivity=None):
+    """Creates a function that behaves like :func:`band_radius` for a fixed
+    set of parameters (intended for bulk usage).
+
+    Keyword Args:
+        gap_prob (float): as in :func:`band_radius`.
+        sensitivity (float): as in :func:`band_radius`.
+
+    Returns:
+        function: A function with signature ``f(len0, len1, diag)``.
+    """
+    assert sensitivity > 0 and sensitivity < 1
+    assert gap_prob > 0 and gap_prob < 1
+
+    adjusted_sensitivity = 1 - 2 * (1. - sensitivity) / 3
+
+    C = 2 * erfinv(adjusted_sensitivity) * sqrt(gap_prob * (1 - gap_prob))
+
+    def calculator(len0, len1, diag):
+        max_len = min(len0 - diag, len1) + min(diag, 0)
+        expected_len = (2. / (2 - gap_prob)) * max_len
+        assert expected_len >= 0
+        radius = C * sqrt(expected_len)
+        return max(1, int(radius))
+
+    return calculator
 
 
 class MutationProcess(object):

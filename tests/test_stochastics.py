@@ -8,7 +8,8 @@ from math import log
 from biseqt.sequence import Alphabet
 from biseqt.stochastics import rand_seq, MutationProcess, rand_read
 from biseqt.stochastics import binomial_to_normal, normal_neg_log_pvalue
-from biseqt.stochastics import band_radius
+from biseqt.stochastics import band_radius as _band_radius
+from biseqt.stochastics import band_radius_calculator
 from biseqt.stochastics import np  # to mock
 
 
@@ -80,7 +81,11 @@ def test_normal_neg_log_pvalue():
     assert np.allclose(neg_log_pvalue, [-log(0.5)] * len(sds))
 
 
-def test_band_radius():
+@pytest.mark.parametrize('band_radius',
+                         [_band_radius,
+                          lambda *a, **kw: band_radius_calculator(**kw)(*a)],
+                         ids=['band_radius()', 'band_radius_calculator()'])
+def test_band_radius(band_radius):
     len0 = len1 = 10
     diag = 0
     assert band_radius(len0, len1, diag, gap_prob=1e-10, sensitivity=0.9) \
