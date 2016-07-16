@@ -8,7 +8,7 @@ Submodules
 
    biseqt.sequence
    biseqt.io
-   biseqt.random
+   biseqt.stochastics
    biseqt.pw
    biseqt.database
    biseqt.kmers

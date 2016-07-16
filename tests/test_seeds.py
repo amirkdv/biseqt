@@ -4,7 +4,7 @@ from itertools import product, combinations
 from StringIO import StringIO
 
 from biseqt.sequence import Alphabet
-from biseqt.random import rand_seq, MutationProcess
+from biseqt.stochastics import rand_seq, MutationProcess
 from biseqt.database import DB
 from biseqt.kmers import KmerIndex
 from biseqt.seeds import band_radius, SeedIndex

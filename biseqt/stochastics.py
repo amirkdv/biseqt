@@ -3,11 +3,11 @@
 .. wikisection:: overview
     :title: Random Processes
 
-    The :mod:`biseqt.random` module provides a collection of tools for
-    simulating random processes.
+    The :mod:`biseqt.stochastics` module provides a collection of tools for
+    statistical calculations and for simulating random processes.
 
     >>> from biseqt.sequence import Alphabet
-    >>> from biseqt.random import rand_seq, MutationProcess
+    >>> from biseqt.stochastics import rand_seq, MutationProcess
     >>> A = Alphabet('ACGT')
     >>> seq = rand_seq(A, 10)
     >>> seq

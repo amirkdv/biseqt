@@ -4,8 +4,8 @@ import mock
 from itertools import combinations
 
 from biseqt.sequence import Alphabet
-from biseqt.random import rand_seq, MutationProcess, rand_read
-from biseqt.random import np  # to mock
+from biseqt.stochastics import rand_seq, MutationProcess, rand_read
+from biseqt.stochastics import np  # to mock
 
 
 def test_rand_seq():
