@@ -25,6 +25,7 @@ import struct
 from .database import DB
 
 
+# TODO move this to random and rename to stochastics
 def binomial_to_normal(n, p):
     """Given the parameters of a binomial distribution, returns the parameters
     of its normal approximation.
@@ -52,6 +53,7 @@ def binomial_to_normal(n, p):
     return mu, sd
 
 
+# TODO move this to random and rename to stochastics
 def normal_neg_log_pvalue(mu, sd, x):
     """Gives the negative log p-value of an observation under the null
     hypothesis of normal distribution; that is, given an observation :math:`x`

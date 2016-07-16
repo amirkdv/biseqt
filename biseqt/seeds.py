@@ -26,12 +26,13 @@
 from scipy.special import erfinv
 from collections import namedtuple
 from itertools import combinations
-from math import sqrt, log
+from math import sqrt
 
-from .kmers import KmerIndex
+from .kmers import KmerIndex, binomial_to_normal
 
 
 # TODO implement band_radius_calculator to avoid calling erfinv too many times.
+# TODO move this to random and rename to stochastics
 def band_radius(len0, len1, diag, gap_prob=None, sensitivity=None):
     """Calculates the smallest band radius such an overlap alignment, with the
     given gap probability, stays entirely within the diagonal band centered at
@@ -205,6 +206,7 @@ class SeedIndex(object):
 
     def drop_sql_index(self, table=None):
         """Drops SQL indices created by :func:`create_sql_index`.
+
         Args:
             table (str): Either of :attr:`seeds_table` or
                 :attr:`diagonals_table`.
@@ -240,6 +242,8 @@ class SeedIndex(object):
             kmers = self.kmer_index.kmers(max_score=max_kmer_score)
             for kmer, hits, _ in kmers:
                 for (id0, pos0), (id1, pos1) in combinations(hits, 2):
+                    if id0 == id1:
+                        continue
                     yield id0, id1, pos0, pos1
 
         self.log('Indexing seeds (max_kmer_score=%s).' % max_kmer_score)
@@ -358,11 +362,13 @@ class SeedIndex(object):
         Explicitly, for a fixed pair of sequences with lengths :math:`l_0, l_1`
         a diagonal band centered at :math:`d` and with radius :math:`r`, the
         dimensions of the dynamic programming table is :math:`[0, l_0] \\times
-        [0, l_1]` and the probability of observing :math:`n` seeds in the
-        diagonal band :math:`[d-r, d+r]` is:
+        [0, l_1]`. Under the null hypothesis, namely that the two sequences are
+        not related, the number :math:`n` of observed seeds in the diagonal
+        band :math:`[d-r, d+r]` is distributed according to a binomial
+        distribution:
 
         .. math::
-            \\Pr(X\\ge n) \\simeq \\left(\\frac{A}{l_0l_1}\\right)^n
+            n \\sim B(A, p)
 
         where :math:`A` is the area of the diagonal band:
 
@@ -370,15 +376,20 @@ class SeedIndex(object):
 
             A \\simeq 2r\\sqrt{(l_0-|d|)^2 + (l_1-|d|)^2}
 
-        Since the same hypothesis is tested against all diagonal bands (there
-        are roughly :math:`l_0+l_1` total hypotheses) a Bonferroni correction
-        term is added to give the final formula for the corrected negative log
-        p-value:
+        and :math:`p` is the probability that two arbitrary kmers are
+        identical, that is:
 
         .. math::
 
-                - \\log(l_0+l_1) -
-                n \\left[\\log(A) - \\log(l_0) - \\log(l_1)\\right]
+            p = \\left(\\frac{1}{|\\Sigma|}\\right)^k
+
+        To score a band, the normal approximation of the binomial is considered
+        (cf. :func:`biseqt.kmers.binomial_to_normal`) and the z-score of the
+        observed number of seeds is reported, namely:
+
+        .. math::
+
+                \\mathrm{score} = \\frac{n-Ap}{\\sqrt{Ap(1-p)}}
 
         A high scoring diagonal band is less likely to be accidental and more
         likely to indicate an overlap between the two sequences.
@@ -388,17 +399,13 @@ class SeedIndex(object):
         """ % self.diagonals_table
 
         def score_calculator(len0, len1, diag, radius, num_seeds):
-            band_width = 2 * radius
             band_length = sqrt(
                 (len0 - abs(diag)) ** 2 + (len1 - abs(diag)) ** 2
             )
-            band_area = band_width * band_length
-            seed_contribution = log(band_area) - log(len0) - log(len1)
-            # TODO consider caching seed contributions for multiples of 100
-            # as it barely changes.
-            # TODO consider dropping the bonferroni term as it depends only on
-            # len0 and len1, and not on what differentiates bands.
-            return - log(len0 + len1) - num_seeds * seed_contribution
+            band_area = 2. * radius * band_length
+            mu, sd = binomial_to_normal(band_area, .25 ** self.wordlen)
+            z_score = (num_seeds - mu) / float(sd)
+            return z_score
 
         self.log('Scoring all diagonals for each pair of sequences.')
         # each entry is a pair of (id, len) tuples
@@ -407,13 +414,15 @@ class SeedIndex(object):
             cursor = conn.cursor()
             for (id0, len0), (id1, len1) in seqpairs:
                 seed_count, diags = self.cum_seed_count(id0, id1, len0, len1)
+
                 for diag, radius in diags:
                     center_idx = diag + len1
                     upper_idx = min(center_idx + radius, len(seed_count) - 1)
                     lower_idx = max(center_idx - radius - 1, 0)
-                    num_seeds = seed_count[upper_idx] - seed_count[lower_idx]
-                    score = score_calculator(len0, len1, diag, radius,
-                                             num_seeds)
+
+                    num = seed_count[upper_idx] - seed_count[lower_idx]
+                    score = score_calculator(len0, len1, diag, radius, num)
+
                     cursor.execute(query, (score, id0, id1, diag))
 
     def highest_scoring_band(self, id0, id1, min_band_score=None):
