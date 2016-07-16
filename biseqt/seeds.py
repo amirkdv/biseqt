@@ -23,79 +23,12 @@
     >>> seed_index.seeds(1, 2, diag_range)  # only yields seeds in best band
 """
 
-from scipy.special import erfinv
 from collections import namedtuple
 from itertools import combinations
 from math import sqrt
 
-from .kmers import KmerIndex, binomial_to_normal
-
-
-# TODO implement band_radius_calculator to avoid calling erfinv too many times.
-# TODO move this to random and rename to stochastics
-def band_radius(len0, len1, diag, gap_prob=None, sensitivity=None):
-    """Calculates the smallest band radius such an overlap alignment, with the
-    given gap probability, stays entirely within the diagonal band centered at
-    the given diagonal. This is given by:
-
-    .. math::
-        r = 2\\sqrt{g(1-g)K}
-            \\mathrm{erf}^{-1}\\left(1-\\frac{2\\epsilon}{3}\\right)
-
-    where :math:`g` is the gap probability, :math:`1-\\epsilon` is the desired
-    sensitivity, and :math:`K` is the "expected" length of the alignment given
-    by:
-
-    .. math::
-        K = \\left(\\frac{2}{2 - g}\\right) L
-
-    where :math:`L` is the maximum possible length of the alignment:
-
-    .. math::
-        L = \\min(l_0 - d, l_1) + \\min(d, 0)
-
-    with :math:`l_0,l_1` being the length of the sequences (i.e ``len0`` and
-    ``len1`` arguments) and :math:`d` the starting diagonal (i.e ``diag``
-    argument).
-
-    Diagonals are numbered as follows in the dynamic programming table::
-
-        0 -1 -2 -3 ... -len1
-        1
-        2
-        3
-        .
-        .
-        .
-        +len0
-
-
-    Args:
-        len0 (int): Length of the first sequence (the "vertical" sequence in
-            the table).
-        len1 (int): Length of the second sequence (the "horizontal" sequence in
-            the table).
-        diag (int): Starting diagonal of alignments to consider.
-        gap_prob (float): Probability of indels occuring at any position of an
-            alignment.
-        sensitivity (float): The probability that an alignment with given gap
-            probability remains entirely within the band.
-    Returns:
-        int: The smallest band radius guaranteeing the required sensitivity.
-
-    """
-    assert sensitivity > 0 and sensitivity < 1
-    assert gap_prob > 0 and gap_prob < 1
-
-    adjusted_sensitivity = 1 - 2 * (1. - sensitivity) / 3
-
-    max_alignment_length = min(len0 - diag, len1) + min(diag, 0)
-    expected_alignment_length = (2 / (2. - gap_prob)) * max_alignment_length
-    assert expected_alignment_length >= 0
-    radius = 2 * erfinv(adjusted_sensitivity) * sqrt(
-        gap_prob * (1 - gap_prob) * expected_alignment_length
-    )
-    return max(1, int(radius))
+from .kmers import KmerIndex
+from .stochastics import binomial_to_normal, band_radius
 
 
 class Seed(namedtuple('Seed', ['id0', 'id1', 'pos0', 'pos1', 'length'])):
@@ -319,11 +252,13 @@ class SeedIndex(object):
 
     def calculate_band_radii(self, gap_prob=None, sensitivity=None):
         """Calculates the diagonal band radius for each entry in the
-        :attr:`diagonals table <diagonals_table>` using :func:`band_radius`.
+        :attr:`diagonals table <diagonals_table>` using :func:`band_radius
+        <biseqt.stochastics.band_radius>`.
 
         Keyword Args:
-            gap_prob (float): Passed as is to :func:`band_radius`.
-            sensitivity (float): Passed as is to :func:`band_radius`.
+            gap_prob (float): Passed as is, mut be strictly between 0 and 1.
+            sensitivity (float): Passed as is, must be strictly between 0 and
+                1.
         """
         assert sensitivity > 0 and sensitivity < 1
         assert gap_prob > 0 and gap_prob < 1
@@ -384,8 +319,8 @@ class SeedIndex(object):
             p = \\left(\\frac{1}{|\\Sigma|}\\right)^k
 
         To score a band, the normal approximation of the binomial is considered
-        (cf. :func:`biseqt.kmers.binomial_to_normal`) and the z-score of the
-        observed number of seeds is reported, namely:
+        (cf. :func:`binomial_to_normal <biseqt.stochastics.binomial_to_normal`)
+        and the z-score of the observed number of seeds is reported, namely:
 
         .. math::
 

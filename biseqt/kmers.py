@@ -19,72 +19,11 @@
     >>> kmer_index.kmers(max_score=10)  # exclude high scoring kmers
 """
 
-from math import sqrt, erf, log
+from math import log
 import struct
 
 from .database import DB
-
-
-# TODO move this to random and rename to stochastics
-def binomial_to_normal(n, p):
-    """Given the parameters of a binomial distribution, returns the parameters
-    of its normal approximation.
-
-    .. math::
-        B(n, p) \\simeq \\mathcal{N}(np, \\sqrt{np(1-p)})
-
-    The approximation approaches identity as :math:`n` grows to infinity for
-    any fixed :math:`p`.
-
-    Args:
-        n (int): First parameter of binomial distribution (i.e number of
-            Bernoulli trials).
-        p (float): Second parameter of binomial distribution (i.e Bernoulli
-            success probability).
-
-    Returns:
-        tuple:
-            Mean and standard deviation of the approximating normal
-            distribution.
-    """
-    assert p >= 0 and p <= 1 and n > 0
-    mu = n * p
-    sd = sqrt(n * p * (1 - p))
-    return mu, sd
-
-
-# TODO move this to random and rename to stochastics
-def normal_neg_log_pvalue(mu, sd, x):
-    """Gives the negative log p-value of an observation under the null
-    hypothesis of normal distribution; that is, given an observation :math:`x`
-    from a random variable:
-
-    .. math::
-        X \\sim \\mathcal{N}(\\mu, \\sigma)
-
-    this function calculates :math:`-\\log(\\Pr[X\\ge x])` which is:
-
-    .. math::
-        -\\log\\left(
-            \\frac{1}{2} \\left[1 - \\mathrm{erf} \\left(
-                                \\frac{x-\mu}{\\sigma\\sqrt{2}} \\right)
-                         \\right]
-        \\right)
-
-    Args:
-        mu (float): Mean of normal distribution.
-        sd (float): Standard deviation of normal distribution.
-        x (float): Observation.
-
-    Returns:
-        float: A positive real number.
-    """
-    z_score = (x - mu) / float(sd)
-    try:
-        return - log((1 - erf(z_score/sqrt(2))) / 2.)
-    except ValueError:
-        # can only happen if the argument to log is 0, i.e z_score >> 1.
-        return float('+inf')
+from .stochastics import binomial_to_normal, normal_neg_log_pvalue
 
 
 class KmerIndex(object):
@@ -281,11 +220,13 @@ class KmerIndex(object):
         """Calculates the negative log p-value for the number of occurences of
         each kmer under the null hypothesis of a binomial distribution. The
         binomial distribution is approximated by a normal distribution for
-        numeric stability (cf. :func:`binomial_to_normal`) and then a
-        Bonferroni correction for the total number of kmers (cf.
-        :func:`num_kmers`) is applied to the raw negative log p-value given by
-        :func:`normal_neg_log_pvalue`. The higher the score of a kmer, the more
-        likely it is that it belongs to a repeat structure.
+        numeric stability (cf. :func:`binomial_to_normal
+        <biseqt.stochastics.binomial_to_normal`) and then a Bonferroni
+        correction for the total number of kmers (cf.  :func:`num_kmers`) is
+        applied to the raw negative log p-value given by
+        :func:`normal_neg_log_pvalue
+        <biseqt.stochastics.normal_neg_log_pvalue`. The higher the score of a
+        kmer, the more likely it is that it belongs to a repeat structure.
 
         Keyword Args:
             only_missing (bool): Whether to re-score all kmers or only those

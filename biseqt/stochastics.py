@@ -26,9 +26,10 @@
     origin[0]: CT-TGGAAAAA
     mutant[0]: ATCTGGATCAT
 """
-import numpy as np
-from math import log
+from math import sqrt, erf, log
 from itertools import product
+from scipy.special import erfinv
+import numpy as np
 
 from .sequence import Sequence, Alphabet, EditTranscript
 
@@ -94,6 +95,132 @@ def rand_read(seq, len_mean=None, len_sd=1, expected_coverage=None, num=None):
         start = np.random.choice(len(seq) - length)
         read = seq[start:start + length]
         yield read, start
+
+
+def binomial_to_normal(n, p):
+    """Given the parameters of a binomial distribution, returns the parameters
+    of its normal approximation.
+
+    .. math::
+        B(n, p) \\simeq \\mathcal{N}(np, \\sqrt{np(1-p)})
+
+    The approximation approaches identity as :math:`n` grows to infinity for
+    any fixed :math:`p`.
+
+    Args:
+        n (int): First parameter of binomial distribution (i.e number of
+            Bernoulli trials).
+        p (float): Second parameter of binomial distribution (i.e Bernoulli
+            success probability).
+
+    Returns:
+        tuple:
+            Mean and standard deviation of the approximating normal
+            distribution.
+    """
+    assert p >= 0 and p <= 1 and n > 0
+    mu = n * p
+    sd = sqrt(n * p * (1 - p))
+    return mu, sd
+
+
+def normal_neg_log_pvalue(mu, sd, x):
+    """Gives the negative log p-value of an observation under the null
+    hypothesis of normal distribution; that is, given an observation :math:`x`
+    from a random variable:
+
+    .. math::
+        X \\sim \\mathcal{N}(\\mu, \\sigma)
+
+    this function calculates :math:`-\\log(\\Pr[X\\ge x])` which is:
+
+    .. math::
+        -\\log\\left(
+            \\frac{1}{2} \\left[1 - \\mathrm{erf} \\left(
+                                \\frac{x-\mu}{\\sigma\\sqrt{2}} \\right)
+                         \\right]
+        \\right)
+
+    Args:
+        mu (float): Mean of normal distribution.
+        sd (float): Standard deviation of normal distribution.
+        x (float): Observation.
+
+    Returns:
+        float: A positive real number.
+    """
+    z_score = (x - mu) / float(sd)
+    try:
+        return - log((1 - erf(z_score/sqrt(2))) / 2.)
+    except ValueError:
+        # can only happen if the argument to log is 0, i.e z_score >> 1.
+        return float('+inf')
+
+
+def band_radius(len0, len1, diag, gap_prob=None, sensitivity=None):
+    """Calculates the smallest band radius in the dynamic programming table
+    such that an overlap alignment, with the given gap probability, stays
+    entirely within the diagonal band centered at the given diagonal. This is
+    given by:
+
+    .. math::
+        r = 2\\sqrt{g(1-g)K}
+            \\mathrm{erf}^{-1}\\left(1-\\frac{2\\epsilon}{3}\\right)
+
+    where :math:`g` is the gap probability, :math:`1-\\epsilon` is the desired
+    sensitivity, and :math:`K` is the "expected" length of the alignment given
+    by:
+
+    .. math::
+        K = \\left(\\frac{2}{2 - g}\\right) L
+
+    where :math:`L` is the maximum possible length of the alignment:
+
+    .. math::
+        L = \\min(l_0 - d, l_1) + \\min(d, 0)
+
+    with :math:`l_0,l_1` being the length of the sequences (i.e ``len0`` and
+    ``len1`` arguments) and :math:`d` the starting diagonal (i.e ``diag``
+    argument).
+
+    Diagonals are numbered as follows in the dynamic programming table::
+
+        0 -1 -2 -3 ... -len1
+        1
+        2
+        3
+        .
+        .
+        .
+        +len0
+
+
+    Args:
+        len0 (int): Length of the first sequence (the "vertical" sequence in
+            the table).
+        len1 (int): Length of the second sequence (the "horizontal" sequence in
+            the table).
+        diag (int): Starting diagonal of alignments to consider.
+        gap_prob (float): Probability of indels occuring at any position of an
+            alignment.
+        sensitivity (float): The probability that an alignment with given gap
+            probability remains entirely within the band.
+    Returns:
+        int: The smallest band radius guaranteeing the required sensitivity.
+
+    """
+    assert sensitivity > 0 and sensitivity < 1
+    assert gap_prob > 0 and gap_prob < 1
+
+    adjusted_sensitivity = 1 - 2 * (1. - sensitivity) / 3
+
+    max_alignment_length = min(len0 - diag, len1) + min(diag, 0)
+    expected_alignment_length = (2 / (2. - gap_prob)) * max_alignment_length
+    assert expected_alignment_length >= 0
+    radius = 2 * erfinv(adjusted_sensitivity) * sqrt(
+        gap_prob * (1 - gap_prob) * expected_alignment_length
+    )
+    return max(1, int(radius))
 
 
 class MutationProcess(object):

@@ -1,31 +1,13 @@
 # -*- coding: utf-8 -*-
 import pytest
 from itertools import product
-from scipy.stats import norm, binom
-from math import log
 from StringIO import StringIO
-import numpy as np
 
 from biseqt.random import rand_seq
 from biseqt.sequence import Alphabet
 from biseqt.database import DB
-from biseqt.kmers import binomial_to_normal, normal_neg_log_pvalue
 from biseqt.kmers import KmerIndex
 from biseqt.io import write_fasta
-
-
-def test_binomial_to_normal():
-    n, p = 10000, 0.1
-    mu, sd = binomial_to_normal(n, p)
-    binomial = [binom.cdf(x, n, p) for x in range(0, 10000, 500)]
-    normal = [norm(mu, sd).cdf(x) for x in range(0, 10000, 500)]
-    assert np.allclose(binomial, normal, atol=0.01)
-
-
-def test_normal_neg_log_pvalue():
-    sds = range(1, 10)
-    neg_log_pvalue = [normal_neg_log_pvalue(0, sd, 0) for sd in sds]
-    assert np.allclose(neg_log_pvalue, [-log(0.5)] * len(sds))
 
 
 def test_kmer_as_int_limitations():
