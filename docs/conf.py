@@ -28,7 +28,7 @@ if os.environ.get('READTHEDOCS', None) == 'True':
         def __getattr__(cls, name):
             return Mock()
 
-    MOCK_MODULES = ['cffi', 'igraph', 'numpy', 'scipy', 'apsw']
+    MOCK_MODULES = ['cffi', 'igraph', 'numpy', 'scipy', 'scipy.special', 'matplotlib', 'apsw']
     sys.modules.update((mod_name, Mock()) for mod_name in MOCK_MODULES)
 
     # Call doxygen
