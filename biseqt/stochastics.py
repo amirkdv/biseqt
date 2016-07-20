@@ -135,9 +135,9 @@ def normal_neg_log_pvalue(mu, sd, x):
     this function calculates :math:`-\\log(\\Pr[X\\ge x])` which is:
 
     .. math::
-        -\\log\\left(
-            \\frac{1}{2} \\left[1 - \\mathrm{erf} \\left(
-                                \\frac{x-\mu}{\\sigma\\sqrt{2}} \\right)
+        -\log\left(
+            \\frac{1}{2} \left[1 - \mathrm{erf} \left(
+                                \\frac{x-\mu}{\sigma\sqrt{2}} \\right)
                          \\right]
         \\right)
 
@@ -147,7 +147,8 @@ def normal_neg_log_pvalue(mu, sd, x):
         x (float): Observation.
 
     Returns:
-        float: A positive real number.
+        float:
+            A positive real number or infinity.
 
     .. wikisection:: dev
         :title: Log-probability numerics
@@ -164,11 +165,14 @@ def normal_neg_log_pvalue(mu, sd, x):
         \sim \mathcal{N}(\mu, \sigma)` the score is given in closed form by:
 
         .. math::
-            S = -\log\\left[ \\frac{1}{2} \\left(
-                    1-\mathrm{erf}(\\frac{x-\mu}{\sigma\sqrt{2}})
-                \\right) \\right]
-              = -\log\\left[ 1-\mathrm{erf}(\\frac{z}{\sqrt{2}})
-                \\right] + \log(2)
+            S = -\log\\left(
+                    \\frac{1}{2} \left[1 - \mathrm{erf} \left(
+                                    \\frac{x-\mu}{\sigma\sqrt{2}} \\right)
+                                 \\right]
+                \\right)
+              = -\log\left(1 - \mathrm{erf} \left(
+                                    \\frac{z}{\sqrt{2}} \\right)
+                \\right) + \log(2)
 
         Calculating this formula numerically runs into precision issues because
         the error function rapidly approaches its limit such that, for
