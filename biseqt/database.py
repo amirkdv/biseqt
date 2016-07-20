@@ -30,10 +30,11 @@
 .. wikisection:: dev
     :title: Insert-or-Append Queries
 
-    You may need to perform an SQL query which either inserts a new record or
-    appends the given value to some column in case of conflict. This is achived
-    by using one of SQLite's conflict resolution mechanisms_ ``ON CONFLICT
-    REPLACE`` or in short ``OR REPLACE``. For instance, consider a table::
+    It may be useful to perform an SQL query which either inserts a new record
+    or appends the given value to some column in case of conflict. This is
+    achived by using one of SQLite's conflict resolution mechanisms_ ``ON
+    CONFLICT REPLACE`` or in short ``OR REPLACE``. For instance, consider a
+    table::
 
         id | field
         1  | foo
@@ -266,7 +267,6 @@ class DB(object):
                 os.access(os.path.dirname(self.path), os.W_OK), \
                 'Database %s is not writable' % self.path
 
-        # TODO pull out to top level biseqt
         self._logger = Logger(log_level=log_level,
                               header=os.path.relpath(self.path, os.getcwd()))
         self._connection = None
