@@ -148,12 +148,90 @@ def normal_neg_log_pvalue(mu, sd, x):
 
     Returns:
         float: A positive real number.
+
+    .. wikisection:: dev
+        :title: Log-probability numerics
+
+        It is customary to capture the statistical significance of an
+        observation :math:`x` corresponding to the random variable :math:`X`
+        by a *score*
+
+        .. math::
+            S=-\log(p)
+
+        where :math:`p` is the p-value of the observation, i.e :math:`\Pr(X\ge
+        x)` as per the null hypothesis.  If the null hypothesis is :math:`X
+        \sim \mathcal{N}(\mu, \sigma)` the score is given in closed form by:
+
+        .. math::
+            S = -\log\\left[ \\frac{1}{2} \\left(
+                    1-\mathrm{erf}(\\frac{x-\mu}{\sigma\sqrt{2}})
+                \\right) \\right]
+              = -\log\\left[ 1-\mathrm{erf}(\\frac{z}{\sqrt{2}})
+                \\right] + \log(2)
+
+        Calculating this formula numerically runs into precision issues because
+        the error function rapidly approaches its limit such that, for
+        instance, on 64-bit system, the :math:`\mathrm{erf}` term evaluates to
+        ``0.0`` for any z-score larger than 9 leading to infinities where the
+        real value of :math:`S` is a small number, e.g. at :math:`z=9` we
+        have :math:`S\simeq42.9`.
+
+        One improvement is to use the ``erfc`` `function <erfc_>`_
+        (or corresponding wrappers in ``numpy`` or ``scipy.special``) which
+        numerically finds :math:`1-\mathrm{erf}(\cdot)`. This postpones
+        infinities to z-scores larger than 39 at which point the score jumps
+        from roughly 726 to infinity.
+
+        These blowups can have serious consequences in any classification
+        algorithm where the cumulative distribution of a population is of
+        interest: with too many infinities in a set of scores, the cumulative
+        distribution of scores never gets close to 1 (e.g. if a fifth of scores
+        are infinities the maximum value of the cumulative distribution is
+        0.8). For this reason, it is advisable to use z-scores instead of
+        negative log of p-values for classification (note that the ROC curve
+        corresponding to the two is identical, cf. below).
+
+
+        .. _erfc: https://docs.python.org/2/library/math.html#math.erfc
+
+    .. wikisection:: dev
+        :title: Effect of filtering on ROC curves
+        :parent: Log-probability numerics
+
+        Consider a binary classification problem with two sample sets
+        :math:`X,Y` with positive and negative labels respectively. The
+        corresponding ROC curve is a paremetric curve in
+        :math:`[0,1]\\times[0,1]` given by :math:`(F_X(t), F_Y(t)` over
+        :math:`t\in\mathbb{R}` where :math:`F_X,F_Y` are the cumulative
+        distributions of the positive and negative samples.
+
+        Now suppose we consider instead the *filtered* sample sets :math:`f(X),
+        f(Y)` where :math:`f:\mathbb{R}\\to\mathbb{R}` is a monotonic real
+        function and for any set :math:`A`, the set :math:`f(A)` denotes
+        :math:`\{f(a); a\in A\}`.  With simple probability arithmetic we can show
+        that
+
+        .. math::
+            F_{f(X)} = F_X \circ f^{-1}
+
+            F_{f(Y)} = F_Y \circ f^{-1}
+
+        It follows that although the cumulative distributions of the positive
+        and negative sample sets change by applying :math:`f(\cdot)`, the ROC
+        curve remains unchanged.
+
+        As a special case, this implies that the ROC curve of a collection of
+        positive and negative z-score sets is identical to the ROC curve of the
+        corresponding sets of p-values or negative-log p-values.
     """
     z_score = (x - mu) / float(sd)
     try:
-        return - log((1 - erf(z_score/sqrt(2))) / 2.)
+        return - log(erfc(z_score/sqrt(2)) / 2.)
     except ValueError:
-        # can only happen if the argument to log is 0, i.e z_score >> 1.
+        # NOTE This can only happen if the argument to log is
+        # 0, which theoretically means z_score >> 1. In practice, this happens
+        # for z scores exceeding 39.
         return float('+inf')
 
 
