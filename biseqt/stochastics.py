@@ -26,9 +26,9 @@
     origin[0]: CT-TGGAAAAA
     mutant[0]: ATCTGGATCAT
 """
-from math import sqrt, erf, log
+from math import sqrt, erfc, log
 from itertools import product
-from scipy.special import erfinv
+from scipy.special import erfcinv
 import numpy as np
 
 from .sequence import Sequence, Alphabet, EditTranscript
@@ -209,8 +209,8 @@ def normal_neg_log_pvalue(mu, sd, x):
         Now suppose we consider instead the *filtered* sample sets :math:`f(X),
         f(Y)` where :math:`f:\mathbb{R}\\to\mathbb{R}` is a monotonic real
         function and for any set :math:`A`, the set :math:`f(A)` denotes
-        :math:`\{f(a); a\in A\}`.  With simple probability arithmetic we can show
-        that
+        :math:`\{f(a); a\in A\}`.  With simple probability arithmetic we can
+        show that:
 
         .. math::
             F_{f(X)} = F_X \circ f^{-1}
@@ -290,12 +290,13 @@ def band_radius(len0, len1, diag, gap_prob=None, sensitivity=None):
     assert sensitivity > 0 and sensitivity < 1
     assert gap_prob > 0 and gap_prob < 1
 
-    adjusted_sensitivity = 1 - 2 * (1. - sensitivity) / 3
+    epsilon = 1. - sensitivity
+    adjusted_epsilon = epsilon * 2 / 3
 
     max_len = min(len0 - diag, len1) + min(diag, 0)
     expected_len = (2. / (2 - gap_prob)) * max_len
     assert expected_len >= 0
-    radius = 2 * erfinv(adjusted_sensitivity) * sqrt(
+    radius = 2 * erfcinv(adjusted_epsilon) * sqrt(
         gap_prob * (1 - gap_prob) * expected_len
     )
     return max(1, int(radius))
@@ -315,9 +316,10 @@ def band_radius_calculator(gap_prob=None, sensitivity=None):
     assert sensitivity > 0 and sensitivity < 1
     assert gap_prob > 0 and gap_prob < 1
 
-    adjusted_sensitivity = 1 - 2 * (1. - sensitivity) / 3
+    epsilon = 1. - sensitivity
+    adjusted_epsilon = epsilon * 2 / 3
 
-    C = 2 * erfinv(adjusted_sensitivity) * sqrt(gap_prob * (1 - gap_prob))
+    C = 2 * erfcinv(adjusted_epsilon) * sqrt(gap_prob * (1 - gap_prob))
 
     def calculator(len0, len1, diag):
         max_len = min(len0 - diag, len1) + min(diag, 0)
