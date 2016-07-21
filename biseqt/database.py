@@ -162,7 +162,7 @@ import json
 import logging
 from collections import namedtuple
 
-from . import Logger, ProgressIndicator
+from .util import Logger, ProgressIndicator
 from .io import read_fasta
 from .sequence import Alphabet, NamedSequence
 

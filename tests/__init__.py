@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
-from biseqt import ProgressIndicator
-from biseqt import Logger
+from biseqt.util import ProgressIndicator
+from biseqt.util import Logger
 
-# skip all logging
-ProgressIndicator.write = lambda *args: None
+# Turn off all logging for tests
+ProgressIndicator.write = lambda *args, **kwargs: None
 Logger.log = lambda *args, **kwargs: None
