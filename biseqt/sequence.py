@@ -220,7 +220,7 @@ class Sequence(object):
             assert self.alphabet == other.alphabet
             contents = other.contents
         else:
-            other = self.alphabet.letter_to_idx(other)
+            contents = self.alphabet.letter_to_idx(other)
         return Sequence(self.alphabet, self.contents + contents)
 
 
