@@ -1,14 +1,9 @@
 # -*- coding: utf-8 -*-
 from StringIO import StringIO
 
-from biseqt import ProgressIndicator
 from biseqt.io import write_fasta
 from biseqt.sequence import Alphabet
 from biseqt.database import DB, Record
-
-# skip all logging
-ProgressIndicator.write = lambda *args: None
-DB.log = lambda *args, **kwargs: None
 
 
 def test_database_basic():
