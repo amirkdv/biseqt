@@ -153,8 +153,8 @@ alignment* dptable_traceback(dptable* T, intpair end) {
   // strncpy does not null terminate:
   opseq[len] = '\0';
 
-  aln->S_idx = xy.i + T->prob->frame->S_range.i;
-  aln->T_idx = xy.j + T->prob->frame->T_range.i;
+  aln->origin_idx = xy.i + T->prob->frame->origin_range.i;
+  aln->mutant_idx = xy.j + T->prob->frame->mutant_range.i;
   aln->score=T->cells[end.i][end.j].choices[0].score;
   aln->opseq=opseq;
   return aln;

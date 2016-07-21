@@ -6,8 +6,8 @@
 #include "pwlib.h"
 
 int _std_table_init_dims(dptable* T) {
-  int xmax = T->prob->frame->S_range.j - T->prob->frame->S_range.i,
-      ymax = T->prob->frame->T_range.j - T->prob->frame->T_range.i;
+  int xmax = T->prob->frame->origin_range.j - T->prob->frame->origin_range.i,
+      ymax = T->prob->frame->mutant_range.j - T->prob->frame->mutant_range.i;
   int i;
   T->num_rows = xmax + 1;
 
@@ -23,8 +23,8 @@ int _std_table_init_dims(dptable* T) {
 }
 
 int _banded_table_init_dims(dptable* T) {
-  int xmax = T->prob->frame->S_range.j - T->prob->frame->S_range.i,
-      ymax = T->prob->frame->T_range.j - T->prob->frame->T_range.i,
+  int xmax = T->prob->frame->origin_range.j - T->prob->frame->origin_range.i,
+      ymax = T->prob->frame->mutant_range.j - T->prob->frame->mutant_range.i,
       dend = xmax - ymax,
       dmax = T->prob->banded_params->dmax,
       dmin = T->prob->banded_params->dmin,
@@ -127,17 +127,17 @@ intpair _xy_from_cellpos(alnprob* prob, int i, int j) {
 
 intpair _xlim(alnprob* prob) {
   int dmin, dmax;
-  int S_len = prob->frame->S_range.j - prob->frame->S_range.i,
-      T_len = prob->frame->T_range.j - prob->frame->T_range.i;
+  int origin_len = prob->frame->origin_range.j - prob->frame->origin_range.i,
+      mutant_len = prob->frame->mutant_range.j - prob->frame->mutant_range.i;
   switch (prob->mode) {
     case STD_MODE:
-      return (intpair) {0, S_len + 1};
+      return (intpair) {0, origin_len + 1};
     case BANDED_MODE:
       dmin = prob->banded_params->dmin;
       dmax = prob->banded_params->dmax;
       return (intpair) {
         dmin > 0 ? dmin : 0,
-        1 + (S_len > T_len + dmax ? T_len + dmax : S_len)
+        1 + (origin_len > mutant_len + dmax ? mutant_len + dmax : origin_len)
       };
     default:
       _panick("Unknown alignment mode.");
@@ -147,16 +147,16 @@ intpair _xlim(alnprob* prob) {
 
 intpair _ylim(alnprob* prob, int x) {
   int dmin, dmax;
-  int T_len = prob->frame->T_range.j - prob->frame->T_range.i;
+  int mutant_len = prob->frame->mutant_range.j - prob->frame->mutant_range.i;
   switch (prob->mode) {
     case STD_MODE:
-      return (intpair) {0, T_len + 1};
+      return (intpair) {0, mutant_len + 1};
     case BANDED_MODE:
       dmin = prob->banded_params->dmin;
       dmax = prob->banded_params->dmax;
       return (intpair) {
         x - dmax > 0 ? x - dmax : 0,
-        1 + (T_len > x - dmin ? x - dmin : T_len)
+        1 + (mutant_len > x - dmin ? x - dmin : mutant_len)
       };
     default:
       _panick("Unknown alignment mode.");
@@ -169,9 +169,9 @@ double _ge_score(alnprob* prob, int x, int y, char op) {
     return prob->scores->gap_extend_score;
   }
   if (op == 'D') {
-    return prob->scores->content_dependent_gap_scores[prob->frame->S_range.i + x];
+    return prob->scores->content_dependent_gap_scores[prob->frame->origin_range.i + x];
   }
-  return prob->scores->content_dependent_gap_scores[prob->frame->T_range.i + y];
+  return prob->scores->content_dependent_gap_scores[prob->frame->mutant_range.i + y];
 }
 
 /**
@@ -235,7 +235,7 @@ int _alnchoice_B(dptable *T, int x, int y, alnchoice* choice) {
  * @return 0 if choice successfully built, -1 if choice not possible.
  */
 int _alnchoice_M(dptable *T, int x, int y, alnchoice* choice) {
-  intpair chars; // the indices of characters in question of S and T,
+  intpair chars; // the indices of characters in question of origin and T,
   double score;
   alnframe* frame = T->prob->frame;
   intpair prev = _cellpos_from_xy(T->prob, x-1, y-1);
@@ -245,8 +245,8 @@ int _alnchoice_M(dptable *T, int x, int y, alnchoice* choice) {
   }
   // pos is guaranteed to be in xy-system now:
   chars = (intpair) {
-    frame->S[frame->S_range.i + x - 1],
-    frame->T[frame->T_range.i + y - 1]
+    frame->origin[frame->origin_range.i + x - 1],
+    frame->mutant[frame->mutant_range.i + y - 1]
   };
 
   score = T->prob->scores->subst_scores[chars.i][chars.j];
@@ -330,8 +330,8 @@ intpair _std_find_optimal(dptable* T) {
   int row = -1, col = -1;
   if (type == GLOBAL || type == END_ANCHORED || type == END_ANCHORED_OVERLAP) {
     // Global and end-anchored alignments must end at the bottom right corner
-    row = frame->S_range.j - frame->S_range.i;
-    col = frame->T_range.j - frame->T_range.i;
+    row = frame->origin_range.j - frame->origin_range.i;
+    col = frame->mutant_range.j - frame->mutant_range.i;
     if (T->cells[row][col].num_choices == 0) {
       return (intpair){-1, -1};
     }
@@ -340,11 +340,11 @@ intpair _std_find_optimal(dptable* T) {
     // Overlap alignments (except end-anchored ones) can end anywhere on either
     // of the bottom or right edges; find the best:
     max = -INT_MAX;
-    for (i = 0; i < frame->S_range.j - frame->S_range.i + 1; i++){
-      for (j = 0; j < frame->T_range.j - frame->T_range.i + 1; j++) {
+    for (i = 0; i < frame->origin_range.j - frame->origin_range.i + 1; i++){
+      for (j = 0; j < frame->mutant_range.j - frame->mutant_range.i + 1; j++) {
         // Are we on the bottom row or the right column?
-        if (i != frame->S_range.j - frame->S_range.i &&
-            j != frame->T_range.j - frame->T_range.i) {
+        if (i != frame->origin_range.j - frame->origin_range.i &&
+            j != frame->mutant_range.j - frame->mutant_range.i) {
           continue;
         }
         if (T->cells[i][j].num_choices == 0) {
@@ -362,8 +362,8 @@ intpair _std_find_optimal(dptable* T) {
     // Local and start-anchored alignments (except for overlap ones) can end
     // anywhere; find the best:
     max = T->cells[0][0].choices[0].score;
-    for (i = 0; i < frame->S_range.j - frame->S_range.i + 1; i++){
-      for (j = 0; j < frame->T_range.j - frame->T_range.i + 1; j++) {
+    for (i = 0; i < frame->origin_range.j - frame->origin_range.i + 1; i++){
+      for (j = 0; j < frame->mutant_range.j - frame->mutant_range.i + 1; j++) {
         if (T->cells[i][j].num_choices == 0) {
           continue;
         }
@@ -390,8 +390,8 @@ intpair _banded_find_optimal(dptable* T) {
   intpair opt = (intpair) {-1, -1};
   if (T->prob->banded_params->type == B_GLOBAL) {
     opt = _cellpos_from_xy(T->prob,
-      frame->S_range.j - frame->S_range.i,
-      frame->T_range.j - frame->T_range.i
+      frame->origin_range.j - frame->origin_range.i,
+      frame->mutant_range.j - frame->mutant_range.i
     );
     /*printf("(d+,a)=(%d,%d)\n", opt.i, opt.j);*/ // FIXME segfaults, does it?
     if (T->cells[opt.i][opt.j].num_choices < 1) {

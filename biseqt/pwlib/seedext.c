@@ -12,18 +12,18 @@
  * "from" or "to" sequence.
  *
  * @param aln The alignment of interest.
- * @param on A single character of either 'S' or 'T'.
+ * @param on A single character of either 'O' (for origin) or 'M' (for mutant).
  * @return A non-negative integer corresponding to the length of the indicated
  *   sequence that is covered by the alignment and -1 if an error occurs.
  */
 int aln_seq_len(alignment* aln, char on) {
-  if (on != 'S' && on != 'T') {
+  if (on != 'O' && on != 'M') {
     return -1;
   }
   int sum = 0;
   for (int i = 0; i < strlen(aln->opseq); i++) {
-    if ((on == 'S' && aln->opseq[i] != 'I') ||
-        (on == 'T' && aln->opseq[i] != 'D')) {
+    if ((on == 'O' && aln->opseq[i] != 'I') ||
+        (on == 'M' && aln->opseq[i] != 'D')) {
       sum ++;
     }
   }
@@ -41,20 +41,20 @@ int extend_1d_once(alignment* aln, alnframe* frame, seedext_params* params, int 
   char* opseq;
   int failure = 0;
 
-  int S_len = aln_seq_len(aln, 'S'),
-      T_len = aln_seq_len(aln, 'T');
-  intpair ext_S_range, ext_T_range;
+  int origin_len = aln_seq_len(aln, 'O'),
+      mutant_len = aln_seq_len(aln, 'M');
+  intpair ext_origin_range, ext_mutant_range;
   if (forward) {
-    ext_S_range = (intpair) {aln->S_idx + S_len, aln->S_idx + S_len + params->window};
-    ext_T_range = (intpair) {aln->T_idx + T_len, aln->T_idx + T_len + params->window};
+    ext_origin_range = (intpair) {aln->origin_idx + origin_len, aln->origin_idx + origin_len + params->window};
+    ext_mutant_range = (intpair) {aln->mutant_idx + mutant_len, aln->mutant_idx + mutant_len + params->window};
   } else {
-    ext_S_range = (intpair) {aln->S_idx - params->window, aln->S_idx};
-    ext_T_range = (intpair) {aln->T_idx - params->window, aln->T_idx};
+    ext_origin_range = (intpair) {aln->origin_idx - params->window, aln->origin_idx};
+    ext_mutant_range = (intpair) {aln->mutant_idx - params->window, aln->mutant_idx};
   }
 
   type = forward ? START_ANCHORED_OVERLAP : END_ANCHORED_OVERLAP;
   ext_frame = (alnframe) {
-    .S=frame->S, .T=frame->T, .S_range=ext_S_range, .T_range=ext_T_range
+    .origin=frame->origin, .mutant=frame->mutant, .origin_range=ext_origin_range, .mutant_range=ext_mutant_range
   };
   std_alnparams alnparams = (std_alnparams) {.type=type};
   prob = (alnprob) {
@@ -87,8 +87,8 @@ int extend_1d_once(alignment* aln, alnframe* frame, seedext_params* params, int 
     strncpy(opseq, aln->opseq, seg_opseq_len);
     strncpy(opseq + seg_opseq_len, aln->opseq, res_opseq_len);
   } else {
-    aln->S_idx = res->S_idx;
-    aln->T_idx = res->T_idx;
+    aln->origin_idx = res->origin_idx;
+    aln->mutant_idx = res->mutant_idx;
     strncpy(opseq, res->opseq, res_opseq_len);
     strncpy(opseq + res_opseq_len, aln->opseq, seg_opseq_len);
   }
@@ -103,17 +103,17 @@ int extend_1d(alignment* res, alignment* aln, alnframe* frame, seedext_params* p
   alignment cur_aln = *aln;
   double cur_min = aln->score;
   int num_mins = 0, actual_window;
-  int S_end, T_end, S_wiggle, T_wiggle, min_wiggle;
+  int origin_end, mutant_end, origin_wiggle, mutant_wiggle, min_wiggle;
   seedext_params* curparams = malloc(sizeof(seedext_params));
   while (1) {
     if (forward) {
-      S_end = cur_aln.S_idx + aln_seq_len(&cur_aln, 'S');
-      T_end = cur_aln.T_idx + aln_seq_len(&cur_aln, 'T');
-      S_wiggle = frame->S_range.j - frame->S_range.i - S_end;
-      T_wiggle = frame->T_range.j - frame->T_range.i - T_end;
-      min_wiggle = S_wiggle < T_wiggle ? S_wiggle : T_wiggle;
+      origin_end = cur_aln.origin_idx + aln_seq_len(&cur_aln, 'O');
+      mutant_end = cur_aln.mutant_idx + aln_seq_len(&cur_aln, 'M');
+      origin_wiggle = frame->origin_range.j - frame->origin_range.i - origin_end;
+      mutant_wiggle = frame->mutant_range.j - frame->mutant_range.i - mutant_end;
+      min_wiggle = origin_wiggle < mutant_wiggle ? origin_wiggle : mutant_wiggle;
     } else {
-      min_wiggle = cur_aln.S_idx < cur_aln.T_idx ? cur_aln.S_idx : cur_aln.T_idx;
+      min_wiggle = cur_aln.origin_idx < cur_aln.mutant_idx ? cur_aln.origin_idx : cur_aln.mutant_idx;
     }
 
     actual_window = params->window < min_wiggle ? params->window : min_wiggle;
@@ -169,8 +169,8 @@ alignment* extend(alignment** alns, int num_alns, alnframe* frame, seedext_param
     opseq[fwd_aln_len + bwd_aln_len - seg_aln_len] = '\0';
     // build the overall alignment
     aln = malloc(sizeof(alignment));
-    aln->S_idx = bwd.S_idx;
-    aln->T_idx = bwd.T_idx;
+    aln->origin_idx = bwd.origin_idx;
+    aln->mutant_idx = bwd.mutant_idx;
     aln->score = overlap_score;
     aln->opseq = opseq;
     return aln;

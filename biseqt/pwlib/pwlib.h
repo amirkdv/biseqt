@@ -86,10 +86,10 @@ typedef struct {
  * their start/end of frame positions.
  */
 typedef struct {
-  int* S; /**< The "from" sequence as an array of integers.*/
-  int* T; /**< The "to" sequence as an array of integers.*/
-  intpair S_range; /**< Vertical span of the frame in [min, max) format. */
-  intpair T_range; /**< Horizontal span of the frame in [min, max) format. */
+  int* origin; /**< The "from" sequence as an array of integers.*/
+  int* mutant; /**< The "to" sequence as an array of integers.*/
+  intpair origin_range; /**< Vertical span of the frame in [min, max) format. */
+  intpair mutant_range; /**< Horizontal span of the frame in [min, max) format. */
 } alnframe;
 
 /**
@@ -144,7 +144,7 @@ typedef struct {
  * for example, the affine gap penalty.
  */
 typedef struct alnchoice {
-  char op; /**< Either of `M` for match, `S` for substitution, `I`
+  char op; /**< Either of `M` for match, `origin` for substitution, `I`
     for insertion, and `D` for deletion. */
   double score; /**< The overall score of the alignment corresponding to the
     chain of bases leading to here.*/
@@ -181,9 +181,9 @@ typedef struct {
  * Represents a solution to an alignment problem.
  */
 typedef struct {
-  int S_idx; /**< The starting position of the alignment along the
-    "from" sequence. This is *not* relative to the start of alignment frame.*/
-  int T_idx; /**< The starting position of the alignment along the "to"
+  int origin_idx; /**< The starting position of the alignment along the
+    original sequence. This is *not* relative to the start of alignment frame.*/
+  int mutant_idx; /**< The starting position of the alignment along the "to"
     sequence. This is *not* relative to the start of alignment frame.*/
   double score; /**< The score of the alignment according to the
     corresponding ::alnscores.*/
