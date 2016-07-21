@@ -101,8 +101,7 @@ class Alphabet(object):
             'TCCCA'
 
         """
-        if mappings is None:
-            mappings = {}
+        mappings = mappings if mappings is not None else {}
 
         if isinstance(mappings, list):
             assert all(len(m) == 2 for m in mappings)
