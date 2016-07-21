@@ -301,11 +301,5 @@ class EditTranscript(str):
     def __repr__(self):
         return 'EditTranscript("%s")' % self
 
-    def __getitem__(self, key):
-        if isinstance(key, int):
-            return str(self)[key]
-        else:
-            return EditTranscript(str(self)[key])
-
     def __add__(self, other):
         return EditTranscript(str(self) + str(other))
