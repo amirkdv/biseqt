@@ -205,25 +205,34 @@ def normal_neg_log_pvalue(mu, sd, x):
 
         Consider a binary classification problem with two sample sets
         :math:`X,Y` with positive and negative labels respectively. The
-        corresponding ROC curve is a paremetric curve in
-        :math:`[0,1]\\times[0,1]` given by :math:`(F_X(t), F_Y(t)` over
-        :math:`t\in\mathbb{R}` where :math:`F_X,F_Y` are the cumulative
-        distributions of the positive and negative samples.
+        corresponding ROC curve is a paremetric curve in the unit square given
+        by:
 
-        Now suppose we consider instead the *filtered* sample sets :math:`f(X),
-        f(Y)` where :math:`f:\mathbb{R}\\to\mathbb{R}` is a monotonic real
-        function and for any set :math:`A`, the set :math:`f(A)` denotes
-        :math:`\{f(a); a\in A\}`.  With simple probability arithmetic we can
-        show that:
+        .. math::
+            \left(F_X(t), F_Y(t)\\right) \in [0,1]\\times[0,1]
+
+        where :math:`F_X,F_Y` are the cumulative distributions of the positive
+        and negative samples and :math:`t` varies over the extended real line
+        :math:`\mathbb{R}\cup\{\pm\infty\}`.
+
+        Now let :math:`f:\mathbb{R}\\to\mathbb{R}` be a *monotonically
+        increasing* real function and for any set :math:`A` let :math:`f(A)`
+        denote the set :math:`\{f(a); a\in A\}`. If we consider the sets
+        :math:`f(X), f(Y)` as the positive and negative samples, we have:
+
+        .. math::
+            F_{f(X)}(a) = \Pr[f(X)\le a] = \Pr[X\le f^{-1}(a)]
+
+        which implies:
 
         .. math::
             F_{f(X)} = F_X \circ f^{-1}
 
             F_{f(Y)} = F_Y \circ f^{-1}
 
-        It follows that although the cumulative distributions of the positive
-        and negative sample sets change by applying :math:`f(\cdot)`, the ROC
-        curve remains unchanged.
+        It follows that although the cumulative distributions :math:`F_{f(X)},
+        F_{f(Y)}` differ from the original :math:`F_X,F_Y`, the ROC curve
+        is merely reparameterized and thus remains unchanged.
 
         As a special case, this implies that the ROC curve of a collection of
         positive and negative z-score sets is identical to the ROC curve of the
