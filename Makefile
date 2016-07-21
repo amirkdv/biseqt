@@ -20,8 +20,9 @@ flake8:
 	flake8 biseqt tests --exclude=$(FLAKE8_EXCLUDE)
 
 PYTEST_OPTS=--cov biseqt --capture=no --cov-report=term-missing --verbose
-COVERAGE_BADGE=coverage.svg
+COVERAGE_BADGE=coverage.svg  # relative to tests/
 tests: $(LIBDIR)/pwlib.so flake8
+	rm -f tests/$(COVERAGE_BADGE)
 	cd tests && PYTHONPATH=.. py.test $(PYTEST_OPTS) && coverage-badge -o $(COVERAGE_BADGE)
 
 loc:
