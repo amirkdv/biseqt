@@ -1,14 +1,25 @@
 # -*- coding: utf-8 -*-
 """This modules provides various pairwise sequence alignment algorithms
 implemented in `pwlib <biseqt.pwlib.html>`_."""
-
+import os
+from cffi import FFI
 from math import log
 import re
-from . import ffi, lib, sequence, CffiObject
 try:
     from matplotlib import pyplot as plt
 except ImportError:
     pass
+from . import sequence  # FIXME
+
+
+pwlib_so = os.path.join(os.path.dirname(__file__), 'pwlib', 'pwlib.so')
+pwlib_h = os.path.join(os.path.dirname(__file__), 'pwlib', 'pwlib.h')
+
+ffi = FFI()
+lib = ffi.dlopen(pwlib_so)
+with open(pwlib_h) as f:
+    ffi.cdef(f.read())
+
 
 # alignment modes
 STD_MODE = lib.STD_MODE
@@ -50,17 +61,7 @@ B_OVERLAP = lib.B_OVERLAP
 substring alignments."""
 
 
-class AlignScores(CffiObject):
-    """Wraps the C struct ``alnscores``, see ``pwlib.h``.
-
-    Attributes:
-        alphabet (Alphabet): alphabet used to represent the sequences.
-        c_obj (cffi.cdata): points to the underlying C ``alnscores`` struct.
-        subst_scores (List[List]): rebuilt from the C ``double**`` upon access.
-
-    Additionally all struct members of ``alnscores`` can be read (and not
-    written) as usual attributes.
-    """
+class AlignScores(object):
     def __init__(self, alphabet=None, subst_scores=[],
                  go_score=0, ge_score=0, content_dependent_gap_scores=None):
         self.alphabet = alphabet
@@ -85,155 +86,8 @@ class AlignScores(CffiObject):
             self._c_gaps_ka = ffi.NULL
         self.c_obj = ffi.new('alnscores*', kw)
 
-    @classmethod
-    def subst_scores_from_probs(cls, alphabet, **kw):
-        """Converts a substitution probability matrix to a substitution score
-        matrix using a null-hypothesis letters distribution. The scores are
-        natural logs of odds ratios:
 
-            :math:`S(a_i,a_j) = \log[(1-g)\Pr(a_j|a_i)] - \log[\Pr(a_j)]`
-
-        where :math:`S(a_i,a_j)` is the substitution score of letter
-        :math:`a_i` to letter :math:`a_j` and :math:`g` is the gap probability.
-
-        Args:
-            alphabet(sequence.Alphabet): the underlying alphabet, needed since
-                probabilities are in order of letter index in alphabet.
-
-        Keyword Args:
-            subst_probs(List[List[float]]): As in
-                :func:`biseqt.sequence.Sequence.mutate`.
-            letter_dist(Optional[List[float]]): Probability distributions of
-                each letter of the alphabet in the null (random) hypothesis,
-                default is uniform.
-
-        Returns:
-            List[List[float]]: Substitution score matrix for given alphabet,
-                as expected by :func:`AlignScores`.
-
-        Note:
-            Only a linear gap model is supported for translating probabilities
-            to scores. This is because under an affine model where the
-            probability of opening a gap differs from that of extending a gap,
-            the substitution probabilities also become context-dependent (see
-            where :math:`g` appears in the formula above) which is not
-            supported by ``libalign``.
-        """
-        L = len(alphabet)
-        subst_probs = kw['subst_probs']
-        letter_dist = kw.get('letter_dist', [1.0/L for k in range(L)])
-        gap_prob = kw.get('gap_prob', 0)
-        subst_scores = [[0 for _ in range(L)] for _ in range(L)]
-        for i in range(L):
-            assert(abs(1 - sum([subst_probs[i][j] for j in range(L)])) < 0.001)
-            for j in range(L):
-                assert(subst_probs[i][j] > 0)
-                assert(letter_dist[i] * letter_dist[j] != 0)
-                subst_scores[i][j] = log(1-gap_prob) + \
-                    log(subst_probs[i][j]) - log(letter_dist[j])
-        return subst_scores
-
-    @classmethod
-    def gap_scores_from_probs(cls, go_prob, ge_prob):
-        """Converts gap open/extend probabilities to gap open/extend scores
-        in an affine gap penalty scheme. The probabilites are taken to mean the
-        following:
-
-            * The gap open probability :math:`g_o` is the probability of a
-              single indel following a substitution/match or an indel of a
-              different kind.
-            * The gap extend probability :math:`g_e` is the probability of a
-              single indel following an indel of the same kind.
-
-        Note:
-            In the above sense the score (log likelihood) of a gap of
-            length :math:`n \\ge 1` is :math:`\log g_o + (n-1)\log g_e`.
-            This differs by the 1 offset from textbook definitions of the
-            affine gap penalty (and from what ``libalign`` expects). The two
-            are equivalent since the above gap penalty function can be
-            rewritten as :math:`\log {g_o \over g_e} + n \log g_e`.
-            These are precisely the scores this function returns.
-
-            Consequently, to ensure that the gap open score is not positive,
-            we require that the gap open probability be less than the gap
-            extend probability.
-
-            To enforce a linear gap model, naturally, pass identical values for
-            ``go_prob`` and ``ge_prob``. This translates to a gap open
-            score of 0.
-
-        """
-        return log(go_prob/ge_prob), log(ge_prob)
-
-    def __getattr__(self, name):
-        if name == 'subst_scores':
-            idx = range(len(self.alphabet))
-            return [[self.c_obj.subst_scores[i][j] for j in idx] for i in idx]
-        elif name == 'gap_scores':
-            return (self.c_obj.gap_open_score, self.c_obj.gap_extend_score)
-        else:
-            return super(AlignScores, self).__getattr__(name)
-
-    def score(self, S, T, opseq, S_min_idx=0, T_min_idx=0):
-        """Calculates the score for an arbitray opseq over given sequences.
-        Opseqs are allowed to be partial alignments (i.e finishing before
-        reaching the end of frame)::
-
-            C = AlignScores(...)
-            C.score('ACCTT', 'AGCTTA', 'MSMMMD')
-
-        Args:
-            S (sequence.Sequence): The "from" sequence of alignment.
-            T (sequence.Sequence): The "to" sequence of alignment.
-            opseq  (str): The edit transcript of the form ``(M|S|I|D)+``.
-
-        Keyword Args:
-            S_min_idx(Optional[int]): The starting position of the opseq in
-                ``S``, default is 0.
-            T_min_idx(Optiona[int]): The starting position of the opseq in
-                ``T``, default is 0.
-        """
-        score = 0.0
-        i, j = S_min_idx, T_min_idx
-
-        def tokens():
-            for match in re.finditer(r'(.)\1*', opseq):
-                match = match.group(0)
-                yield match[0], len(match)
-
-        for op, num in tokens():
-            if op in 'MS':
-                for k in range(num):
-                    S_let_idx = S.c_idxseq[i + k]
-                    T_let_idx = T.c_idxseq[j + k]
-                    score += self.subst_scores[S_let_idx][T_let_idx]
-                i, j = i + num, j + num
-            elif op in 'ID':
-                score += self.gap_open_score + self.gap_extend_score * num
-                if op == 'I':
-                    j = j + num
-                else:
-                    i = i + num
-            else:
-                raise ValueError('Invalid edit operation: %c' % op)
-        return score
-
-
-class AlignFrame(CffiObject):
-    """FIXME
-    Args:
-        S (sequence.Sequence): The "from" sequence.
-        T (sequence.Sequence): The "to" sequence.
-
-    Keyword Args:
-        S_min_idx (int): Starting position of frame for ``S``, default is 0.
-        T_min_idx (int): Starting position of frame for ``T``, default is 0.
-        S_max_idx (int): Ending position (non-inclusive) of the frame for
-            ``S``, default is the length of ``S``.
-        T_max_idx (int): Ending position (non-inclusive) of the frame for
-            ``T``, default is the length of ``T``.
-
-    """
+class AlignFrame(object):
     def __init__(self, S, T, **kw):
         assert isinstance(S, sequence.Sequence)
         assert isinstance(T, sequence.Sequence)
@@ -252,22 +106,7 @@ class AlignFrame(CffiObject):
         })
 
 
-class AlignTable(CffiObject):
-    """Wraps the C struct ``dptable`` and provides a context manager to
-    solve and potentially traceback an alignment problem. The corresponding
-    ``alnprob`` or ``banded_alnprob`` is contained in this class as well.
-    Args:
-        frame (pw.AlignFrame): Alignment frame.
-        scores (pw.AlignScores): Alignment parameters.
-
-    Keyword Args:
-        alntype: FIXME
-
-    Attributes:
-        dp_table (List[List[float]]): The dynamic programming table built upon
-            access from the underlying C ``double **``.
-        c_obj (cffi.cdata): points to the underlying ``alndef`` struct.
-    """
+class AlignTable(object):
     def __init__(self, frame, scores, **kw):
         alnmode = kw['alnmode']
         alntype = kw['alntype']
@@ -308,17 +147,8 @@ class AlignTable(CffiObject):
     def __exit__(self, *args):
         lib.dptable_free(self.c_obj)
 
-    def __getattr__(self, name):
-        # TODO look up attributes from self.c_obj or self.aln_prob
-        return super(AlignTable, self).__getattr__(name)
-
     def score(self, opseq):
-        """Calculates the score for an arbitray opseq. Opseqs are allowed to be
-        partial alignments (i.e finishing before reaching the end of frame).::
-
-            P = AlignProblem(...)
-            P.score('MMMSSISSD') #=> 23.50
-        """
+        # FIXME
         return self.scores.score(
             self.frame.S, self.frame.T, opseq,
             self.frame.S_range.i, self.frame.T_range.i
@@ -354,7 +184,7 @@ class AlignTable(CffiObject):
         return Alignment(c_obj=alignment)
 
 
-class Alignment(CffiObject):
+class Alignment(object):
     """Wraps alignment solutions represented as C ``alignment*``.
     All keyword arguments become attributes with identical names.
 
@@ -389,6 +219,7 @@ class Alignment(CffiObject):
         else:
             return super(Alignment, self).__getattr__(name)
 
+    # FIXME what is the use of this?
     def __str__(self):
         return '(%d,%d),%.2f:%s' \
             % (self.S_idx, self.T_idx, self.score, self.opseq)
@@ -398,6 +229,7 @@ class Alignment(CffiObject):
             % (self.S_idx, self.T_idx, self.score, self.opseq)
 
 
+# FIXME make this simpler and better
 def rasterplot(path, alignment, S_name='S', T_name='T', fullview=False):
     if 'plt' not in globals():
         raise ImportError('matplotlib is required for rasterplots')
