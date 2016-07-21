@@ -8,4 +8,6 @@ dependencies:
 
 test:
   override:
-    - docker run -it -v $PWD:/biseqt amirkdv/biseqt-base sh -c '. $SCI_PY_ENV/bin/activate && cd /biseqt && make deps docs tests'
+    - docker run -it -v $PWD:/biseqt amirkdv/biseqt-base sh -c
+      '. $SCI_PY_ENV/bin/activate && cd /biseqt && make deps docs tests COVERAGE_BADGE=/biseqt/coverage.svg'
+    - cp $PWD/coverage.svg $CIRCLE_ARTIFACTS/

@@ -19,8 +19,10 @@ FLAKE8_EXCLUDE = biseqt/overlap,biseqt/mapping.py
 flake8:
 	flake8 biseqt tests --exclude=$(FLAKE8_EXCLUDE)
 
+PYTEST_OPTS=--cov biseqt --capture=no --cov-report=term-missing --verbose
+COVERAGE_BADGE=coverage.svg
 tests: $(LIBDIR)/pwlib.so flake8
-	cd tests && PYTHONPATH=.. py.test --cov biseqt --capture=no --cov-report=term-missing --verbose
+	cd tests && PYTHONPATH=.. py.test $(PYTEST_OPTS) && coverage-badge -o $(COVERAGE_BADGE)
 
 loc:
 	find biseqt tests -type f -regex '.*\(\.py\|\.c\|\.h\)' | xargs wc -l

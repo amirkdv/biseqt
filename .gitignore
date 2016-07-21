@@ -25,3 +25,5 @@ html/
 
 workspace/
 matplotlibrc
+
+tests/.coverage
