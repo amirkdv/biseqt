@@ -21,6 +21,14 @@ def test_rand_seq():
     np.random.choice = _bak
 
 
+def test_expected_coverage():
+    A = Alphabet('ACGT')
+    S = rand_seq(A, 100)
+    cov = 10
+    reads = [r for r in rand_read(S, len_mean=len(S)/2, expected_coverage=cov)]
+    assert len(reads) == 2 * cov
+
+
 def test_lossless_reads():
     A = Alphabet('ACGT')
     S = rand_seq(A, 100)

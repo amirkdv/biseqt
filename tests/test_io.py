@@ -43,7 +43,6 @@ def test_read_fasta_advanced():
             'should be able to read single sequences from known positions'
 
     f.seek(recs[1][1])
-    return
     assert [r for r in read_fasta(f, A, num=2)] == recs[1:3], \
         'should be able to read known number of sequences from known positions'
 
@@ -118,21 +117,27 @@ def test_pw_render_basic():
     #   AACT
     #   AG-T
     tx = EditTranscript('MSDM')
-    with_del = pw_render_term(tx, S + S, A.parse('AGT'), **render_kw)
+    origin, mutant = S + S, A.parse('AGT')
+    with_del = pw_render_term(tx, origin, mutant, **render_kw)
     assert 'AG-T' in with_del, 'deletions are represented by - in mutant'
     lines = with_del.rstrip().split('\n')
     assert lines[0].index('C') == lines[1].index('-'), \
         'deleted content and - should be aligned'
+    # shouldn't crash when printing with color
+    pw_render_term(tx, origin, mutant, origin_start=len(S), colored=True)
 
     # insertion:
     #   AAC-T
     #   AACGT
     tx = EditTranscript('MMMIM')
-    with_ins = pw_render_term(tx, S + S, A.parse('AACGT'), **render_kw)
+    origin, mutant = S + S, A.parse('AACGT')
+    with_ins = pw_render_term(tx, origin, mutant, **render_kw)
     assert 'AAC-T' in with_ins, 'insertions are represented by - in origin'
     lines = with_ins.rstrip().split('\n')
     assert lines[0].index('-') == lines[1].index('G'), \
         'inserted content and - should be aligned'
+    # shouldn't crash when printing with color
+    pw_render_term(tx, origin, mutant, origin_start=len(S), colored=True)
 
 
 def test_pw_render_width():

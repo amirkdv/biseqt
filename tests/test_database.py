@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 import pytest
 from StringIO import StringIO
+from mock import patch, MagicMock
 
 from biseqt.io import write_fasta
 from biseqt.sequence import Alphabet
@@ -114,6 +115,14 @@ def test_database_populate_fasta():
         'source file of sequence records must be set'
     assert [db.load_from_record(rec, fasta) for rec in inserted] == [S, T], \
         'should be able to retrieve sequences by position in source'
+
+    with patch('biseqt.database.open', create=True) as open_mock:
+        open_mock.return_value = MagicMock(spec=file, wraps=fasta)
+        assert db.load_from_record(inserted[0]) == S, \
+            'load_from_record should work without an open file handle'
+        # the same cannot be repeated for T because load_from_record calls
+        # close on the fake file. If additional tests are needed wrap "fasta"
+        # twice: MagicMock(spec=file, wraps=StringIO(fasta.getvalue()))
 
 
 def test_database_populate_fasta_rc():
