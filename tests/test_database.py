@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+import pytest
 from StringIO import StringIO
 
 from biseqt.io import write_fasta
@@ -14,6 +15,9 @@ def test_database_basic():
     with db.connection() as conn:
         # a sequence table should be created
         conn.cursor().execute('SELECT * FROM sequence LIMIT 1;')
+
+    with pytest.raises(AssertionError):
+        DB('/cannot/possibly/exist/directory/', A)
 
 
 def test_database_insert():

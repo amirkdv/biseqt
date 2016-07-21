@@ -51,6 +51,7 @@ def test_sequence_magic():
         'indexing by a slice should give another sequence object'
 
     assert S + A.parse('TT') == A.parse('HTHTTT'), 'add by appending'
+    assert S + 'TT' == A.parse('HTHTTT'), 'add by appending raw sequences'
 
 
 def test_sequence_transforms():
@@ -100,12 +101,15 @@ def test_named_sequence_tranforms():
     assert complement == A.parse('TTGA', name='bar'), \
         'result of transforming a named sequence is a named sequence'
 
+    assert 'transformed' in S.transform(mappings=['AT', 'CG']).name
+
 
 def test_transcript():
     with pytest.raises(AssertionError):
-        EditTranscript('T')
+        EditTranscript('MSSST')  # illegal character
 
     tx = EditTranscript('MM')
+    assert tx == 'MM', 'transcripts and strings should equal if same contents'
     assert str(tx) == 'MM', 'str() gives the raw opseq'
     assert len(tx) == 2, 'len() works'
     assert eval(repr(tx)) == tx, 'repr() should provide eval-able string'
@@ -117,5 +121,4 @@ def test_transcript():
         'transcript + string gives transcript'
 
     assert tx[0] == 'M', 'indexing by int should give a string'
-    assert tx[:1] == EditTranscript('M'), \
-        'indexing by slice should give another transcript'
+    assert tx[:] == tx, 'equality should only depend on contents'
