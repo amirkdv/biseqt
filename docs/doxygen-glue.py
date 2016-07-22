@@ -1,8 +1,13 @@
 #!/usr/bin/env python
 
 from pycparser import c_ast, parse_file
+from subprocess import Popen, PIPE
 import sys
+import os
 import argparse
+
+HERE = os.path.dirname(__file__)
+DOXY_RELDIR = 'doxygen/html'
 
 
 def skip_name(name):
@@ -54,6 +59,10 @@ Functions
 Constants
 ---------
 %s
+
+Call Graphs
+-----------
+%s
 """
     enum = '\n'.join('.. doxygenenum:: %s' % e
                      for e in d.collected['enum'])
@@ -63,17 +72,23 @@ Constants
     # TODO with the next relase of sphinx (1.5) we can center align graphviz
     # cf. https://github.com/sphinx-doc/sphinx/commit/1d17475a
     # currently this is hacked to work in CSS, cf. docs/_static/theme_hacks.css
-    struct_tpl = """
-.. doxygenstruct:: %s
-.. graphviz:: doxygen/html/struct%s__coll__graph.dot
-
----------------
-"""
+    struct_tpl = '\n' + \
+            '\n.. doxygenstruct:: %s' + \
+            '\n.. graphviz:: %s/struct%%s__coll__graph.dot' % DOXY_RELDIR + \
+            '\n\n-----------'
     struct = ''
     for s in d.collected['struct']:
         struct += (struct_tpl % (s, s.replace('_', '__')))
 
-    return ret % (struct, func, enum)
+    cmd = ['find', os.path.join(HERE, DOXY_RELDIR), '-regex', '.*_icgraph.dot']
+    out, _ = Popen(cmd, stdout=PIPE).communicate()
+    call_graphs = [os.path.relpath(call_graph, HERE)
+                   for call_graph in sorted(out.strip().split('\n'), reverse=1)
+                   # skip duplicates in header file:
+                   if '/pwlib_8h_' not in call_graph]
+    call_graphs = '\n.. graphviz:: '.join([''] + call_graphs)
+
+    return ret % (struct, func, enum, call_graphs)
 
 def main(args):
     parser = argparse.ArgumentParser(prog='cdocs')
