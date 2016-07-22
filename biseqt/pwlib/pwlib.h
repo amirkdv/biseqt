@@ -180,7 +180,7 @@ typedef struct {
 /**
  * Represents a solution to an alignment problem.
  */
-typedef struct {
+typedef struct alignment {
   int origin_idx; /**< The starting position of the alignment along the
     original sequence. This is *not* relative to the start of alignment frame.*/
   int mutant_idx; /**< The starting position of the alignment along the "to"
@@ -247,7 +247,7 @@ void dptable_free(dptable* T);
 alignment* dptable_traceback(dptable* T, intpair end);
 
 /**
- * Given an alignment with allocated DP table, solves the alignment problem (i.e
+ * Given an ::alignment with allocated DP table, solves the alignment problem (i.e
  * populates the alignment table) and returns the optimal ending point for the
  * alignment.  The optimal score and edit transcript can then be obtained by
  * using `dptable_traceback`. Half of the constraints imposed by an alignment
@@ -302,6 +302,7 @@ int extend_1d(alignment* res, alignment* aln, alnframe* frame, seedext_params* p
  * @return -1 if an error occurs and 0 otherwise.
  */
 int extend_1d_once(alignment* aln, alnframe* frame, seedext_params* params, int forward);
+
 // --------------------- Internals ---------------------
 int _alnchoice_B(dptable *T, int x, int y, alnchoice* choice);
 int _alnchoice_M(dptable *T, int x, int y, alnchoice* choice);

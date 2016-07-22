@@ -32,7 +32,7 @@ with local alignments."""
 
 # standard alignment types:
 GLOBAL = lib.GLOBAL
-"""Standard global alignment problem, i.e Needeman-Wunsch."""
+"""Standard global alignment problem, i.e Needleman-Wunsch."""
 LOCAL = lib.LOCAL
 """Standard local alignment problem, i.e Smith-Waterman."""
 START_ANCHORED = lib.START_ANCHORED

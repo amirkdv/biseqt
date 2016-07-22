@@ -52,6 +52,7 @@ intpair dptable_solve(dptable* T) {
   double max_score;
   alnchoice *choices = NULL;
   intpair ylim, xlim = _xlim(T->prob);
+
   // It's simpler to always populate the table in the natural order of xy
   // coordinates (note that order of dependencies is obviously statisfied in any
   // coordinate system).
@@ -126,17 +127,17 @@ alignment* dptable_traceback(dptable* T, intpair end) {
   if (aln == NULL) {
     _panick("Failed to allocate memory.");
   }
-  intpair xy = _xy_from_cellpos(T->prob, end.i, end.j);
-  int len = xy.i + xy.j + 1, // FIXME not unnecessarily too big?
+  end = _xy_from_cellpos(T->prob, end.i, end.j);
+  // We write ops to rev_opseq backwards starting from the end (position `len')
+  int len = end.i + end.j + 1, // FIXME not unnecessarily too big?
       pos = len - 1;
   alnchoice* cur = &(T->cells[end.i][end.j].choices[0]);
-  // We write ops to rev_opseq backwards starting from the end (position `len')
   char rev_opseq[len];
   while (cur->base != NULL) {
     pos--;
     rev_opseq[pos] = cur->op;
-    xy.i -= (cur->op == 'I' ? 0 : 1);
-    xy.j -= (cur->op == 'D' ? 0 : 1);
+    end.i -= (cur->op == 'I' ? 0 : 1);
+    end.j -= (cur->op == 'D' ? 0 : 1);
     cur = cur->base;
   }
   if (pos == len - 1) {
@@ -153,8 +154,8 @@ alignment* dptable_traceback(dptable* T, intpair end) {
   // strncpy does not null terminate:
   opseq[len] = '\0';
 
-  aln->origin_idx = xy.i + T->prob->frame->origin_range.i;
-  aln->mutant_idx = xy.j + T->prob->frame->mutant_range.i;
+  aln->origin_idx = end.i + T->prob->frame->origin_range.i;
+  aln->mutant_idx = end.j + T->prob->frame->mutant_range.i;
   aln->score=T->cells[end.i][end.j].choices[0].score;
   aln->opseq=opseq;
   return aln;
