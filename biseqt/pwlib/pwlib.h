@@ -262,11 +262,11 @@ alignment* dptable_traceback(dptable* T, intpair end);
 intpair dptable_solve(dptable* T);
 
 /**
- * Given an array of segments tries to extend all in both directions and returns
- * a fully extended segment as soon as it finds one.
+ * Given an array of partial alignments tries to extend all in both directions
+ * and returns a fully extended alignment as soon as it finds one.
  *
- * @param alns The original segments.
- * @param num_alns The number of provided segments.
+ * @param alns The original partial alignments.
+ * @param num_alns The number of provided partial alignments.
  * @param frame The frame defining the alignment of the original sequences.
  * @param params Seed extension parameters.
  *
@@ -276,12 +276,12 @@ intpair dptable_solve(dptable* T);
 alignment* extend(alignment** alns, int num_alns, alnframe* frame, seedext_params* params);
 
 /**
- * Given a segment fully extends it in one direction. A fully extended segment
- * (in one direction) is one that hits the boundary (beginning or end) of either
- * of the sequences.
+ * Given a partial alignment fully extends it in one direction. A fully
+ * extended alignment (in one direction) is one that hits the boundary
+ * (beginning or end) of either of the sequences.
  *
- * @param res Extended segment to be populated here.
- * @param aln The original segment.
+ * @param res Extended alignment to be populated here.
+ * @param aln The original partial alignment.
  * @param frame The frame defining the alignment of the original sequences.
  * @param params Seed extension parameters.
  * @param forward Either of 0 or 1 indicating the direction of extension.
