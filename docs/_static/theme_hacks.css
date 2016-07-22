@@ -109,3 +109,11 @@ body {
 div.rst-versions.rst-badge {
   display: none;
 }
+
+/**
+ *  TODO This shouldn't be needed with sphinx 1.5, cf. docs/doxygen-glue.py
+ */
+dl.struct + img {
+  display: block;
+  margin: auto;
+}

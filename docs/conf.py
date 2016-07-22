@@ -71,12 +71,13 @@ extensions = [
     'sphinx.ext.napoleon',
     'sphinx.ext.mathjax',
     'sphinx.ext.viewcode',
+    'sphinx.ext.graphviz',
     'sphinxcontrib.wiki',
     'breathe',
 ]
 
 # Breathe configuration
-breathe_projects = {"biseqt": "doxygen"}
+breathe_projects = {"biseqt": "doxygen/xml"}
 breathe_default_project = "biseqt"
 breathe_domain_by_extension = {"h": "c", "c": "c"}
 breathe_default_members = ('members', 'undoc-members')

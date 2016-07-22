@@ -46,13 +46,14 @@ DOCS_OUT = _build
 docs: $(LIBDIR)/pwlib.so docs/doxygen
 	rm -rf docs/$(DOCS_OUT)
 	# sphinx-apidoc -e -o $@ biseqt/ $(DOCS_EXCLUDE)
-	python docs/cdocs.py $(LIBDIR)/pwlib.h > docs/biseqt.pwlib.rst
+	docs/doxygen-glue.py $(LIBDIR)/pwlib.h > docs/biseqt.pwlib.rst
 	cd $@ && sphinx-build -b html . $(DOCS_OUT)
 	cd $@ && sphinx-build -b latex . $(DOCS_OUT)
 	@echo "Find the docs at file://`readlink -f $@/$(DOCS_OUT)/index.html`"
 
 docs/doxygen:
 	rm -rf $@
+	mkdir $@
 	doxygen docs/doxygen.conf
 
 DOCKER_IMG=amirkdv/biseqt-base
