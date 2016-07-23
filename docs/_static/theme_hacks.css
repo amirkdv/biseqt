@@ -113,7 +113,7 @@ div.rst-versions.rst-badge {
 /**
  *  TODO This shouldn't be needed with sphinx 1.5, cf. docs/doxygen-glue.py
  */
-dl.struct + img, dl.function + img{
+img[src*="graphviz"] {
   display: block;
   margin: auto;
 }
