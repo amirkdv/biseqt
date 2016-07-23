@@ -294,6 +294,14 @@ class Alignment(object):
     def __str__(self):
         return self.render_term(term_width=float('+inf'), margin=0, colored=0)
 
+    def __eq__(self, other):
+        assert isinstance(other, Alignment)
+        return other.origin == self.origin and \
+               other.mutant == self.mutant and \
+               other.transcript == self.transcript and \
+               other.origin_start == self.origin_start and \
+               other.mutant_start == self.mutant_start
+
     @classmethod
     def projected_len(cls, transcript, on='origin'):
         """Calculates the projected length of a given transcript on either of

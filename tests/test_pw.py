@@ -4,7 +4,7 @@ from biseqt.sequence import Alphabet
 from biseqt.stochastics import rand_seq, MutationProcess
 from biseqt.pw import Alignment, Aligner
 from biseqt.pw import STD_MODE
-from biseqt.pw import GLOBAL, LOCAL
+from biseqt.pw import GLOBAL, LOCAL, OVERLAP
 
 
 def test_projected_aln_len():
@@ -18,15 +18,33 @@ def test_projected_aln_len():
     assert Alignment.projected_len('IMS', on='mutant') == 3
 
 
-def test_alignment_basic():
+def test_alignment_std_basic():
     A = Alphabet('ACGT')
-    S = A.parse('AACCGGTT')
+    S = A.parse('A' * 10)
     with pytest.raises(AssertionError):
         Alignment(S, S, 'MSSST')  # illegal character
     with pytest.raises(AssertionError):
         Alignment(S, S, 'M', origin_start=len(S))  # illegal starting point
     with pytest.raises(AssertionError):
         Alignment(S, S, 'MM', origin_start=len(S)-1)  # transcript too long
+
+    with Aligner(S, S) as aligner:
+        aligner.solve()
+        assert aligner.traceback().transcript == 'M' * len(S), \
+            'default mode should be standard global alignment'
+
+    junk = A.parse('T' * len(S))
+    origin, mutant = S + junk, junk + S
+    alignment = Alignment(origin, mutant, 'M' * len(S), mutant_start=len(S))
+    with Aligner(origin, mutant, alntype=LOCAL) as aligner:
+        aligner.solve()
+        assert alignment == aligner.traceback(), \
+            'basic local alignment should work'
+
+    with Aligner(origin, mutant, alntype=OVERLAP) as aligner:
+        aligner.solve()
+        assert aligner.traceback().transcript == 'M' * len(S), \
+            'basic overlap alignment should work'
 
 
 noise_levels = [1e-2, 1e-1, 2e-1, 3e-1, 4e-1]
