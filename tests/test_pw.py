@@ -1,7 +1,10 @@
 # -*- coding: utf-8 -*-
 import pytest
 from biseqt.sequence import Alphabet
-from biseqt.pw import Alignment
+from biseqt.stochastics import rand_seq, MutationProcess
+from biseqt.pw import Alignment, Aligner
+from biseqt.pw import STD_MODE
+from biseqt.pw import GLOBAL
 
 
 def test_projected_aln_len():
@@ -13,6 +16,40 @@ def test_projected_aln_len():
     assert Alignment.projected_len('DMS', on='mutant') == 2
     assert Alignment.projected_len('IMS', on='origin') == 2
     assert Alignment.projected_len('IMS', on='mutant') == 3
+
+
+noise_levels = [1e-2, 1e-1, 2e-1, 3e-1, 4e-1]
+
+
+@pytest.mark.parametrize('noise_level', noise_levels,
+                         ids=['noise=%.1e' % l for l in noise_levels])
+def test_alignment_std_global(noise_level):
+    A = Alphabet('ACGT')
+    M = MutationProcess(A, subst_probs=noise_level, go_prob=noise_level,
+                        ge_prob=noise_level)
+    subst_scores, (go_score, ge_score) = M.log_odds_scores()
+
+    S = rand_seq(A, 100)
+    T, tx = M.mutate(S)
+    mutation_aln = Alignment(S, T, tx)
+    mutation_score = mutation_aln.calculate_score(subst_scores, go_score,
+                                                  ge_score)
+
+    aligner = Aligner(S, T, subst_scores=subst_scores, go_score=go_score,
+                      ge_score=ge_score, alnmode=STD_MODE, alntype=GLOBAL)
+    with aligner:
+        reported_score = aligner.solve()
+        assert round(reported_score, 3) >= round(mutation_score, 3), \
+            'optimal alignment scores better than the known transcript'
+        alignment = aligner.traceback()
+        aln_score = alignment.calculate_score(subst_scores, go_score, ge_score)
+        assert round(aln_score, 3) == round(reported_score, 3), \
+            'The alignment score should be calculated correctly'
+
+        ori_len = Alignment.projected_len(alignment.transcript, on='origin')
+        mut_len = Alignment.projected_len(alignment.transcript, on='mutant')
+        assert ori_len == len(S) and mut_len == len(T), \
+            'Global alignments cover the entirety of both sequences'
 
 
 def test_alignment_basic():
