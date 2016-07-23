@@ -187,7 +187,7 @@ typedef struct alignment {
     sequence. This is *not* relative to the start of alignment frame.*/
   double score; /**< The score of the alignment according to the
     corresponding ::alnscores.*/
-  char* opseq; /**< The sequence of edit operations, as in ::alnchoice
+  char* transcript; /**< The sequence of edit operations, as in ::alnchoice
     that defines the alignment.*/
 } alignment;
 

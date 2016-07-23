@@ -122,41 +122,41 @@ intpair dptable_solve(dptable* T) {
 }
 
 alignment* dptable_traceback(dptable* T, intpair end) {
-  char *opseq;
+  char *transcript;
   alignment* aln = malloc(sizeof(alignment));
   if (aln == NULL) {
     _panick("Failed to allocate memory.");
   }
   end = _xy_from_cellpos(T->prob, end.i, end.j);
-  // We write ops to rev_opseq backwards starting from the end (position `len')
+  // We write ops to rev_transcript backwards starting from the end (position `len')
   int len = end.i + end.j + 1, // FIXME not unnecessarily too big?
       pos = len - 1;
   alnchoice* cur = &(T->cells[end.i][end.j].choices[0]);
-  char rev_opseq[len];
+  char rev_transcript[len];
   while (cur->base != NULL) {
     pos--;
-    rev_opseq[pos] = cur->op;
+    rev_transcript[pos] = cur->op;
     end.i -= (cur->op == 'I' ? 0 : 1);
     end.j -= (cur->op == 'D' ? 0 : 1);
     cur = cur->base;
   }
   if (pos == len - 1) {
-    // empty opseq
+    // empty transcript
     return NULL;
   }
 
   len = len - pos - 1;
-  opseq = malloc(len + 1);
-  if (opseq == NULL) {
+  transcript = malloc(len + 1);
+  if (transcript == NULL) {
     _panick("Failed to allocate memory.");
   }
-  strncpy(opseq, rev_opseq + pos, len);
+  strncpy(transcript, rev_transcript + pos, len);
   // strncpy does not null terminate:
-  opseq[len] = '\0';
+  transcript[len] = '\0';
 
   aln->origin_idx = end.i + T->prob->frame->origin_range.i;
   aln->mutant_idx = end.j + T->prob->frame->mutant_range.i;
   aln->score=T->cells[end.i][end.j].choices[0].score;
-  aln->opseq=opseq;
+  aln->transcript=transcript;
   return aln;
 }

@@ -8,7 +8,7 @@
 #include "pwlib.h"
 
 /**
- * Given an alignment returns the length of its opseq on the
+ * Given an alignment returns the length of its transcript on the
  * "from" or "to" sequence.
  *
  * @param aln The alignment of interest.
@@ -21,9 +21,9 @@ int aln_seq_len(alignment* aln, char on) {
     return -1;
   }
   int sum = 0;
-  for (int i = 0; i < strlen(aln->opseq); i++) {
-    if ((on == 'O' && aln->opseq[i] != 'I') ||
-        (on == 'M' && aln->opseq[i] != 'D')) {
+  for (int i = 0; i < strlen(aln->transcript); i++) {
+    if ((on == 'O' && aln->transcript[i] != 'I') ||
+        (on == 'M' && aln->transcript[i] != 'D')) {
       sum ++;
     }
   }
@@ -38,8 +38,8 @@ int extend_1d_once(alignment* aln, alnframe* frame, seedext_params* params,
   dptable table;
   intpair opt;
   std_alntype type;
-  int res_opseq_len, seg_opseq_len;
-  char* opseq;
+  int res_transcript_len, seg_transcript_len;
+  char* transcript;
   int failure = 0;
 
   int origin_len = aln_seq_len(aln, 'O'),
@@ -98,22 +98,22 @@ int extend_1d_once(alignment* aln, alnframe* frame, seedext_params* params,
   }
 
   // There is an alignment:
-  seg_opseq_len = strlen(aln->opseq);
-  res_opseq_len = strlen(res->opseq);
+  seg_transcript_len = strlen(aln->transcript);
+  res_transcript_len = strlen(res->transcript);
   aln->score += res->score;
-  opseq = malloc(seg_opseq_len + res_opseq_len + 1);
+  transcript = malloc(seg_transcript_len + res_transcript_len + 1);
   if (forward) {
-    strncpy(opseq, aln->opseq, seg_opseq_len);
-    strncpy(opseq + seg_opseq_len, aln->opseq, res_opseq_len);
+    strncpy(transcript, aln->transcript, seg_transcript_len);
+    strncpy(transcript + seg_transcript_len, aln->transcript, res_transcript_len);
   } else {
     aln->origin_idx = res->origin_idx;
     aln->mutant_idx = res->mutant_idx;
-    strncpy(opseq, res->opseq, res_opseq_len);
-    strncpy(opseq + res_opseq_len, aln->opseq, seg_opseq_len);
+    strncpy(transcript, res->transcript, res_transcript_len);
+    strncpy(transcript + res_transcript_len, aln->transcript, seg_transcript_len);
   }
   // strncpy does not null-terminate:
-  opseq[seg_opseq_len + res_opseq_len] = '\0';
-  aln->opseq = opseq;
+  transcript[seg_transcript_len + res_transcript_len] = '\0';
+  aln->transcript = transcript;
   return 0;
 }
 
@@ -170,7 +170,7 @@ alignment* extend(alignment** alns, int num_alns, alnframe* frame,
                   seedext_params* params) {
   alignment fwd, bwd;
   alignment* aln;
-  char* opseq;
+  char* transcript;
   int fwd_aln_len, bwd_aln_len, seg_aln_len;
   double overlap_score;
   for (int i = 0; i < num_alns; i ++) {
@@ -185,20 +185,20 @@ alignment* extend(alignment** alns, int num_alns, alnframe* frame,
       continue;
     }
     // Found a fully extending segment; return it:
-    fwd_aln_len = strlen(fwd.opseq);
-    bwd_aln_len = strlen(bwd.opseq);
-    seg_aln_len = strlen(alns[i]->opseq);
-    opseq = malloc(fwd_aln_len + bwd_aln_len - seg_aln_len + 1);
-    strncpy(opseq, bwd.opseq, bwd_aln_len - seg_aln_len);
-    strncpy(opseq + bwd_aln_len - seg_aln_len, fwd.opseq, fwd_aln_len);
+    fwd_aln_len = strlen(fwd.transcript);
+    bwd_aln_len = strlen(bwd.transcript);
+    seg_aln_len = strlen(alns[i]->transcript);
+    transcript = malloc(fwd_aln_len + bwd_aln_len - seg_aln_len + 1);
+    strncpy(transcript, bwd.transcript, bwd_aln_len - seg_aln_len);
+    strncpy(transcript + bwd_aln_len - seg_aln_len, fwd.transcript, fwd_aln_len);
     // strncpy does not null terminate:
-    opseq[fwd_aln_len + bwd_aln_len - seg_aln_len] = '\0';
+    transcript[fwd_aln_len + bwd_aln_len - seg_aln_len] = '\0';
     // build the overall alignment
     aln = malloc(sizeof(alignment));
     aln->origin_idx = bwd.origin_idx;
     aln->mutant_idx = bwd.mutant_idx;
     aln->score = overlap_score;
-    aln->opseq = opseq;
+    aln->transcript = transcript;
     return aln;
   }
   return NULL;
