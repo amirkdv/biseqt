@@ -146,7 +146,7 @@ def discover_overlap(S_id, T_id, index, shift, sig, mode='banded alignment', **k
     elif mode == 'seed extension':
         seeds = words.maximal_seeds(seeds, S_id, T_id)
         seeds = sorted(seeds, key=lambda x: abs(x.tx.S_idx - x.tx.T_idx - best_shift))
-        txs = ffi.new('transcript* []', [seed.tx.c_obj for seed in seeds])
+        txs = ffi.new('alignment* []', [seed.tx.c_obj for seed in seeds])
         F = pw.AlignFrame(S, T)
         assert(isinstance(kwargs['seed_ext_params'], SeedExtensionParams))
         tx = lib.extend(txs, len(txs), F.c_obj, kwargs['seed_ext_params'].c_obj)
