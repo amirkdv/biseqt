@@ -11,9 +11,3 @@ test:
     - docker run -it -v $PWD:/biseqt amirkdv/biseqt-base sh -c
       '. $SCI_PY_ENV/bin/activate && cd /biseqt && make deps docs tests COVERAGE_BADGE=/biseqt/coverage.svg'
     - cp $PWD/coverage.svg $CIRCLE_ARTIFACTS/
-  post:
-    # purge github's cached coverage badge
-    - curl https://github.com/amirkdv/biseqt/blob/master/README.md |
-      grep coverage.svg |
-      sed 's/.*img src="\([^"]*\).*$/\1/' |
-      xargs curl -X PURGE

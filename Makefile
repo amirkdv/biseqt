@@ -51,6 +51,13 @@ docs: $(LIBDIR)/pwlib.so docs/doxygen
 	cd $@ && sphinx-build -b latex . $(DOCS_OUT)
 	@echo "Find the docs at file://`readlink -f $@/$(DOCS_OUT)/index.html`"
 
+gh-coverage-badge:
+	@echo "Updating github's cache of test coverage badge"
+	curl https://github.com/amirkdv/biseqt/blob/master/README.md 2>/dev/null | \
+		grep coverage.svg | \
+		sed 's/.*img src="\([^"]*\).*$$/\1/' | \
+		xargs curl -X PURGE
+
 docs/doxygen:
 	rm -rf $@
 	mkdir $@
