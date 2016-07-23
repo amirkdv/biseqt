@@ -107,6 +107,9 @@ class AlignFrameC(object):
         assert 0 <= origin_range[0] <= origin_range[1] <= len(origin)
         assert 0 <= mutant_range[0] <= mutant_range[1] <= len(mutant)
 
+        self.origin = origin
+        self.mutant = mutant
+
         self.c_origin = ffi.new('int[]', origin.contents)
         self.c_mutant = ffi.new('int[]', mutant.contents)
         self.c_obj = ffi.new('alnframe*', {
@@ -182,37 +185,36 @@ class AlignTableC(object):
         alignment = lib.dptable_traceback(self.c_obj, self.opt)
         if alignment == ffi.NULL:
             return None
-        return AlignmentC(c_obj=alignment)
+        return Alignment(self.frame.origin, self.frame.mutant,
+                         ffi.string(alignment.transcript),
+                         score=alignment.score,
+                         origin_start=alignment.origin_idx,
+                         mutant_start=alignment.mutant_idx)
 
 
-# FIXME not needed at all! Instead have a python class with the score()
-# function.
-class AlignmentC(object):
-    def __init__(self, c_obj=None, **kw):
-        if c_obj is not None:
-            self.c_obj = c_obj
-            self.c_tx = c_obj.transcript
-        else:
-            self.c_tx = ffi.new('char[]', kw['transcript'])
-            self.c_obj = ffi.new('alignment*', {
-                'origin_idx': kw['origin_idx'],
-                'mutant_idx': kw['mutant_idx'],
-                'score': kw['score'],
-                'transcript': self.c_tx,
-            })
-
-    def __getattr__(self, name):
-        if name == 'transcript':
-            return ffi.string(self.c_tx)
-        elif name in ['origin_idx', 'mutant_idx', 'score']:
-            return getattr(self.c_obj, name)
-        else:
-            raise AttributeError('Unknown attribute %s' % name)
+class Alignment(object):
+    def __init__(self, origin, mutant, transcript, score=None,
+                 origin_start=0, mutant_start=0):
+        assert isinstance(origin, Sequence) and isinstance(mutant, Sequence)
+        assert all(c in 'MSID' for c in transcript)
+        origin_end = origin_start + self.projected_len(transcript, on='origin')
+        mutant_end = mutant_start + self.projected_len(transcript, on='mutant')
+        assert 0 <= origin_start and origin_end <= len(origin)
+        assert 0 <= mutant_start and mutant_end <= len(mutant)
+        self.transcript = str(transcript)
+        self.origin, self.mutant = origin, mutant
+        self.origin_start, self.mutant_start = origin_start, mutant_start
+        self.score = score
 
     def __str__(self):
-        return '(%d,%d),%.2f:%s' \
-            % (self.origin_idx, self.mutant_idx, self.score, self.transcript)
+        from .io import pw_render_term
+        return pw_render_term(self.transcript, self.origin, self.mutant,
+                              origin_start=self.origin_start,
+                              mutant_start=self.mutant_start, colored=False)
 
-    def __repr__(self):
-        return 'Alignment(origin_idx=%d, mutant_idx=%d, score=%.2f, opseq="%s")' \
-            % (self.origin_idx, self.mutant_idx, self.score, self.transcript)
+    @classmethod
+    def projected_len(cls, transcript, on='origin'):
+        assert on in ['origin', 'mutant']
+        ops = 'MSD' if on == 'origin' else 'MSI'
+        return sum(int(op in ops) for op in transcript)
+
