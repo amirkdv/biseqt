@@ -4,7 +4,7 @@ from biseqt.sequence import Alphabet
 from biseqt.stochastics import rand_seq, MutationProcess
 from biseqt.pw import Alignment, Aligner
 from biseqt.pw import STD_MODE
-from biseqt.pw import GLOBAL
+from biseqt.pw import GLOBAL, LOCAL
 
 
 def test_projected_aln_len():
@@ -18,15 +18,25 @@ def test_projected_aln_len():
     assert Alignment.projected_len('IMS', on='mutant') == 3
 
 
+def test_alignment_basic():
+    A = Alphabet('ACGT')
+    S = A.parse('AACCGGTT')
+    with pytest.raises(AssertionError):
+        Alignment(S, S, 'MSSST')  # illegal character
+    with pytest.raises(AssertionError):
+        Alignment(S, S, 'M', origin_start=len(S))  # illegal starting point
+    with pytest.raises(AssertionError):
+        Alignment(S, S, 'MM', origin_start=len(S)-1)  # transcript too long
+
+
 noise_levels = [1e-2, 1e-1, 2e-1, 3e-1, 4e-1]
 
 
-@pytest.mark.parametrize('noise_level', noise_levels,
+@pytest.mark.parametrize('err', noise_levels,
                          ids=['noise=%.1e' % l for l in noise_levels])
-def test_alignment_std_global(noise_level):
+def test_alignment_std_global(err):
     A = Alphabet('ACGT')
-    M = MutationProcess(A, subst_probs=noise_level, go_prob=noise_level,
-                        ge_prob=noise_level)
+    M = MutationProcess(A, subst_probs=err, go_prob=err, ge_prob=err)
     subst_scores, (go_score, ge_score) = M.log_odds_scores()
 
     S = rand_seq(A, 100)
@@ -52,15 +62,35 @@ def test_alignment_std_global(noise_level):
             'Global alignments cover the entirety of both sequences'
 
 
-def test_alignment_basic():
+@pytest.mark.parametrize('err', noise_levels,
+                         ids=['noise=%.1e' % l for l in noise_levels])
+def test_alignment_std_local(err):
     A = Alphabet('ACGT')
-    S = A.parse('AACCGGTT')
-    with pytest.raises(AssertionError):
-        Alignment(S, S, 'MSSST')  # illegal character
-    with pytest.raises(AssertionError):
-        Alignment(S, S, 'M', origin_start=len(S))  # illegal starting point
-    with pytest.raises(AssertionError):
-        Alignment(S, S, 'MM', origin_start=len(S)-1)  # transcript too long
+    M = MutationProcess(A, subst_probs=err, go_prob=err, ge_prob=err)
+    subst_scores, (go_score, ge_score) = M.log_odds_scores()
+
+    S = rand_seq(A, 100)
+    T, tx = M.mutate(S)
+    T = A.parse('A' * 100) + T + A.parse('G' * 100)
+    mutation_aln = Alignment(S, T, tx)
+    mutation_score = mutation_aln.calculate_score(subst_scores, go_score,
+                                                  ge_score)
+
+    aligner = Aligner(S, T, subst_scores=subst_scores, go_score=go_score,
+                      ge_score=ge_score, alnmode=STD_MODE, alntype=LOCAL)
+    with aligner:
+        reported_score = aligner.solve()
+        assert round(reported_score, 3) >= round(mutation_score, 3), \
+            'optimal alignment scores better than the known transcript'
+        alignment = aligner.traceback()
+        aln_score = alignment.calculate_score(subst_scores, go_score, ge_score)
+        assert round(aln_score, 3) == round(reported_score, 3), \
+            'The alignment score should be calculated correctly'
+
+        ori_len = Alignment.projected_len(alignment.transcript, on='origin')
+        mut_len = Alignment.projected_len(alignment.transcript, on='mutant')
+        assert ori_len <= len(S) and mut_len < len(T), \
+            'Local alignments do not cover the entirety of both sequences'
 
 
 def test_pw_render_basic():
