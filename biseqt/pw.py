@@ -5,7 +5,8 @@ import os
 import termcolor
 from cffi import FFI
 from collections import namedtuple
-from .sequence import Sequence, Alphabet
+
+from .sequence import Sequence
 
 
 pwlib_so = os.path.join(os.path.dirname(__file__), 'pwlib', 'pwlib.so')
@@ -47,9 +48,6 @@ END_ANCHORED_OVERLAP = lib.END_ANCHORED_OVERLAP
 """Standard suffix-prefix alignment demanding that it ends at the end of frame
 of both sequences."""
 
-STD_ALN_TYPES = [GLOBAL, LOCAL, START_ANCHORED, END_ANCHORED, OVERLAP,
-                 START_ANCHORED_OVERLAP, END_ANCHORED_OVERLAP]
-
 # banded alignment types:
 B_GLOBAL = lib.GLOBAL
 """Banded global alignment problem; may not be well-defined (end points of the
@@ -58,92 +56,140 @@ B_OVERLAP = lib.B_OVERLAP
 """Banded suffix-prefix alignment problem in either direction including
 substring alignments."""
 
-BANDED_ALN_TYPES = [B_GLOBAL, B_OVERLAP]
+ALN_TYPES = {
+    STD_MODE: [GLOBAL, LOCAL, START_ANCHORED, END_ANCHORED, OVERLAP,
+               START_ANCHORED_OVERLAP, END_ANCHORED_OVERLAP],
+    BANDED_MODE: [B_GLOBAL, B_OVERLAP],
+}
 
 
-# FIXME not needed at all! Instead have a python class defined in stochastics
-# that wraps gap and substitution scores. Convert to c object when solving.
-class AlignScoresC(object):
-    def __init__(self, alphabet=None, subst_scores=[],
-                 go_score=0, ge_score=0, content_dependent_gap_scores=None):
-        assert isinstance(alphabet, Alphabet)
-        self.alphabet = alphabet
-        # each row in the substitution matrix must be "owned" by an object that
-        # is kept alive.
-        L = len(self.alphabet)
-        self._c_subst_rows_ka = [
-            ffi.new('double[]', subst_scores[i]) for i in range(L)
-        ]
-        self._c_subst_full_ka = ffi.new('double *[]', self._c_subst_rows_ka)
-        kw = {
-            'subst_scores': self._c_subst_full_ka,
-            'gap_open_score': go_score,
-            'gap_extend_score': ge_score,
-        }
-        if content_dependent_gap_scores:
-            self._c_gaps_ka = ffi.new(
-                'double []', content_dependent_gap_scores
-            )
-            kw['content_dependent_gap_scores'] = self._c_gaps_ka
-        else:
-            self._c_gaps_ka = ffi.NULL
-        self.c_obj = ffi.new('alnscores*', kw)
+class Aligner(object):
+    """Provides a context that solves a pairwise alignment problem.  Memory is
+    allocated upon entering the context and is freed upon leaving it.  All
+    alignment calculations (:func:`solve` and :func:`traceback`) are explicitly
+    invoked by the caller:
 
+        >>> A = biseqt.sequence.Alphabet('ACGT')
+        >>> S = A.parse('AAAA')
+        >>> T = A.parse('AGA')
+        >>> aligner = biseqt.pw.Aligner(S, T)
+        >>> with aligner:
+        ...    print 'score is', aligner.solve()
+        ...    print aligner.traceback()
+        score is 1.0
+        origin[0]: AAAA
+        mutant[0]: AGA-
 
-# FIXME not needed at all! move all this C-conversion crap to AlignTableC or
-# the currently-nonexistent "align()"
-class AlignFrameC(object):
-    def __init__(self, origin, mutant, origin_range=None, mutant_range=None):
+    Args:
+        origin (sequence.Sequence): The original ("from") sequence.
+        mutant (sequence.Sequence): The mutant ("to") sequence.
+
+    Keyword Args:
+        origin_range (tuple): The original ("from") sequence; cf.
+            :c:member:`alnframe::origin_range`.
+        mutant_range (tuple): The mutant ("to") sequence; cf.
+            :c:member:`alnframe::mutant_range`.
+        alnmode (int): One of the :attr:`STD_MODE` or :attr:`BANDED_MODE`,
+            default is ``STD_MODE``; cf. :c:member:`alnprob::mode`.
+        alntype (int): One of the allowed alingment types for the given
+            *alnmode*, see :attr:`ALN_TYPES`; default is ``GLOBAL``; cf.
+            :c:type:`std_alnparams` and :c:type:`banded_alnparams`.
+        subst_scores (list): The overriding definition of the substitution
+            score matrix; cf. :c:member:`alnscores::subst_scores`. Default is
+            None in which case the score matrix is populated based on match and
+            mismatch scores.
+        match_score (float): If ``subst_scores`` is not given, this parameter
+            is used to populate the diagonal entries of the substitution score
+            matrix; default is 1.
+        mismatch_score (float): If ``subst_scores`` is not given, this
+            parameter is used to populate the off-diagonal entries of the
+            substitution score matrix; default is 0.
+        go_score (float): The gap open score; cf.
+            :c:member:`alnscores::gap_open_score`. Default is 0.
+        ge_score (float): The gap extend score; cf.
+            :c:member:`alnscores::gap_extend_score`. Default is 0.
+        max_new_mins (int): Maximum number of tolerated new minima encountered
+            in the running score of an alignment; cf.
+            :c:member:`alnprob::max_new_mins`. Default is -1 in which case
+            no such constraint is imposed.
+        diag_range (tuple): If in :attr:`BANDED_MODE` this argument specifies
+            the upper and lower limit on diagonals of the dynamic programming
+            table to be populated; cf. :c:type:`banded_alnparams`.
+    """
+    def __init__(self, origin, mutant, **kw):
+        self.alnmode = kw.get('alnmode', STD_MODE)
+        self.alntype = kw.get('alntype', GLOBAL)
+        assert self.alnmode in [STD_MODE, BANDED_MODE]
+        assert self.alntype in ALN_TYPES[self.alnmode]
+
+        # set origin, mutant, and alphabet
         assert isinstance(origin, Sequence) and isinstance(mutant, Sequence)
-        if origin_range is None:
-            origin_range = (0, len(origin))
-        if mutant_range is None:
-            mutant_range = (0, len(mutant))
-        assert 0 <= origin_range[0] <= origin_range[1] <= len(origin)
-        assert 0 <= mutant_range[0] <= mutant_range[1] <= len(mutant)
+        assert origin.alphabet == mutant.alphabet
+        self.origin, self.mutant = origin, mutant
+        self.alphabet = origin.alphabet
 
-        self.origin = origin
-        self.mutant = mutant
+        # set origin_range and mutant_range
+        origin_range = kw.get('origin_range', (0, len(self.origin)))
+        mutant_range = kw.get('mutant_range', (0, len(self.mutant)))
+        assert 0 <= origin_range[0] <= origin_range[1] <= len(self.origin)
+        assert 0 <= mutant_range[0] <= mutant_range[1] <= len(self.mutant)
+        self.origin_range, self.mutant_range = origin_range, mutant_range
 
-        self.c_origin = ffi.new('int[]', origin.contents)
-        self.c_mutant = ffi.new('int[]', mutant.contents)
-        self.c_obj = ffi.new('alnframe*', {
+        # set alignment scores
+        self.go_score = kw.get('go_score', 0)
+        self.ge_score = kw.get('ge_score', 0)
+        L = len(self.alphabet)
+        subst_scores = kw.get('subst_scores', None)
+        if subst_scores is None:
+            mismatch = kw.get('mismatch_score', 0)
+            match = kw.get('match_score', 1)
+            subst_scores = [
+                [match if i == j else mismatch for i in range(L)]
+                for j in range(L)
+            ]
+        assert isinstance(subst_scores, list) and len(subst_scores) == L
+        self.subst_scores = subst_scores
+
+        self.max_new_mins = kw.get('max_new_mins', -1)
+        self.diag_range = kw.get('diag_range', None)
+
+        # create all the C data structures
+        self.c_subst_scores_rows = [ffi.new('double[]', self.subst_scores[i])
+                                    for i in range(L)]
+        self.c_subst_scores = ffi.new('double *[]', self.c_subst_scores_rows)
+        self.c_alnscores = ffi.new('alnscores*', {
+            'subst_scores': self.c_subst_scores,
+            'gap_open_score': self.go_score,
+            'gap_extend_score': self.ge_score,
+        })
+        self.c_origin = ffi.new('int[]', self.origin.contents)
+        self.c_mutant = ffi.new('int[]', self.mutant.contents)
+        self.c_alnframe = ffi.new('alnframe*', {
             'origin': self.c_origin,
             'mutant': self.c_mutant,
-            'origin_range': origin_range,
-            'mutant_range': mutant_range,
+            'origin_range': self.origin_range,
+            'mutant_range': self.mutant_range,
         })
 
-
-class AlignTableC(object):
-    def __init__(self, frame, scores, alnmode=STD_MODE, alntype=GLOBAL,
-                 max_new_mins=-1, diag_range=None):
-        assert isinstance(frame, AlignFrameC)
-        assert isinstance(scores, AlignScoresC)
-        self.frame, self.scores = frame, scores
-        assert alnmode in [STD_MODE, BANDED_MODE]
-        alnprob_args = {
-            'frame': frame.c_obj,
-            'scores': scores.c_obj,
-            'mode': alnmode,
-            'max_new_mins': max_new_mins,
-        }
-        if alnmode == STD_MODE:
-            assert alntype in STD_ALN_TYPES
-            self.c_alnparams = ffi.new('std_alnparams*', {'type': alntype})
-            alnprob_args['std_params'] = self.c_alnparams
-        elif alnmode == BANDED_MODE:
-            assert alntype in BANDED_ALN_TYPES
-            assert diag_range is not None and len(diag_range) == 2
+        if self.alnmode == STD_MODE:
+            self.c_alnparams = ffi.new('std_alnparams*',
+                                       {'type': self.alntype})
+        elif self.alnmode == BANDED_MODE:
+            assert len(self.diag_range) == 2
             self.c_alnparams = ffi.new('banded_alnparams*', {
-                'type': alntype,
-                'dmin': diag_range[0],
-                'dmax': diag_range[1],
+                'type': self.alntype,
+                'dmin': self.diag_range[0],
+                'dmax': self.diag_range[1],
             })
-            alnprob_args['banded_params'] = self.c_alnparams
-
-        self.c_alnprob = ffi.new('alnprob*', alnprob_args)
-        self.c_obj = ffi.new('dptable*', {
+        self.c_alnprob = ffi.new('alnprob*', {
+            'frame': self.c_alnframe,
+            'scores': self.c_alnscores,
+            'mode': self.alnmode,
+            'max_new_mins': self.max_new_mins,
+            'std_params' if self.alnmode == STD_MODE else 'banded_params':
+                self.c_alnparams,
+        })
+        self.c_dptable = ffi.new('dptable*', {
             'prob': self.c_alnprob,
             'cells': ffi.NULL,
             'num_rows': -1,
@@ -151,37 +197,47 @@ class AlignTableC(object):
         })
 
     def __enter__(self):
-        if lib.dptable_init(self.c_obj) == -1:
+        """Allocates memory for the dynamic programming table and initializes
+        all cells."""
+        if lib.dptable_init(self.c_dptable) == -1:
             raise Exception('Failed to initialize the DP table.')
         return self
 
     def __exit__(self, *args):
-        lib.dptable_free(self.c_obj)
-
-    def score(self, opseq):
-        # FIXME
-        return self.scores.score(
-            self.frame.origin, self.frame.mutant, opseq,
-            self.frame.origin_range.i, self.frame.mutant_range.i
-        )
+        """Frees the allocated memory for the dynamic programming table."""
+        lib.dptable_free(self.c_dptable)
 
     def solve(self):
-        self.opt = lib.dptable_solve(self.c_obj)
+        """Populates the regions of interest in the dynamic programming table
+        and reports the optimal score; if any. This function must be called
+        within the context, cf. :func:`__enter__`, :func:`__exit__`.
+
+        Returns:
+            score (float): The score of the optimal alignment or None if none
+                found.
+        """
+        self.opt = lib.dptable_solve(self.c_dptable)
         if self.opt.i == -1 or self.opt.j == -1:
             self.opt = None
             return None
-        score = self.c_obj.cells[self.opt.i][self.opt.j].choices[0].score
-        return score
+        return self.c_dptable.cells[self.opt.i][self.opt.j].choices[0].score
 
     def traceback(self):
+        """Traces back the optimal alignment identified by :func:`solve`. This
+        function has to be called within the context and after :func:`solve`.
+        Otherwise no alignment would be found.
+
+        Returns:
+            Alignment: The optimal alignment or None if none found.
+        """
         if self.opt is None:
             return None
 
-        alignment = lib.dptable_traceback(self.c_obj, self.opt)
+        alignment = lib.dptable_traceback(self.c_dptable, self.opt)
         if alignment == ffi.NULL:
             return None
-        return Alignment(self.frame.origin, self.frame.mutant,
-                         ffi.string(alignment.transcript),
+        transcript = ffi.string(alignment.transcript)
+        return Alignment(self.origin, self.mutant, transcript,
                          score=alignment.score,
                          origin_start=alignment.origin_idx,
                          mutant_start=alignment.mutant_idx)
@@ -191,12 +247,14 @@ class Alignment(object):
     """Represents a pairwise alignment.
 
     Attributes:
-        origin (sequence.Sequence): The original :class:`Sequence`.
-        mutant (sequence.Sequence): The mutant :class:`Sequence`.
+        origin (sequence.Sequence): The original ("from") sequence.
+        mutant (sequence.Sequence): The mutant ("to") sequence.
         alphabet (sequence.Alphabet): The shared alphabet of *origin* and
             *mutant*.
-        transcript (str): The sequence of edit operations that mutates *origin*
-            to *mutant*.
+        transcript (str): The sequence of edit operations that transforms
+            *origin* to *mutant*. The alphabet for edit operations is ``M`` for
+            match, ``S`` for substitution (mismatch), and ``I`` and ``D`` for
+            insertion and deletion.
         origin_start (int): Starting position on the original sequence; default
             is 0.
         mutant_start (int): Starting position on the mutant sequence; default
@@ -224,6 +282,24 @@ class Alignment(object):
 
     @classmethod
     def projected_len(cls, transcript, on='origin'):
+        """Calculates the projected length of a given transcript on either of
+        the involved sequences. For instance:
+
+            >>> biseqt.Alignment.projected_len('MSI', on='origin')
+            2
+            >>> biseqt.Alignment.projected_len('MSI', on='mutant')
+            3
+
+        Args:
+            transcript (str): A sequence of edit operations, cf.
+                :attr:`Alignment.transcript`.
+
+        Keyword Args:
+            on (str): Either of ``origin`` or ``mutant``.
+
+        Returns:
+            int: The projected length of the edit transcript.
+        """
         assert on in ['origin', 'mutant']
         ops = 'MSD' if on == 'origin' else 'MSI'
         return sum(int(op in ops) for op in transcript)
