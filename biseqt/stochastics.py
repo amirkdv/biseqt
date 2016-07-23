@@ -19,7 +19,7 @@
     >>> P = MutationProcess(A, go_prob=.1, ge_prob=.2, subst_probs=.3)
     >>> mutant, transcript = P.mutate(seq)
     >>> transcript
-    EditTranscript("SMIMMMMSSMS")
+    "SMIMMMMSSMS"
 
     >>> from biseqt.io import pw_render_term
     >>> print(pw_render_term(transcript, seq, mutant, colored=False))
@@ -31,7 +31,7 @@ from itertools import product
 from scipy.special import erfcinv
 import numpy as np
 
-from .sequence import Sequence, Alphabet, EditTranscript
+from .sequence import Sequence, Alphabet
 
 
 def rand_seq(alphabet, size, p=None):
@@ -415,8 +415,7 @@ class MutationProcess(object):
         Returns:
             tuple:
                 The mutant :class:`Sequence <biseqt.sequence.Sequence>` and the
-                corresponding :class:`EditTranscript
-                <biseqt.sequence.EditTranscript>`.
+                corresponding edit transcript (as a string).
         """
         L = len(self.alphabet)
         pos = 0
@@ -455,7 +454,7 @@ class MutationProcess(object):
                     pos += 1
 
             opseq += op
-        return Sequence(self.alphabet, T), EditTranscript(opseq)
+        return Sequence(self.alphabet, T), opseq
 
     def noisy_read(self, seq, **kw):
         """Wraps :func:`rand_read` to generates a collection of lossy reads

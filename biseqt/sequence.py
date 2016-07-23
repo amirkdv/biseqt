@@ -290,42 +290,26 @@ class NamedSequence(Sequence):
         )
 
 
-class EditTranscript(str):
-    """Represents an edit transcript without reference to the original or
-    mutant sequences."""
-    def __new__(cls, content):
-        obj = str.__new__(cls, content.upper())
-        assert all(c in 'MSID' for c in obj)
-        return obj
-
-    def __repr__(self):
-        return 'EditTranscript("%s")' % self
-
-    def __add__(self, other):
-        return EditTranscript(str(self) + str(other))
-
-    # FIXME what to do with this? goes into pw.Alignment? or what?
-    def score(self, origin, mutant, tx, origin_start=0, mutant_start=0):
-        score = 0.0
-        i, j = origin_start, mutant_start
-
-        def tokens():
-            for match in re.finditer(r'(.)\1*', opseq):
-                match = match.group(0)
-                yield match[0], len(match)
-
-        for op, num in tokens():
-            if op in 'MS':
-                score += sum(self.subst_scores[origin[i + k]][mutant[j + k]]
-                             for k in range(num))
-                i, j = i + num, j + num
-            elif op in 'ID':
-                score += self.gap_open_score + self.gap_extend_score * num
-                if op == 'I':
-                    j = j + num
-                else:
-                    i = i + num
-            else:
-                raise ValueError('Invalid edit operation: %c' % op)
-        return score
-
+# def score(self, origin, mutant, tx, origin_start=0, mutant_start=0):
+#     score = 0.0
+#     i, j = origin_start, mutant_start
+#
+#     def tokens():
+#         for match in re.finditer(r'(.)\1*', opseq):
+#             match = match.group(0)
+#             yield match[0], len(match)
+#
+#     for op, num in tokens():
+#         if op in 'MS':
+#             score += sum(self.subst_scores[origin[i + k]][mutant[j + k]]
+#                          for k in range(num))
+#             i, j = i + num, j + num
+#         elif op in 'ID':
+#             score += self.gap_open_score + self.gap_extend_score * num
+#             if op == 'I':
+#                 j = j + num
+#             else:
+#                 i = i + num
+#         else:
+#             raise ValueError('Invalid edit operation: %c' % op)
+#     return score

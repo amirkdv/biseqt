@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 import pytest
-from biseqt.sequence import Alphabet, Sequence, NamedSequence, EditTranscript
+from biseqt.sequence import Alphabet, Sequence, NamedSequence
 
 
 def test_alphabet():
@@ -102,23 +102,3 @@ def test_named_sequence_tranforms():
         'result of transforming a named sequence is a named sequence'
 
     assert 'transformed' in S.transform(mappings=['AT', 'CG']).name
-
-
-def test_transcript():
-    with pytest.raises(AssertionError):
-        EditTranscript('MSSST')  # illegal character
-
-    tx = EditTranscript('MM')
-    assert tx == 'MM', 'transcripts and strings should equal if same contents'
-    assert str(tx) == 'MM', 'str() gives the raw opseq'
-    assert len(tx) == 2, 'len() works'
-    assert eval(repr(tx)) == tx, 'repr() should provide eval-able string'
-    assert tx == EditTranscript('MM'), 'equal opseq means equal transcripts'
-
-    assert tx + EditTranscript('S') == EditTranscript('MMS'), \
-        'transcript + transcript gives a transcript'
-    assert tx + 'S' == EditTranscript('MMS'), \
-        'transcript + string gives transcript'
-
-    assert tx[0] == 'M', 'indexing by int should give a string'
-    assert tx[:] == tx, 'equality should only depend on contents'
