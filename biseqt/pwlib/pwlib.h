@@ -71,14 +71,9 @@ typedef struct {
   double **subst_scores; /**< The substitution score matrix, ordered the same
     as letters in the alphabet.*/
   double gap_open_score; /**< The gap open score in the affine gap
-    penalty scheme, use 0 for a linear gap model. This is in effect regardless
-    of content-dependence of gap extension score. */
+    penalty scheme, use 0 for a linear gap model.*/
   double gap_extend_score; /**< The gap extension score, or the linear gap
-    score when using a linear gap model. This is only in effect when
-    `content_dependent_gap_scores == NULL`.*/
-  double* content_dependent_gap_scores; /**< The gap extension scores based on
-    what letter is inserted/deleted. If this is `NULL`, `gap_extend_score` will
-    be in effect and all gaps of equal length are scored identically.*/
+    score when using a linear gap model.*/
 } alnscores;
 
 /**

@@ -164,16 +164,6 @@ intpair _ylim(alnprob* prob, int x) {
   return (intpair) {-1, -1}; // for the compiler
 }
 
-double _ge_score(alnprob* prob, int x, int y, char op) {
-  if (prob->scores->content_dependent_gap_scores == NULL) {
-    return prob->scores->gap_extend_score;
-  }
-  if (op == 'D') {
-    return prob->scores->content_dependent_gap_scores[prob->frame->origin_range.i + x];
-  }
-  return prob->scores->content_dependent_gap_scores[prob->frame->mutant_range.i + y];
-}
-
 /**
  * If possible populates an alignment 'B' move for a given position of the table
  * (in either coordinate systems depending on alignment mode).
@@ -267,7 +257,7 @@ int _alnchoice_M(dptable *T, int x, int y, alnchoice* choice) {
 
 int _alnchoice_ID(dptable* T, int x, int y, alnchoice* choice, char op) {
   int base_idx;
-  double score, max_score, ge_score;
+  double score, max_score;
   intpair prev;
 
   switch (op) {
@@ -284,12 +274,11 @@ int _alnchoice_ID(dptable* T, int x, int y, alnchoice* choice, char op) {
     return -1;
   }
 
-  ge_score = _ge_score(T->prob, x, y, op);
-
   base_idx = 0;
   max_score = -INT_MAX;
   for (int k = 0; k < T->cells[prev.i][prev.j].num_choices; k++) {
-    score = T->cells[prev.i][prev.j].choices[k].score + ge_score;
+    score = T->cells[prev.i][prev.j].choices[k].score +
+            T->prob->scores->gap_extend_score;
     if (T->cells[prev.i][prev.j].choices[k].op != op) {
       score += T->prob->scores->gap_open_score;
     }
