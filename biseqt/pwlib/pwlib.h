@@ -113,8 +113,7 @@ typedef struct {
   alnframe *frame; /**< The skeleton of the DP table. */
   alnscores *scores; /**< The parameters defining an optimal solution.*/
   int max_new_mins; /**< Maximum number of times a new minimum score is
-    tolerated before alignment is aborted (only operative if positive). Not
-    to be confused with ::seedext_params.max_new_mins. **/
+    tolerated before alignment is aborted (only operative if positive).*/
   alnmode mode; /**< Indicates which of standard or banded alignment this is. */
   union {
     std_alnparams* std_params; /**< The parameters for standard algorithms. */
@@ -187,21 +186,6 @@ typedef struct alignment {
 } alignment;
 
 /**
- * Groups together seed extension parameters.
- */
-typedef struct {
-  alnscores* scores; /**< Substitution and gap scores. **/
-  int window; /**< The width of the rolling window of alignment. **/
-  double min_score; /**< The minimum required score for an overlap to be reported. **/
-  int max_new_mins; /**< Maximum number of times a new minimum score is
-    tolerated before alignment is aborted. This differs from
-    ::alnprob.max_new_mins in that this parameter applies to the number of
-    times the score over an entire rolling frame reaches new minima and not
-    single edit operations.
-    **/
-} seedext_params;
-
-/**
  * Given a ::dptable containing the alignment problem definition and the mode of
  * alignment, the table's dimensions are calculated and the appropriate amount of
  * memory is allocated with initialized ::dpcell entries.
@@ -255,48 +239,6 @@ alignment* dptable_traceback(dptable* T, intpair end);
  * @return The optimal cell for the alignment to end at or {-1,-1} if error.
  */
 intpair dptable_solve(dptable* T);
-
-/**
- * Given an array of partial alignments tries to extend all in both directions
- * and returns a fully extended alignment as soon as it finds one.
- *
- * @param alns The original partial alignments.
- * @param num_alns The number of provided partial alignments.
- * @param frame The frame defining the alignment of the original sequences.
- * @param params Seed extension parameters.
- *
- * @return 0 if the seed successfully extends to the boundary of either of
- *   the sequences and -1 otherwise.
- */
-alignment* extend(alignment** alns, int num_alns, alnframe* frame, seedext_params* params);
-
-/**
- * Given a partial alignment fully extends it in one direction. A fully
- * extended alignment (in one direction) is one that hits the boundary
- * (beginning or end) of either of the sequences.
- *
- * @param res Extended alignment to be populated here.
- * @param aln The original partial alignment.
- * @param frame The frame defining the alignment of the original sequences.
- * @param params Seed extension parameters.
- * @param forward Either of 0 or 1 indicating the direction of extension.
- *
- * @return 0 if the seed successfully extends to the boundary of either of
- *   the sequences and -1 otherwise.
- */
-int extend_1d(alignment* res, alignment* aln, alnframe* frame, seedext_params* params, int forward);
-
-/**
- * Given an alignment, extends it in the given direction by one window.
- *
- * @param aln The alignment to be extended.
- * @param frame The frame defining the alignment of the original sequences.
- * @param params Seed extension parameters.
- * @param forward Either of 0 or 1 indicating the direction of extension.
- *
- * @return -1 if an error occurs and 0 otherwise.
- */
-int extend_1d_once(alignment* aln, alnframe* frame, seedext_params* params, int forward);
 
 // --------------------- Internals ---------------------
 int _alnchoice_B(dptable *T, int x, int y, alnchoice* choice);

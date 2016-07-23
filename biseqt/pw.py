@@ -77,7 +77,7 @@ class Aligner(object):
         >>> with aligner:
         ...    print 'score is', aligner.solve()
         ...    print aligner.traceback()
-        score is 1.0
+        score is 2.0
         origin[0]: AAAA
         mutant[0]: AGA-
 
