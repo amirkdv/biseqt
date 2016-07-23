@@ -3,6 +3,7 @@
 implemented in `pwlib <biseqt.pwlib.html>`_."""
 import os
 import termcolor
+import re
 from cffi import FFI
 from collections import namedtuple
 
@@ -242,6 +243,19 @@ class Aligner(object):
                          origin_start=alignment.origin_idx,
                          mutant_start=alignment.mutant_idx)
 
+    def calculate_score(self, alignment):
+        """Scores a given alignment for :attr:`origin` and :attr:`mutant`.
+        Args:
+            alignment (Alignment): The alignment to be evaluated.
+
+        Returns:
+            float:
+                The score of the alignment based on :attr:`subst_scores`,
+                :attr:`go_score`, and :attr:`ge_score`.
+        """
+        return alignment.calculate_score(self.subst_scores, self.go_score,
+                                         self.ge_score)
+
 
 class Alignment(object):
     """Represents a pairwise alignment.
@@ -303,6 +317,46 @@ class Alignment(object):
         assert on in ['origin', 'mutant']
         ops = 'MSD' if on == 'origin' else 'MSI'
         return sum(int(op in ops) for op in transcript)
+
+    def calculate_score(self, subst_scores, go_score, ge_score):
+        """Scores a this alignment according to given scoring scheme.
+
+        Args:
+            subst_scores (list): The substitution score matrix, cf.
+                :attr:`Aligner.subst_scores`.
+            go_score (float): The gap open score; cf. :attr:`Aligner.go_score`.
+            ge_score (float): The gap extend score; cf.
+                :attr:`Aligner.ge_score`.
+
+        Returns:
+            float:
+                The score of the alignment for :attr:`origin` and
+                :attr:`mutant` based on given scores.
+        """
+        score = 0.
+        i, j = self.origin_start, self.mutant_start
+
+        def tokens():
+            for match in re.finditer(r'(.)\1*', self.transcript):
+                match = match.group(0)
+                yield match[0], len(match)
+
+        for op, num in tokens():
+            if op in 'MS':
+                score += sum(
+                    subst_scores[self.origin[i + k]][self.mutant[j + k]]
+                    for k in range(num)
+                )
+                i, j = i + num, j + num
+            elif op in 'ID':
+                score += go_score + ge_score * num
+                if op == 'I':
+                    j = j + num
+                else:
+                    i = i + num
+            else:
+                raise ValueError('Invalid edit operation: %c' % op)
+        return score
 
     def render_term(self, term_width=120, margin=0, colored=True):
         """Renders a textual representation of the alignment.
