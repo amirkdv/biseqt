@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 import pytest
-from biseqt.sequence import Alphabet
+from biseqt.sequence import Alphabet, Sequence
 from biseqt.stochastics import rand_seq, MutationProcess
 from biseqt.pw import Alignment, Aligner
 from biseqt.pw import STD_MODE, BANDED_MODE
@@ -83,6 +83,17 @@ def test_alignment_banded_basic(alphabet):
         aligner.solve()
         assert alignment == aligner.traceback(), \
             'basic overlap banded alignment works'
+
+
+def test_alignment_banded_memory():
+    A = Alphabet('ACGT')
+    # pick sequences so large that cannot be aligned quadratically
+    L = int(1e6)
+    S = Sequence(A, (0,) * L)
+    T = Sequence(A, (1,) * L)
+    with Aligner(S, T, alnmode=BANDED_MODE, diag_range=(0, 0)) as aligner:
+        aligner.solve()
+        assert aligner.traceback().transcript == 'S' * L
 
 noise_levels = [1e-2, 1e-1, 2e-1, 3e-1, 4e-1]
 

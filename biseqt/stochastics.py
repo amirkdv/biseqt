@@ -46,7 +46,7 @@ def rand_seq(alphabet, size, p=None):
             case letters are chosen uniformly.
     """
     assert isinstance(alphabet, Alphabet)
-    contents = np.random.choice(range(len(alphabet)), size=size, p=p)
+    contents = np.random.choice(range(len(alphabet)), size=int(size), p=p)
     return Sequence(alphabet, contents)
 
 
