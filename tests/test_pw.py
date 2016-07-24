@@ -18,9 +18,11 @@ def test_projected_aln_len():
     assert Alignment.projected_len('IMS', on='mutant') == 3
 
 
-def test_alignment_std_basic():
-    A = Alphabet('ACGT')
-    S = A.parse('A' * 10)
+@pytest.mark.parametrize('alphabet',
+                         [Alphabet('ACGT'), Alphabet(['00', '01'])],
+                         ids=['one letter alphabet', 'two letter alphabet'])
+def test_alignment_std_basic(alphabet):
+    S = alphabet.parse(alphabet[0] * 10)
     with pytest.raises(AssertionError):
         Alignment(S, S, 'MSSST')  # illegal character
     with pytest.raises(AssertionError):
@@ -33,7 +35,7 @@ def test_alignment_std_basic():
         assert aligner.traceback().transcript == 'M' * len(S), \
             'default mode should be standard global alignment'
 
-    junk = A.parse('T' * len(S))
+    junk = alphabet.parse(alphabet[1] * len(S))
     origin, mutant = S + junk, junk + S
     alignment = Alignment(origin, mutant, 'M' * len(S), mutant_start=len(S))
     with Aligner(origin, mutant, alntype=LOCAL) as aligner:
@@ -47,9 +49,11 @@ def test_alignment_std_basic():
             'basic overlap alignment should work'
 
 
-def test_alignment_banded_basic():
-    A = Alphabet('ACGT')
-    S = A.parse('A' * 10)
+@pytest.mark.parametrize('alphabet',
+                         [Alphabet('ACGT'), Alphabet(['00', '01'])],
+                         ids=['one letter alphabet', 'two letter alphabet'])
+def test_alignment_banded_basic(alphabet):
+    S = alphabet.parse(alphabet[0] * 10)
     with pytest.raises(AssertionError):
         Aligner(S, S, alnmode=BANDED_MODE, diag_range=(-len(S) - 1, 0))
     with pytest.raises(AssertionError):
@@ -60,7 +64,7 @@ def test_alignment_banded_basic():
         assert aligner.traceback() == Alignment(S, S, 'M' * len(S)), \
             'basic global banded alignment should work'
 
-    junk = A.parse('T' * len(S))
+    junk = alphabet.parse(alphabet[1] * len(S))
     origin, mutant = S + junk, junk + S
     alignment = Alignment(origin, mutant, 'M' * len(S), mutant_start=len(S))
     with Aligner(origin, mutant, alnmode=BANDED_MODE, alntype=B_OVERLAP,
