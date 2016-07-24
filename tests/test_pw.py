@@ -3,8 +3,8 @@ import pytest
 from biseqt.sequence import Alphabet
 from biseqt.stochastics import rand_seq, MutationProcess
 from biseqt.pw import Alignment, Aligner
-from biseqt.pw import STD_MODE
-from biseqt.pw import GLOBAL, LOCAL, OVERLAP
+from biseqt.pw import STD_MODE, BANDED_MODE
+from biseqt.pw import GLOBAL, LOCAL, OVERLAP, B_OVERLAP
 
 
 def test_projected_aln_len():
@@ -46,6 +46,28 @@ def test_alignment_std_basic():
         assert aligner.traceback().transcript == 'M' * len(S), \
             'basic overlap alignment should work'
 
+
+def test_alignment_banded_basic():
+    A = Alphabet('ACGT')
+    S = A.parse('A' * 10)
+    with pytest.raises(AssertionError):
+        Aligner(S, S, alnmode=BANDED_MODE, diag_range=(-len(S) - 1, 0))
+    with pytest.raises(AssertionError):
+        Aligner(S, S, alnmode=BANDED_MODE, diag_range=(0, len(S) + 1))
+
+    with Aligner(S, S, alnmode=BANDED_MODE, diag_range=(0, 0)) as aligner:
+        aligner.solve()
+        assert aligner.traceback() == Alignment(S, S, 'M' * len(S)), \
+            'basic global banded alignment should work'
+
+    junk = A.parse('T' * len(S))
+    origin, mutant = S + junk, junk + S
+    alignment = Alignment(origin, mutant, 'M' * len(S), mutant_start=len(S))
+    with Aligner(origin, mutant, alnmode=BANDED_MODE, alntype=B_OVERLAP,
+                 diag_range=(-2*len(S), 2*len(S)), ge_score=-1) as aligner:
+        aligner.solve()
+        assert alignment == aligner.traceback(), \
+            'basic overlap banded alignment should work'
 
 noise_levels = [1e-2, 1e-1, 2e-1, 3e-1, 4e-1]
 

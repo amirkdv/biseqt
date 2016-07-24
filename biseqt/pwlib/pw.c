@@ -82,6 +82,7 @@ intpair dptable_solve(dptable* T) {
       num_choices += (_alnchoice_I(T, x, y, &choices[num_choices]) == 0) ? 1 : 0;
       num_choices += (_alnchoice_M(T, x, y, &choices[num_choices]) == 0) ? 1 : 0;
 
+
       cellpos = _cellpos_from_xy(T->prob, x, y);
       if (num_choices == 0) {
         T->cells[cellpos.i][cellpos.j].num_choices = 0;
@@ -127,17 +128,17 @@ alignment* dptable_traceback(dptable* T, intpair end) {
   if (aln == NULL) {
     _panick("Failed to allocate memory.");
   }
-  end = _xy_from_cellpos(T->prob, end.i, end.j);
   // We write ops to rev_transcript backwards starting from the end (position `len')
-  int len = end.i + end.j + 1, // FIXME not unnecessarily too big?
+  int len = end.i + end.j + 1,
       pos = len - 1;
   alnchoice* cur = &(T->cells[end.i][end.j].choices[0]);
+  intpair xy = _xy_from_cellpos(T->prob, end.i, end.j);
   char rev_transcript[len];
   while (cur->base != NULL) {
     pos--;
     rev_transcript[pos] = cur->op;
-    end.i -= (cur->op == 'I' ? 0 : 1);
-    end.j -= (cur->op == 'D' ? 0 : 1);
+    xy.i -= (cur->op == 'I' ? 0 : 1);
+    xy.j -= (cur->op == 'D' ? 0 : 1);
     cur = cur->base;
   }
   if (pos == len - 1) {
@@ -154,8 +155,8 @@ alignment* dptable_traceback(dptable* T, intpair end) {
   // strncpy does not null terminate:
   transcript[len] = '\0';
 
-  aln->origin_idx = end.i + T->prob->frame->origin_range.i;
-  aln->mutant_idx = end.j + T->prob->frame->mutant_range.i;
+  aln->origin_idx = xy.i + T->prob->frame->origin_range.i;
+  aln->mutant_idx = xy.j + T->prob->frame->mutant_range.i;
   aln->score=T->cells[end.i][end.j].choices[0].score;
   aln->transcript=transcript;
   return aln;

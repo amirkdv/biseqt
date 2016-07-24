@@ -176,11 +176,13 @@ class Aligner(object):
             self.c_alnparams = ffi.new('std_alnparams*',
                                        {'type': self.alntype})
         elif self.alnmode == BANDED_MODE:
-            assert len(self.diag_range) == 2
+            self.min_diag, self.max_diag = kw['diag_range']
+            assert -len(mutant) <= self.min_diag <= \
+                self.max_diag <= len(origin)
             self.c_alnparams = ffi.new('banded_alnparams*', {
                 'type': self.alntype,
-                'dmin': self.diag_range[0],
-                'dmax': self.diag_range[1],
+                'dmin': self.min_diag,
+                'dmax': self.max_diag,
             })
         self.c_alnprob = ffi.new('alnprob*', {
             'frame': self.c_alnframe,
@@ -297,10 +299,10 @@ class Alignment(object):
     def __eq__(self, other):
         assert isinstance(other, Alignment)
         return other.origin == self.origin and \
-               other.mutant == self.mutant and \
-               other.transcript == self.transcript and \
-               other.origin_start == self.origin_start and \
-               other.mutant_start == self.mutant_start
+            other.mutant == self.mutant and \
+            other.transcript == self.transcript and \
+            other.origin_start == self.origin_start and \
+            other.mutant_start == self.mutant_start
 
     @classmethod
     def projected_len(cls, transcript, on='origin'):

@@ -173,7 +173,6 @@ intpair _ylim(alnprob* prob, int x) {
 int _alnchoice_B(dptable *T, int x, int y, alnchoice* choice) {
   std_alntype std_type;
   banded_alntype banded_type;
-  intpair cellpos;
   switch (T->prob->mode) {
     case STD_MODE:
       std_type = T->prob->std_params->type;
@@ -193,14 +192,13 @@ int _alnchoice_B(dptable *T, int x, int y, alnchoice* choice) {
       // B not allowed otherwise:
       return -1;
     case BANDED_MODE:
-      cellpos = _cellpos_from_xy(T->prob, x, y);
       banded_type = T->prob->banded_params->type;
       // global alignments must start at the origin:
       if (banded_type == B_GLOBAL && x == 0 && y == 0) {
         break;
       }
-      // overlap alignments can start anywhere with a = 0
-      if (banded_type == B_OVERLAP && cellpos.j == 0) {
+      // overlap alignments can start anywhere on the top or left edge
+      if (banded_type == B_OVERLAP && (x == 0 || y == 0)) {
         break;
       }
       // B not allowed otherwise:
@@ -233,7 +231,6 @@ int _alnchoice_M(dptable *T, int x, int y, alnchoice* choice) {
   if (!_cellpos_valid(T, prev) || T->cells[prev.i][prev.j].num_choices < 1) {
     return -1;
   }
-  // pos is guaranteed to be in xy-system now:
   chars = (intpair) {
     frame->origin[frame->origin_range.i + x - 1],
     frame->mutant[frame->mutant_range.i + y - 1]
@@ -382,7 +379,6 @@ intpair _banded_find_optimal(dptable* T) {
       frame->origin_range.j - frame->origin_range.i,
       frame->mutant_range.j - frame->mutant_range.i
     );
-    /*printf("(d+,a)=(%d,%d)\n", opt.i, opt.j);*/ // FIXME segfaults, does it?
     if (T->cells[opt.i][opt.j].num_choices < 1) {
       return (intpair) {-1, -1};
     } else {
@@ -393,7 +389,7 @@ intpair _banded_find_optimal(dptable* T) {
     max = -INT_MAX;
     for (i = 0; i < T->num_rows; i++){
       j = T->row_lens[i] - 1;
-      if (T->cells[i][j].num_choices > 1 &&
+      if (T->cells[i][j].num_choices >= 1 &&
         T->cells[i][j].choices[0].score > max) {
         max = T->cells[i][j].choices[0].score;
         opt = (intpair) {i, j};
