@@ -32,7 +32,9 @@ if os.environ.get('READTHEDOCS', None) == 'True':
     sys.modules.update((mod_name, Mock()) for mod_name in MOCK_MODULES)
 
     # Call doxygen
-    subprocess.call('cd .. && doxygen docs/doxygen.conf', shell=True)
+    root = os.path.dirname(os.path.dirname(__file__))
+    cmd = 'cd %s && make docs/doxygen' % root
+    subprocess.call(cmd, shell=True)
     # Mock classes that require "arbitrary" binaries for building on rtfd.org
     MOCK_MODULES = ['cffi', 'igraph', 'numpy', 'scipy', 'pysqlite', 'termcolor']
     sys.modules.update((mod_name, Mock()) for mod_name in MOCK_MODULES)
