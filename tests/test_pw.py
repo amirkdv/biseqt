@@ -33,7 +33,14 @@ def test_alignment_std_basic(alphabet):
     with Aligner(S, S) as aligner:
         aligner.solve()
         assert aligner.traceback().transcript == 'M' * len(S), \
-            'default mode should be standard global alignment'
+            'default mode is standard global alignment'
+    with Aligner(S, S[:len(S) / 2]) as aligner:
+        aligner.solve()
+        alignment = aligner.traceback()
+        assert alignment.transcript.count('D') == len(S) / 2, \
+            'basic global alignment with gaps works'
+        assert '-' * (len(S) / 2) in str(alignment), \
+            'alignments have proper string representations'
 
     junk = alphabet.parse(alphabet[1] * len(S))
     origin, mutant = S + junk, junk + S
@@ -41,12 +48,16 @@ def test_alignment_std_basic(alphabet):
     with Aligner(origin, mutant, alntype=LOCAL) as aligner:
         aligner.solve()
         assert alignment == aligner.traceback(), \
-            'basic local alignment should work'
+            'basic local alignment works'
+
+    with Aligner(S, junk, alntype=LOCAL) as aligner:
+        assert aligner.solve() is None and aligner.traceback() is None, \
+            'alignment not found works'
 
     with Aligner(origin, mutant, alntype=OVERLAP) as aligner:
         aligner.solve()
         assert aligner.traceback().transcript == 'M' * len(S), \
-            'basic overlap alignment should work'
+            'basic overlap alignment works'
 
 
 @pytest.mark.parametrize('alphabet',
@@ -62,7 +73,7 @@ def test_alignment_banded_basic(alphabet):
     with Aligner(S, S, alnmode=BANDED_MODE, diag_range=(0, 0)) as aligner:
         aligner.solve()
         assert aligner.traceback() == Alignment(S, S, 'M' * len(S)), \
-            'basic global banded alignment should work'
+            'basic global banded alignment works'
 
     junk = alphabet.parse(alphabet[1] * len(S))
     origin, mutant = S + junk, junk + S
@@ -71,7 +82,7 @@ def test_alignment_banded_basic(alphabet):
                  diag_range=(-2*len(S), 2*len(S)), ge_score=-1) as aligner:
         aligner.solve()
         assert alignment == aligner.traceback(), \
-            'basic overlap banded alignment should work'
+            'basic overlap banded alignment works'
 
 noise_levels = [1e-2, 1e-1, 2e-1, 3e-1, 4e-1]
 
@@ -99,6 +110,10 @@ def test_alignment_std_global(err):
         aln_score = alignment.calculate_score(subst_scores, go_score, ge_score)
         assert round(aln_score, 3) == round(reported_score, 3), \
             'The alignment score should be calculated correctly'
+
+        aligner_score = aligner.calculate_score(alignment)
+        assert round(aln_score, 3) == round(aligner_score, 3), \
+            'Aligner.calculate_score behaves like Alignment.calculate_score'
 
         ori_len = Alignment.projected_len(alignment.transcript, on='origin')
         mut_len = Alignment.projected_len(alignment.transcript, on='mutant')

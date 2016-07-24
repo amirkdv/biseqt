@@ -237,8 +237,7 @@ class Aligner(object):
             return None
 
         alignment = lib.dptable_traceback(self.c_dptable, self.opt)
-        if alignment == ffi.NULL:
-            return None
+        assert alignment != ffi.NULL
         transcript = ffi.string(alignment.transcript)
         return Alignment(self.origin, self.mutant, transcript,
                          score=alignment.score,
@@ -358,14 +357,13 @@ class Alignment(object):
                     for k in range(num)
                 )
                 i, j = i + num, j + num
-            elif op in 'ID':
+            else:
+                assert op in 'ID'
                 score += go_score + ge_score * num
                 if op == 'I':
                     j = j + num
                 else:
                     i = i + num
-            else:
-                raise ValueError('Invalid edit operation: %c' % op)
         return score
 
     def render_term(self, term_width=120, margin=0, colored=True):
