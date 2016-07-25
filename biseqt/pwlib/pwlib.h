@@ -261,6 +261,6 @@ intpair _xy_from_cellpos(alnprob* prob, int i, int j);
 
 void _print_mem_usage();
 void* safe_malloc(int n, char* file, int line);
+#define MALLOC(n) safe_malloc(n, __FILE__, __LINE__)
 // Used to handle terminal failures:
 #define PANICK(message) {printf("Panick in %s (%d): %s\n", __FILE__, __LINE__, message); exit(1);}
-#define MALLOC(n) safe_malloc(n, __FILE__, __LINE__)

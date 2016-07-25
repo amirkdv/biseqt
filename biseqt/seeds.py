@@ -379,12 +379,15 @@ class SeedIndex(object):
                 upper and lower bounds) with the highest score and its score.
                 If no acceptable band is found ``(None, None)`` is returned.
         """
-        assert isinstance(id0, int) and isinstance(id1, int) and id0 < id1
+        assert isinstance(id0, int) and isinstance(id1, int)
+        if id0 == id1:
+            return None, None
+        # DB records of seeds are all such that id0 < id1, flip them if needed:
+        args = (id0, id1) if id0 < id1 else (id1, id0)
         query = """
             SELECT diag - radius, diag + radius, score FROM %s
             WHERE id0 = ? AND id1 = ?
         """ % self.diagonals_table
-        args = (id0, id1)
         if min_band_score is not None:
             query += ' AND score >= ?'
             args += (float(min_band_score), )
@@ -394,9 +397,13 @@ class SeedIndex(object):
             cursor = conn.cursor()
             cursor.execute(query, args)
             for min_diag, max_diag, score in cursor:
-                return (min_diag, max_diag), score
+                # translate the diagonals to the original order of id0 and id1
+                if id0 < id1:
+                    return (min_diag, max_diag), score
+                if id1 < id0:
+                    return (-max_diag, -min_diag), score
 
-        return (None, None)
+        return None, None
 
     def seeds(self, id0, id1, diag_range=None):
         """Yields the :class:`seeds <Seed>` and their respective scores for a
