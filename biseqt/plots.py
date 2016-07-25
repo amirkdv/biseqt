@@ -303,7 +303,7 @@ def npv(X, Y, classifier='>', num_points=1000):
 
 def plot_ppv(ax, X, Y, classifier='>', num_points=1000, **kwargs):
     """Plots the positive predictive value over a range of parameters. All
-    keyword arguments are passed as is to ``matplotlib.axes.Axes.scatter`.
+    keyword arguments are passed as is to ``matplotlib.axes.Axes.scatter``.
 
     Args:
         X (list): The "positive" sample set.
@@ -320,7 +320,7 @@ def plot_ppv(ax, X, Y, classifier='>', num_points=1000, **kwargs):
 
 def plot_npv(ax, X, Y, classifier='>', num_points=1000, **kwargs):
     """Plots the negative predictive value over a range of parameters. All
-    keyword arguments are passed as is to ``matplotlib.axes.Axes.scatter`.
+    keyword arguments are passed as is to ``matplotlib.axes.Axes.scatter``.
 
     Args:
         X (list): The "positive" sample set.
