@@ -33,7 +33,7 @@ if os.environ.get('READTHEDOCS', None) == 'True':
 
     # Call doxygen
     root = os.path.dirname(os.path.dirname(__file__))
-    cmd = 'cd %s && make docs/doxygen' % root
+    cmd = 'cd %s && rm -rf docs/_build && make docs/doxygen' % root
     subprocess.call(cmd, shell=True)
     # Mock classes that require "arbitrary" binaries for building on rtfd.org
     MOCK_MODULES = ['cffi', 'igraph', 'numpy', 'scipy', 'pysqlite', 'termcolor']
