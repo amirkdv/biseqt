@@ -124,15 +124,15 @@ intpair dptable_solve(dptable* T) {
 
 alignment* dptable_traceback(dptable* T, intpair end) {
   char *transcript;
+  intpair xy = _xy_from_cellpos(T->prob, end.i, end.j);
   alignment* aln = malloc(sizeof(alignment));
   if (aln == NULL) {
     PANICK("Failed to allocate memory.");
   }
   // We write ops to rev_transcript backwards starting from the end (position `len')
-  int len = end.i + end.j + 1,
+  int len = xy.i + xy.j + 1,
       pos = len - 1;
   alnchoice* cur = &(T->cells[end.i][end.j].choices[0]);
-  intpair xy = _xy_from_cellpos(T->prob, end.i, end.j);
   char rev_transcript[len];
   while (cur->base != NULL) {
     pos--;
@@ -140,6 +140,9 @@ alignment* dptable_traceback(dptable* T, intpair end) {
     xy.i -= (cur->op == 'I' ? 0 : 1);
     xy.j -= (cur->op == 'D' ? 0 : 1);
     cur = cur->base;
+  }
+  if (pos <= 0) {
+    PANICK("Shouldn't have happened!");
   }
   if (pos == len - 1) {
     // empty transcript
