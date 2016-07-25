@@ -145,8 +145,12 @@ class Aligner(object):
         diag_range (tuple): If in :attr:`BANDED_MODE` this argument specifies
             the upper and lower limit on diagonals of the dynamic programming
             table to be populated; cf. :c:type:`banded_alnparams`.
+        min_score (float): The minimum required score for an alignment to be
+            reported; default is ``float("-inf")`` in which case all alignments
+            are reported.
     """
     def __init__(self, origin, mutant, **kw):
+        self.min_score = kw.get('min_score', float('-inf'))
         self.alnmode = kw.get('alnmode', STD_MODE)
         self.alntype = kw.get('alntype', GLOBAL)
         assert self.alnmode in [STD_MODE, BANDED_MODE]
@@ -252,7 +256,11 @@ class Aligner(object):
         if self.opt.i == -1 or self.opt.j == -1:
             self.opt = None
             return None
-        return self.c_dptable.cells[self.opt.i][self.opt.j].choices[0].score
+        score = self.c_dptable.cells[self.opt.i][self.opt.j].choices[0].score
+        if score < self.min_score:
+            self.opt = None
+            return None
+        return score
 
     def traceback(self):
         """Traces back the optimal alignment identified by :func:`solve`. This
