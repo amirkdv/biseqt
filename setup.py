@@ -10,6 +10,7 @@ install_requires = [
     'scipy',
     'matplotlib',
     'apsw',         # for speaking to SQLite databases
+    'pysam',        # for manipulating SAM/BAM files
     'termcolor',    # for colored text output
     'cffi',         # for the C component
     'python-igraph',# for bindings to igraph
