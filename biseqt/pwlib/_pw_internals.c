@@ -12,10 +12,7 @@ int _std_table_init_dims(dptable* T) {
   T->num_rows = xmax + 1;
 
   // Caclculate row lengths:
-  T->row_lens = malloc(T->num_rows * sizeof(int));
-  if (T->row_lens == NULL) {
-    PANICK("Failed to allocated memory.");
-  }
+  T->row_lens = MALLOC(T->num_rows * sizeof(int));
   for (i = 0; i < T->num_rows; i++) {
     T->row_lens[i] = ymax + 1;
   }
@@ -52,10 +49,7 @@ int _banded_table_init_dims(dptable* T) {
   }
 
   // Caclculate row lengths:
-  T->row_lens = malloc(T->num_rows * sizeof(int));
-  if (T->row_lens == NULL) {
-    PANICK("Failed to allocated memory.");
-  }
+  T->row_lens = MALLOC(T->num_rows * sizeof(int));
   for (i = 0; i < T->num_rows; i++) {
     // the actual shift is dmin + i since i is the adjusted to [0, dmax-dmin].
     d = dmin + i;
@@ -69,15 +63,9 @@ int _banded_table_init_dims(dptable* T) {
 
 int _table_init_cells(dptable* T) {
   int i, j;
-  T->cells = malloc(T->num_rows * sizeof(dpcell *));
-  if (T->cells == NULL) {
-    PANICK("Failed to allocated memory.");
-  }
+  T->cells = MALLOC(T->num_rows * sizeof(dpcell *));
   for (i = 0; i < T->num_rows; i++) {
-    T->cells[i] = malloc(T->row_lens[i] * sizeof(dpcell));
-    if (T->cells[i] == NULL) {
-      PANICK("Failed to allocated memoryx.");
-    }
+    T->cells[i] = MALLOC(T->row_lens[i] * sizeof(dpcell));
     for (j = 0; j < T->row_lens[i]; j++) {
       T->cells[i][j] = (dpcell) {.num_choices=0, .choices=NULL};
     }
@@ -415,4 +403,17 @@ void _print_mem_usage() {
   printf("%.2f MB (tot), %.2f MB (res)\n",
     tot[0]/1024.0, res[0]/1024.0);
   fclose(fp);
+}
+
+/**
+ * Safe handler for memory allocation. If memory cannot be allocated prints
+ * an error message with coordinates of caller and crashes.
+ */
+void* safe_malloc(int n, char* file, int line) {
+  void* addr = malloc(n);
+  if (addr == NULL) {
+    printf("Failed to allocate memory: %s (%d)\n", file, line);
+    exit(-1);
+  }
+  return addr;
 }

@@ -69,10 +69,7 @@ intpair dptable_solve(dptable* T) {
         max_score_choices = NULL;
       }
       // Allocate for all 4 possible choices (B,M/S,I,D)
-      choices = malloc(4 * sizeof(alnchoice));
-      if (choices == NULL) {
-        PANICK("Failed to allocate memory.");
-      }
+      choices = MALLOC(4 * sizeof(alnchoice));
 
       // Find all possible moves: _alnchoice_X functions populate the choice*
       // they're given and return 0 if move is allowed.
@@ -90,10 +87,7 @@ intpair dptable_solve(dptable* T) {
       }
 
       // Find the highest scoring alternatives
-      max_score_choices = malloc(num_choices * sizeof(int));
-      if (max_score_choices == NULL) {
-        PANICK("Failed to allocate memory.");
-      }
+      max_score_choices = MALLOC(num_choices * sizeof(int));
       num_max_scores = 0;
       max_score = choices[0].score;
       for (k = 0; k < num_choices; k++){
@@ -108,10 +102,7 @@ intpair dptable_solve(dptable* T) {
         }
       }
       T->cells[cellpos.i][cellpos.j].num_choices = num_max_scores;
-      T->cells[cellpos.i][cellpos.j].choices = malloc(num_max_scores * sizeof(alnchoice));
-      if (T->cells[cellpos.i][cellpos.j].choices == NULL) {
-        PANICK("Failed to allocate memory.");
-      }
+      T->cells[cellpos.i][cellpos.j].choices = MALLOC(num_max_scores * sizeof(alnchoice));
       for (k = 0; k < num_max_scores; k++) {
         T->cells[cellpos.i][cellpos.j].choices[k] = choices[max_score_choices[k]];
       }
@@ -125,10 +116,7 @@ intpair dptable_solve(dptable* T) {
 alignment* dptable_traceback(dptable* T, intpair end) {
   char *transcript;
   intpair xy = _xy_from_cellpos(T->prob, end.i, end.j);
-  alignment* aln = malloc(sizeof(alignment));
-  if (aln == NULL) {
-    PANICK("Failed to allocate memory.");
-  }
+  alignment* aln = MALLOC(sizeof(alignment));
   // We write ops to rev_transcript backwards starting from the end (position `len')
   int len = xy.i + xy.j + 1,
       pos = len - 1;
@@ -150,10 +138,7 @@ alignment* dptable_traceback(dptable* T, intpair end) {
   }
 
   len = len - pos - 1;
-  transcript = malloc(len + 1);
-  if (transcript == NULL) {
-    PANICK("Failed to allocate memory.");
-  }
+  transcript = MALLOC(len + 1);
   strncpy(transcript, rev_transcript + pos, len);
   // strncpy does not null terminate:
   transcript[len] = '\0';

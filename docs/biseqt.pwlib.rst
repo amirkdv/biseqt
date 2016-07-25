@@ -23,6 +23,8 @@ Functions
 
 .. doxygenfunction:: dptable_solve
 
+.. doxygenfunction:: safe_malloc
+
 Data Structures
 ---------------
 

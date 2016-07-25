@@ -21,10 +21,18 @@ ffi = None
 automatically populated upon loading this module (cf. :func:`setup_ffi`) and
 users never have to manipulate it."""
 
+
 def setup_ffi():
     """Instantiates an FFI object as :attr:`ffi` and loads the shared object
     for pwlib into :attr:`lib`. This function is automatically called when
-    this module loads."""
+    this module loads.
+
+    Note:
+        CFFI has issues with loading macros as they are defined in a header
+        file. For this reason, and since we don't use the macros in python code
+        any line that begins with ``#define`` is ignored from the header file.
+        This means multiline macros will not work.
+    """
     pwlib_so = os.path.join(os.path.dirname(__file__), 'pwlib', 'pwlib.so')
     pwlib_h = os.path.join(os.path.dirname(__file__), 'pwlib', 'pwlib.h')
     global ffi, lib
@@ -260,6 +268,8 @@ class Aligner(object):
         alignment = lib.dptable_traceback(self.c_dptable, self.opt)
         assert alignment != ffi.NULL
         transcript = ffi.string(alignment.transcript)
+        if not transcript:
+            return None
         return Alignment(self.origin, self.mutant, transcript,
                          score=alignment.score,
                          origin_start=alignment.origin_idx,
