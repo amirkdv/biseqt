@@ -21,6 +21,8 @@
 import numpy as np
 import scipy.stats
 import matplotlib
+from matplotlib.figure import Figure
+from matplotlib.backends.backend_agg import FigureCanvas
 
 
 matplotlib.rc('font', style='normal', size=8)
@@ -45,8 +47,8 @@ def figure():
     Returns:
         matplotlib.figure.Figure
     """
-    fig = matplotlib.figure.Figure()
-    matplotlib.backends.backend_agg.FigureCanvas(fig)  # add a canvas to figure
+    fig = Figure()
+    FigureCanvas(fig)  # add a canvas to figure
     return fig
 
 
@@ -82,7 +84,8 @@ def plot_density(ax, sample, num_points=1000, **kwargs):
 
 
 def cdf(sample, num_points=1000, value_range=None):
-    """Calculate the cumulative distribution function of a given sample set.
+    """Calculate the cumulative distribution function of a given sample set
+    based on its estimated density.
 
     Args:
         sample (list): A list of numbers; the sample set.
@@ -97,6 +100,12 @@ def cdf(sample, num_points=1000, value_range=None):
         tuple:
             A tuple containing two lists: the values at which the CDF is
             reported and CDF values themselves.
+
+    Note:
+        The density estimation is done using ``scipy.stats.guassian_kde`` which
+        requires a "reasonably large" sample set to behave regularly. For
+        instance, if the sample size is too small (e.g. 3 data points only)
+        the calculated CDF may not necessarily approach 1 at its higher end.
     """
     density = scipy.stats.gaussian_kde(sample)
     if value_range is None:
