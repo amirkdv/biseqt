@@ -4,6 +4,7 @@
 # and http://matplotlib.org/users/customizing.html
 
 # TODO document http://matplotlib.org/faq/usage_faq.html#what-is-a-backend
+# TODO module docs
 
 import numpy as np
 import scipy.stats

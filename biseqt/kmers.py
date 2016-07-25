@@ -232,6 +232,7 @@ class KmerIndex(object):
             only_missing (bool): Whether to re-score all kmers or only those
                 with a ``NULL`` score; default is True.
         """
+        self.log('Scoring all observed kmers by repetition.')
         N = self.num_kmers()
         L = self.total_length_indexed()
         kmer_probability = 1./(len(self.db.alphabet) ** self.wordlen)
@@ -254,7 +255,6 @@ class KmerIndex(object):
                 SELECT kmer, COUNT(*) FROM %s GROUP BY kmer
             """ % self.hits_table
         update = 'UPDATE %s SET score = ? WHERE kmer = ?' % self.scores_table
-        self.log('Scoring all observed kmers by repetition.')
 
         self.create_sql_index()
         with self.db.connection() as conn:
