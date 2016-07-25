@@ -40,12 +40,11 @@ deps:
 env:
 	virtualenv $@
 
-DOCS_EXCLUDE = biseqt/tests
 DOCS_OUT = _build
 # in RTD docs/doxygen is built by docs/conf.py
 docs: $(LIBDIR)/pwlib.so docs/doxygen
 	rm -rf docs/$(DOCS_OUT)
-	# sphinx-apidoc -e -o $@ biseqt/ $(DOCS_EXCLUDE)
+	# sphinx-apidoc -e -o $@ biseqt/
 	docs/doxygen-glue.py $(LIBDIR)/pwlib.h > docs/biseqt.pwlib.rst
 	cd $@ && sphinx-build -b html . $(DOCS_OUT)
 	cd $@ && sphinx-build -b latex . $(DOCS_OUT)
