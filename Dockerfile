@@ -15,5 +15,5 @@ RUN apt-get install -qqy libcairo2
 # Dependencies for sqlite3 and the CLI for debugging
 RUN apt-get install -qqy libsqlite3-dev sqlite3
 
-# install doxygen and pandoc for docs
-RUN apt-get install -qqy doxygen pandoc
+# install doxygen and graphviz for docs
+RUN apt-get install -qqy doxygen graphviz
