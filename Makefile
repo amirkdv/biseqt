@@ -26,7 +26,7 @@ tests: $(LIBDIR)/pwlib.so flake8
 	cd tests && PYTHONPATH=.. py.test $(PYTEST_OPTS) && coverage-badge -o $(COVERAGE_BADGE)
 
 loc:
-	find biseqt tests -type f -regex '.*\(\.py\|\.c\|\.h\)' | xargs wc -l
+	find biseqt tests -type f -regex '.*\(\.py\|\.c\|\.h\)' | grep -v __pycache__ | xargs wc -l
 
 todo:
 	find biseqt Makefile *.mk *.py -type f -regex '.*\(\.py\|\.c\|\.h\|Makefile\|\.mk\)' | xargs grep -A2 -nP --color 'FIXME|TODO|BUG'
