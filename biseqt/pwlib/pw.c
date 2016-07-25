@@ -20,7 +20,7 @@ int dptable_init(dptable* T) {
       }
       break;
     default:
-      _panick("Shouldn't have happened!");
+      PANICK("Shouldn't have happened!");
   }
   return _table_init_cells(T);
 }
@@ -71,7 +71,7 @@ intpair dptable_solve(dptable* T) {
       // Allocate for all 4 possible choices (B,M/S,I,D)
       choices = malloc(4 * sizeof(alnchoice));
       if (choices == NULL) {
-        _panick("Failed to allocate memory.");
+        PANICK("Failed to allocate memory.");
       }
 
       // Find all possible moves: _alnchoice_X functions populate the choice*
@@ -92,7 +92,7 @@ intpair dptable_solve(dptable* T) {
       // Find the highest scoring alternatives
       max_score_choices = malloc(num_choices * sizeof(int));
       if (max_score_choices == NULL) {
-        _panick("Failed to allocate memory.");
+        PANICK("Failed to allocate memory.");
       }
       num_max_scores = 0;
       max_score = choices[0].score;
@@ -110,7 +110,7 @@ intpair dptable_solve(dptable* T) {
       T->cells[cellpos.i][cellpos.j].num_choices = num_max_scores;
       T->cells[cellpos.i][cellpos.j].choices = malloc(num_max_scores * sizeof(alnchoice));
       if (T->cells[cellpos.i][cellpos.j].choices == NULL) {
-        _panick("Failed to allocate memory.");
+        PANICK("Failed to allocate memory.");
       }
       for (k = 0; k < num_max_scores; k++) {
         T->cells[cellpos.i][cellpos.j].choices[k] = choices[max_score_choices[k]];
@@ -126,7 +126,7 @@ alignment* dptable_traceback(dptable* T, intpair end) {
   char *transcript;
   alignment* aln = malloc(sizeof(alignment));
   if (aln == NULL) {
-    _panick("Failed to allocate memory.");
+    PANICK("Failed to allocate memory.");
   }
   // We write ops to rev_transcript backwards starting from the end (position `len')
   int len = end.i + end.j + 1,
@@ -149,7 +149,7 @@ alignment* dptable_traceback(dptable* T, intpair end) {
   len = len - pos - 1;
   transcript = malloc(len + 1);
   if (transcript == NULL) {
-    _panick("Failed to allocate memory.");
+    PANICK("Failed to allocate memory.");
   }
   strncpy(transcript, rev_transcript + pos, len);
   // strncpy does not null terminate:

@@ -14,7 +14,7 @@ int _std_table_init_dims(dptable* T) {
   // Caclculate row lengths:
   T->row_lens = malloc(T->num_rows * sizeof(int));
   if (T->row_lens == NULL) {
-    _panick("Failed to allocated memory.");
+    PANICK("Failed to allocated memory.");
   }
   for (i = 0; i < T->num_rows; i++) {
     T->row_lens[i] = ymax + 1;
@@ -54,14 +54,14 @@ int _banded_table_init_dims(dptable* T) {
   // Caclculate row lengths:
   T->row_lens = malloc(T->num_rows * sizeof(int));
   if (T->row_lens == NULL) {
-    _panick("Failed to allocated memory.");
+    PANICK("Failed to allocated memory.");
   }
   for (i = 0; i < T->num_rows; i++) {
     // the actual shift is dmin + i since i is the adjusted to [0, dmax-dmin].
     d = dmin + i;
     T->row_lens[i] = 1 + (d > 0 ? 0 : d) + (xmax - d > ymax ? ymax : xmax - d);
     if (T->row_lens[i] <= 0) {
-      _panick("This shouldn't have happened: row length is negative!");
+      PANICK("This shouldn't have happened: row length is negative!");
     }
   }
   return 0;
@@ -71,12 +71,12 @@ int _table_init_cells(dptable* T) {
   int i, j;
   T->cells = malloc(T->num_rows * sizeof(dpcell *));
   if (T->cells == NULL) {
-    _panick("Failed to allocated memory.");
+    PANICK("Failed to allocated memory.");
   }
   for (i = 0; i < T->num_rows; i++) {
     T->cells[i] = malloc(T->row_lens[i] * sizeof(dpcell));
     if (T->cells[i] == NULL) {
-      _panick("Failed to allocated memoryx.");
+      PANICK("Failed to allocated memoryx.");
     }
     for (j = 0; j < T->row_lens[i]; j++) {
       T->cells[i][j] = (dpcell) {.num_choices=0, .choices=NULL};
@@ -104,7 +104,7 @@ intpair _cellpos_from_xy(alnprob* prob, int x, int y) {
     // pos.i is the actual d, we want it adjusted to [0, dmax-dmin].
     return (intpair) {pos.i - prob->banded_params->dmin, pos.j};
   } else {
-    _panick("Unknown alignment mode.");
+    PANICK("Unknown alignment mode.");
   }
   return (intpair) {-1, -1}; // for the compiler
 }
@@ -120,7 +120,7 @@ intpair _xy_from_cellpos(alnprob* prob, int i, int j) {
       // (x,y) = (a+max(d,0), a-min(d,0))
       return (intpair) {j + (i > 0 ? i : 0), j - (i > 0 ? 0 : i)};
     default:
-      _panick("Unknown alignment mode.");
+      PANICK("Unknown alignment mode.");
   }
   return (intpair) {-1, -1}; // for the compiler
 }
@@ -140,7 +140,7 @@ intpair _xlim(alnprob* prob) {
         1 + (origin_len > mutant_len + dmax ? mutant_len + dmax : origin_len)
       };
     default:
-      _panick("Unknown alignment mode.");
+      PANICK("Unknown alignment mode.");
   }
   return (intpair) {-1, -1}; // for the compiler
 }
@@ -159,7 +159,7 @@ intpair _ylim(alnprob* prob, int x) {
         1 + (mutant_len > x - dmin ? x - dmin : mutant_len)
       };
     default:
-      _panick("Unknown alignment mode.");
+      PANICK("Unknown alignment mode.");
   }
   return (intpair) {-1, -1}; // for the compiler
 }
@@ -204,7 +204,7 @@ int _alnchoice_B(dptable *T, int x, int y, alnchoice* choice) {
       // B not allowed otherwise:
       return -1;
     default:
-      _panick("Invalid alignment mode");
+      PANICK("Invalid alignment mode");
       // for compiler's sake:
       return -1;
   }
@@ -265,7 +265,7 @@ int _alnchoice_ID(dptable* T, int x, int y, alnchoice* choice, char op) {
       prev = _cellpos_from_xy(T->prob, x-1, y);
       break;
     default:
-      _panick("Unknown op given to _alnchoice_ID\n");
+      PANICK("Unknown op given to _alnchoice_ID\n");
   }
   if (!_cellpos_valid(T, prev) || T->cells[prev.i][prev.j].num_choices < 1) {
     return -1;
@@ -415,9 +415,4 @@ void _print_mem_usage() {
   printf("%.2f MB (tot), %.2f MB (res)\n",
     tot[0]/1024.0, res[0]/1024.0);
   fclose(fp);
-}
-
-void _panick(char* message) {
-  printf("Panick: %s\n", message);
-  exit(1);
 }

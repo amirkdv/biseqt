@@ -260,4 +260,5 @@ intpair _cellpos_from_xy(alnprob* prob, int x, int y);
 intpair _xy_from_cellpos(alnprob* prob, int i, int j);
 
 void _print_mem_usage();
-void _panick(char* message);
+// Used to handle terminal failures:
+#define PANICK(message) printf("Panick in %s (%d): %s\n", __FILE__, __LINE__, message); exit(1);

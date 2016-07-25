@@ -10,13 +10,34 @@ from collections import namedtuple
 from .sequence import Sequence
 
 
-pwlib_so = os.path.join(os.path.dirname(__file__), 'pwlib', 'pwlib.so')
-pwlib_h = os.path.join(os.path.dirname(__file__), 'pwlib', 'pwlib.h')
-ffi = FFI()
-lib = ffi.dlopen(pwlib_so)
-with open(pwlib_h) as f:
-    ffi.cdef(f.read())
+lib = None
+"""The loaded shared object for ``pwlib``. All functions defined in the header
+file are accessible through this object. This object is automatically populated
+upon loading this module (cf. :func:`setup_ffi`) and users never have to
+manipulate it."""
 
+ffi = None
+"""The main FFI instance used throughout this module. This object is
+automatically populated upon loading this module (cf. :func:`setup_ffi`) and
+users never have to manipulate it."""
+
+def setup_ffi():
+    """Instantiates an FFI object as :attr:`ffi` and loads the shared object
+    for pwlib into :attr:`lib`. This function is automatically called when
+    this module loads."""
+    pwlib_so = os.path.join(os.path.dirname(__file__), 'pwlib', 'pwlib.so')
+    pwlib_h = os.path.join(os.path.dirname(__file__), 'pwlib', 'pwlib.h')
+    global ffi, lib
+    ffi = FFI()
+    lib = ffi.dlopen(pwlib_so)
+    with open(pwlib_h) as f:
+        # ignore macro definitions in header file; we don't use them in python
+        # and cffi is unhappy about parsing them:
+        headers = '\n'.join(line for line in f.read().split('\n')
+                            if not line.startswith('#define'))
+        ffi.cdef(headers)
+
+setup_ffi()
 
 # alignment modes
 STD_MODE = lib.STD_MODE
