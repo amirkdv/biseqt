@@ -432,7 +432,8 @@ class DB(object):
     def find(self, condition=None, sql_condition=None):
         """Loads :class:`Record` objects satisfying the given conditions.
         Conditions can be specified either as python filtering callables or an
-        SQL ``WHERE`` clause.
+        SQL ``WHERE`` clause. Records are always yielded in increasing order of
+        their database integer id.
 
         Args:
             condition(callable): A python callable that determines whether a
@@ -440,9 +441,12 @@ class DB(object):
                 filtering.
             sql_condition(str): The body of an SQL ``WHERE`` clause; default is
                 None which means no filtering.
+        Yields:
+            Record
         """
         q = 'SELECT %s FROM sequence' % ', '.join(Record._fields)
         q += ' WHERE ' + sql_condition if sql_condition else ''
+        q += ' ORDER BY id ASC'
 
         def _record_factory(cursor, row):
             kw = {Record._fields[i]: row[i] for i in range(len(row))}
