@@ -7,20 +7,15 @@
     ``matplotlib`` functionality in addition to basic tools for inspecting
     binary classifiers.
 
-    >>> from biseqt.plots import figure, save, cdf, plot_density
+    >>> from biseqt.plots import figure, save, plot_density, plot_roc, plot_ppv
     >>> X = ... # a list of numbers (the positive data set)
     >>> Y = ... # a list of numbers (the negatvie data set)
-    >>> fig = figure()
-    >>> plot_density(fig.subplot(2, 1, 1), X)
-    >>> plot_density(fig.subplot(2, 1, 2), Y)
+    >>> fig = biseqt.plots.figure()
+    >>> plot_density(fig.subplot(4, 1, 1), X)
+    >>> plot_density(fig.subplot(4, 1, 2), Y)
+    >>> plot_roc(fig.subplot(4, 1, 3), X, Y)
+    >>> plot_ppv(fig.subplot(4, 1, 4), X, Y)
     >>> save(fig, '/path/to/fig.png')
-
-    >>> from biseqt.plots import plot_roc, plot_ppv
-    >>> fig = figure()
-    >>> plot_roc(fig.subplot(1, 1, 1), X, Y)
-
-    >>> fig = figure()
-    >>> plot_ppv(fig.subplot(1, 1, 1), X, Y)
 """
 
 import numpy as np

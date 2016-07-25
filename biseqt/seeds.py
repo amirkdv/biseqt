@@ -3,7 +3,7 @@
 .. wikisection:: overview
     :title: Statistical Seed Analysis
 
-    The :mod:`biseqt.seeds` module provides statistical tools for analyzing
+    The :mod:`biseqt.seeds` module provides tools for storing and analyzing
     matching segment pairs (aka seeds) between large numbers of sequences.
 
     >>> from biseqt.database import DB
