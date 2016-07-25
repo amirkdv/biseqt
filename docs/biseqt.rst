@@ -13,6 +13,8 @@ Submodules
    biseqt.database
    biseqt.kmers
    biseqt.seeds
+   biseqt.util
+   biseqt.plots
 
 Module contents
 ---------------
