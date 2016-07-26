@@ -31,12 +31,6 @@ loc:
 todo:
 	find biseqt Makefile *.mk *.py -type f -regex '.*\(\.py\|\.c\|\.h\|Makefile\|\.mk\)' | xargs grep -A2 -nP --color 'FIXME|TODO|BUG'
 
-deps:
-	# install numpy separately before, cf. setup.py
-	pip install numpy && \
-	pip install -e .  && \
-	pip install -e .[docs] .[tests]
-
 env:
 	virtualenv $@
 

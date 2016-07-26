@@ -3,6 +3,16 @@
 from setuptools import setup
 from os import path, environ
 
+try:
+    import numpy
+except ImportError:
+    raise ImportError('numpy must be already installed')
+
+try:
+    import pysam
+except ImportError:
+    raise ImportError('pysam must be already installed')
+
 with open(path.join(path.abspath(path.dirname(__file__)), 'README.md')) as f:
     README = f.read()
 
@@ -10,7 +20,6 @@ install_requires = [
     'scipy',
     'matplotlib',
     'apsw',         # for speaking to SQLite databases
-    'pysam',        # for manipulating SAM/BAM files
     'termcolor',    # for colored text output
     'cffi',         # for the C component
     'python-igraph',# for bindings to igraph
@@ -45,8 +54,11 @@ setup(
     # However, it is still much faster to install numpy separately via pip
     # because installing by setup_requires wants to compile all the fortran and
     # C/C++ code.
-    setup_requires=[
-        'numpy',        # for setup.py to work at all
+    #
+    # pysam has similar issues.
+    setup_requires=[ # for setup.py to work at all
+        'numpy',
+        'pysam',
     ],
     install_requires=install_requires,
     extras_require={
