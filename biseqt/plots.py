@@ -31,6 +31,9 @@ _default_scatter_kwargs = {
     's': 1,
     'color': 'k',
 }
+_default_savefig_kwargs = {
+    'dpi': 500,
+}
 
 
 def _scatter(ax, *args, **kwargs):
@@ -64,7 +67,9 @@ def save(fig, path, **kwargs):
         ax.grid(True)
         ax.legend()
     fig.tight_layout()
-    fig.savefig(path, **kwargs)
+    _kwargs = _default_savefig_kwargs
+    _kwargs.update(kwargs)
+    fig.savefig(path, **_kwargs)
 
 
 def plot_density(ax, sample, num_points=1000, **kwargs):
