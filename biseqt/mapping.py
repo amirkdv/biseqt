@@ -115,6 +115,7 @@ def overlaps_from_seed_index(seed_index, seqids=None, targets=None,
     elif isinstance(seqids, int):
         seqids = [seqids]
     assert isinstance(seqids, list)
+
     if targets is None:
         assert len(seqids) > 1
         all_to_all = True

@@ -279,7 +279,7 @@ class SeedIndex(object):
 
         self.log('Calculating band radii (gap_prob=%s, sensitivity=%s)' %
                  (str(gap_prob), str(sensitivity)))
-        num_pairs = (len(scanned_seqs) * (len(scanned_seqs) - 1) ) / 2
+        num_pairs = (len(scanned_seqs) * (len(scanned_seqs) - 1)) / 2
         indic = ProgressIndicator(num_total=num_pairs, percentage=True)
         indic.start()
         with self.db.connection() as conn:
