@@ -29,6 +29,7 @@ from math import sqrt
 
 from .kmers import KmerIndex
 from .stochastics import binomial_to_normal, band_radius_calculator
+from .util import ProgressIndicator
 
 
 class Seed(namedtuple('Seed', ['id0', 'id1', 'pos0', 'pos1', 'length'])):
@@ -271,18 +272,26 @@ class SeedIndex(object):
         """ % self.diagonals_table
 
         # each entry is a pair of (id, len) tuples
-        seqpairs = combinations(self.kmer_index.scanned_sequences(), 2)
+        scanned_seqs = list(self.kmer_index.scanned_sequences())
+        seqpairs = combinations(scanned_seqs, 2)
+
         self.create_sql_index(self.diagonals_table)
+
         self.log('Calculating band radii (gap_prob=%s, sensitivity=%s)' %
                  (str(gap_prob), str(sensitivity)))
+        num_pairs = (len(scanned_seqs) * (len(scanned_seqs) - 1) ) / 2
+        indic = ProgressIndicator(num_total=num_pairs, percentage=True)
+        indic.start()
         with self.db.connection() as conn:
             cursor = conn.cursor()
             for (id0, len0), (id1, len1) in seqpairs:
+                indic.progress()
                 cursor = conn.cursor()
                 diags = [x[0] for x in cursor.execute(select, (id0, id1))]
                 recs = ((radius(len0, len1, diag), id0, id1, diag)
                         for diag in diags)
                 conn.cursor().executemany(update, recs)
+        indic.finish()
         self.log('Done calculating band radii.')
 
     def score_diagonals(self):
