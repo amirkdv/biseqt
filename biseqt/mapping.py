@@ -61,7 +61,7 @@ class ReadMapper(object):
     def initialize(self, reads_fa, refs_fa=None):
         self.db.initialize()
         with open(reads_fa) as f:
-            self.db.load_fasta(f, num=100, rc=True)
+            self.db.load_fasta(f, rc=True)
         if refs_fa is not None:
             with open(reads_fa) as f:
                 self.db.load_fasta(f, rc=False)
