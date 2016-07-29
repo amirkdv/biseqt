@@ -24,7 +24,7 @@
 """
 
 from collections import namedtuple
-from itertools import combinations
+from itertools import combinations, product
 from math import sqrt
 
 from .kmers import KmerIndex
@@ -367,7 +367,7 @@ class SeedIndex(object):
 
                     cursor.execute(query, (score, id0, id1, diag))
 
-    def highest_scoring_band(self, id0, id1, min_band_score=None):
+    def highest_scoring_band(self, id0s, id1s, min_band_score=None):
         """Returns the diagonal range with the highest score (i.e lowest
         p-value, cf. :func:`score_seeds`) for a given pair of sequences.
 
@@ -387,16 +387,23 @@ class SeedIndex(object):
                 A 2-tuple containing a diagonal range (as a tuple of inclusive
                 upper and lower bounds) with the highest score and its score.
                 If no acceptable band is found ``(None, None)`` is returned.
-        """
-        assert isinstance(id0, int) and isinstance(id1, int)
-        if id0 == id1:
-            return None, None
+        """  # FIXME docs and tests
+        if not isinstance(id0s, list):
+            id0s = [id0s]
+        if not isinstance(id1s, list):
+            id1s = [id1s]
+
+        assert not set(id0s).intersection(set(id1s))
         # DB records of seeds are all such that id0 < id1, flip them if needed:
-        args = (id0, id1) if id0 < id1 else (id1, id0)
+        args = tuple()
+        idpairs = list(product(id0s, id1s))
+        for id0, id1 in idpairs:
+            args += (id0, id1) if id0 < id1 else (id1, id0)
+        id_condition = ' OR '.join('(id0 = ? AND id1 = ?)' for _ in idpairs)
         query = """
-            SELECT diag - radius, diag + radius, score FROM %s
-            WHERE id0 = ? AND id1 = ?
-        """ % self.diagonals_table
+            SELECT id0, id1, diag - radius, diag + radius, score FROM %s
+            WHERE (%s)
+        """ % (self.diagonals_table, id_condition)
         if min_band_score is not None:
             query += ' AND score >= ?'
             args += (float(min_band_score), )
@@ -405,14 +412,15 @@ class SeedIndex(object):
         with self.db.connection() as conn:
             cursor = conn.cursor()
             cursor.execute(query, args)
-            for min_diag, max_diag, score in cursor:
-                # translate the diagonals to the original order of id0 and id1
-                if id0 < id1:
-                    return (min_diag, max_diag), score
-                if id1 < id0:
-                    return (-max_diag, -min_diag), score
+            for id0, id1, min_diag, max_diag, score in cursor:
+                if id0 in id0s:
+                    return (id0, id1), (min_diag, max_diag), score
+                else:
+                    # FIXME is it fixed now?
+                    # return (id1, id0), (min_diag, max_diag), score
+                    return (id1, id0), (-max_diag, -min_diag), score
 
-        return None, None
+        return (None, None), (None, None), None
 
     def seeds(self, id0, id1, diag_range=None):
         """Yields the :class:`seeds <Seed>` and their respective scores for a

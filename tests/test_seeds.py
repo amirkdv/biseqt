@@ -129,14 +129,14 @@ def test_score_diagonals(sequencing_sample):
     avg_read_len = sum(len(read) for read in reads)/num_reads
     for i in range(num_reads - 1):
         id0, id1 = records[i].id, records[i + 1].id
-        impossible_diag, score = seed_index.highest_scoring_band(
+        ids, impossible_diag, score = seed_index.highest_scoring_band(
             id0, id1, min_band_score=float('+inf')
         )
         assert score is None or score == float('+inf'), \
             'min_band_score should work'
 
-        best_diag, _ = seed_index.highest_scoring_band(id0, id1)
-
+        ids, best_diag, _ = seed_index.highest_scoring_band(id0, id1)
+        assert ids == (id0, id1)
         assert best_diag is not None, \
             'there should always be a most dense diagonal'
         min_diag, max_diag = best_diag
