@@ -3,16 +3,6 @@
 from setuptools import setup
 from os import path, environ
 
-try:
-    import numpy
-except ImportError:
-    raise ImportError('numpy must be already installed')
-
-try:
-    import pysam
-except ImportError:
-    raise ImportError('pysam must be already installed')
-
 with open(path.join(path.abspath(path.dirname(__file__)), 'README.md')) as f:
     README = f.read()
 
@@ -33,6 +23,16 @@ if environ.get('READTHEDOCS', None) == 'True':
         'sphinxcontrib-wiki', # for breaking down doc pages to sections
         'breathe',   # for doxygen integration, doxygen is executed in conf.py
     ]
+else:
+    try:
+        import numpy
+    except ImportError:
+        raise ImportError('numpy must be already installed')
+
+    try:
+        import pysam
+    except ImportError:
+        raise ImportError('pysam must be already installed')
 
 setup(
     name='biseqt',
