@@ -60,8 +60,10 @@ def save(fig, path, **kwargs):
     ``matplotlib.figure.Figure.savefig``.
 
     Args:
-        fig (matplotlib.figure.Figure)
-        path (str)
+        fig (matplotlib.figure.Figure): The ``matplotlib.figure.Figure`` to be
+            saved.
+        path (str): Path where figure is saved; can be an absolute path or
+            relative to current working directory.
     """
     for ax in fig.get_axes():
         ax.grid(True)

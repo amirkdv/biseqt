@@ -453,3 +453,21 @@ class SeedIndex(object):
             cursor.execute(query, args)
             for pos0, pos1 in cursor:
                 yield Seed(pos0=pos0, pos1=pos1, **seed_kw)
+
+    def plot_seeds(self, ax, id0, id1, **kw):
+        """Plots all seeds for a given pair of sequences on a matplitlib
+        axes object. All keyword arguments are passed as is to
+        ``matplotlib.axes.Axes.scatter``.
+
+        Args:
+            ax (matplotlib.axes.Axes): The matplotlib axes object to use.
+            id0 (int): The identifier for the first (vertical) sequence.
+            id1 (int): The idenfitier for the second (horizontal) sequence.
+        """
+        _kw = {
+            's': 1,
+            'color': 'k',
+        }
+        _kw.update(kw)
+        seeds = list(self.seeds(id0, id1))
+        ax.scatter([s.pos0 for s in seeds], [s.pos1 for s in seeds], **_kw)
