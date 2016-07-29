@@ -4,151 +4,189 @@ from itertools import combinations
 
 from biseqt.util import ProgressIndicator
 from biseqt.pw import Aligner, BANDED_MODE, B_OVERLAP
+from biseqt.database import DB, Record
+from biseqt.kmers import KmerIndex
+from biseqt.seeds import SeedIndex
 
 
-def _all_records(db):
-    """Internal helper that loads all records from the database."""
-    db.log('Loading all sequence records from database')
-    records = list(db.find())
-    # records = records[:100]
-    return records
+class Read(object):
+    def __init__(self, seed_index, record, rc_record):
+        assert isinstance(seed_index, SeedIndex)
+        self.seed_index = seed_index
+        assert isinstance(record, Record) and isinstance(rc_record, Record)
+        assert rc_record.attrs.get('rc_of', None) == record.content_id
+        self.record, self.rc_record = record, rc_record
+        self.ids = [self.record.id, self.rc_record.id]
+        self.seq = seed_index.db.load_from_record(self.record)
+        self.rc_seq = seed_index.db.load_from_record(self.rc_record)
+
+    def map(self, targets, min_band_score=20, **aligner_kw):
+        if not isinstance(targets, list):
+            targets = [targets]
+        default = None, None, None
+        assert all(isinstance(target, Record) for target in targets)
+        targetids = [target.id for target in targets]
+        (ours, match), band, score = self.seed_index.highest_scoring_band(
+            self.ids, targetids, min_band_score=min_band_score)
+
+        if ours is None:
+            return default
+        assert ours in self.ids and match in targetids
+        target = [target for target in targets if target.id == match][0]
+        rc = ours == self.rc_record.id
+        seq = self.seq if not rc else self.rc_seq
+        target_seq = self.seed_index.db.load_from_record(target)
+        aligner_kw.update(alnmode=BANDED_MODE, alntype=B_OVERLAP,
+                          diag_range=band)
+        with Aligner(seq, target_seq, **aligner_kw) as aligner:
+            score = aligner.solve()
+            if score is None:
+                return default
+            alignment = aligner.traceback()
+            if alignment is not None:
+                ours = self.record if not rc else self.rc_record
+                return ours, target, alignment
 
 
-def mappings_from_sam(db, sampath):
-    """Loads mappings from a SAM mapping file and translates sequence
-    names to integer identifiers as stored by :class:`biseqt.database.DB`.
+class ReadMapper(object):
+    def __init__(self, alphabet, wordlen, db_path):
+        self.db = DB(db_path, alphabet)
+        self.kmer_index = KmerIndex(self.db, wordlen)
+        self.seed_index = SeedIndex(self.kmer_index)
+        self.bands_indexed = False
 
-    Args:
-        db (database.DB): The sequence database where ids are looked up.
-        sampath (str): The path to SAM mappings file.
+    def log(self, *args, **kwargs):
+        self.db.log(*args, **kwargs)
 
-    Yields:
-        tuple:
-            A 3-tuple containing the read record, the reference name and the
-            ``pysam.calignedsegment.AlignedSegment`` mapping it to the
-            reference.
-    """
-    records_by_name = {rec.attrs['name']: rec for rec in _all_records(db)}
-    samfile = pysam.AlignmentFile(sampath)
-    db.log('Loading SAM mappings from %s.' % sampath)
-    for mapping in samfile.fetch():
-        qname, rname = mapping.query_name, mapping.reference_name
-        # NOTE this is because BLASR does a weird thing with sequence names
-        qname = qname.rsplit('/', 1)[0]
-        if qname not in records_by_name:
-            continue
-        yield records_by_name[qname], rname, mapping
+    def initialize(self, reads_fa, refs_fa=None):
+        self.db.initialize()
+        with open(reads_fa) as f:
+            self.db.load_fasta(f, num=100, rc=True)
+        if refs_fa is not None:
+            with open(reads_fa) as f:
+                self.db.load_fasta(f, rc=False)
 
+    def index_bands(self, **kw):
+        assert all(key in kw for key in ['max_kmer_score', 'sensitivity',
+                                         'gap_prob'])
+        self.kmer_index.score_kmers()
+        self.seed_index.index_seeds(max_kmer_score=kw['max_kmer_score'])
+        self.seed_index.count_seeds_on_diagonals()
+        self.seed_index.calculate_band_radii(sensitivity=kw['sensitivity'],
+                                             gap_prob=kw['gap_prob'])
+        self.seed_index.score_diagonals()
+        self.bands_indexed = True
 
-def overlaps_from_sam_mappings(db, sampath, min_overlap=-1):
-    """Finds all pairs of overlapping sequences based on their mappings to
-    a reference.
+    def load_reads(self):
+        recs_by_content_id = {r.content_id: r for r in list(self.db.find())}
+        reads = []
+        for record in recs_by_content_id.values():
+            if 'rc_of' in record.attrs:
+                pair = (recs_by_content_id[record.attrs['rc_of']], record)
+                reads.append(Read(self.seed_index, *pair))
+        return sorted(reads, key=lambda read: read.record.id)
 
-    Args:
-        db (database.DB): The sequence database where ids are looked up.
-        sampath (str): The path to SAM mappings file.
-        min_overlap (int): The minimum required length for overlaps to be
-            reported; default is -1 in which case no overlap is excluded.
+    def load_refs(self):
+        recs_by_content_id = {r.content_id: r for r in list(self.db.find())}
+        for record in recs_by_content_id.values():
+            if 'rc_of' in record.attrs:
+                recs_by_content_id.pop(record.attrs['rc_of'])
+                recs_by_content_id.pop(record.content_id)
+        return recs_by_content_id.values()
 
-    Yields:
-        tuple:
-            A tuple of sequence integer ids (in increasing order) that are
-            deemed as overlapping based on SAM mappings.
-    """
-    # dict from Record to mapping
-    mappings = {rec.id: (ref, mapping)
-                for rec, ref, mapping in mappings_from_sam(db, sampath)}
-    db.log('Finding overlaps from SAM mappings.')
-    seqids = sorted(mappings.keys())
-    for id0, id1 in combinations(seqids, 2):
-        (ref0, map0), (ref1, map1) = mappings[id0], mappings[id1]
-        if ref0 != ref1 or map0.is_reverse != map1.is_reverse:
-            continue
-        # TODO ignoring query_alignment_start and query_alignment_end
-        overlap_len = min(map0.reference_end, map1.reference_end) - \
-            max(map0.reference_start, map1.reference_start)
-        if overlap_len <= 0 or overlap_len < min_overlap:
-            continue
-        yield id0, id1
-
-
-# TODO what about rc?
-def overlaps_from_seed_index(seed_index, seqids=None, targets=None,
-                             min_diagonal_score=20, **aligner_kw):
-    """Finds overlapping pairs of sequences based on seed statistics and
-    banded alignments. All unnamed keyword arguments are passed as is to
-    :class:`biseqt.pw.Aligner`.
-
-    Args:
-        seed_index (seeds.SeedIndex): The seed index to query diagonal bands
-            from. All sequences, kmers, and seeds are assumed to be already
-            indexed and all diagonal bands already scored.
-
-    Keyword ARgs:
-        seqids (list|int): A list of sequence integer ids or a single integer
-            id. Default is None in which case all sequences in the database
-            are considered.
-        targets (list|int): A list of sequence integer ids to map those
-            sequences indicated by ``seqids`` against. For each sequence
-            in ``seqids`` the best map is reported unless ``targets`` is is
-            None (default) in which case ``seqids`` is used also as ``targets``
-            and all well-scoring overlaps are reported.
-        min_diagonal_score (float): The minimum diagonal score (cf.
-            :func:`biseqt.seeds.SeedIndex.score_diagonals`) for a band to be
-            considered. Default is ``-inf`` in which case all bands are
-            considered.
-
-    Yields:
-        tuple:
-            A 3-tuple containing the sequence id, the target sequence id (to
-            which the first sequence is mapped), and the
-            :class:`biseqt.pw.Alignment` corresponding to the mapping.
-    """
-    records_by_id = {rec.id: rec for rec in _all_records(seed_index.db)}
-    aligner_kw.update(alnmode=BANDED_MODE, alntype=B_OVERLAP)
-
-    def _load_seq(_id):
-        return seed_index.db.load_from_record(records_by_id[_id])
-
-    if seqids is None:
-        seqids = records_by_id.keys()
-    elif isinstance(seqids, int):
-        seqids = [seqids]
-    assert isinstance(seqids, list)
-
-    if targets is None:
-        assert len(seqids) > 1
-        all_to_all = True
-        targets = seqids
-    else:
-        all_to_all = False
-        assert not set(seqids).intersection(set(targets))
-
-    indic = ProgressIndicator(num_total=len(seqids))
-    indic.start()
-
-    for seqid in seqids:
-        indic.progress()
-        seq = _load_seq(seqid)
-        max_score = float('-inf')
-        bands = {}
-        for target in targets:
-            if seqid == target:
-                continue
-            diag_range, score = seed_index.highest_scoring_band(seqid, target)
-            if diag_range is None or score < min_diagonal_score:
-                continue
-            if not all_to_all and score < max_score:
-                continue
-            bands[target] = diag_range
-        for target in bands:
-            target_seq = _load_seq(target)
-            with Aligner(seq, target_seq, diag_range=bands[target],
-                         **aligner_kw) as aligner:
-                score = aligner.solve()
-                if score is None:
+    def map_all_to_all(self, min_band_score, **aligner_kw):
+        assert self.bands_indexed, 'Bands must be indexed first'
+        self.log('Mapping all reads against each other')
+        reads = self.load_reads()  # NOTE comes in sorted order of id
+        indic = ProgressIndicator(num_total=len(reads))
+        indic.start()
+        for read in reads:
+            indic.progress()
+            # NOTE only compare to reads after us
+            others = (r.record for r in reads if r.record.id > read.record.id)
+            for other in others:
+                rec, target_rec, aln = read.map(other,
+                                                min_band_score=min_band_score,
+                                                **aligner_kw)
+                if rec is None:
                     continue
-                alignment = aligner.traceback()
-                if alignment is not None:
-                    yield seqid, target, alignment
-    indic.finish()
+                yield rec, target_rec, aln
+        indic.finish()
+
+    def map_all_to_refs(self, min_band_score, **aligner_kw):
+        assert self.bands_indexed, 'Bands must be indexed first'
+        self.log('Mapping all reads against reference sequences')
+        reads = self.load_reads()
+        indic = ProgressIndicator(num_total=len(reads))
+        indic.start()
+        refs = self.load_refs()
+        for read in reads:
+            indic.progress()
+            rec, target_rec, aln = read.map(refs,
+                                            min_band_score=min_band_score,
+                                            **aligner_kw)
+            if rec is not None:
+                yield rec, target_rec, aln
+        indic.finish()
+
+    def mappings_from_sam(self, sampath):
+        """Loads mappings from a SAM mapping file and translates sequence
+        names to integer identifiers as stored by :class:`biseqt.database.DB`.
+
+        Args:
+            db (database.DB): The sequence database where ids are looked up.
+            sampath (str): The path to SAM mappings file.
+
+        Yields:
+            tuple:
+                A 3-tuple containing the read record, the reference name and
+                the ``pysam.calignedsegment.AlignedSegment`` mapping it to the
+                reference.
+        """
+        self.log('Loading SAM mappings from %s.' % sampath)
+        reads = self.load_reads()
+        reads_by_name = {read.record.attrs['name']: read for read in reads}
+        samfile = pysam.AlignmentFile(sampath)
+        for mapping in samfile.fetch():
+            qname, rname = mapping.query_name, mapping.reference_name
+            # NOTE this is because BLASR does a weird thing with sequence names
+            qname = qname.rsplit('/', 1)[0]
+            if qname not in reads_by_name:
+                continue
+            yield reads_by_name[qname], rname, mapping
+
+    def overlaps_from_sam_mappings(self, sampath, min_overlap=-1):
+        """Finds all pairs of overlapping sequences based on their mappings to
+        a reference.
+
+        Args:
+            sampath (str): The path to SAM mappings file.
+            min_overlap (int): The minimum required length for overlaps to be
+                reported; default is -1 in which case no overlap is excluded.
+
+        Yields:
+            tuple:
+                A tuple of sequence integer ids (in increasing order) that are
+                deemed as overlapping based on SAM mappings.
+        """
+        self.log('Finding overlaps from SAM mappings.')
+        mappings = {read.record.id: (read, ref, mapping)
+                    for read, ref, mapping in self.mappings_from_sam(sampath)}
+        seqids = sorted(mappings.keys())
+        for id0, id1 in combinations(seqids, 2):
+            (r0, ref0, map0), (r1, ref1, map1) = mappings[id0], mappings[id1]
+            if ref0 != ref1:
+                continue
+            # TODO ignoring query_alignment_start and query_alignment_end
+            overlap_len = min(map0.reference_end, map1.reference_end) - \
+                max(map0.reference_start, map1.reference_start)
+            if overlap_len <= 0 or overlap_len < min_overlap:
+                continue
+            # FIXME the second thing we yield is not reported by our own
+            # map_all_to_all.
+            if map0.is_reverse == map1.is_reverse:
+                yield r0.record, r1.record
+                yield r0.rc_record, r1.rc_record
+            else:
+                yield r0.record, r1.rc_record
+                yield r0.rc_record, r1.record
