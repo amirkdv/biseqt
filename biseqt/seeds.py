@@ -351,10 +351,13 @@ class SeedIndex(object):
 
         self.log('Scoring all diagonals for each pair of sequences.')
         # each entry is a pair of (id, len) tuples
-        seqpairs = combinations(self.kmer_index.scanned_sequences(), 2)
+        seqpairs = list(combinations(self.kmer_index.scanned_sequences(), 2))
+        indic = ProgressIndicator(num_total=len(seqpairs), percentage=True)
+        indic.start()
         with self.db.connection() as conn:
             cursor = conn.cursor()
             for (id0, len0), (id1, len1) in seqpairs:
+                indic.progress()
                 seed_count, diags = self.cum_seed_count(id0, id1, len0, len1)
 
                 for diag, radius in diags:
@@ -366,6 +369,7 @@ class SeedIndex(object):
                     score = score_calculator(len0, len1, diag, radius, num)
 
                     cursor.execute(query, (score, id0, id1, diag))
+        indic.finish()
 
     def highest_scoring_band(self, id0s, id1s, min_band_score=None):
         """Returns the diagonal range with the highest score (i.e lowest
