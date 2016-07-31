@@ -257,8 +257,8 @@ def ppv(X, Y, classifier='>', num_points=1000):
 
     if classifier == '>':
         Nc_X, Nc_Y = (1 - F_X) * len(X), (1 - F_Y) * len(Y)
+        # don't complain about points where denominator is 0
         with np.errstate(divide='ignore', invalid='ignore'):
-            # don't complain about points where denominator is 0
             return params, Nc_X / (Nc_X + Nc_Y)
     else:
         N_X, N_Y = F_X * len(X), F_Y * len(Y)

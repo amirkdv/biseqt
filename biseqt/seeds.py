@@ -396,6 +396,7 @@ class SeedIndex(object):
             id0s = [id0s]
         if not isinstance(id1s, list):
             id1s = [id1s]
+        assert id0s and id1s
 
         assert not set(id0s).intersection(set(id1s))
         # DB records of seeds are all such that id0 < id1, flip them if needed:

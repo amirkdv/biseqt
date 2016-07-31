@@ -387,7 +387,9 @@ class MutationProcess(object):
         assert isinstance(alphabet, Alphabet)
         self.alphabet = alphabet
 
-        if not isinstance(subst_probs, list):
+        if isinstance(subst_probs, list):
+            self.subst_probs = subst_probs
+        else:
             L = len(self.alphabet)
             assert subst_probs < 1 and subst_probs >= 0
             any_subst = float(subst_probs)
