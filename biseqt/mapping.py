@@ -45,6 +45,8 @@ class Read(object):
             alignment = aligner.traceback()
             if alignment is not None:
                 ours = self.record if not rc else self.rc_record
+                # FIXME maybe return True False for rc only, users already
+                # have this object
                 return ours, target, alignment
 
 
@@ -63,7 +65,7 @@ class ReadMapper(object):
         with open(reads_fa) as f:
             self.db.load_fasta(f, rc=True)
         if refs_fa is not None:
-            with open(reads_fa) as f:
+            with open(refs_fa) as f:
                 self.db.load_fasta(f, rc=False)
 
     def index_bands(self, **kw):
@@ -114,12 +116,13 @@ class ReadMapper(object):
         indic.finish()
 
     def map_all_to_refs(self, min_band_score, **aligner_kw):
+        # FIXME it would be nice to only calculate bands for read v. ref not
+        # all pairwise of reads too
         assert self.bands_indexed, 'Bands must be indexed first'
         self.log('Mapping all reads against reference sequences')
-        reads = self.load_reads()
+        reads, refs = self.load_reads(), self.load_refs()
         indic = ProgressIndicator(num_total=len(reads))
         indic.start()
-        refs = self.load_refs()
         for read in reads:
             indic.progress()
             rec, target_rec, aln = read.map(refs,
@@ -144,8 +147,7 @@ class ReadMapper(object):
                 reference.
         """
         self.log('Loading SAM mappings from %s.' % sampath)
-        reads = self.load_reads()
-        reads_by_name = {read.record.attrs['name']: read for read in reads}
+        reads_by_name = {r.record.attrs['name']: r for r in self.load_reads()}
         samfile = pysam.AlignmentFile(sampath)
         for mapping in samfile.fetch():
             qname, rname = mapping.query_name, mapping.reference_name

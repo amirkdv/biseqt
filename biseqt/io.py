@@ -25,6 +25,8 @@ def read_fasta(f, alphabet, num=-1):
             an integer.
     """
     observed_names = []
+    cur_name = cur_seq = ''
+    count = cur_pos = 0
 
     def _parse(seq, name):
         if cur_seq and cur_name:
@@ -33,8 +35,6 @@ def read_fasta(f, alphabet, num=-1):
             observed_names.append(cur_name)
             return alphabet.parse(cur_seq, name=cur_name)
 
-    count = cur_pos = 0
-    cur_name = cur_seq = ''
     # NOTE `for raw_line in f` uses a read-ahead buffer which makes `f.tell()`
     # useless for remembering where a sequence begins.
     # cf. https://docs.python.org/2/library/stdtypes.html#file.next
