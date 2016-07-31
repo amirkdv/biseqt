@@ -29,7 +29,7 @@ if os.environ.get('READTHEDOCS', None) == 'True':
             return Mock()
 
     MOCK_MODULES = ['cffi', 'igraph', 'numpy', 'apsw', 'pysam',
-        'matplotlib', 'matplotlib.figure', 'matplotlib.backends.backend_agg',
+        'matplotlib', 'matplotlib.figure', 'matplotlib.backends', 'matplotlib.backends.backend_agg',
         'scipy', 'scipy.special', 'scipy.stats']
     sys.modules.update((mod_name, Mock()) for mod_name in MOCK_MODULES)
 
