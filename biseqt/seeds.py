@@ -484,3 +484,4 @@ class SeedIndex(object):
         _kw.update(kw)
         seeds = list(self.seeds(id0, id1))
         ax.scatter([s.pos0 for s in seeds], [s.pos1 for s in seeds], **_kw)
+        ax.set_aspect('equal')
