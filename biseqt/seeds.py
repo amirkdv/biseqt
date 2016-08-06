@@ -166,8 +166,8 @@ class SeedIndex(object):
         been called.
 
         Keyword Args:
-            max_kmer_score: The maximum score beyond which kmers are not
-                considered for seeds. High scoring words are more likely to
+            max_kmer_score (float): The maximum score beyond which kmers are
+                not considered for seeds. High scoring words are more likely to
                 belong to repetitive regions (cf. :func:`score_kmers
                 <biseqt.kmers.KmerIndex.score_kmers>`). Default is None in
                 which case all kmers are considered.
@@ -232,12 +232,6 @@ class SeedIndex(object):
 
         return seed_count, diags
 
-    # FIXME the sequence is:
-    # 1. index_seeds()
-    # 2. count_seeds_on_diagonals()
-    # 3. calculate_band_radii()
-    # 4. score_diagonals()
-    # simplify it!
     def count_seeds_on_diagonals(self):
         """Populates the :attr:`diagonals table <diagonals_table>` form the
         contents of the :attr:`seeds table <seeds_table>`. Radius and score
@@ -253,7 +247,7 @@ class SeedIndex(object):
 
     def calculate_band_radii(self, gap_prob=None, sensitivity=None):
         """Calculates the diagonal band radius for each entry in the
-        :attr:`diagonals table <diagonals_table>` using :func:`band_radius
+        :attr:`diagonals table <diagonals_table>` using :func:`band_radius()
         <biseqt.stochastics.band_radius>`.
 
         Keyword Args:
@@ -294,14 +288,23 @@ class SeedIndex(object):
         indic.finish()
         self.log('Done calculating band radii.')
 
-    def score_diagonals(self):
-        """Scores all diagonal bands containing seeds for each pair of sequences.
-        The radius for each diagonal band is assumed to be calculated by
-        :func:`calculate_band_radii`. The score for a band is the negative log
-        p-value of the observed number of seeds in it under the null hypothesis
-        that seeds occur randomly throughout the dynamic programming table.
+    def score_diagonals(self, max_kmer_score=None, gap_prob=None,
+                        sensitivity=None):
+        """Scores all diagonal bands containing seeds for each pair of
+        sequences. It is assumed that all kmers are already indexed and scored
+        (cf. :func:`biseqt.kmers.KmerIndex.score_kmers`). First, all seeds are
+        indexed via :func:`index_seeds`. Then band radii for each diagonal is
+        calculated by :func:`calculate_band_radii`. The score for a band is
+        then calculated as the z-score of the observed number of seeds in it
+        under the null hypothesis that seeds occur randomly throughout the
+        dynamic programming table.
 
-        Explicitly, for a fixed pair of sequences with lengths :math:`l_0, l_1`
+        Keyword Args:
+            max_kmer_score (float): Passed to :func:`index_seeds`.
+            gap_prob (float): Passed to :func:`calculate_band_radii`.
+            sensitivity (float): Passed to :func:`calculate_band_radii`.
+
+        For a fixed pair of sequences with lengths :math:`l_0, l_1`
         a diagonal band centered at :math:`d` and with radius :math:`r`, the
         dimensions of the dynamic programming table is :math:`[0, l_0] \\times
         [0, l_1]`. Under the null hypothesis, namely that the two sequences are
@@ -326,8 +329,9 @@ class SeedIndex(object):
             p = \\left(\\frac{1}{|\\Sigma|}\\right)^k
 
         To score a band, the normal approximation of the binomial is considered
-        (cf. :func:`binomial_to_normal <biseqt.stochastics.binomial_to_normal`)
-        and the z-score of the observed number of seeds is reported, namely:
+        (cf. :func:`binomial_to_normal()
+        <biseqt.stochastics.binomial_to_normal>`) and the z-score of the
+        observed number of seeds is reported, namely:
 
         .. math::
 
@@ -336,6 +340,9 @@ class SeedIndex(object):
         A high scoring diagonal band is less likely to be accidental and more
         likely to indicate an overlap between the two sequences.
         """
+        self.index_seeds(max_kmer_score=max_kmer_score)
+        self.count_seeds_on_diagonals()
+        self.calculate_band_radii(gap_prob=gap_prob, sensitivity=sensitivity)
         query = """
             UPDATE %s SET score = ? WHERE id0 = ? AND id1= ? AND diag = ?
         """ % self.diagonals_table
@@ -391,7 +398,7 @@ class SeedIndex(object):
                 A 2-tuple containing a diagonal range (as a tuple of inclusive
                 upper and lower bounds) with the highest score and its score.
                 If no acceptable band is found ``(None, None)`` is returned.
-        """  # FIXME docs and tests
+        """  # FIXME docs and tests about order of ids
         if not isinstance(id0s, list):
             id0s = [id0s]
         if not isinstance(id1s, list):
@@ -421,8 +428,6 @@ class SeedIndex(object):
                 if id0 in id0s:
                     return (id0, id1), (min_diag, max_diag), score
                 else:
-                    # FIXME is it fixed now?
-                    # return (id1, id0), (min_diag, max_diag), score
                     return (id1, id0), (-max_diag, -min_diag), score
 
         return (None, None), (None, None), None

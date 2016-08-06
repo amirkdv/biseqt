@@ -220,8 +220,8 @@ class KmerIndex(object):
         """Calculates the negative log p-value for the number of occurences of
         each kmer under the null hypothesis of a binomial distribution. The
         binomial distribution is approximated by a normal distribution for
-        numeric stability (cf. :func:`binomial_to_normal
-        <biseqt.stochastics.binomial_to_normal`) and then a Bonferroni
+        numeric stability (cf. :func:`binomial_to_normal()
+        <biseqt.stochastics.binomial_to_normal>`) and then a Bonferroni
         correction for the total number of kmers (cf.  :func:`num_kmers`) is
         applied to the raw negative log p-value given by
         :func:`normal_neg_log_pvalue

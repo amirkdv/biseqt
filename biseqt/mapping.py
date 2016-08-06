@@ -8,6 +8,8 @@ from biseqt.database import DB, Record
 from biseqt.kmers import KmerIndex
 from biseqt.seeds import SeedIndex
 
+# FIXME docs and tests
+
 
 class Read(object):
     def __init__(self, seed_index, record, rc_record):
@@ -69,14 +71,8 @@ class ReadMapper(object):
                 self.db.load_fasta(f, rc=False)
 
     def index_bands(self, **kw):
-        assert all(key in kw for key in ['max_kmer_score', 'sensitivity',
-                                         'gap_prob'])
         self.kmer_index.score_kmers()
-        self.seed_index.index_seeds(max_kmer_score=kw['max_kmer_score'])
-        self.seed_index.count_seeds_on_diagonals()
-        self.seed_index.calculate_band_radii(sensitivity=kw['sensitivity'],
-                                             gap_prob=kw['gap_prob'])
-        self.seed_index.score_diagonals()
+        self.seed_index.score_diagonals(**kw)
         self.bands_indexed = True
 
     def load_reads(self):

@@ -115,16 +115,12 @@ def sequencing_sample(request):
     seed_index = SeedIndex(kmer_index)
     seed_index.db.initialize()
     records = [db.insert(r) for r in reads]
-    seed_index.score_diagonals()
     return seq, reads, records, gap_prob, seed_index
 
 
 def test_score_diagonals(sequencing_sample):
     seq, reads, records, gap_prob, seed_index = sequencing_sample
-    seed_index.index_seeds()
-    seed_index.count_seeds_on_diagonals()
-    seed_index.calculate_band_radii(sensitivity=1-1e-4, gap_prob=gap_prob)
-    seed_index.score_diagonals()
+    seed_index.score_diagonals(sensitivity=1-1e-4, gap_prob=gap_prob)
     num_reads = len(reads)
     avg_read_len = sum(len(read) for read in reads)/num_reads
     for i in range(num_reads - 1):
