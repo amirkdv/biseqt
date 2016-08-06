@@ -255,22 +255,12 @@ def normal_neg_log_pvalue(mu, sd, x):
         return float('+inf')
 
 
-def band_radius(len0, len1, diag, gap_prob=None, sensitivity=None):
-    """Calculates the smallest band radius in the dynamic programming table
-    such that an overlap alignment, with the given gap probability, stays
-    entirely within the diagonal band centered at the given diagonal. This is
-    given by:
+def expected_alignment_length(len0, len1, diag, gap_prob=None):
+    """Calculates the expected length of an alignment for two sequences of
+    given lengths starting at the given diagonal:
 
     .. math::
-        r = 2\\sqrt{g(1-g)K}
-            \\mathrm{erf}^{-1}\\left(1-\\frac{2\\epsilon}{3}\\right)
-
-    where :math:`g` is the gap probability, :math:`1-\\epsilon` is the desired
-    sensitivity, and :math:`K` is the "expected" length of the alignment given
-    by:
-
-    .. math::
-        K = \\left(\\frac{2}{2 - g}\\right) L
+        \\left(\\frac{2}{2 - g}\\right) L
 
     where :math:`L` is the maximum possible length of the alignment:
 
@@ -301,6 +291,41 @@ def band_radius(len0, len1, diag, gap_prob=None, sensitivity=None):
         diag (int): Starting diagonal of alignments to consider.
         gap_prob (float): Probability of indels occuring at any position of an
             alignment.
+
+    Returns:
+        float: The expected length of an aligment.
+
+    """
+    assert gap_prob > 0 and gap_prob < 1
+
+    max_len = min(len0 - diag, len1) + min(diag, 0)
+    expected_len = (2. / (2 - gap_prob)) * max_len
+    assert expected_len >= 0
+    return expected_len
+
+
+def band_radius(len0, len1, diag, gap_prob=None, sensitivity=None):
+    """Calculates the smallest band radius in the dynamic programming table
+    such that an overlap alignment, with the given gap probability, stays
+    entirely within the diagonal band centered at the given diagonal. This is
+    given by:
+
+    .. math::
+        r = 2\\sqrt{g(1-g)K}
+            \\mathrm{erf}^{-1}\\left(1-\\frac{2\\epsilon}{3}\\right)
+
+    where :math:`g` is the gap probability, :math:`1-\\epsilon` is the desired
+    sensitivity, and :math:`K` is the expected length of the alignment (cf.
+    :func:`expected_alignment_length`).
+
+    Args:
+        len0 (int): Length of the first sequence (the "vertical" sequence in
+            the table).
+        len1 (int): Length of the second sequence (the "horizontal" sequence in
+            the table).
+        diag (int): Starting diagonal of alignments to consider.
+        gap_prob (float): Probability of indels occuring at any position of an
+            alignment.
         sensitivity (float): The probability that an alignment with given gap
             probability remains entirely within the band.
     Returns:
@@ -312,12 +337,9 @@ def band_radius(len0, len1, diag, gap_prob=None, sensitivity=None):
 
     epsilon = 1. - sensitivity
     adjusted_epsilon = epsilon * 2 / 3
-
-    max_len = min(len0 - diag, len1) + min(diag, 0)
-    expected_len = (2. / (2 - gap_prob)) * max_len
-    assert expected_len >= 0
+    e_len = expected_alignment_length(len0, len1, diag, gap_prob=gap_prob)
     radius = 2 * erfcinv(adjusted_epsilon) * sqrt(
-        gap_prob * (1 - gap_prob) * expected_len
+        gap_prob * (1 - gap_prob) * e_len
     )
     return max(1, int(radius))
 
@@ -342,10 +364,8 @@ def band_radius_calculator(gap_prob=None, sensitivity=None):
     C = 2 * erfcinv(adjusted_epsilon) * sqrt(gap_prob * (1 - gap_prob))
 
     def calculator(len0, len1, diag):
-        max_len = min(len0 - diag, len1) + min(diag, 0)
-        expected_len = (2. / (2 - gap_prob)) * max_len
-        assert expected_len >= 0
-        radius = C * sqrt(expected_len)
+        e_len = expected_alignment_length(len0, len1, diag, gap_prob=gap_prob)
+        radius = C * sqrt(e_len)
         return max(1, int(radius))
 
     return calculator

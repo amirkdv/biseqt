@@ -130,6 +130,21 @@ def test_mutation_process():
     A = Alphabet('ACGT')
     S = A.parse('ACT' * 100)
     gap_kw = {'go_prob': 0, 'ge_prob': 0}
+
+    def _check_subst_probs(subst_probs, msg):
+        assert len(subst_probs) == len(A)
+        for i in range(len(A)):
+            correct = [.7 if i == j else .1 for j in range(len(A))]
+            assert np.allclose(M.subst_probs[i], correct), msg
+    M = MutationProcess(A, subst_probs=.3)
+    _check_subst_probs(M.subst_probs,
+                       'Substitution probabilities given as a single float')
+    M = MutationProcess(A, subst_probs=[[.7 if i == j else .1
+                                         for j in range(len(A))]
+                                        for i in range(len(A))])
+    _check_subst_probs(M.subst_probs,
+                       'Substitution probabilities given as a matrix')
+
     T, tx = MutationProcess(A, subst_probs=0, **gap_kw).mutate(S)
     assert T == S and tx == 'MMM' * 100, \
         'all mutation probabilities can be set to zero'
