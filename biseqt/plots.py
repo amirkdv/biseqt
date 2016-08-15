@@ -193,7 +193,7 @@ def roc(X, Y, classifier='>', num_points=1000):
     return (xs, 1 - F_Y, 1 - F_X) if classifier == '>' else (xs, F_Y, F_X)
 
 
-def plot_roc(ax, X, Y, **kwargs):
+def plot_roc(ax, X, Y, classifier='>', **kwargs):
     """Plots the ROC curve of two sample sets, cf. :func:`roc`. All keyword
     arguments are passed as is to ``matplotlib.axes.Axes.scatter``.
 
@@ -201,13 +201,17 @@ def plot_roc(ax, X, Y, **kwargs):
         ax (matplotlib.axes.Axes): The matplotlib axes object to use.
         X (list): The "positive" sample set (horizontal axis).
         Y (list): The "negative" sample set (vertical axis).
+
+    Keyword Args:
+        classifier (str): see :func:`roc`.
     """
     ax.set_xlim([-.1, 1.1])
     ax.set_ylim([-.1, 1.1])
     ax.set_xlabel('False positive rate')
     ax.set_ylabel('True positive rate')
-    _, x, y = roc(X, Y)
+    _, x, y = roc(X, Y, classifier=classifier)
     _scatter(ax, x, y, **kwargs)
+    ax.plot(np.linspace(0, 1, num=2), np.linspace(0, 1, num=2), color='gray')
 
 
 def ppv(X, Y, classifier='>', num_points=1000):
