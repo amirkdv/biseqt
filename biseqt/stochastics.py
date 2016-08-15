@@ -260,9 +260,10 @@ def expected_alignment_length(len0, len1, diag, gap_prob=None):
     given lengths starting at the given diagonal:
 
     .. math::
-        \\left(\\frac{2}{2 - g}\\right) L
+        \\left(\\frac{1}{1 - g}\\right) L
 
-    where :math:`L` is the maximum possible length of the alignment:
+    where :math:`L` is the length of any ungapped overlap alignment starting
+    at the given diagonal:
 
     .. math::
         L = \\min(l_0 - d, l_1) + \\min(d, 0)
@@ -299,7 +300,7 @@ def expected_alignment_length(len0, len1, diag, gap_prob=None):
     assert gap_prob > 0 and gap_prob < 1
 
     max_len = min(len0 - diag, len1) + min(diag, 0)
-    expected_len = (2. / (2 - gap_prob)) * max_len
+    expected_len = (1. / (1 - gap_prob)) * max_len
     assert expected_len >= 0
     return expected_len
 
