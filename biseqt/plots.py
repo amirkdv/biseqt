@@ -116,7 +116,8 @@ def cdf(sample, num_points=1000, value_range=None):
     """
     density = scipy.stats.gaussian_kde(sample)
     if value_range is None:
-        value_range = min(sample), max(sample)
+        margin = .1 * (max(sample) - min(sample))
+        value_range = (min(sample) - margin, max(sample) + margin)
     xs = np.linspace(*value_range, num=num_points)
     cdf = scipy.integrate.cumtrapz(density(xs), xs)
     return xs, np.insert(cdf, [0], 0)
