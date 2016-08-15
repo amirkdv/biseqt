@@ -319,7 +319,7 @@ def npv(X, Y, classifier='>', num_points=1000):
     else:
         Nc_X, Nc_Y = (1 - F_X) * len(X), (1 - F_Y) * len(Y)
         with np.errstate(divide='ignore', invalid='ignore'):
-            return params, Nc_Y / (Nc_X + Nc_X)
+            return params, Nc_Y / (Nc_X + Nc_Y)
 
 
 def plot_ppv(ax, X, Y, classifier='>', num_points=1000, **kwargs):
