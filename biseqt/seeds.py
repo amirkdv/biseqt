@@ -432,6 +432,14 @@ class SeedIndex(object):
 
         return (None, None), (None, None), None
 
+    def num_seeds_in_band(self, id0, id1, diag_range=None):
+        q = """
+            SELECT SUM(count) FROM %s
+            WHERE id0 = ? AND id1 = ? AND diag BETWEEN ? AND ?
+        """ % self.diagonals_table
+        with self.db.connection() as conn:
+            return conn.cursor().execute(q, (id0, id1) + diag_range).next()[0]
+
     def seeds(self, id0, id1, diag_range=None):
         """Yields the :class:`seeds <Seed>` and their respective scores for a
         given pair of sequences and a given diagonal range (cf.
