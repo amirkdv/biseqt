@@ -45,14 +45,11 @@ class KmerIndex(object):
         self.db = db
         self.wordlen = wordlen
 
-        self.hits_table = 'kmers_%d_hits' % self.wordlen
-        self.scores_table = 'kmers_%d_scores' % self.wordlen
+        self.kmers_table = 'kmers_%d' % self.wordlen
         self.status_table = 'kmers_%d_indexed' % self.wordlen
 
         db.add_event_listener('db-initialized', self.initialize)
-        db.add_event_listener('sequence-inserted', self.index_kmers)
-        db.add_event_listener('sequences-loading',
-                              lambda *args: self.drop_sql_index())
+        db.add_event_listener('sequence-inserted', self.store_kmers)
 
         self._digits = '0123456789abcdefghijklmnopqrstuvwxyz'
         assert len(self.db.alphabet) <= len(self._digits), \
@@ -65,17 +62,9 @@ class KmerIndex(object):
 
     _init_script = """
     -- Kmer index initialization script
-        CREATE TABLE IF NOT EXISTS %s ( -- hits table
-          'kmer'  INTEGER,              -- The kmer in integer representation.
-          'seq'   INTEGER,              -- REFERENCES sequence(id)
-                                        -- but do not declare it to save time
-                                        -- on checking referential integrity.
-          'pos'   INTEGER               -- the position of kmer in sequence.
-        );
-        CREATE TABLE IF NOT EXISTS %s ( -- scores table
-          'kmer'  INTEGER PRIMARY KEY,  -- The kmer in integer representation.
-          'score' REAL DEFAULT NULL     -- The -log(p-value) for the number of
-                                        -- occurences of this kmer.
+        CREATE TABLE IF NOT EXISTS %s (
+          'seq'   INTEGER,
+          'kmers' VARCHAR
         );
         CREATE TABLE IF NOT EXISTS %s ( -- status table
           'id'     INTEGER REFERENCES sequence(id),
@@ -95,8 +84,7 @@ class KmerIndex(object):
         Args:
             conn (sqlite3.Connection): An open connection to operate on.
         """
-        conn.cursor().execute(self._init_script % (self.hits_table,
-                              self.scores_table, self.status_table))
+        conn.cursor().execute(self._init_script % (self.kmers_table, self.status_table))
 
     # put the initialization script in the docs
     initialize.__doc__ += '\n\n\t.. code-block:: sql\n\t%s\n' % \
@@ -152,7 +140,7 @@ class KmerIndex(object):
         as_str = ''.join(self._digits[c] for c in contents)
         return int(as_str, len(self.db.alphabet))
 
-    def scan_kmers(self, seq):
+    def as_kmer_sequence(self, seq):
         """A generator for kmer hit tuples of the form ``(kmer, pos)``. Kmers
         are represented in integer form (cf. :func:`kmer_as_int`).
 
@@ -162,11 +150,12 @@ class KmerIndex(object):
         Yields:
             tuple: a kmer and its starting position in ``seq``.
         """
+        kmers = []
         for pos in range(len(seq) - self.wordlen + 1):
-            kmer = self.kmer_as_int(seq.contents[pos: pos + self.wordlen])
-            yield (kmer, pos)
+            kmers.append(self.kmer_as_int(seq.contents[pos: pos + self.wordlen]))
+        return kmers
 
-    def index_kmers(self, conn, seq, rec):
+    def store_kmers(self, conn, seq, rec):
         """Event handler for "sequence-inserted" (cf. :attr:`database.events
         <biseqt.database.events>`). Indexes all kmers observed in the given
         sequence in :attr:`hits_table`.
@@ -185,9 +174,9 @@ class KmerIndex(object):
         if sum(1 for _ in cursor) > 0:
             return
 
-        cursor.executemany(
-            'INSERT INTO %s (kmer, seq, pos) VALUES (?,?,?)' % self.hits_table,
-            ((kmer, rec.id, pos) for kmer, pos in self.scan_kmers(seq))
+        cursor.execute(
+            'INSERT INTO %s (seq, kmers) VALUES (?, ?)' % self.kmers_table,
+            (rec.id, repr(self.as_kmer_sequence(seq)))
         )
         cursor.execute(
             'INSERT INTO %s (id, length) VALUES (?, ?)' % self.status_table,
@@ -264,7 +253,7 @@ class KmerIndex(object):
                 score = score_calculator(count)
                 insert_cursor.execute(update, (score, kmer))
 
-    def scanned_sequences(self):
+    def scanned_sequences(self, ids=None):
         """Yields the ids and lengths of all scanned sequences from the
         ``kmer_indexed_N`` table.
 
@@ -273,9 +262,13 @@ class KmerIndex(object):
                 The sequence integer identifier and the length of the sequence.
         """
         query = 'SELECT id, length FROM kmers_%d_indexed' % self.wordlen
+        if ids is not None:
+            query += ' WHERE id IN (%s)' % ', '.join('?' for _ in ids)
+        else:
+            ids = tuple()
         with self.db.connection() as conn:
             cursor = conn.cursor()
-            cursor.execute(query)
+            cursor.execute(query, ids)
             for _id, _len in cursor:
                 yield _id, _len
 
@@ -322,7 +315,7 @@ class KmerIndex(object):
                 SELECT DISTINCT kmer FROM %s
             """ % (self.scores_table, self.hits_table))
 
-    def kmers(self, max_score=None):
+    def kmers(self, ids):
         """Lazy-loads the observed kmers, their occurences, and their score.
 
         Keyword Args:
@@ -336,14 +329,10 @@ class KmerIndex(object):
                 each occurence is a tuple of sequence id and position, and
                 the score for the kmer.
         """
-        query = 'SELECT kmer, score FROM %s' % self.scores_table
-        args = ()
-        if max_score is not None:
-            query += ' WHERE score < ?'
-            args += (max_score,)
-
-        self.create_sql_index()
-        self._update_score_table()
         with self.db.connection() as conn:
-            for kmer, score in conn.cursor().execute(query, args):
-                yield kmer, self.hits(kmer), score
+            cursor = conn.cursor()
+            q = 'SELECT seq, kmers FROM %s WHERE seq IN (%s)' % \
+                (self.kmers_table, ', '.join('?' for _ in ids))
+            cursor.execute(q, ids)
+            for seqid, kmers in cursor:
+                yield seqid, eval(kmers)
