@@ -72,8 +72,9 @@ class SeedIndex(object):
         self.wordlen = self.kmer_index.wordlen
         self.db = self.kmer_index.db
         self.seeds_table = 'seeds_%d' % self.wordlen
+        self.kmers_table = 'kmers_%d' % self.wordlen
         self.diagonals_table = 'diagonals_%d' % self.wordlen
-        self._connection = None
+        self.connection(reset=True)
 
     _init_script = """
         CREATE TABLE %s (
@@ -125,7 +126,7 @@ class SeedIndex(object):
                           '\n\t'.join(_init_script.split('\n'))
 
     def connection(self, reset=False):
-        if self._connection is None or reset:
+        if reset or self._connection is None:
             self._connection = apsw.Connection(':memory:')
         return self._connection
 
@@ -192,7 +193,7 @@ class SeedIndex(object):
                         continue
                     yield id0, id1, pos0, pos1
 
-        with self.connection(reset=True) as conn:
+        with self.connection() as conn:
             self.initialize(conn)
             self.index_kmers(conn, ids)
             conn.cursor().executemany(

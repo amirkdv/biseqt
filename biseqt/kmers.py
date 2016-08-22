@@ -266,7 +266,7 @@ class KmerIndex(object):
             query += ' WHERE id IN (%s)' % ', '.join('?' for _ in ids)
         else:
             ids = tuple()
-        with self.db.connection() as conn:
+        with self.db.connection(reset=True) as conn: # FIXME parallelism hack
             cursor = conn.cursor()
             cursor.execute(query, ids)
             for _id, _len in cursor:
@@ -329,7 +329,7 @@ class KmerIndex(object):
                 each occurence is a tuple of sequence id and position, and
                 the score for the kmer.
         """
-        with self.db.connection() as conn:
+        with self.db.connection(reset=True) as conn: # FIXME parallel hack
             cursor = conn.cursor()
             q = 'SELECT seq, kmers FROM %s WHERE seq IN (%s)' % \
                 (self.kmers_table, ', '.join('?' for _ in ids))
