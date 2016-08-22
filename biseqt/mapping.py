@@ -26,7 +26,6 @@ class ReadMapper(object):
     def __init__(self, alphabet, wordlen, db_path):
         self.db = DB(db_path, alphabet)
         self.kmer_index = KmerIndex(self.db, wordlen)
-        self.seed_index = SeedIndex(self.kmer_index)
         self.bands_indexed = False
 
     def log(self, *args, **kwargs):
@@ -57,14 +56,17 @@ class ReadMapper(object):
                 recs_by_content_id.pop(record.content_id)
         return recs_by_content_id.values()
 
-    def map_to_band(self, read, targets, min_band_score=20):
+    def map_to_band(self, read, targets, min_band_score=20,
+        gap_prob=None, sensitivity=None):
         if not isinstance(targets, list):
             targets = [targets]
         assert all(isinstance(target, Record) for target in targets)
         targetids = [target.id for target in targets]
-        self.seed_index.score_diagonals(read.ids + targetids)
-        return self.seed_index.highest_scoring_band(read.ids, targetids,
-            min_band_score=min_band_score)
+        seed_index = SeedIndex(self.kmer_index)
+        seed_index.score_diagonals(read.ids + targetids, gap_prob=gap_prob,
+                                   sensitivity=sensitivity)
+        return seed_index.highest_scoring_band(read.ids, targetids,
+                                               min_band_score=min_band_score)
 
     def map_read(self, read, targets, min_band_score=20, **aligner_kw):
         default = None, None, None
@@ -76,7 +78,7 @@ class ReadMapper(object):
         target = [target for target in targets if target.id == match][0]
         rc = ours == read.rc_record.id
         seq = read.seq if not rc else read.rc_seq
-        target_seq = self.seed_index.db.load_from_record(target)
+        target_seq = self.db.load_from_record(target)
         aligner_kw.update(alnmode=BANDED_MODE, alntype=B_OVERLAP,
                           diag_range=band)
         with Aligner(seq, target_seq, **aligner_kw) as aligner:
