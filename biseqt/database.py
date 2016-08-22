@@ -308,7 +308,7 @@ class DB(object):
         """Wraps :class:`Logger.log`."""
         self._logger.log(*args, **kwargs)
 
-    def connection(self):
+    def connection(self, reset=False):
         """Provides a SQLite database connection that can be used as a context
         manager. The returned object is always the same connection object
         belonging to the :class:`DB` instance (otherwise in-memory connections
@@ -323,7 +323,7 @@ class DB(object):
             >>> with DB('example.db').connection() as conn:
             ...     conn.cursor().execute('SELECT * FROM sequence')
         """
-        if self._connection is None:
+        if reset or self._connection is None:
             self._connection = apsw.Connection(self.path)
         return self._connection
 
