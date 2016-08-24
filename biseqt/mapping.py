@@ -56,7 +56,7 @@ class ReadMapper(object):
                 recs_by_content_id.pop(record.content_id)
         return recs_by_content_id.values()
 
-    def map_to_band(self, read, targets, min_band_score=20,
+    def map_to_band(self, read, targets, min_band_score=None,
         gap_prob=None, sensitivity=None):
         if not isinstance(targets, list):
             targets = [targets]
