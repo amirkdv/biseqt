@@ -367,6 +367,9 @@ class DB(object):
         if 'name' not in rec_kw['attrs']:
             rec_kw['attrs']['name'] = seq.name
 
+        if 'length' not in rec_kw['attrs']:
+            rec_kw['attrs']['length'] = len(seq)
+
         rec = Record(id=None, **rec_kw)
         with self.connection() as conn:
             cursor = conn.cursor()
