@@ -279,6 +279,7 @@ class SeedIndex(object):
         """ % self.diagonals_table
 
         # each entry is a pair of (id, len) tuples
+        # FIXME use the sequence table and the lengths from attrs.
         scanned_seqs = list(self.kmer_index.scanned_sequences())
         seqpairs = combinations(scanned_seqs, 2)
 
@@ -345,6 +346,7 @@ class SeedIndex(object):
         A high scoring diagonal band is less likely to be accidental and more
         likely to indicate an overlap between the two sequences.
         """
+        #self.kmer_index.score_kmers()
         self.index_seeds(ids)
         self.count_seeds_on_diagonals()
         self.calculate_band_radii(gap_prob=gap_prob, sensitivity=sensitivity)
@@ -362,6 +364,7 @@ class SeedIndex(object):
             return z_score
 
         # each entry is a pair of (id, len) tuples
+        # FIXME use the sequence table and the attrs for lengths
         seqpairs = list(combinations(self.kmer_index.scanned_sequences(ids), 2))
         with self.connection() as conn:
             cursor = conn.cursor()

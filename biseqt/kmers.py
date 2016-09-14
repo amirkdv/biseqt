@@ -253,6 +253,7 @@ class KmerIndex(object):
                 score = score_calculator(count)
                 insert_cursor.execute(update, (score, kmer))
 
+    # FIXME is there a point to this anymore?
     def scanned_sequences(self, ids=None):
         """Yields the ids and lengths of all scanned sequences from the
         ``kmer_indexed_N`` table.
@@ -261,7 +262,7 @@ class KmerIndex(object):
             tuple:
                 The sequence integer identifier and the length of the sequence.
         """
-        query = 'SELECT id, length FROM kmers_%d_indexed' % self.wordlen
+        query = 'SELECT id, length FROM %s' % self.status_table
         if ids is not None:
             query += ' WHERE id IN (%s)' % ', '.join('?' for _ in ids)
         else:

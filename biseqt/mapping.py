@@ -18,6 +18,7 @@ class Read(object):
         assert rc_record.attrs.get('rc_of', None) == record.content_id
         self.record, self.rc_record = record, rc_record
         self.ids = [self.record.id, self.rc_record.id]
+        # FIXME this is never used, move it to a method
         self.seq = db.load_from_record(self.record)
         self.rc_seq = db.load_from_record(self.rc_record)
 
@@ -56,8 +57,11 @@ class ReadMapper(object):
                 recs_by_content_id.pop(record.content_id)
         return recs_by_content_id.values()
 
+    # FIXME why is read a Read and targets Records?
     def map_to_band(self, read, targets, min_band_score=None,
         gap_prob=None, sensitivity=None):
+        if isinstance(targets, Read):
+            targets = [targets.record]
         if not isinstance(targets, list):
             targets = [targets]
         assert all(isinstance(target, Record) for target in targets)
@@ -65,8 +69,9 @@ class ReadMapper(object):
         seed_index = SeedIndex(self.kmer_index)
         seed_index.score_diagonals(read.ids + targetids, gap_prob=gap_prob,
                                    sensitivity=sensitivity)
-        return seed_index.highest_scoring_band(read.ids, targetids,
-                                               min_band_score=min_band_score)
+        res = seed_index.highest_scoring_band(read.ids, targetids,
+                                              min_band_score=min_band_score)
+        return seed_index, res
 
     def map_read(self, read, targets, min_band_score=20, **aligner_kw):
         default = None, None, None
