@@ -31,6 +31,7 @@ loc:
 todo:
 	find biseqt Makefile *.mk *.py -type f -regex '.*\(\.py\|\.c\|\.h\|Makefile\|\.mk\)' | xargs grep -A2 -nP --color 'FIXME|TODO|BUG'
 
+# FIXME virtualenv env --system-site-packages
 env:
 	virtualenv $@
 

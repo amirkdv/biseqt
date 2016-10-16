@@ -130,6 +130,7 @@ class SeedIndex(object):
             self._connection = apsw.Connection(':memory:')
         return self._connection
 
+    # FIXME not needed
     def create_sql_index(self, table=None):
         """Creates a ``(id0, id1)`` SQL index over a given table.
 
@@ -346,7 +347,7 @@ class SeedIndex(object):
         A high scoring diagonal band is less likely to be accidental and more
         likely to indicate an overlap between the two sequences.
         """
-        #self.kmer_index.score_kmers()
+        #self.kmer_index.score_kmers() FIXME make this run pre-comparison by mapper
         self.index_seeds(ids)
         self.count_seeds_on_diagonals()
         self.calculate_band_radii(gap_prob=gap_prob, sensitivity=sensitivity)

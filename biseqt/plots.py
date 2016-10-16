@@ -120,6 +120,7 @@ def cdf(sample, num_points=1000, value_range=None):
         value_range = (min(sample) - margin, max(sample) + margin)
     xs = np.linspace(*value_range, num=num_points)
     cdf = scipy.integrate.cumtrapz(density(xs), xs)
+    # FIXME add a 1 in the end too
     return xs, np.insert(cdf, [0], 0)
 
 
@@ -262,7 +263,8 @@ def ppv(X, Y, classifier='>', num_points=1000):
 
     if classifier == '>':
         Nc_X, Nc_Y = (1 - F_X) * len(X), (1 - F_Y) * len(Y)
-        # don't complain about points where denominator is 0
+        # don't complain about points where denominator is 0; FIXME is this
+        # working properly?
         with np.errstate(divide='ignore', invalid='ignore'):
             return params, Nc_X / (Nc_X + Nc_Y)
     else:
