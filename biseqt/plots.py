@@ -42,7 +42,7 @@ def _scatter(ax, *args, **kwargs):
     ax.scatter(*args, **_kwargs)
 
 
-def figure():
+def figure(**kw):
     """Initializes new figure with the AGG backend_ and adds a canvas to it.
 
     .. _backend: http://matplotlib.org/faq/usage_faq.html#what-is-a-backend
@@ -50,7 +50,7 @@ def figure():
     Returns:
         matplotlib.figure.Figure
     """
-    fig = Figure()
+    fig = Figure(**kw)
     FigureCanvas(fig)  # add a canvas to figure
     return fig
 
