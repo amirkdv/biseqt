@@ -88,6 +88,7 @@ def plot_density(ax, sample, num_points=1000, **kwargs):
     density = scipy.stats.gaussian_kde(sample)
     xs = np.linspace(min(sample), max(sample), num=num_points)
     ax.plot(xs, density(xs), **kwargs)
+    ax.set_title('Probability Density')
 
 
 def cdf(sample, num_points=1000, value_range=None):
@@ -208,8 +209,8 @@ def plot_roc(ax, X, Y, classifier='>', **kwargs):
     """
     ax.set_xlim([-.1, 1.1])
     ax.set_ylim([-.1, 1.1])
-    ax.set_xlabel('False positive rate')
-    ax.set_ylabel('True positive rate')
+    ax.set_xlabel('False positive rate', fontsize=14)
+    ax.set_ylabel('True positive rate', fontsize=14)
     _, x, y = roc(X, Y, classifier=classifier)
     _scatter(ax, x, y, **kwargs)
     ax.plot(np.linspace(0, 1, num=2), np.linspace(0, 1, num=2), color='gray')
@@ -223,8 +224,9 @@ def ppv(X, Y, classifier='>', num_points=1000):
     .. math::
         \mathrm{PPV} = \\frac{t.p.}{t.p. + f.p.}
 
-    where :math:`t.p., f.p., t.n., f.n.` stand for true and false positives and
-    negatives. Depending on the classifier direction this translates to:
+    where :math:`t.p., f.p., t.n., f.n.` stand for the number of true/false
+    positives/negatives. Depending on the classifier direction this
+    translates to:
 
     .. math::
         \mathrm{PPV} = \\frac{(1-F_X)|X|}{(1-F_X)|X| + (1-F_Y)|Y|}
