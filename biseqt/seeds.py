@@ -437,6 +437,33 @@ class SeedIndex(object):
 
         return (None, None), (None, None), None
 
+    # FIXME badly named
+    def min_num_seeds_in_band(self, id0, id1, len0, len1, bin_len=20, diag_range=None):
+        seeds = list(self.seeds(id0, id1, diag_range))
+        # FIXME make seeds() return in order of anti; then filter out the first
+        # and last chunk of table (and NOT the seeds themselves).
+
+        diag = sum(diag_range) / 2
+        # [s, 2*s), [2*s, 3*s),  ... [(k-2)*s, (k-1)*s)
+        # anti/bin_len = 1, 2, ..., k - 2
+        max_anti = min(len0 - diag, len1) + min(diag, 0)
+        k = max_anti / bin_len
+        if k <= 2:
+            return 0, 0
+        counts = [0] * (k - 2)
+        for seed in seeds:
+            anti = min(seed.pos0, seed.pos1)
+            #print 'anti =', anti, 'diag =', seed.pos0 - seed.pos1, seed
+            k_ = anti / bin_len
+            if k_ >= 1 and k_ < k - 1:
+                counts[k_ - 1] += 1
+        #print id0, id1, len(seeds), counts
+        num_0 = sum(1. if c == 0 else 0 for c in counts)
+        return num_0, k - 2
+        mu, sd = binomial_to_normal(k - 2, .5)
+        return (num_0 - mu) / float(sd)
+        #return min(counts)
+
     def num_seeds_in_band(self, id0, id1, diag_range=None):
         q = """
             SELECT SUM(count) FROM %s

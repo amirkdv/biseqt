@@ -73,17 +73,21 @@ class ReadMapper(object):
                                               min_band_score=min_band_score)
         return seed_index, res
 
-    def map_read(self, read, targets, min_band_score=20, **aligner_kw):
+    def map_read(self, read, targets, min_band_score=None, gap_prob=None,
+                 sensitivity=None, **aligner_kw):
         default = None, None, None
-        (ours, match), band, score = self.map_to_band(read, targets,
-            min_band_score=min_band_score)
+        if not isinstance(targets, list):
+            targets = [targets]
+        seed_idx, ((ours, match), band, score) = self.map_to_band(read, targets,
+            min_band_score=min_band_score, gap_prob=gap_prob,
+            sensitivity=sensitivity)
         if ours is None:
             return default
-        assert ours in read.ids and match in targetids
         target = [target for target in targets if target.id == match][0]
         rc = ours == read.rc_record.id
         seq = read.seq if not rc else read.rc_seq
         target_seq = self.db.load_from_record(target)
+
         aligner_kw.update(alnmode=BANDED_MODE, alntype=B_OVERLAP,
                           diag_range=band)
         with Aligner(seq, target_seq, **aligner_kw) as aligner:
@@ -96,6 +100,7 @@ class ReadMapper(object):
                 # FIXME maybe return True False for rc only, users already
                 # have this object
                 return ours, target, alignment
+            return default
 
     def map_all_to_all(self, min_band_score, **aligner_kw):
         self.log('Mapping all reads against each other')
@@ -184,9 +189,10 @@ class ReadMapper(object):
                 continue
             # FIXME the second thing we yield is not reported by our own
             # map_all_to_all.
+            quality = min(map0.mapping_quality, map1.mapping_quality)
             if map0.is_reverse == map1.is_reverse:
-                yield r0.record, r1.record
-                yield r0.rc_record, r1.rc_record
+                yield r0.record, r1.record, overlap_len, quality
+                yield r0.rc_record, r1.rc_record, overlap_len, quality
             else:
-                yield r0.record, r1.rc_record
-                yield r0.rc_record, r1.record
+                yield r0.record, r1.rc_record, overlap_len, quality
+                yield r0.rc_record, r1.record, overlap_len, quality
