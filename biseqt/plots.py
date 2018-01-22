@@ -55,7 +55,7 @@ def figure(**kw):
     return fig
 
 
-def save(fig, path, **kwargs):
+def save(fig, path, produce_legend=True, **kwargs):
     """Saves figure to path. All keyword arguments are passed as is to
     ``matplotlib.figure.Figure.savefig``.
 
@@ -67,12 +67,12 @@ def save(fig, path, **kwargs):
     """
     for ax in fig.get_axes():
         ax.grid(True)
-        ax.legend()
+        if produce_legend:
+            ax.legend()
     fig.tight_layout()
     _kwargs = _default_savefig_kwargs
     _kwargs.update(kwargs)
     fig.savefig(path, **_kwargs)
-
 
 def plot_density(ax, sample, num_points=1000, **kwargs):
     """Plots the Guassian density estimate of the given sample. All un-named
