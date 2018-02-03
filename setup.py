@@ -12,8 +12,8 @@ install_requires = [
     'apsw',         # for speaking to SQLite databases
     'termcolor',    # for colored text output
     'cffi',         # for the C component
-    'python-igraph',# for bindings to igraph
-    'cairocffi',    # for igraph plots
+    'python-igraph',# for bindings to igraph # FIXME remove?
+    'cairocffi',    # for igraph plots # FIXME remove?
 ]
 
 # so we don't install anything on readthedocs.io

@@ -47,6 +47,7 @@ class KmerIndex(object):
 
         self.kmers_table = 'kmers_%d' % self.wordlen
         self.status_table = 'kmers_%d_indexed' % self.wordlen
+        self.hits_table = 'kmers_%d_hits' % self.wordlen
 
         db.add_event_listener('db-initialized', self.initialize)
         db.add_event_listener('sequence-inserted', self.store_kmers)
@@ -62,6 +63,13 @@ class KmerIndex(object):
 
     _init_script = """
     -- Kmer index initialization script
+        CREATE TABLE IF NOT EXISTS %s ( -- hits table
+          'kmer'  INTEGER,              -- The kmer in integer representation.
+          'seq'   INTEGER,              -- REFERENCES sequence(id)
+                                        -- but do not declare it to save time
+                                        -- on checking referential integrity.
+          'pos'   INTEGER               -- the position of kmer in sequence.
+        );
         CREATE TABLE IF NOT EXISTS %s (
           'seq'   INTEGER,
           'kmers' VARCHAR
@@ -84,7 +92,7 @@ class KmerIndex(object):
         Args:
             conn (sqlite3.Connection): An open connection to operate on.
         """
-        conn.cursor().execute(self._init_script % (self.kmers_table, self.status_table))
+        conn.cursor().execute(self._init_script % (self.hits_table, self.kmers_table, self.status_table))
 
     # put the initialization script in the docs
     initialize.__doc__ += '\n\n\t.. code-block:: sql\n\t%s\n' % \
@@ -316,7 +324,7 @@ class KmerIndex(object):
                 SELECT DISTINCT kmer FROM %s
             """ % (self.scores_table, self.hits_table))
 
-    def kmers(self, ids):
+    def kmers(self, ids=None):
         """Lazy-loads the observed kmers, their occurences, and their score.
 
         Keyword Args:
@@ -332,8 +340,9 @@ class KmerIndex(object):
         """
         with self.db.connection(reset=True) as conn: # FIXME parallel hack
             cursor = conn.cursor()
-            q = 'SELECT seq, kmers FROM %s WHERE seq IN (%s)' % \
-                (self.kmers_table, ', '.join('?' for _ in ids))
+            q = 'SELECT seq, kmers FROM %s' % self.kmers_table
+            if ids:
+                q += ' WHERE seq IN (%s)' % ', '.join('?' for _ in ids)
             cursor.execute(q, ids)
             for seqid, kmers in cursor:
                 yield seqid, eval(kmers)

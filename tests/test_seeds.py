@@ -86,7 +86,6 @@ _words = {
 _ids = product(_gaps.keys(), _substs.keys(), _words.keys())
 _params = product(_gaps.values(), _substs.values(), _words.values())
 
-
 @pytest.fixture(ids=[', '.join(x) for x in _ids], params=[x for x in _params])
 def sequencing_sample(request):
     """Creates a random sequence, generates reads, with parameterized mutation

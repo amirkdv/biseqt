@@ -148,9 +148,9 @@ class SeedIndex(object):
         """Wraps :func:`log <biseqt.database.DB.log>` of :attr:`db`."""
         self.db.log(*args, **kwargs)
 
-    def index_kmers(self, conn, ids):
+    def index_kmers(self, conn, ids=None):
         def _records():
-            for seq, kmers in self.kmer_index.kmers(ids):
+            for seq, kmers in self.kmer_index.kmers(ids=ids):
                 for pos, kmer in enumerate(kmers):
                     yield kmer, seq, pos
 
@@ -159,7 +159,7 @@ class SeedIndex(object):
         conn.cursor().executemany(q, _records())
         conn.cursor().execute('CREATE INDEX %s_kmer ON %s (kmer);' % (self.kmers_table, self.kmers_table))
 
-    def index_seeds(self, ids, max_kmer_score=None):
+    def index_seeds(self, ids=None, max_kmer_score=None):
         """Indexes all seeds and their diagonal positions. For each kmer with
         :math:`n` hits from *distinct* sequences :math:`n\\choose2` seeds
         are created. If a kmer occurs multiple times in a sequence seeds
