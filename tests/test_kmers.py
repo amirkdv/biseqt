@@ -42,14 +42,15 @@ def test_kmer_as_int(seq_db, wordlen):
         'for a fixed k the integer representation of kmers must be unique'
 
 
-@pytest.mark.parametrize('wordlen', [3, 6, 9],
-                         ids=['k = %d' % i for i in [3, 6, 9]])
+wordlens = [3, 10, 30]
+@pytest.mark.parametrize('wordlen', wordlens,
+                         ids=['k = %d' % i for i in wordlens])
 def test_scan_kmers(seq_db, wordlen):
     db = seq_db
     A = db.alphabet
     kmer_index = KmerIndex(db, wordlen)
     S = rand_seq(A, 50)
-    assert sum(1 for _ in kmer_index.scan_kmers(S)) == len(S) - wordlen + 1, \
+    assert len(kmer_index.as_kmer_sequence(S)) == len(S) - wordlen + 1, \
         'correct number of kmers should be scanned'
 
 
