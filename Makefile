@@ -9,9 +9,9 @@ $(LIBDIR)/pwlib.so: $(CFILES) $(LIBDIR)/pwlib.h
 	$(GCC) $(CFILES) -o $@
 
 clean:
-	@find biseqt -regextype posix-extended -regex '.*.(pyc|swp|egg|egg-info)' | \
+	@find biseqt tests -regextype posix-extended -regex '.*.(pyc|swp|swo|egg|egg-info)' | \
 		grep -v '^./.git' | tee /dev/stderr  | while read f; do rm -rf $$f; done
-	rm -rf build dist env
+	rm -rf build dist tests/__pycache__/*
 	rm -f core biseqt/pwlib/pwlib.so
 	rm -rf docs/biseqt*.rst docs/_build docs/doxygen
 
@@ -31,9 +31,8 @@ loc:
 todo:
 	find biseqt Makefile *.mk *.py -type f -regex '.*\(\.py\|\.c\|\.h\|Makefile\|\.mk\)' | xargs grep -A2 -nP --color 'FIXME|TODO|BUG'
 
-# FIXME virtualenv env --system-site-packages
 env:
-	virtualenv $@
+	virtualenv --system-site-packages $@
 
 DOCS_OUT = _build
 # in RTD docs/doxygen is built by docs/conf.py
