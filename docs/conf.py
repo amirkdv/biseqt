@@ -102,7 +102,7 @@ master_doc = 'index'
 
 # General information about the project.
 project = u'biseqt'
-copyright = u'2015, Amir Kadivar'
+copyright = u'2018, Amir Kadivar'
 author = u'Amir Kadivar'
 
 # The version info for the project you're documenting, acts as replacement for
