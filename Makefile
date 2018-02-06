@@ -15,13 +15,13 @@ clean:
 	rm -f core biseqt/pwlib/pwlib.so
 	rm -rf docs/biseqt*.rst docs/_build docs/doxygen
 
-FLAKE8_EXCLUDE = biseqt/overlap
+FLAKE8_EXCLUDE =
 flake8:
 	flake8 biseqt tests --exclude=$(FLAKE8_EXCLUDE)
 
 PYTEST_OPTS=--cov biseqt --capture=no --cov-report=term-missing --verbose
 COVERAGE_BADGE=coverage.svg  # relative to tests/
-tests: $(LIBDIR)/pwlib.so # flake8
+tests: $(LIBDIR)/pwlib.so flake8
 	rm -f tests/$(COVERAGE_BADGE)
 	cd tests && PYTHONPATH=.. py.test $(PYTEST_OPTS) && coverage-badge -o $(COVERAGE_BADGE)
 

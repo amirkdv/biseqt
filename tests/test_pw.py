@@ -95,6 +95,7 @@ def test_alignment_banded_memory():
         aligner.solve()
         assert aligner.traceback().transcript == 'S' * L
 
+
 noise_levels = [1e-2, 1e-1, 2e-1, 3e-1, 4e-1]
 
 

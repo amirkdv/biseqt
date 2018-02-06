@@ -45,6 +45,7 @@ def setup_ffi():
                             if not line.startswith('#define'))
         ffi.cdef(headers)
 
+
 setup_ffi()
 
 # alignment modes
