@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 import pytest
-from biseqt.sequence import Alphabet, Sequence, NamedSequence
+from biseqt.sequence import Alphabet, Sequence
 
 
 def test_alphabet():
@@ -78,27 +78,3 @@ def test_sequence_parsing():
     S = A.parse('001011')
     assert len(S) == 3 and S == Sequence(A, [0, 2, 3]), \
         'alphabets with > 1 long letters should be able to parse strings'
-
-
-def test_named_sequence():
-    A = Alphabet('ACGT')
-    S = A.parse('AACT', name='foo')
-    assert isinstance(S, NamedSequence)
-    assert eval(repr(S)) == S, 'repr() should provide eval-able string'
-    assert S.name == 'foo'
-    assert S.content_id == A.parse(str(S), name='bar').content_id, \
-        'content id should only depend on the contents of the sequence'
-    assert S == A.parse(str(S), name='foo'), \
-        'equality should work'
-
-
-def test_named_sequence_tranforms():
-    A = Alphabet('ACGT')
-    S = A.parse('AACT', name='foo')
-    assert S.reverse(name='bar') == A.parse('TCAA', name='bar'), \
-        'reverse of named sequences should be a named sequence'
-    complement = S.transform(mappings=['AT', 'CG'], name='bar')
-    assert complement == A.parse('TTGA', name='bar'), \
-        'result of transforming a named sequence is a named sequence'
-
-    assert 'transformed' in S.transform(mappings=['AT', 'CG']).name

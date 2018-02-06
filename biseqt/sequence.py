@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-from hashlib import sha1
 from itertools import chain
 
 
@@ -44,14 +43,12 @@ class Alphabet(object):
         """
         return tuple(self._idx_by_letter[l] for l in letters)
 
-    def parse(self, string, name=None):
+    def parse(self, string):
         """Given a string representation of a sequence returns a corresponding
         :class:`Sequence` object.
 
         Args:
             string (str): The raw sequence represented as a string.
-            name (str): The name for the sequence; default is None in which
-                case a :class:`NamedSequence` will be returned.
 
         Returns:
             Sequence
@@ -65,10 +62,7 @@ class Alphabet(object):
             contents.append(string[idx:idx + self._letlen])
             idx += self._letlen
         contents = self.letter_to_idx(contents)
-        if name is None:
-            return Sequence(self, contents)
-        else:
-            return NamedSequence(self, contents, name=name)
+        return Sequence(self, contents)
 
     def transform(self, seq, mappings={}):
         """Transforms the given sequence to another sequence in the same
@@ -180,18 +174,6 @@ class Sequence(object):
         """Wraps :func:`Alphabet.transform` for convenience."""
         return self.alphabet.transform(self, mappings=mappings)
 
-    def to_named(self, name):
-        """Names this sequence, i.e a :class:`NamedSequence` is returned with
-        identical raw contents.
-
-        Args:
-            name (str): The name to give the sequence.
-
-        Returns:
-            NamedSequence
-        """
-        return NamedSequence(self.alphabet, self.contents, name=name)
-
     def __str__(self):
         return ''.join(self.alphabet[idx] for idx in self.contents)
 
@@ -222,69 +204,3 @@ class Sequence(object):
         else:
             contents = self.alphabet.letter_to_idx(other)
         return Sequence(self.alphabet, self.contents + contents)
-
-
-class NamedSequence(Sequence):
-    """A named version of :class:`Sequence`. The main differences are the
-    additional attributes which allow for faster equality comparison for large
-    sequences.
-
-    Attributes:
-        name (str): The name of the sequence which need not be unique.
-        content_id (str): The SHA1 of the sequence contents in integer form.
-    """
-    def __init__(self, alphabet, contents=(), name='', content_id=None):
-        super(NamedSequence, self).__init__(alphabet, contents)
-        self.content_id = sha1(str(self)).hexdigest()
-        if content_id is not None:
-            assert self.content_id == content_id, \
-                'Provided content identifier does not match sequence contents'
-        self.name = name
-
-    def reverse(self, name=None):
-        """Wraps :func:`Sequence.reverse` to make sure a named sequence is
-        returned.
-
-        Args:
-            name(str): The name to give to the new sequence. Default is None
-                in which case ``(reversed)`` is preprended to the original
-                sequence name.
-
-        Returns:
-            NamedSequence
-        """
-        rev = super(NamedSequence, self).reverse()
-        if name is None:
-            name = '(reversed) ' + self.name
-        return NamedSequence(rev.alphabet, rev.contents, name=name)
-
-    def transform(self, mappings={}, name=None):
-        """Wraps :func:`Sequence.transform` to make sure a named sequence is
-        returned.
-
-        Args:
-            mappings (dict|list): As in :func:`Sequence.transform`.
-            name (str): The name to give to the new sequence. Default is None
-                in which case ``(transformed)`` is prependended to the
-                original sequence name.
-
-        Returns:
-            NamedSequence
-        """
-        seq = super(NamedSequence, self).transform(mappings=mappings)
-        if name is None:
-            name = '(transformed) ' + self.name
-        return NamedSequence(seq.alphabet, seq.contents, name=name)
-
-    def __eq__(self, other):
-        return isinstance(other, NamedSequence) and \
-               self.content_id == other.content_id and \
-               self.name == other.name
-
-    def __repr__(self):
-        return 'NamedSequence(%s, name=%s, contents=%s, content_id=%s)' % (
-            repr(self.alphabet),
-            repr(self.name),
-            repr(self.contents),
-            repr(self.content_id),
-        )

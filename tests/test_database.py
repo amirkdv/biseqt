@@ -1,11 +1,39 @@
 # -*- coding: utf-8 -*-
 import pytest
+from tempfile import NamedTemporaryFile
 from StringIO import StringIO
 from mock import patch, MagicMock
 
-from biseqt.io import write_fasta
-from biseqt.sequence import Alphabet
-from biseqt.database import DB, Record
+from biseqt.sequence import Alphabet, Sequence
+from biseqt.database import DB, NamedSequence, Record, read_fasta
+
+
+def test_named_sequence():
+    A = Alphabet('ACGT')
+    S = NamedSequence(A.parse('AACT'), name='foo')
+    assert isinstance(S, NamedSequence)
+    T = eval(repr(S), {'Alphabet': Alphabet, 'Sequence': Sequence,
+                       'NamedSequence': NamedSequence})
+    assert T == S, 'repr() should provide eval-able string'
+    assert S.name == 'foo'
+    T = NamedSequence(A.parse(str(S)), name='bar')
+    assert S.content_id == T.content_id, \
+        'content id should only depend on the contents of the sequence'
+    assert S == NamedSequence(A.parse(str(S)), name='foo'), \
+        'equality should work'
+
+
+def test_named_sequence_tranforms():
+    A = Alphabet('ACGT')
+    S = NamedSequence(A.parse('AACT'), name='foo')
+    T = NamedSequence(A.parse('TCAA'), name='bar')
+    assert S.reverse(name='bar') == T, \
+        'reverse of named sequences should be a named sequence'
+    T = NamedSequence(A.parse('TTGA'), name='bar')
+    assert S.transform(mappings=['AT', 'CG'], name='bar') == T, \
+        'result of transforming a named sequence is a named sequence'
+
+    assert 'transformed' in S.transform(mappings=['AT', 'CG']).name
 
 
 def test_database_basic():
@@ -23,7 +51,7 @@ def test_database_basic():
 
 def test_database_insert():
     A = Alphabet('ACGT')
-    S = A.parse('AACT', name='foo')
+    S = NamedSequence(A.parse('AACT'), name='foo')
     db = DB(':memory:', A)
     db.initialize()
     attrs = {'key': 'value'}
@@ -45,7 +73,7 @@ def test_database_insert():
             'content identifier is properly populated'
 
     # add a second sequence
-    T = A.parse('GCTG', name='bar')
+    T = NamedSequence(A.parse('GCTG'), name='bar')
     new_rec = db.insert(T)
     assert new_rec.id != rec.id, 'new ids are assigned to new sequences'
     with db.connection() as conn:
@@ -58,7 +86,7 @@ def test_database_insert():
 
 def test_database_overwrite():
     A = Alphabet('ACGT')
-    S = A.parse('AACT', name='foo')
+    S = NamedSequence(A.parse('AACT'), name='foo')
     db = DB(':memory:', A)
     db.initialize()
     db.insert(S, source_file='old_source.fa')
@@ -76,8 +104,8 @@ def test_database_overwrite():
 
 def test_database_find():
     A = Alphabet('ACGT')
-    S = A.parse('AACT', name='foo')
-    T = A.parse('GGCT', name='bar')
+    S = NamedSequence(A.parse('AACT'), name='foo')
+    T = NamedSequence(A.parse('GGCT'), name='bar')
     db = DB(':memory:', A)
     db.initialize()
     db.insert(S)
@@ -97,8 +125,8 @@ def test_database_find():
 
 def test_database_populate_fasta():
     A = Alphabet('ACGT')
-    S = A.parse('AACT', name='S')
-    T = A.parse('GCAT', name='T')
+    S = NamedSequence(A.parse('AACT'), name='S')
+    T = NamedSequence(A.parse('GCAT'), name='T')
 
     db = DB(':memory:', A)
     db.initialize()
@@ -106,7 +134,7 @@ def test_database_populate_fasta():
     fasta = StringIO()
     fasta.name = '/x.fasta'
 
-    write_fasta(fasta, [S, T])
+    fasta.write('\n'.join(x.to_fasta() for x in [S, T]))
     fasta.seek(0)
     inserted = db.load_fasta(fasta, rc=False)
     assert len(inserted) == 2
@@ -127,13 +155,13 @@ def test_database_populate_fasta():
 
 def test_database_populate_fasta_rc():
     A = Alphabet('ACGT')
-    S = A.parse('AACT', name='S')
-    T = A.parse('GCAT', name='T')
+    S = NamedSequence(A.parse('AACT'), name='S')
+    T = NamedSequence(A.parse('GCAT'), name='T')
 
     db = DB(':memory:', A)
     db.initialize()
     fasta = StringIO()
-    write_fasta(fasta, [S, T])
+    fasta.write('\n'.join(x.to_fasta() for x in [S, T]))
     fasta.seek(0)
     inserted = db.load_fasta(fasta, rc=True)
 
@@ -152,7 +180,7 @@ def test_database_populate_fasta_rc():
 
 def test_database_events():
     A = Alphabet('ACGT')
-    S = A.parse('AACT', name='S')
+    S = NamedSequence(A.parse('AACT'), name='S')
 
     # NOTE python 2 does not support non-local, non-global variables, put it in
     # the function object.
@@ -171,3 +199,61 @@ def test_database_events():
     db.insert(S)
     assert test_database_events.callback_called == 2, \
         'event callbacks for "insert-sequence" should be executed'
+
+
+def test_read_fasta_basic():
+    A = Alphabet('ACGT')
+    with NamedTemporaryFile() as f:
+        f.write('> name1\nAAA\n\nTTT')
+        f.flush()
+        f.seek(0)
+        recs = [r for r in read_fasta(f, A)]
+        assert len(recs) == 1, 'should work when reading from file'
+        assert recs[0][0] == NamedSequence(A.parse('AAATTT'), name='name1'), \
+            'should properly parse what is in the file'
+        assert isinstance(recs[0][0], NamedSequence), \
+            'should return NamedSequence objects'
+        assert recs[0][1] == 0, 'should report the right file positions'
+
+    # duplicate names not allowed
+    with pytest.raises(AssertionError):
+        [r for r in read_fasta(StringIO('>name\nAAA\n> name\nTTT\n'), A)]
+
+
+def test_read_fasta_advanced():
+    A = Alphabet('ACGT')
+    fasta = '>name0\nAAA\n\n>name1\nTTT\n\n>name2\nCCC\n>name3\nGGG'
+    f = StringIO(fasta)
+
+    recs = [r for r in read_fasta(f, A)]
+    assert len(recs) == fasta.count('>'), 'should work with StringIO'
+
+    # check loading from position
+    for idx in range(4):
+        assert recs[idx][1] == fasta.index('>name%d' % idx), \
+            'should report the right file positions'
+        f.seek(recs[idx][1])
+        assert next(read_fasta(f, A, num=1))[0] == recs[idx][0], \
+            'should be able to read single sequences from known positions'
+
+    f.seek(recs[1][1])
+    assert [r for r in read_fasta(f, A, num=2)] == recs[1:3], \
+        'should be able to read known number of sequences from known positions'
+
+
+def test_to_fasta():
+    A = Alphabet('ACGT')
+    S = NamedSequence(A.parse('AAA'), name='foo')
+    T = NamedSequence(A.parse('TTT'), name='bar')
+
+    with NamedTemporaryFile() as f:
+        f.write('\n'.join(x.to_fasta() for x in [S, T]))
+        f.seek(0)
+        assert [s for s, _ in read_fasta(f, A)] == [S, T], \
+            'read_fasta should be the opposite of to_fasta'
+
+    S = NamedSequence(A.parse('AAATTT'), name='foo')
+    f = StringIO('')
+    f.write(S.to_fasta(width=3))
+    f.seek(0)
+    assert sum(1 for _ in f) == 3, 'FASTA width should be modifiable'

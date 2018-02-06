@@ -160,11 +160,88 @@ import os
 import apsw
 import json
 import logging
+import textwrap
+from hashlib import sha1
 from collections import namedtuple
 
 from .util import Logger, ProgressIndicator
-from .io import read_fasta
-from .sequence import Alphabet, NamedSequence
+from .sequence import Alphabet, Sequence
+
+
+class NamedSequence(Sequence):
+    """A named version of :class:`biseqt.sequence.Sequence`. The main
+    differences are the additional attributes which allow for faster equality
+    comparison for large sequences.
+
+    Attributes:
+        name (str): The name of the sequence which need not be unique.
+        content_id (str): The SHA1 of the sequence contents in integer form.
+    """
+    def __init__(self, seq, name='', content_id=None):
+        super(NamedSequence, self).__init__(seq.alphabet, seq.contents)
+        self.content_id = sha1(str(self)).hexdigest()
+        if content_id is not None:
+            assert self.content_id == content_id, \
+                'Provided content identifier does not match sequence contents'
+        self.name = name
+
+    def reverse(self, name=None):
+        """Wraps :func:`Sequence.reverse` to make sure a named sequence is
+        returned.
+
+        Args:
+            name(str): The name to give to the new sequence. Default is None
+                in which case ``(reversed)`` is preprended to the original
+                sequence name.
+
+        Returns:
+            NamedSequence
+        """
+        rev = super(NamedSequence, self).reverse()
+        if name is None:
+            name = '(reversed) ' + self.name
+        return NamedSequence(rev, name=name)
+
+    def transform(self, mappings={}, name=None):
+        """Wraps :func:`Sequence.transform` to make sure a named sequence is
+        returned.
+
+        Args:
+            mappings (dict|list): As in :func:`Sequence.transform`.
+            name (str): The name to give to the new sequence. Default is None
+                in which case ``(transformed)`` is prependended to the
+                original sequence name.
+
+        Returns:
+            NamedSequence
+        """
+        seq = super(NamedSequence, self).transform(mappings=mappings)
+        if name is None:
+            name = '(transformed) ' + self.name
+        return NamedSequence(seq, name=name)
+
+    def __eq__(self, other):
+        return isinstance(other, NamedSequence) and \
+               self.content_id == other.content_id and \
+               self.name == other.name
+
+    def __repr__(self):
+        return 'NamedSequence(Sequence(alphabet=%s, contents=%s), name=%s)' % (
+            repr(self.alphabet),
+            repr(self.contents),
+            repr(self.name),
+        )
+
+    def to_fasta(self, width=80):
+        """Sequence in FASTA format.
+
+        Returns:
+            str
+        """
+        contents = str(self)
+        if width is not None:
+            contents = '\n'.join(textwrap.wrap(contents, width))
+        return '>%s\n%s\n' % (self.name, contents)
 
 
 class Record(namedtuple('Record', ['id', 'content_id', 'source_file',
@@ -176,8 +253,7 @@ class Record(namedtuple('Record', ['id', 'content_id', 'source_file',
     Attributes:
         id (int): The integer identifier assigned by the database.
         content_id (str): The content identifier of the sequence, cf.
-            :attr:`NamedSequence.content_id
-            <biseqt.sequence.NamedSequence.content_id>`
+            :attr:`NamedSequence.content_id`.
         source_file (str): The path to the file where this sequence was read.
         source_pos (int): The position in the file where this sequence begins.
         attrs (dict): A dict of arbitrary attributes (stored as JSON and
@@ -220,6 +296,62 @@ class Record(namedtuple('Record', ['id', 'content_id', 'source_file',
         * http://bugs.python.org/issue16669
 
     """
+
+
+def read_fasta(f, alphabet, num=-1):
+    """Lazy generator for content-identifiable :class:`NamedSequence` objects
+        loaded from a FASTA source.
+
+    Args:
+        f (file): A readable open file or equivalent (e.g.
+            :class:`StringIO.StringIO`). The file position is only modified by
+            reading; namely, sequences are read starting from the current
+            position of the file and after this function returns the file
+            position points at the last character of the last yielded sequence.
+        alphabet (sequence.Alphabet): The alphabet of the sequences.
+        num (int): The number of sequences to read from the file; default is -1
+            in which case all sequences are read until end-of-file is reached.
+
+    Yields:
+        tuple:
+            A :class:`NamedSequence` whose
+            :attr:`NamedSequence.name` is the FASTA
+            record name, and the starting position of the sequence in ``f`` as
+            an integer.
+    """
+    observed_names = []
+
+    def _parse(raw_seq, name):
+        if cur_seq and cur_name:
+            assert cur_name not in observed_names, \
+                'Duplicate sequence name: %s' % cur_name
+            observed_names.append(cur_name)
+            return NamedSequence(alphabet.parse(raw_seq), name=cur_name)
+
+    count = cur_pos = 0
+    cur_name = cur_seq = ''
+    # NOTE `for raw_line in f` uses a read-ahead buffer which makes `f.tell()`
+    # useless for remembering where a sequence begins.
+    # cf. https://docs.python.org/2/library/stdtypes.html#file.next
+    for raw_line in iter(f.readline, ''):
+        line = raw_line.strip()
+        if not line:
+            continue
+        if line[0] == '>':
+            seq = _parse(cur_seq, cur_name)
+            if seq:
+                yield seq, cur_pos
+                count += 1
+                if num > 0 and count >= num:
+                    return
+            cur_pos = f.tell() - len(raw_line)
+            cur_name = line[1:].strip()
+            cur_seq = ''
+        else:
+            cur_seq += line
+    seq = _parse(cur_seq, cur_name)
+    if seq:
+        yield seq, cur_pos
 
 
 class DB(object):

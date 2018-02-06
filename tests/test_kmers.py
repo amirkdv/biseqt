@@ -5,9 +5,8 @@ from StringIO import StringIO
 
 from biseqt.stochastics import rand_seq
 from biseqt.sequence import Alphabet
-from biseqt.database import DB
+from biseqt.database import DB, NamedSequence
 from biseqt.kmers import KmerIndex
-from biseqt.io import write_fasta
 
 
 def test_kmer_as_int_limitations():
@@ -66,7 +65,7 @@ def test_index_kmers(dna_kmer_index):
     A = db.alphabet
 
     db.initialize()
-    S = A.parse('ATGCAGGGC', name='foo')  # has no repeating kmers
+    S = NamedSequence(A.parse('ATGCAGGGC'), name='foo')  # no repeating kmers
     rec = db.insert(S)
     assert next(dna_kmer_index.scanned_sequences()) == (rec.id, len(S))
     assert dna_kmer_index.num_kmers() == len(S) - dna_kmer_index.wordlen + 1
@@ -82,7 +81,7 @@ def test_kmer_hits(dna_kmer_index):
     A = db.alphabet
 
     db.initialize()
-    S = A.parse('A' * 10, name='foo')
+    S = NamedSequence(A.parse('A' * 10), name='foo')
     db.insert(S)
 
     kmer_contents = S[:wordlen].contents
@@ -100,7 +99,7 @@ def test_score_kmers(dna_kmer_index):
     A = dna_kmer_index.db.alphabet
     dna_kmer_index.db.initialize()
 
-    dna_kmer_index.db.insert(A.parse('ATGCA', name='foo'))
+    dna_kmer_index.db.insert(NamedSequence(A.parse('ATGCA'), name='foo'))
 
     assert dna_kmer_index.kmers().next()[2] is None, \
         'score should be left None until explicitly calculated'
@@ -112,7 +111,7 @@ def test_score_kmers(dna_kmer_index):
     # test only_missing: set the score of all observed kmers to 1, then
     # add a new sequence to DB, score kmers for only missing and make sure
     # the old kmers' scores remains 1. The kmer 'AAA' is 0.
-    dna_kmer_index.db.insert(A.parse('AAA', name='bar'))
+    dna_kmer_index.db.insert(NamedSequence(A.parse('AAA'), name='bar'))
     dna_kmer_index.db.connection().cursor().execute("""
         UPDATE %s SET score = 1 WHERE kmer <> 0
     """ % dna_kmer_index.scores_table)
@@ -135,10 +134,10 @@ def test_bulk_index_kmers(dna_kmer_index):
     A = dna_kmer_index.db.alphabet
     dna_kmer_index.db.initialize()
 
-    S = A.parse('ATGCA', name='foo')
-    T = A.parse('ATGCC', name='bar')
+    S = NamedSequence(A.parse('ATGCA'), name='foo')
+    T = NamedSequence(A.parse('ATGCC'), name='bar')
     fasta = StringIO()
-    write_fasta(fasta, [S, T])
+    fasta.write('\n'.join(x.to_fasta() for x in [S, T]))
     fasta.seek(0)
 
     S_rec, T_rec = dna_kmer_index.db.load_fasta(fasta)
@@ -170,7 +169,7 @@ def test_inf_score_kmers(dna_kmer_index):
     A = dna_kmer_index.db.alphabet
     dna_kmer_index.db.initialize()
 
-    dna_kmer_index.db.insert(A.parse('A' * 1000, name='foo'))
+    dna_kmer_index.db.insert(NamedSequence(A.parse('A' * 1000), name='foo'))
     dna_kmer_index.score_kmers()
     _, _, score = dna_kmer_index.kmers().next()
     assert score == float('+inf')

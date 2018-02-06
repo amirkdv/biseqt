@@ -5,10 +5,9 @@ from StringIO import StringIO
 
 from biseqt.sequence import Alphabet
 from biseqt.stochastics import rand_seq, MutationProcess
-from biseqt.database import DB
+from biseqt.database import DB, NamedSequence
 from biseqt.kmers import KmerIndex
 from biseqt.seeds import SeedIndex
-from biseqt.io import write_fasta
 
 
 @pytest.fixture
@@ -26,8 +25,9 @@ def seed_index():
     seed_index.db.initialize()
 
     fasta = StringIO()
-    seqs = (rand_seq(A, seq_len).to_named('#%d' % i) for i in range(num_seqs))
-    write_fasta(fasta, seqs)
+    seqs = (NamedSequence(rand_seq(A, seq_len), name='#%d' % i)
+            for i in range(num_seqs))
+    fasta.write('\n'.join(x.to_fasta() for x in seqs))
     fasta.seek(0)
 
     db.load_fasta(fasta)
@@ -102,13 +102,13 @@ def sequencing_sample(request):
     A = Alphabet('ACGT')
     gap_prob, subst_prob, wordlen = request.param
     seq_len, read_len = 2000, 500
-    seq = rand_seq(A, seq_len).to_named('genome')
+    seq = NamedSequence(rand_seq(A, seq_len), name='genome')
     mutation_process = MutationProcess(A, subst_probs=subst_prob,
                                        go_prob=gap_prob, ge_prob=gap_prob)
     reads = []
     for i in range(0, seq_len - read_len, int(read_len/2)):
         read, _ = mutation_process.mutate(seq[i: i + read_len])
-        reads += [read.to_named('read#%d' % i)]
+        reads += [NamedSequence(read, name='read#%d' % i)]
 
     db = DB(':memory:', A)
     kmer_index = KmerIndex(db, wordlen)
