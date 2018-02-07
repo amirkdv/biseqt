@@ -167,3 +167,29 @@ class SeedIndex(KmerDBWrapper):
                 yield (i, j)
                 if self.self_comp and i != j:
                     yield (j, i)
+
+    def seed_count(self, d_center=None, d_radius=None):
+        """Counts the number of seeds either in the whole table or in the
+        specified diagonal band.
+
+        Args:
+            d_center (int|None):
+                If specified, the diagonal number of the center of band.
+            d_radius (int|None):
+                If specified, the radius of the band.
+
+        Returns:
+            int: Number of seeds found in the entire table or in the specified
+            diagonal band.
+        """
+        query = 'SELECT COUNT(*) FROM %s' % self.seeds_table
+        if d_center is not None and d_radius is not None:
+            query += ' WHERE d_ - %d BETWEEN %d AND %d ' % \
+                (self.d0, d_center - d_radius, d_center + d_radius)
+
+        with self.connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(query)
+            for row in cursor:
+                return row[0]
+            return 0

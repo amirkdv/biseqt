@@ -64,7 +64,6 @@ def test_band_radius():
         'band radius must increase proportional to square root of alignment'
 
     n = 50
-    d = 0
     sensitivity = .99
     gaps = [i * .05 for i in range(1, 7)]
     radii = np.array([band_radius(n, g, sensitivity) for g in gaps])
