@@ -233,12 +233,12 @@ class KmerIndex(KmerDBWrapper):
             CREATE TABLE IF NOT EXISTS kmers (
               'kmer'  INTEGER,      -- the kmer in integer representation.
               'seqid' INTEGER,      -- integer identifier of sequence
-                                    -- REFERENCES indexed(seqid), but don't
-                                    -- declare it to avoid integrity checks
+                                    -- REFERENCES kmer_indexed(seqid), but not
+                                    -- declared to avoid integrity checks
               'pos'   INTEGER       -- the position of kmer in sequence.
             );
 
-            CREATE TABLE IF NOT EXISTS indexed (
+            CREATE TABLE IF NOT EXISTS kmer_indexed (
               'seq'  VARCHAR,                           -- content id,
               'seqid' INTEGER PRIMARY KEY AUTOINCREMENT -- integer id.
             );
@@ -269,13 +269,13 @@ class KmerIndex(KmerDBWrapper):
 
         with self.connection() as conn:
             cursor = conn.cursor()
-            q = 'SELECT seqid FROM indexed WHERE seq = ?'
+            q = 'SELECT seqid FROM kmer_indexed WHERE seq = ?'
             for seqid in cursor.execute(q, (seq.content_id,)):
                 self.log('sequence %s already indexed, skipping.' %
                          seq.content_id[:8])
                 return seqid[0]
             q = """
-                INSERT INTO indexed (seq) VALUES (?);
+                INSERT INTO kmer_indexed (seq) VALUES (?);
                 SELECT last_insert_rowid();
             """
             seqid = cursor.execute(q, (seq.content_id,)).next()[0]
