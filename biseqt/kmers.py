@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# FIXME docs
 """
 .. wikisection:: overview
     :title: Kmers
@@ -19,331 +20,304 @@
     >>> kmer_index.kmers(max_score=10)  # exclude high scoring kmers
 """
 
-from math import log
 import struct
+import os
+import apsw
+import logging
 
-from .database import DB
-from .stochastics import binomial_to_normal, normal_neg_log_pvalue
+from .util import Logger
+from .sequence import Alphabet, Sequence
+
+# FIXME docs
+DIGITS = '0123456789abcdefghijklmnopqrstuvwxyz'
 
 
-class KmerIndex(object):
-    """An index for kmers, their occurences in a body of sequences, and
-    :class:`seeds <Seed>`.
+# FIXME update docs
+def kmer_as_int(contents, alphabet):
+    """Calculates the integer representation of a kmer by treating its
+    contents as digits in the base of alphabet length. For instance, in the
+    DNA alphabet ``AGA`` becomes :math:`(020)_4` which is 8. Note that
+    each kmer gives a unique integer as long as all kmers have the same
+    word length (which is the case here). There are two restrictions
+    imposed on the word length and alphabet size (enforced in
+    :func:`__init__`):
+
+    * The alphabet must be such that all letters can be represented by
+      single ASCII characters between ``[0-9a-z]`` (cf. int_). This
+      implies a maximum alphabet size of 36.
+    * The word length must be such that a single integer can store the
+      entire representation of a kmer. This requires that we have:
+
+      .. math::
+        k < \\frac{I-1}{2}
+
+      where :math:`k` is the word length and :math:`I` is the number of
+      bits allocated for an integer. For instance, on a 64-bit system the
+      maximum word length is 31.
+
+    .. _int: https://docs.python.org/2/library/functions.html#int
+
+    .. wikisection:: dev
+        :title: Integer Sizes
+
+        All kmers are stored as their integer representation to save on
+        space and processing time. Python_ is flexible with the maximum
+        size of integers, as integers automatically switch to longs, which
+        have "unlimited precision". SQLite_, too, is flexible but has a
+        maximum integer cap of 64-bits: integers take 2, 4, 6, or 8 bytes
+        per integer dependning on the size it needs.
+
+        The checks resulting from maximum integer size are performed in
+        :func:`KmerIndex.__init__ <KmerIndex>` which basically block kmers
+        taking more than 64-bit integers to represent.
+
+        .. _python: https://docs.python.org/2/library/stdtypes.html\
+                    #numeric-types-int-float-long-complex
+        .. _sqlite: https://www.sqlite.org/datatype3.html#section_2
+    """
+    assert isinstance(alphabet, Alphabet)
+    # TODO document dependence on word length
+    as_str = ''.join(DIGITS[c] for c in contents)
+    return int(as_str, len(alphabet))
+
+
+def as_kmer_seq(seq, wordlen):
+    """A generator for kmer hit tuples of the form ``(kmer, pos)``. Kmers
+    are represented in integer form (cf. :func:`kmer_as_int`).
+
+    Args:
+        seq (sequence.Sequence): The sequence to be scanned.
+
+    Returns:
+        list: of integers representing kmers.
+    """
+    assert isinstance(seq, Sequence)
+    kmers = []
+    for pos in range(len(seq) - wordlen + 1):
+        kmer = kmer_as_int(seq.contents[pos: pos + wordlen], seq.alphabet)
+        kmers.append(kmer)
+    return kmers
+
+
+class KmerDBWrapper(object):
+    """Generic wrapper for an SQLite database for Kmers.
 
     Attributes:
-        db (database.DB): The sequence :class:`database <biseqt.database.DB>`.
+        path (str): Path to the SQLite datbase (on disk or ':memory:' for RAM).
+        alphabet (Alphabet): The alphabet for sequences in the database.
         wordlen (int): Length of kmers of interest to this index.
-        hits_table (str): ``kmers_N_hits`` contains occurences of each kmer
-            where ``N`` is :attr:`wordlen`.
-        scores_table (str): ``kmers_N_scores`` contains scores of each kmer
-            (``N`` is :attr:`wordlen`).
-        status_table (str): ``kmers_N_indexed`` contains metadata about scanned
-            sequences (``N`` is :attr:`wordlen`).
+        init_script (str): SQL script to be executed in __init__
     """
-    def __init__(self, db, wordlen):
-        assert isinstance(db, DB)
-        self.db = db
+    def __init__(self, path=':memory:', alphabet=None, wordlen=None,
+                 log_level=logging.INFO, init_script=None):
+        assert isinstance(wordlen, int)
+        assert isinstance(alphabet, Alphabet)
+        assert len(alphabet) <= len(DIGITS), \
+            'Maximum alphabet size of %d exceeded' % len(DIGITS)
+        self.alphabet = alphabet
+        int_size = 8 * struct.calcsize('P')
+        assert wordlen < (int_size - 1)/2., \
+            'Maximum kmer length %d for %d-bit integers exceeded' % \
+            (wordlen, int_size)
         self.wordlen = wordlen
 
-        self.hits_table = 'kmers_%d_hits' % self.wordlen
-        self.scores_table = 'kmers_%d_scores' % self.wordlen
-        self.status_table = 'kmers_%d_indexed' % self.wordlen
+        if path == ':memory:':
+            self.path = path
+            relpath = path
+        else:
+            self.path = os.path.abspath(path)
+            assert os.path.exists(self.path) or \
+                os.access(os.path.dirname(self.path), os.W_OK), \
+                'Database %s is not writable' % self.path
+            relpath = os.path.relpath(self.path, os.getcwd())
 
-        db.add_event_listener('db-initialized', self.initialize)
-        db.add_event_listener('sequence-inserted', self.index_kmers)
-        db.add_event_listener('sequences-loading',
-                              lambda *args: self.drop_sql_index())
+        log_header = '%d-mer cache (%s)' % (self.wordlen, relpath)
+        self._logger = Logger(log_level=log_level, header=log_header)
+        self._connection = None
 
-        self._digits = '0123456789abcdefghijklmnopqrstuvwxyz'
-        assert len(self.db.alphabet) <= len(self._digits), \
-            'Maximum alphabet size of %d exceeded' % len(self._digits)
+        self.init_script = init_script
+        if self.init_script:
+            with self.connection() as conn:
+                conn.cursor().execute(self.init_script)
 
-        int_size = 8 * struct.calcsize('P')
-        assert self.wordlen < (int_size - 1)/2., \
-            'Maximum kmer length %d for %d-bit integers exceeded' % \
-            (self.wordlen, int_size)
+    # FIXME compare with old-tip and figure out what the deal with resetting is
+    def connection(self, reset=False):
+        """Provides a SQLite database connection that can be used as a context
+        manager. The returned object is always the same connection object
+        belonging to the :class:`KmerIndex` instance (otherwise in-memory
+        connections would reset the database contents upon every invocation).
 
-    _init_script = """
-    -- Kmer index initialization script
-        CREATE TABLE IF NOT EXISTS %s ( -- hits table
-          'kmer'  INTEGER,              -- The kmer in integer representation.
-          'seq'   INTEGER,              -- REFERENCES sequence(id)
-                                        -- but do not declare it to save time
-                                        -- on checking referential integrity.
-          'pos'   INTEGER               -- the position of kmer in sequence.
-        );
-        CREATE TABLE IF NOT EXISTS %s ( -- scores table
-          'kmer'  INTEGER PRIMARY KEY,  -- The kmer in integer representation.
-          'score' REAL DEFAULT NULL     -- The -log(p-value) for the number of
-                                        -- occurences of this kmer.
-        );
-        CREATE TABLE IF NOT EXISTS %s ( -- status table
-          'id'     INTEGER REFERENCES sequence(id),
-                                        -- the id of an indexed sequence
-          'length' INTEGER              -- the length of the sequence
-        );
-    """
-
-    def initialize(self, conn):
-        """Event handler for "db-initialized" (cf. :attr:`DB.events
-        <biseqt.database.DB.events>`). Creates three tables:
-
-        * :attr:`hits_table`,
-        * :attr:`scores_table`,
-        * :attr:`status_table`.
-
-        Args:
-            conn (sqlite3.Connection): An open connection to operate on.
+        Returns:
+            apsw.Connection
         """
-        conn.cursor().execute(self._init_script % (self.hits_table,
-                              self.scores_table, self.status_table))
-
-    # put the initialization script in the docs
-    initialize.__doc__ += '\n\n\t.. code-block:: sql\n\t%s\n' % \
-                          '\n\t'.join(_init_script.split('\n'))
+        if reset or self._connection is None:
+            self._connection = apsw.Connection(self.path)
+        return self._connection
 
     def log(self, *args, **kwargs):
-        """Wraps :func:`log <biseqt.database.DB.log>` of :attr:`db`."""
-        self.db.log(*args, **kwargs)
+        """Wraps :class:`Logger.log`."""
+        self._logger.log(*args, **kwargs)
 
-    def kmer_as_int(self, contents):
-        """Calculates the integer representation of a kmer by treating its
-        contents as digits in the base of alphabet length. For instance, in the
-        DNA alphabet ``AGA`` becomes :math:`(020)_4` which is 8. Note that
-        each kmer gives a unique integer as long as all kmers have the same
-        word length (which is the case here). There are two restrictions
-        imposed on the word length and alphabet size (enforced in
-        :func:`__init__`):
 
-        * The alphabet must be such that all letters can be represented by
-          single ASCII characters between ``[0-9a-z]`` (cf. int_). This
-          implies a maximum alphabet size of 36.
-        * The word length must be such that a single integer can store the
-          entire representation of a kmer. This requires that we have:
+class KmerCache(KmerDBWrapper):
+    """A cache backed by SQLite for represetnations of sequences as integer
+    sequences. Upon initialization the following SQL script is executed
 
-          .. math::
-            k < \\frac{I-1}{2}
+    .. code-block:: sql
+        CREATE TABLE seq_kmers (
+            'seq' VARCHAR,   -- content identifier of sequence
+            'kmres' VARCHAR, -- comma separated representation of sequence
+                             -- as integers encoding kmers.
+        );
 
-          where :math:`k` is the word length and :math:`I` is the number of
-          bits allocated for an integer. For instance, on a 64-bit system the
-          maximum word length is 31.
-
-        .. _int: https://docs.python.org/2/library/functions.html#int
-
-        .. wikisection:: dev
-            :title: Integer Sizes
-
-            All kmers are stored as their integer representation to save on
-            space and processing time. Python_ is flexible with the maximum
-            size of integers, as integers automatically switch to longs, which
-            have "unlimited precision". SQLite_, too, is flexible but has a
-            maximum integer cap of 64-bits: integers take 2, 4, 6, or 8 bytes
-            per integer dependning on the size it needs.
-
-            The checks resulting from maximum integer size are performed in
-            :func:`KmerIndex.__init__ <KmerIndex>` which basically block kmers
-            taking more than 64-bit integers to represent.
-
-            .. _python: https://docs.python.org/2/library/stdtypes.html\
-                        #numeric-types-int-float-long-complex
-            .. _sqlite: https://www.sqlite.org/datatype3.html#section_2
+    This implies that any time only one ``KmerCache`` can exist with the same
+    path. FIXME is parallel :memory: ok with this? We want kmercache on disk
+    anyway though!
+    """
+    def __init__(self, path=':memory:', alphabet=None, wordlen=None,
+                 log_level=logging.INFO):
+        init_script = """
+            CREATE TABLE IF NOT EXISTS seq_kmers (
+                'seq' VARCHAR,   -- content identifier of sequence
+                'kmers' VARCHAR  -- comma separated representation of sequence
+                                 -- as integers encoding kmers.
+            );
         """
-        # document dependence on word length
-        as_str = ''.join(self._digits[c] for c in contents)
-        return int(as_str, len(self.db.alphabet))
+        super(KmerCache, self).__init__(path=path, wordlen=wordlen,
+                                        alphabet=alphabet, log_level=log_level,
+                                        init_script=init_script)
 
-    def scan_kmers(self, seq):
-        """A generator for kmer hit tuples of the form ``(kmer, pos)``. Kmers
-        are represented in integer form (cf. :func:`kmer_as_int`).
+    def cached_seqs(self):
+        """Returns content identifiers for all cached sequences."""
+        with self.connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('SELECT seq from seq_kmers')
+            return [x[0] for x in cursor]
 
-        Args:
-            seq (sequence.Sequence): The sequence to be scanned.
+    def as_kmer_seq(self, seq):
+        with self.connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                'SELECT kmers from seq_kmers WHERE seq = ?',
+                (seq.content_id,)
+            )
+            for kmer_seq in cursor:
+                return eval(kmer_seq)
+        # cache miss, translate to kmer sequence
+        self.log('cache miss, finding kmers of %s.' % seq.content_id[:8])
+        kmer_seq = as_kmer_seq(seq, self.wordlen)
+        with self.connection() as conn:
+            conn.cursor().execute(
+                'INSERT INTO seq_kmers (seq, kmers) VALUES (?, ?)',
+                (seq.content_id, repr(kmer_seq))
+             )
+        return kmer_seq
 
-        Yields:
-            tuple: a kmer and its starting position in ``seq``.
+
+# TODO compare SQLite in-memory vs python in-memory and if there is a big
+# difference keep the python version from experiments
+class KmerIndex(KmerDBWrapper):
+    """An index backed by SQLite for occurences of kmers in a body of
+    sequences. Upon initialization the following script is executated:
+
+    :: code-block:: sql
+        CREATE TABLE kmers (
+          'kmer'  INTEGER,      -- The kmer in integer representation.
+          'seq'   INTEGER,      -- integer identifier of sequence
+          'pos'   INTEGER       -- the position of kmer in sequence.
+        );
+    """
+    def __init__(self, path=':memory:', alphabet=None, wordlen=None,
+                 log_level=logging.INFO):
+        init_script = """
+            CREATE TABLE IF NOT EXISTS kmers (
+              'kmer'  INTEGER,      -- the kmer in integer representation.
+              'seqid' INTEGER,      -- integer identifier of sequence
+                                    -- REFERENCES indexed(seqid), but don't
+                                    -- declare it to avoid integrity checks
+              'pos'   INTEGER       -- the position of kmer in sequence.
+            );
+
+            CREATE TABLE IF NOT EXISTS indexed (
+              'seq'  VARCHAR,                           -- content id,
+              'seqid' INTEGER PRIMARY KEY AUTOINCREMENT -- integer id.
+            );
         """
-        for pos in range(len(seq) - self.wordlen + 1):
-            kmer = self.kmer_as_int(seq.contents[pos: pos + self.wordlen])
-            yield (kmer, pos)
+        super(KmerIndex, self).__init__(path=path, wordlen=wordlen,
+                                        alphabet=alphabet, log_level=log_level,
+                                        init_script=init_script)
 
-    def index_kmers(self, conn, seq, rec):
+    # FIXME document the fact that indexing the same thing twice is not checked
+    # for
+    def index_kmers(self, seq, cache=None):
         """Event handler for "sequence-inserted" (cf. :attr:`database.events
         <biseqt.database.events>`). Indexes all kmers observed in the given
         sequence in :attr:`hits_table`.
 
         Args:
-            conn (sqlite3.Connection): SQLite connection to operate on.
             seq (sequence.Sequence): The sequence just inserted into the
                 database.
-            rec (database.Record): The record object corresponding to the
-                insertion of ``seq`` with the :attr:`id
-                <biseqt.database.Record.id>` field populated.
+            seqid (int): The integer identifier to use for sequence.
+            cache (KmerCache): optional kmer cache object to use.
         """
-        cursor = conn.cursor()
-        q = 'SELECT * FROM %s WHERE id = ?' % self.status_table
-        cursor.execute(q, (rec.id,))
-        if sum(1 for _ in cursor) > 0:
-            return
-
-        cursor.executemany(
-            'INSERT INTO %s (kmer, seq, pos) VALUES (?,?,?)' % self.hits_table,
-            ((kmer, rec.id, pos) for kmer, pos in self.scan_kmers(seq))
-        )
-        cursor.execute(
-            'INSERT INTO %s (id, length) VALUES (?, ?)' % self.status_table,
-            (rec.id, len(seq))
-        )
-
-    def total_length_indexed(self):
-        """The total number of letters, among all sequences, indexed so far.
-
-        Returns:
-            int
-        """
-        with self.db.connection() as conn:
-            cursor = conn.cursor()
-            q = 'SELECT SUM(length) FROM kmers_%d_indexed' % self.wordlen
-            cursor.execute(q)
-            return int(cursor.next()[0])
-
-    def num_kmers(self):
-        """The total number of kmers, among all sequences, observed so far.
-
-        Returns:
-            int
-        """
-        with self.db.connection() as conn:
-            q = 'SELECT COUNT(DISTINCT kmer) FROM %s' % self.hits_table
-            return conn.cursor().execute(q).next()[0]
-
-    def score_kmers(self, only_missing=True):
-        """Calculates the negative log p-value for the number of occurences of
-        each kmer under the null hypothesis of a binomial distribution. The
-        binomial distribution is approximated by a normal distribution for
-        numeric stability (cf. :func:`binomial_to_normal
-        <biseqt.stochastics.binomial_to_normal`) and then a Bonferroni
-        correction for the total number of kmers (cf.  :func:`num_kmers`) is
-        applied to the raw negative log p-value given by
-        :func:`normal_neg_log_pvalue
-        <biseqt.stochastics.normal_neg_log_pvalue`. The higher the score of a
-        kmer, the more likely it is that it belongs to a repeat structure.
-
-        Keyword Args:
-            only_missing (bool): Whether to re-score all kmers or only those
-                with a ``NULL`` score; default is True.
-        """
-        self.log('Scoring all observed kmers by repetition.')
-        N = self.num_kmers()
-        L = self.total_length_indexed()
-        kmer_probability = 1./(len(self.db.alphabet) ** self.wordlen)
-        mu, sd = binomial_to_normal(L, kmer_probability)
-
-        def score_calculator(num_occurrences):
-            # Bonferroni correction:
-            return - log(N) + normal_neg_log_pvalue(mu, sd, num_occurrences)
-
-        if only_missing:
-            self._update_score_table()
-            select = """
-                SELECT hits.kmer, COUNT(*) FROM %s AS hits
-                INNER JOIN %s AS scores ON scores.kmer = hits.kmer
-                WHERE score is NULL
-                GROUP BY hits.kmer
-            """ % (self.hits_table, self.scores_table)
+        if cache:
+            assert cache.wordlen == self.wordlen
+            assert cache.alphabet == self.alphabet
+            kmer_seq = cache.as_kmer_seq(seq)
         else:
-            select = """
-                SELECT kmer, COUNT(*) FROM %s GROUP BY kmer
-            """ % self.hits_table
-        update = 'UPDATE %s SET score = ? WHERE kmer = ?' % self.scores_table
+            kmer_seq = as_kmer_seq(seq, self.wordlen)
 
-        self.create_sql_index()
-        with self.db.connection() as conn:
-            select_cursor, insert_cursor = conn.cursor(), conn.cursor()
-            select_cursor.execute(select)
-            for kmer, count in select_cursor:
-                score = score_calculator(count)
-                insert_cursor.execute(update, (score, kmer))
-
-    def scanned_sequences(self):
-        """Yields the ids and lengths of all scanned sequences from the
-        ``kmer_indexed_N`` table.
-
-        Yields:
-            tuple:
-                The sequence integer identifier and the length of the sequence.
-        """
-        query = 'SELECT id, length FROM kmers_%d_indexed' % self.wordlen
-        with self.db.connection() as conn:
+        with self.connection() as conn:
             cursor = conn.cursor()
-            cursor.execute(query)
-            for _id, _len in cursor:
-                yield _id, _len
+            q = 'SELECT seqid FROM indexed WHERE seq = ?'
+            for seqid in cursor.execute(q, (seq.content_id,)):
+                self.log('sequence %s already indexed, skipping.' %
+                         seq.content_id[:8])
+                return seqid[0]
+            q = """
+                INSERT INTO indexed (seq) VALUES (?);
+                SELECT last_insert_rowid();
+            """
+            seqid = cursor.execute(q, (seq.content_id,)).next()[0]
+            cursor.executemany(
+                'INSERT INTO kmers (kmer, seqid, pos) VALUES (?,?,?)',
+                ((kmer, seqid, pos) for pos, kmer in enumerate(kmer_seq))
+            )
+            return seqid
 
     def create_sql_index(self):
-        """Creates SQL indices over :attr:`hits_table`."""
-        self.log('Creating SQL indices for %s.' % self.hits_table)
-        with self.db.connection() as conn:
+        """Creates SQL index over the ``kmer`` column of ``kmers`` table."""
+        self.log('Creating SQL index for kmers table.')
+        with self.connection() as conn:
             conn.cursor().execute("""
-                CREATE INDEX IF NOT EXISTS %s_kmer ON %s (kmer);
-                CREATE INDEX IF NOT EXISTS %s_seq ON %s (seq);
-            """ % ((self.hits_table,) * 4))
-
-    def drop_sql_index(self):
-        """Drops SQL indices created by :func:`create_sql_index`."""
-        self.log('Dropping SQL indices for %s.' % self.hits_table)
-        with self.db.connection() as conn:
-            conn.cursor().execute("""
-                DROP INDEX IF EXISTS %s_kmer;
-                DROP INDEX IF EXISTS %s_seq;
-            """ % ((self.hits_table,) * 2))
+                CREATE INDEX IF NOT EXISTS kmers_idx ON kmers (kmer);
+            """)
 
     def hits(self, kmer):
-        """Returns all hits of a given kmer, represented as an integer or a
-        tuple of sequence :attr:`contents <biseqt.sequence.Sequence.contents>`.
+        """Returns all hits of a given kmer in indexed sequences.
 
         Args:
-            kmer (int|tuple): The kmer of interest.
+            kmer (int): kmer of interest.
 
         Returns:
             list:
-                A list of 2-tuples containing sequence ids (as in the
-                ``sequence`` table) and positions.
+                A list of 2-tuples containing sequence ids (int) and positions.
         """
-        if isinstance(kmer, tuple):
-            kmer = self.kmer_as_int(kmer)
-        query = 'SELECT seq, pos FROM %s WHERE kmer = ?' % self.hits_table
-        with self.db.connection() as conn:
+        assert isinstance(kmer, int)
+        self.create_sql_index()  # FIXME do we need this?
+        query = 'SELECT seqid, pos FROM kmers WHERE kmer = ?'
+        with self.connection() as conn:
             return list(conn.cursor().execute(query, (kmer,)))
 
-    def _update_score_table(self):
-        with self.db.connection() as conn:
-            conn.cursor().execute("""
-                INSERT OR IGNORE INTO %s (kmer)
-                SELECT DISTINCT kmer FROM %s
-            """ % (self.scores_table, self.hits_table))
+    def kmers(self):
+        """All observed kmers.
 
-    def kmers(self, max_score=None):
-        """Lazy-loads the observed kmers, their occurences, and their score.
-
-        Keyword Args:
-            max_score (float): The maximum score (which is negative log
-                p-value) for kmers to be included (cf.  :func:`score_kmers`).
-                Default is None in which case all kmers are included.
-
-        Yields:
-            tuple:
-                The kmer in integer representation, a list of occurences where
-                each occurence is a tuple of sequence id and position, and
-                the score for the kmer.
+        Returns:
+            list: kmers in integer representation.
         """
-        query = 'SELECT kmer, score FROM %s' % self.scores_table
-        args = ()
-        if max_score is not None:
-            query += ' WHERE score < ?'
-            args += (max_score,)
-
-        self.create_sql_index()
-        self._update_score_table()
-        with self.db.connection() as conn:
-            for kmer, score in conn.cursor().execute(query, args):
-                yield kmer, self.hits(kmer), score
+        query = 'SELECT DISTINCT kmer FROM kmers'
+        self.create_sql_index()  # FIXME do we need this?
+        with self.connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(query)
+            return [x[0] for x in cursor]
