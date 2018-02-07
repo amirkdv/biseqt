@@ -155,7 +155,7 @@ class SeedIndex(KmerDBWrapper):
                 ``float`` in descending order of score.
         """
         query = 'SELECT d_, a FROM %s' % self.seeds_table
-        if d_center and d_radius:
+        if d_center is not None and d_radius is not None:
             query += ' WHERE d_ - %d BETWEEN %d AND %d ' % \
                 (self.d0, d_center - d_radius, d_center + d_radius)
 
