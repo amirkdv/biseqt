@@ -14,7 +14,7 @@ Diagonals are numbered as follows in the dynamic programming table::
 
 """
 import numpy as np
-from scipy.special import erfc, erfcinv
+from scipy.special import erfcinv
 
 
 # A band (i-r, i+r) is considered of interest if xs[i] >threshold. This
@@ -138,87 +138,3 @@ def overlap_band_radius(len0, len1, diag, gap_prob=None, sensitivity=None):
     """
     K = expected_overlap_len(len0, len1, diag, gap_prob=gap_prob),
     return band_radius(K, gap_prob=gap_prob, sensitivity=sensitivity)
-
-
-def normal_neg_log_pvalue(mu, sd, x):
-    """Gives the negative log p-value of an observation under the null
-    hypothesis of normal distribution; that is, given an observation :math:`x`
-    from a random variable:
-
-    .. math::
-        X \\sim \\mathcal{N}(\\mu, \\sigma)
-
-    this function calculates :math:`-\\log(\\Pr[X\\ge x])` which is:
-
-    .. math::
-        -\log\left(
-            \\frac{1}{2} \left[1 - \mathrm{erf} \left(
-                                \\frac{x-\mu}{\sigma\sqrt{2}} \\right)
-                         \\right]
-        \\right)
-
-    Args:
-        mu (float): Mean of normal distribution.
-        sd (float): Standard deviation of normal distribution.
-        x (float): Observation.
-
-    Returns:
-        float: A positive real number or infinity.
-
-    .. wikisection:: dev
-        :title: Log-probability numerics
-
-        It is customary to capture the statistical significance of an
-        observation :math:`x` corresponding to the random variable :math:`X`
-        by a *score*
-
-        .. math::
-            S=-\log(p)
-
-        where :math:`p` is the p-value of the observation, i.e :math:`\Pr(X\ge
-        x)` as per the null hypothesis.  If the null hypothesis is :math:`X
-        \sim \mathcal{N}(\mu, \sigma)` the score is given in closed form by:
-
-        .. math::
-            S = -\log\\left(
-                    \\frac{1}{2} \left[1 - \mathrm{erf} \left(
-                                    \\frac{x-\mu}{\sigma\sqrt{2}} \\right)
-                                 \\right]
-                \\right)
-              = -\log\left(1 - \mathrm{erf} \left(
-                                    \\frac{z}{\sqrt{2}} \\right)
-                \\right) + \log(2)
-
-        Calculating this formula numerically runs into precision issues because
-        the error function rapidly approaches its limit such that, for
-        instance, on 64-bit system, the :math:`\mathrm{erf}` term evaluates to
-        ``0.0`` for any z-score larger than 9 leading to infinities where the
-        real value of :math:`S` is a small number, e.g. at :math:`z=9` we
-        have :math:`S\simeq42.9`.
-
-        One improvement is to use the ``erfc`` `function <erfc_>`_
-        (or corresponding wrappers in ``numpy`` or ``scipy.special``) which
-        numerically finds :math:`1-\mathrm{erf}(\cdot)`. This postpones
-        infinities to z-scores larger than 39 at which point the score jumps
-        from roughly 726 to infinity.
-
-        These blowups can have serious consequences in any classification
-        algorithm where the cumulative distribution of a population is of
-        interest: with too many infinities in a set of scores, the cumulative
-        distribution of scores never gets close to 1 (e.g. if a fifth of scores
-        are infinities the maximum value of the cumulative distribution is
-        0.8). For this reason, it is advisable to use z-scores instead of
-        negative log of p-values for classification (note that the ROC curve
-        corresponding to the two is identical, cf. below).
-
-
-        .. _erfc: https://docs.python.org/2/library/math.html#math.erfc
-    """
-    z_score = (x - mu) / float(sd)
-    try:
-        return - np.log(erfc(z_score/np.sqrt(2)) / 2.)
-    except ValueError:
-        # NOTE This can only happen if the argument to log is
-        # 0, which theoretically means z_score >> 1. In practice, this happens
-        # for z scores exceeding 39.
-        return float('+inf')

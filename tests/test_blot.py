@@ -5,7 +5,6 @@ from biseqt.blot import find_peaks
 from biseqt.blot import band_radius
 from biseqt.blot import expected_overlap_len
 from biseqt.blot import overlap_band_radius
-from biseqt.blot import normal_neg_log_pvalue
 
 
 def test_find_peaks():
@@ -90,9 +89,3 @@ def test_overlap_band_radius():
     )
     assert np.all(np.diff(radii) <= 0), \
         'band radius should decrease with decreased sensitivity'
-
-
-def test_normal_neg_log_pvalue():
-    sds = range(1, 10)
-    neg_log_pvalue = [normal_neg_log_pvalue(0, sd, 0) for sd in sds]
-    assert np.allclose(neg_log_pvalue, [-np.log(0.5)] * len(sds))
