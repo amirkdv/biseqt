@@ -7,12 +7,12 @@ Submodules
 .. toctree::
 
    biseqt.sequence
-   biseqt.io
+   biseqt.database
    biseqt.stochastics
    biseqt.pw
-   biseqt.database
    biseqt.kmers
    biseqt.seeds
+   biseqt.blot
    biseqt.util
    biseqt.plots
 

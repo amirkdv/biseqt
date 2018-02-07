@@ -21,6 +21,21 @@ from scipy.special import erfc, erfcinv
 # function returns a maximal (disjoint) set of bands of interest (i.e if two
 # bands overlap they are reported as one bigger band).
 def find_peaks(xs, rs, threshold):
+    """Finds maximal (disjoint) peak regions in a sequence of real numbers.
+    Each value that is at least as large as the threshold constitutes the
+    center of a peak with radius according to its position. In the output all
+    overlapping peaks are merged into maximal peaks.
+
+    Args:
+        xs: the 1D data sequence of interest
+        rs: the radii for peaks defined at every point exceeding threshold,
+            could be a 1D sequence or a fixed number,
+        threshold: cutoff value to compare with ``xs`` values.
+
+    Returns:
+        list (tuple): A least of "peaks", each a tuple of ``(left, right)``
+        coordinates in ``xs``. Returned peaks are guaranteed to be disjoint.
+    """
     peaks = []
     cur_peak = None
     for idx, x in enumerate(xs):
@@ -75,6 +90,20 @@ def expected_overlap_len(len0, len1, diag, gap_prob):
 
 # band radius for edit path of length K
 def band_radius(expected_len, gap_prob, sensitivity):
+    """Calculates the smallest band radius in the dynamic programming table
+    such that an alignment of given expected length, with the given gap
+    probability, stays entirely within the diagonal band with probability given
+    as sensitivity.
+
+    Args:
+        expected_len (int):
+            minimum expected length of similar region.
+        gap_prob (float): Probability of indels occuring at any position.
+        sensitivity (float): The probability that an alignment with given gap
+            probability remains entirely within the band.
+    Returns:
+        int: The smallest band radius guaranteeing the required sensitivity.
+    """
     assert 0 < gap_prob < 1 and 0 < sensitivity < 1
     epsilon = 1. - sensitivity
     C = 2 * erfcinv(epsilon) * np.sqrt(gap_prob * (1 - gap_prob))
@@ -134,8 +163,7 @@ def normal_neg_log_pvalue(mu, sd, x):
         x (float): Observation.
 
     Returns:
-        float:
-            A positive real number or infinity.
+        float: A positive real number or infinity.
 
     .. wikisection:: dev
         :title: Log-probability numerics

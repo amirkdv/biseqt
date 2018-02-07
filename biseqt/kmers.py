@@ -164,6 +164,7 @@ class KmerCache(KmerDBWrapper):
     sequences. Upon initialization the following SQL script is executed
 
     .. code-block:: sql
+
         CREATE TABLE seq_kmers (
             'seq' VARCHAR,   -- content identifier of sequence
             'kmres' VARCHAR, -- comma separated representation of sequence
@@ -220,7 +221,8 @@ class KmerIndex(KmerDBWrapper):
     """An index backed by SQLite for occurences of kmers in a body of
     sequences. Upon initialization the following script is executated:
 
-    :: code-block:: sql
+    .. code-block:: sql
+
         CREATE TABLE kmers (
           'kmer'  INTEGER,      -- The kmer in integer representation.
           'seq'   INTEGER,      -- integer identifier of sequence
