@@ -23,8 +23,11 @@ def test_coordinate_change():
 @pytest.mark.parametrize('in_memory', [True, False],
                          ids=['in memory', 'on disk'])
 def test_index_integrity(in_memory):
-    def _tests(**kw):
-        A, wordlen = kw['alphabet'], kw['wordlen']
+    def _tests(path):
+        A = Alphabet('ACGT')
+        wordlen = 5
+        kw = {'alphabet': A, 'wordlen': wordlen, 'path': path}
+
         S = A.parse('ACGGGCTTTTCG')
         T = A.parse('GTTTCTGGGAGC')
         index1 = SeedIndex(S, T, **kw)
@@ -37,21 +40,21 @@ def test_index_integrity(in_memory):
         assert len(list(index3.seeds())) == len(S) - wordlen + 1,\
             'Multiple comparisons should work on the same datbase path'
 
-    A = Alphabet('ACGT')
-    wordlen = 5
     if in_memory:
-        _tests(alphabet=A, wordlen=wordlen, path=':memory:')
+        _tests(':memory:')
     else:
         with NamedTemporaryFile() as f:
-            _tests(alphabet=A, wordlen=wordlen, path=f.name)
+            _tests(f.name)
 
 
 @pytest.mark.parametrize('in_memory', [True, False],
                          ids=['in memory', 'on disk'])
 def test_index_seeds(in_memory):
-    def _tests(**kw):
-        print '***********', kw['path']
-        A, wordlen = kw['alphabet'], kw['wordlen']
+    def _tests(path):
+        A = Alphabet('ACGT')
+        wordlen = 5
+        kw = {'alphabet': A, 'wordlen': wordlen, 'path': path}
+
         S = A.parse('G' * wordlen)
         T = A.parse('TC' + str(S))
         assert list(SeedIndex(S, T, **kw).seeds()) == [(0, 2)] and \
@@ -70,20 +73,21 @@ def test_index_seeds(in_memory):
         assert len(list(SeedIndex(S, S, **kw).seeds())) == n_seeds, \
             'repeated self comparison should not get confused'
 
-    A = Alphabet('ACGT')
-    wordlen = 5
     if in_memory:
-        _tests(alphabet=A, wordlen=wordlen, path=':memory:')
+        _tests(':memory:')
     else:
         with NamedTemporaryFile() as f:
-            _tests(alphabet=A, wordlen=wordlen, path=f.name)
+            _tests(f.name)
 
 
 @pytest.mark.parametrize('in_memory', [True, False],
                          ids=['in memory', 'on disk'])
 def test_count_seeds_on_diagonals(in_memory):
-    def _tests(**kw):
-        A, wordlen = kw['alphabet'], kw['wordlen']
+    def _tests(path):
+        A = Alphabet('ACGT')
+        wordlen = 5
+        kw = {'alphabet': A, 'wordlen': wordlen, 'path': path}
+
         S = A.parse('G' * wordlen)
         T = A.parse('TT' + str(S))
         d0 = len(T) - 1
@@ -94,10 +98,8 @@ def test_count_seeds_on_diagonals(in_memory):
         assert list(count_by_d_) == expected_count, \
             'diagonal counts should be correctly calculated'
 
-    A = Alphabet('ACGT')
-    wordlen = 5
     if in_memory:
-        _tests(alphabet=A, wordlen=wordlen, path=':memory:')
+        _tests(':memory:')
     else:
         with NamedTemporaryFile() as f:
-            _tests(alphabet=A, wordlen=wordlen, path=f.name)
+            _tests(f.name)
