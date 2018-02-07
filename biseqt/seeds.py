@@ -23,8 +23,7 @@
     >>> seed_index.seeds(1, 2, diag_range)  # only yields seeds in best band
 """
 import numpy as np
-
-from itertools import combinations
+from itertools import chain, combinations
 
 from .kmers import KmerIndex, KmerDBWrapper
 from .util import logging
@@ -102,8 +101,6 @@ class SeedIndex(KmerDBWrapper):
                 );
             """ % self.table)
 
-        # FIXME the kmers table shouldn't be reused, use a separate file but
-        # stay in memory if we are :memory:
         kmer_index = KmerIndex(self.path, wordlen=self.wordlen,
                                alphabet=self.alphabet)
         kmer_index.index_kmers(self.S)
@@ -114,9 +111,15 @@ class SeedIndex(KmerDBWrapper):
             kmers = kmer_index.kmers()
             for kmer in kmers:
                 hits = kmer_index.hits(kmer)
-                for (id0, pos0), (id1, pos1) in combinations(hits, 2):
-                    if not self.self_comp and id0 == id1:
-                        continue
+                if self.self_comp:
+                    pairs = chain(combinations(hits, 2),
+                                  [(x, x) for x in hits])
+                else:
+                    pairs = (((id0, pos0), (id1, pos1))
+                             for (id0, pos0), (id1, pos1)
+                             in combinations(hits, 2)
+                             if id0 != id1)
+                for (id0, pos0), (id1, pos1) in pairs:
                     d, a = self.to_diagonal_coordinates(pos0, pos1)
                     yield d + self.d0, a
 
@@ -129,6 +132,8 @@ class SeedIndex(KmerDBWrapper):
             self.log('Creating SQL index for seeds table.')
             cursor.execute('CREATE INDEX %s_diagonal ON %s(d_);' %
                            (self.table, self.table))
+
+        kmer_index.drop_data()
 
     def seed_count_by_d_(self):
         q = 'SELECT COUNT(a), d_ FROM %s GROUP BY d_' % self.table

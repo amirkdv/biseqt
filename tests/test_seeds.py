@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+from tempfile import NamedTemporaryFile
 from biseqt.sequence import Alphabet
 from biseqt.seeds import SeedIndex
 
@@ -15,6 +16,24 @@ def test_coordinate_change():
             'conversion to diagonal coordinates should be correct'
         assert SeedIndex.to_ij_coordinates(d, a) == (i, j), \
             'conversion from diagonal coordinates should be correct'
+
+
+def test_index_integrity():
+    A = Alphabet('ACGT')
+    S = A.parse('ACGGGCTTTTCG')
+    T = A.parse('GTTTCTGGGAGC')
+    wordlen = 5
+    with NamedTemporaryFile() as f:
+        kw = {'alphabet': A, 'wordlen': wordlen, 'path': f.name}
+        index1 = SeedIndex(S, T, **kw)
+        index2 = SeedIndex(S, T, **kw)
+        assert set(index1.seeds()) == set(index2.seeds()), \
+            'Multiple index objects for the same pair should not conflict'
+
+        T = A.parse('GGG' + str(S))
+        index3 = SeedIndex(S, T, **kw)
+        assert len(list(index3.seeds())) == len(S) - wordlen + 1,\
+            'Multiple comparisons should be allowed on the same datbase path'
 
 
 def test_index_seeds():
@@ -34,7 +53,7 @@ def test_index_seeds():
     assert len(list(SeedIndex(S, T, **kw).seeds())) == n_seeds, \
         'correct number of seeds should be found'
     n_kmers = (len(S) - wordlen + 1)
-    n_seeds = n_kmers * n_kmers - n_kmers  # don't count (i, i) twice
+    n_seeds = n_kmers * n_kmers
     assert len(list(SeedIndex(S, S, **kw).seeds())) == n_seeds, \
         'self comparison should not get confused'
 

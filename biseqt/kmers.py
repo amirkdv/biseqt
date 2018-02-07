@@ -323,3 +323,10 @@ class KmerIndex(KmerDBWrapper):
             cursor = conn.cursor()
             cursor.execute(query)
             return [x[0] for x in cursor]
+
+    def drop_data(self):
+        with self.connection() as conn:
+            conn.cursor().execute("""
+                DROP TABLE kmers;
+                DROP TABLE kmer_indexed;
+            """)
