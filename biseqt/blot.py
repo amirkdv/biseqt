@@ -1,0 +1,242 @@
+# -*- coding: utf-8 -*-
+# TODO
+"""
+Diagonals are numbered as follows in the dynamic programming table::
+
+    0 -1 -2 -3 ... -len1
+    1
+    2
+    3
+    .
+    .
+    .
+    +len0
+
+"""
+import numpy as np
+from scipy.special import erfc, erfcinv
+
+
+# A band (i-r, i+r) is considered of interest if xs[i] >threshold. This
+# function returns a maximal (disjoint) set of bands of interest (i.e if two
+# bands overlap they are reported as one bigger band).
+def find_peaks(xs, rs, threshold):
+    peaks = []
+    cur_peak = None
+    for idx, x in enumerate(xs):
+        radius = rs[idx] if isinstance(rs, list) else rs
+        assert isinstance(radius, int)
+        if x < threshold:
+            continue
+        peak_l = max(0, idx - radius)
+        peak_r = min(len(xs) - 1, idx + radius)
+        if cur_peak is None:
+            cur_peak = (peak_l, peak_r)
+            continue
+        if peak_l < cur_peak[1]:  # overlaps with cur_peak
+            assert peak_r >= cur_peak[1]
+            cur_peak = (cur_peak[0], peak_r)
+        else:
+            peaks.append(cur_peak)
+            cur_peak = (peak_l, peak_r)
+    peaks.append(cur_peak)
+    return [(int(l), int(r)) for (l, r) in peaks]
+
+
+def expected_overlap_len(len0, len1, diag, gap_prob):
+    """Calculates the expected length of an overlap alignment given its starting
+    coordinates:
+
+    .. math::
+        K = \\left(\\frac{2}{2 - g}\\right) L
+
+    where :math:`L` is the maximum possible length of the alignment:
+
+    .. math::
+        L = \\min(l_0 - d, l_1) + \\min(d, 0)
+
+    with :math:`l_0,l_1` being the length of the sequences (i.e ``len0`` and
+    ``len1`` arguments) and :math:`d` the starting diagonal (i.e ``diag``
+    argument).
+
+    Args:
+        len0 (int): Length of the 1st sequence.
+        len1 (int): Length of the 2nd sequence.
+        diag (int): Starting diagonal of alignments to consider.
+        gap_prob (float): Probability of indels occuring at any position.
+    Returns:
+        int: Expected length of an overlap alignment.
+    """
+    max_len = min(len0 - diag, len1) + min(diag, 0)
+    expected_len = (2. / (2 - gap_prob)) * max_len
+    assert expected_len >= 0
+    return int(np.ceil(expected_len))
+
+
+# band radius for edit path of length K
+def band_radius(expected_len, gap_prob, sensitivity):
+    assert 0 < gap_prob < 1 and 0 < sensitivity < 1
+    epsilon = 1. - sensitivity
+    C = 2 * erfcinv(epsilon) * np.sqrt(gap_prob * (1 - gap_prob))
+    radius = C * np.sqrt(expected_len)
+    return max(1, int(np.ceil(radius)))
+
+
+def overlap_band_radius(len0, len1, diag, gap_prob=None, sensitivity=None):
+    """Calculates the smallest band radius in the dynamic programming table
+    such that an overlap alignment, with the given gap probability, stays
+    entirely within the diagonal band centered at the given diagonal. This is
+    given by:
+
+    .. math::
+        r = 2\\sqrt{g(1-g)K}
+            \\mathrm{erf}^{-1}\\left(1-\\epsilon\\right)
+
+    where :math:`g` is the gap probability, :math:`1-\\epsilon` is the desired
+    sensitivity, and :math:`K` is the "expected" length of the alignment given
+    by :func:`expected_overlap_len`.
+
+    Args:
+        len0 (int): Length of the 1st sequence.
+        len1 (int): Length of the 2nd sequence.
+        diag (int): Starting diagonal of alignments to consider.
+        gap_prob (float): Probability of indels occuring at any position.
+        sensitivity (float): The probability that an alignment with given gap
+            probability remains entirely within the band.
+    Returns:
+        int: The smallest band radius guaranteeing the required sensitivity.
+
+    """
+    K = expected_overlap_len(len0, len1, diag, gap_prob=gap_prob),
+    return band_radius(K, gap_prob=gap_prob, sensitivity=sensitivity)
+
+
+def normal_neg_log_pvalue(mu, sd, x):
+    """Gives the negative log p-value of an observation under the null
+    hypothesis of normal distribution; that is, given an observation :math:`x`
+    from a random variable:
+
+    .. math::
+        X \\sim \\mathcal{N}(\\mu, \\sigma)
+
+    this function calculates :math:`-\\log(\\Pr[X\\ge x])` which is:
+
+    .. math::
+        -\log\left(
+            \\frac{1}{2} \left[1 - \mathrm{erf} \left(
+                                \\frac{x-\mu}{\sigma\sqrt{2}} \\right)
+                         \\right]
+        \\right)
+
+    Args:
+        mu (float): Mean of normal distribution.
+        sd (float): Standard deviation of normal distribution.
+        x (float): Observation.
+
+    Returns:
+        float:
+            A positive real number or infinity.
+
+    .. wikisection:: dev
+        :title: Log-probability numerics
+
+        It is customary to capture the statistical significance of an
+        observation :math:`x` corresponding to the random variable :math:`X`
+        by a *score*
+
+        .. math::
+            S=-\log(p)
+
+        where :math:`p` is the p-value of the observation, i.e :math:`\Pr(X\ge
+        x)` as per the null hypothesis.  If the null hypothesis is :math:`X
+        \sim \mathcal{N}(\mu, \sigma)` the score is given in closed form by:
+
+        .. math::
+            S = -\log\\left(
+                    \\frac{1}{2} \left[1 - \mathrm{erf} \left(
+                                    \\frac{x-\mu}{\sigma\sqrt{2}} \\right)
+                                 \\right]
+                \\right)
+              = -\log\left(1 - \mathrm{erf} \left(
+                                    \\frac{z}{\sqrt{2}} \\right)
+                \\right) + \log(2)
+
+        Calculating this formula numerically runs into precision issues because
+        the error function rapidly approaches its limit such that, for
+        instance, on 64-bit system, the :math:`\mathrm{erf}` term evaluates to
+        ``0.0`` for any z-score larger than 9 leading to infinities where the
+        real value of :math:`S` is a small number, e.g. at :math:`z=9` we
+        have :math:`S\simeq42.9`.
+
+        One improvement is to use the ``erfc`` `function <erfc_>`_
+        (or corresponding wrappers in ``numpy`` or ``scipy.special``) which
+        numerically finds :math:`1-\mathrm{erf}(\cdot)`. This postpones
+        infinities to z-scores larger than 39 at which point the score jumps
+        from roughly 726 to infinity.
+
+        These blowups can have serious consequences in any classification
+        algorithm where the cumulative distribution of a population is of
+        interest: with too many infinities in a set of scores, the cumulative
+        distribution of scores never gets close to 1 (e.g. if a fifth of scores
+        are infinities the maximum value of the cumulative distribution is
+        0.8). For this reason, it is advisable to use z-scores instead of
+        negative log of p-values for classification (note that the ROC curve
+        corresponding to the two is identical, cf. below).
+
+
+        .. _erfc: https://docs.python.org/2/library/math.html#math.erfc
+
+    .. wikisection:: dev
+        :title: Effect of filtering on ROC curves
+        :parent: Log-probability numerics
+
+        Consider a binary classification problem with positive and negative
+        sets :math:`X,Y` with positive and negative labels respectively. For
+        simplicity let the positive classification rule be 'lower than
+        threshold'. Then the corresponding ROC is a paremetric curve in the
+        unit square given by:
+
+        .. math::
+            \left(F_Y(t), F_X(t)\\right) \in [0,1]\\times[0,1]
+
+        where :math:`F_X,F_Y` are the cumulative distributions of the positive
+        and negative samples and :math:`t` varies over the extended real line
+        :math:`\mathbb{R}\cup\{\pm\infty\}`.
+
+        Now let :math:`f:\mathbb{R}\\to\mathbb{R}` be a *monotonic*
+        real function and for any set :math:`A` let :math:`f(A)` denote the set
+        :math:`\{f(a); a\in A\}`. If we consider the sets :math:`f(X), f(Y)` as
+        the positive and negative samples, we have:
+
+        .. math::
+            F_{f(X)}(a) = \Pr[f(X)\le a] = \Pr[X\le f^{-1}(a)]
+                = F_X (f^{-1}(a))
+
+        if :math:`f` is increasing and
+
+        .. math::
+            F_{f(X)}(a) = \Pr[f(X)\le a] = 1 - \Pr[X\le f^{-1}(a)]
+                = 1 - F_X (f^{-1}(a))
+
+        otherwise with similar results holding for :math:`Y`.
+        It follows that although the cumulative distributions :math:`F_{f(X)},
+        F_{f(Y)}` differ from the original :math:`F_X,F_Y`:
+
+        * If :math:`f` is increasing, the ROC curve is merely reparameterized
+          and thus remains unchanged.
+        * If :math:`f` is decreasing, the ROC curve is merely mirrored across
+          the main diagonal.
+
+        As a special case, this implies that the ROC of a collection of
+        positive and negative z-scores is identical to the ROC of the
+        corresponding negative-log p-values and the mirror image of the
+        ROC of the corresponding p-values.
+    """
+    z_score = (x - mu) / float(sd)
+    try:
+        return - np.log(erfc(z_score/np.sqrt(2)) / 2.)
+    except ValueError:
+        # NOTE This can only happen if the argument to log is
+        # 0, which theoretically means z_score >> 1. In practice, this happens
+        # for z scores exceeding 39.
+        return float('+inf')

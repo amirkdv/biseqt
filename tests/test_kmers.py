@@ -67,7 +67,6 @@ def test_index_kmers(dna_kmer_index):
     assert total_hits == len(S) - dna_kmer_index.wordlen + 1, \
         'correct number of hits should be oberved'
 
-    print dna_kmer_index.index_kmers(S)
     assert seqid == dna_kmer_index.index_kmers(S), \
         'same sequence should not be indexed twice'
     T = rand_seq(dna_kmer_index.alphabet, 10)

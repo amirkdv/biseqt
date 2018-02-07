@@ -2,14 +2,9 @@
 import pytest
 import mock
 from itertools import combinations
-from scipy.stats import norm, binom
-from math import log
 
 from biseqt.sequence import Alphabet
 from biseqt.stochastics import rand_seq, MutationProcess, rand_read
-from biseqt.stochastics import binomial_to_normal, normal_neg_log_pvalue
-from biseqt.stochastics import band_radius as _band_radius
-from biseqt.stochastics import band_radius_calculator
 from biseqt.stochastics import np  # to mock
 
 
@@ -73,57 +68,6 @@ def test_lossy_reads():
     read, pos, tx = next(M.noisy_read(S, len_mean=50, num=1))
     assert tx.count('S') > 0 and tx.count('I') + tx.count('D') > 0, \
         'Random mutations should be performed to get lossy reads'
-
-
-def test_binomial_to_normal():
-    n, p = 10000, 0.1
-    mu, sd = binomial_to_normal(n, p)
-    binomial = [binom.cdf(x, n, p) for x in range(0, 10000, 500)]
-    normal = [norm(mu, sd).cdf(x) for x in range(0, 10000, 500)]
-    assert np.allclose(binomial, normal, atol=0.01)
-
-
-def test_normal_neg_log_pvalue():
-    sds = range(1, 10)
-    neg_log_pvalue = [normal_neg_log_pvalue(0, sd, 0) for sd in sds]
-    assert np.allclose(neg_log_pvalue, [-log(0.5)] * len(sds))
-
-
-@pytest.mark.parametrize('band_radius',
-                         [_band_radius,
-                          lambda *a, **kw: band_radius_calculator(**kw)(*a)],
-                         ids=['band_radius()', 'band_radius_calculator()'])
-def test_band_radius(band_radius):
-    len0 = len1 = 10
-    diag = 0
-    assert band_radius(len0, len1, diag, gap_prob=1e-10, sensitivity=0.9) \
-        == 1, 'band radius can be shrunk down to 1'
-
-    args = (len0, len1, diag)
-
-    for sensitivity in [i/10. for i in range(1, 10)]:
-        gap_probs = [1e-10, 1e-8, 1e-4, 1e-2, 1e-1]
-        radii = [band_radius(*args, gap_prob=g, sensitivity=sensitivity)
-                 for g in gap_probs]
-        assert all(x <= y for x, y in zip(radii, radii[1:])), \
-            'band radius must be increasing with increasing gap probability'
-
-    for gap_prob in [i/100. for i in range(1, 10)]:
-        sensitivities = [.5 + .05 * i for i in range(10)]
-        radii = [band_radius(*args, gap_prob=gap_prob, sensitivity=s)
-                 for s in sensitivities]
-        assert all(x <= y for x, y in zip(radii, radii[1:])), \
-            'band radius must be increasing with increasing sensitivity'
-
-    kw = {'gap_prob': 0.2, 'sensitivity': 0.9}
-    radii = [band_radius(len0, len1, d, **kw) for d in range(-len1, 0)]
-    assert all(x <= y for x, y in zip(radii, radii[1:])), \
-        'band radius must be increasing with increasing diag if diag < 0'
-
-    kw = {'gap_prob': 0.2, 'sensitivity': 0.9}
-    radii = [band_radius(len0, len1, d, **kw) for d in range(0, len0)]
-    assert all(x >= y for x, y in zip(radii, radii[1:])), \
-        'band radius must be decreasing with increasing diag if diag > 0'
 
 
 def test_mutation_process():
