@@ -26,23 +26,20 @@ import numpy as np
 from itertools import chain, combinations
 
 from .kmers import KmerIndex, KmerDBWrapper
-from .util import logging
 
 
 class SeedIndex(KmerDBWrapper):
-    """An index for seeds. Usage involves indexing seeds via
-    :func:`index_seeds` and then FIXME
+    """An index for seeds in diagonal coordinates.
 
     Attributes:
-        kmer_index (KmerIndex): The kmer index to operate on.
+        S (biseqt.sequence.Sequence): The 1st sequence.
+        T (biseqt.sequence.Sequence): The 2nd sequence.
     """
-    def __init__(self, S, T, path=':memory:', alphabet=None,
-                 wordlen=None, log_level=logging.INFO):
-        super(SeedIndex, self).__init__(path=path, wordlen=wordlen,
-                                        alphabet=alphabet, log_level=log_level)
+    def __init__(self, S, T, **kw):
+        name = '%s_%s' % (S.content_id[:8], T.content_id[:8])
+        super(SeedIndex, self).__init__(name=name, **kw)
         self.self_comp = S == T
         self.S, self.T = S, T
-        self.table = 'seeds_%s_%s' % (S.content_id[:8], T.content_id[:8])
         self.d0 = len(self.T) - 1
         if self._table_exists():
             self.log('seeds for %s and %s already indexed, skipping' %
@@ -51,6 +48,10 @@ class SeedIndex(KmerDBWrapper):
             self.log('Indexing seeds for %s and %s.' %
                      (S.content_id[:8], T.content_id[:8]))
             self._index_seeds()
+
+    @property
+    def seeds_table(self):
+        return 'seeds_' + self.name
 
     @classmethod
     def to_diagonal_coordinates(cls, i, j):
@@ -69,7 +70,7 @@ class SeedIndex(KmerDBWrapper):
             q = """
                 SELECT name FROM sqlite_master
                 WHERE type='table' AND name='%s';
-            """ % self.table
+            """ % self.seeds_table
             cursor = conn.cursor()
             cursor.execute(q)
             for name in cursor:
@@ -86,10 +87,9 @@ class SeedIndex(KmerDBWrapper):
                   'd_' INTEGER,     -- zero-adjusted diagonal position
                   'a'  INTEGER      -- antidiagonal position
                 );
-            """ % self.table)
+            """ % self.seeds_table)
 
-        kmer_index_name = '%dmers_%s_%s' % \
-            (self.wordlen, self.S.content_id[:8], self.T.content_id[:8])
+        kmer_index_name = '%dmers_%s' % (self.wordlen, self.name)
         kmer_index = KmerIndex(path=self.path, name=kmer_index_name,
                                wordlen=self.wordlen, alphabet=self.alphabet)
         kmer_index.index_kmers(self.S)
@@ -115,15 +115,15 @@ class SeedIndex(KmerDBWrapper):
         with self.connection() as conn:
             cursor = conn.cursor()
             cursor.executemany(
-                'INSERT INTO %s (d_, a) VALUES (?, ?)' % self.table,
+                'INSERT INTO %s (d_, a) VALUES (?, ?)' % self.seeds_table,
                 _records()
             )
             self.log('Creating SQL index for seeds table.')
             cursor.execute('CREATE INDEX %s_diagonal ON %s(d_);' %
-                           (self.table, self.table))
+                           (self.seeds_table, self.seeds_table))
 
     def seed_count_by_d_(self):
-        q = 'SELECT COUNT(a), d_ FROM %s GROUP BY d_' % self.table
+        q = 'SELECT COUNT(a), d_ FROM %s GROUP BY d_' % self.seeds_table
         count_by_d_ = np.zeros(len(self.S) + len(self.T))
         with self.connection() as conn:
             cursor = conn.cursor()
@@ -137,7 +137,7 @@ class SeedIndex(KmerDBWrapper):
             SELECT COUNT(d_), a FROM %s
             WHERE d_ - ? BETWEEN ? AND ?
             GROUP BY a
-        """ % self.table
+        """ % self.seeds_table
         count_by_a = np.zeros(min(len(self.S), len(self.T)))
         with self.connection() as conn:
             cursor = conn.cursor()
@@ -167,7 +167,7 @@ class SeedIndex(KmerDBWrapper):
                 The :class:`Seed` object and the score of its diagonal as a
                 ``float`` in descending order of score.
         """
-        query = 'SELECT d_, a FROM %s' % self.table
+        query = 'SELECT d_, a FROM %s' % self.seeds_table
         if d_center and d_radius:
             query += ' WHERE d_ - %d BETWEEN %d AND %d ' % \
                 (self.d0, d_center - d_radius, d_center + d_radius)
