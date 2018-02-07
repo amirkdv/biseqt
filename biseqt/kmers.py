@@ -303,7 +303,7 @@ class KmerIndex(KmerDBWrapper):
 
     def create_sql_index(self):
         """Creates SQL index over the ``kmer`` column of ``kmers`` table."""
-        self.log('Creating SQL index for kmers table.')
+        self.log('Creating SQL index for table %s.' % self.kmers_table)
         with self.connection() as conn:
             q = """
                 CREATE INDEX IF NOT EXISTS idx_%s ON %s (kmer);
@@ -321,7 +321,6 @@ class KmerIndex(KmerDBWrapper):
                 A list of 2-tuples containing sequence ids (int) and positions.
         """
         assert isinstance(kmer, int)
-        self.create_sql_index()  # FIXME do we need this?
         query = 'SELECT seqid, pos FROM %s WHERE kmer = ?' % self.kmers_table
         with self.connection() as conn:
             return list(conn.cursor().execute(query, (kmer,)))
@@ -332,8 +331,8 @@ class KmerIndex(KmerDBWrapper):
         Returns:
             list: kmers in integer representation.
         """
-        query = 'SELECT DISTINCT kmer FROM %s' % self.kmers_table
         self.create_sql_index()  # FIXME do we need this?
+        query = 'SELECT DISTINCT kmer FROM %s' % self.kmers_table
         with self.connection() as conn:
             cursor = conn.cursor()
             cursor.execute(query)
