@@ -183,6 +183,52 @@ def roc(X, Y, classifier='>', num_points=1000):
             A tuple containing three lists: the parameter values (i.e threshold
             values) for which the ROC curve is sampled, the *false positive*
             rates and the *true positive* rates at every sample point.
+
+    .. wikisection:: dev
+        :title: Effect of filtering on ROC curves
+        :parent: Log-probability numerics
+
+        Consider a binary classification problem with positive and negative
+        sets :math:`X,Y` with positive and negative labels respectively. For
+        simplicity let the positive classification rule be 'lower than
+        threshold'. Then the corresponding ROC is a paremetric curve in the
+        unit square given by:
+
+        .. math::
+            \left(F_Y(t), F_X(t)\\right) \in [0,1]\\times[0,1]
+
+        where :math:`F_X,F_Y` are the cumulative distributions of the positive
+        and negative samples and :math:`t` varies over the extended real line
+        :math:`\mathbb{R}\cup\{\pm\infty\}`.
+
+        Now let :math:`f:\mathbb{R}\\to\mathbb{R}` be a *monotonic*
+        real function and for any set :math:`A` let :math:`f(A)` denote the set
+        :math:`\{f(a); a\in A\}`. If we consider the sets :math:`f(X), f(Y)` as
+        the positive and negative samples, we have:
+
+        .. math::
+            F_{f(X)}(a) = \Pr[f(X)\le a] = \Pr[X\le f^{-1}(a)]
+                = F_X (f^{-1}(a))
+
+        if :math:`f` is increasing and
+
+        .. math::
+            F_{f(X)}(a) = \Pr[f(X)\le a] = 1 - \Pr[X\le f^{-1}(a)]
+                = 1 - F_X (f^{-1}(a))
+
+        otherwise with similar results holding for :math:`Y`.
+        It follows that although the cumulative distributions :math:`F_{f(X)},
+        F_{f(Y)}` differ from the original :math:`F_X,F_Y`:
+
+        * If :math:`f` is increasing, the ROC curve is merely reparameterized
+          and thus remains unchanged.
+        * If :math:`f` is decreasing, the ROC curve is merely mirrored across
+          the main diagonal.
+
+        As a special case, this implies that the ROC of a collection of
+        positive and negative z-scores is identical to the ROC of the
+        corresponding negative-log p-values and the mirror image of the
+        ROC of the corresponding p-values.
     """
     assert classifier in '><'
     _all = list(X) + list(Y)
