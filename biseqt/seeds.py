@@ -75,9 +75,10 @@ class SeedIndex(KmerDBWrapper):
                 );
             """ % self.seeds_table)
 
-        kmer_index_name = '%dmers_%s' % (self.wordlen, self.name)
+        kmer_index_name = '%d_%s' % (self.wordlen, self.name)
         kmer_index = KmerIndex(path=self.path, name=kmer_index_name,
-                               wordlen=self.wordlen, alphabet=self.alphabet)
+                               wordlen=self.wordlen, alphabet=self.alphabet,
+                               log_level=self.log_level)
         kmer_index.index_kmers(self.S)
         if not self.self_comp:
             kmer_index.index_kmers(self.T)
@@ -104,7 +105,7 @@ class SeedIndex(KmerDBWrapper):
                 'INSERT INTO %s (d_, a) VALUES (?, ?)' % self.seeds_table,
                 _records()
             )
-            self.log('Creating SQL index for seeds table.')
+            self.log('Creating SQL index for table %s.' % self.seeds_table)
             cursor.execute('CREATE INDEX %s_diagonal ON %s(d_);' %
                            (self.seeds_table, self.seeds_table))
 

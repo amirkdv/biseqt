@@ -134,6 +134,7 @@ class KmerDBWrapper(object):
 
         log_header = '%d-mer cache (%s)' % (self.wordlen, relpath)
         self._logger = Logger(log_level=log_level, header=log_header)
+        self.log_level = log_level
         self._connection = None
 
         self.init_script = init_script
