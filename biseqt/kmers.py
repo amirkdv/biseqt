@@ -108,8 +108,9 @@ class KmerDBWrapper(object):
         wordlen (int): Length of kmers of interest to this index.
         init_script (str): SQL script to be executed in __init__
     """
-    def __init__(self, path=':memory:', alphabet=None, wordlen=None,
+    def __init__(self, name='', path=':memory:', alphabet=None, wordlen=None,
                  log_level=logging.INFO, init_script=None):
+        self.name = name
         assert isinstance(wordlen, int)
         assert isinstance(alphabet, Alphabet)
         assert len(alphabet) <= len(DIGITS), \
@@ -175,31 +176,34 @@ class KmerCache(KmerDBWrapper):
     path. FIXME is parallel :memory: ok with this? We want kmercache on disk
     anyway though!
     """
-    def __init__(self, path=':memory:', alphabet=None, wordlen=None,
-                 log_level=logging.INFO):
+    def __init__(self, name='', **kw):
+        self.name = name
         init_script = """
-            CREATE TABLE IF NOT EXISTS seq_kmers (
+            CREATE TABLE IF NOT EXISTS %s (
                 'seq' VARCHAR,   -- content identifier of sequence
                 'kmers' VARCHAR  -- comma separated representation of sequence
                                  -- as integers encoding kmers.
             );
-        """
-        super(KmerCache, self).__init__(path=path, wordlen=wordlen,
-                                        alphabet=alphabet, log_level=log_level,
-                                        init_script=init_script)
+        """ % self.kmers_table
+        kw['name'] = name
+        super(KmerCache, self).__init__(init_script=init_script, **kw)
+
+    @property
+    def kmers_table(self):
+        return 'seq_kmers_%s' % self.name
 
     def cached_seqs(self):
         """Returns content identifiers for all cached sequences."""
         with self.connection() as conn:
             cursor = conn.cursor()
-            cursor.execute('SELECT seq from seq_kmers')
+            cursor.execute('SELECT seq from %s' % self.kmers_table)
             return [x[0] for x in cursor]
 
     def as_kmer_seq(self, seq):
         with self.connection() as conn:
             cursor = conn.cursor()
             cursor.execute(
-                'SELECT kmers from seq_kmers WHERE seq = ?',
+                'SELECT kmers from %s WHERE seq = ?' % self.kmers_table,
                 (seq.content_id,)
             )
             for kmer_seq in cursor:
@@ -208,10 +212,8 @@ class KmerCache(KmerDBWrapper):
         self.log('cache miss, finding kmers of %s.' % seq.content_id[:8])
         kmer_seq = as_kmer_seq(seq, self.wordlen)
         with self.connection() as conn:
-            conn.cursor().execute(
-                'INSERT INTO seq_kmers (seq, kmers) VALUES (?, ?)',
-                (seq.content_id, repr(kmer_seq))
-             )
+            q = 'INSERT INTO %s (seq, kmers) VALUES (?, ?)' % self.kmers_table
+            conn.cursor().execute(q, (seq.content_id, repr(kmer_seq)))
         return kmer_seq
 
 
@@ -223,16 +225,21 @@ class KmerIndex(KmerDBWrapper):
 
     .. code-block:: sql
 
-        CREATE TABLE kmers (
+        CREATE TABLE kmers_[name] (
           'kmer'  INTEGER,      -- The kmer in integer representation.
           'seq'   INTEGER,      -- integer identifier of sequence
           'pos'   INTEGER       -- the position of kmer in sequence.
         );
+
+        CREATE TABLE IF NOT EXISTS kmer_indexed_[name] (
+          'seq'  VARCHAR,                           -- content id,
+          'seqid' INTEGER PRIMARY KEY AUTOINCREMENT -- integer id.
+        );
     """
-    def __init__(self, path=':memory:', alphabet=None, wordlen=None,
-                 log_level=logging.INFO):
+    def __init__(self, name='', **kw):
+        self.name = name
         init_script = """
-            CREATE TABLE IF NOT EXISTS kmers (
+            CREATE TABLE IF NOT EXISTS %s (
               'kmer'  INTEGER,      -- the kmer in integer representation.
               'seqid' INTEGER,      -- integer identifier of sequence
                                     -- REFERENCES kmer_indexed(seqid), but not
@@ -240,17 +247,22 @@ class KmerIndex(KmerDBWrapper):
               'pos'   INTEGER       -- the position of kmer in sequence.
             );
 
-            CREATE TABLE IF NOT EXISTS kmer_indexed (
+            CREATE TABLE IF NOT EXISTS %s (
               'seq'  VARCHAR,                           -- content id,
               'seqid' INTEGER PRIMARY KEY AUTOINCREMENT -- integer id.
             );
-        """
-        super(KmerIndex, self).__init__(path=path, wordlen=wordlen,
-                                        alphabet=alphabet, log_level=log_level,
-                                        init_script=init_script)
+        """ % (self.kmers_table, self.log_table)
+        kw['name'] = name
+        super(KmerIndex, self).__init__(init_script=init_script, **kw)
 
-    # FIXME document the fact that indexing the same thing twice is not checked
-    # for
+    @property
+    def kmers_table(self):
+        return 'kmers_' + self.name
+
+    @property
+    def log_table(self):
+        return 'kmer_indexed_' + self.name
+
     def index_kmers(self, seq, cache=None):
         """Event handler for "sequence-inserted" (cf. :attr:`database.events
         <biseqt.database.events>`). Indexes all kmers observed in the given
@@ -271,29 +283,32 @@ class KmerIndex(KmerDBWrapper):
 
         with self.connection() as conn:
             cursor = conn.cursor()
-            q = 'SELECT seqid FROM kmer_indexed WHERE seq = ?'
+            q = 'SELECT seqid FROM %s WHERE seq = ?' % self.log_table
             for seqid in cursor.execute(q, (seq.content_id,)):
                 self.log('sequence %s already indexed, skipping.' %
                          seq.content_id[:8])
                 return seqid[0]
             q = """
-                INSERT INTO kmer_indexed (seq) VALUES (?);
+                INSERT INTO %s (seq) VALUES (?);
                 SELECT last_insert_rowid();
-            """
+            """ % self.log_table
             seqid = cursor.execute(q, (seq.content_id,)).next()[0]
-            cursor.executemany(
-                'INSERT INTO kmers (kmer, seqid, pos) VALUES (?,?,?)',
-                ((kmer, seqid, pos) for pos, kmer in enumerate(kmer_seq))
-            )
+            q = """
+                INSERT INTO %s (kmer, seqid, pos)
+                VALUES (?,?,?)
+            """ % self.kmers_table
+            cursor.executemany(q, ((kmer, seqid, pos)
+                                   for pos, kmer in enumerate(kmer_seq)))
             return seqid
 
     def create_sql_index(self):
         """Creates SQL index over the ``kmer`` column of ``kmers`` table."""
         self.log('Creating SQL index for kmers table.')
         with self.connection() as conn:
-            conn.cursor().execute("""
-                CREATE INDEX IF NOT EXISTS kmers_idx ON kmers (kmer);
-            """)
+            q = """
+                CREATE INDEX IF NOT EXISTS idx_%s ON %s (kmer);
+            """ % (self.kmers_table, self.kmers_table)
+            conn.cursor().execute(q)
 
     def hits(self, kmer):
         """Returns all hits of a given kmer in indexed sequences.
@@ -307,7 +322,7 @@ class KmerIndex(KmerDBWrapper):
         """
         assert isinstance(kmer, int)
         self.create_sql_index()  # FIXME do we need this?
-        query = 'SELECT seqid, pos FROM kmers WHERE kmer = ?'
+        query = 'SELECT seqid, pos FROM %s WHERE kmer = ?' % self.kmers_table
         with self.connection() as conn:
             return list(conn.cursor().execute(query, (kmer,)))
 
@@ -317,7 +332,7 @@ class KmerIndex(KmerDBWrapper):
         Returns:
             list: kmers in integer representation.
         """
-        query = 'SELECT DISTINCT kmer FROM kmers'
+        query = 'SELECT DISTINCT kmer FROM %s' % self.kmers_table
         self.create_sql_index()  # FIXME do we need this?
         with self.connection() as conn:
             cursor = conn.cursor()
@@ -326,7 +341,5 @@ class KmerIndex(KmerDBWrapper):
 
     def drop_data(self):
         with self.connection() as conn:
-            conn.cursor().execute("""
-                DROP TABLE kmers;
-                DROP TABLE kmer_indexed;
-            """)
+            conn.cursor().execute('DROP TABLE %s; DROP TABLE %s;' %
+                                  (self.kmers_table, self.logs_table))
