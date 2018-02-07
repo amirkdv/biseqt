@@ -186,7 +186,6 @@ def roc(X, Y, classifier='>', num_points=1000):
 
     .. wikisection:: dev
         :title: Effect of filtering on ROC curves
-        :parent: Log-probability numerics
 
         Consider a binary classification problem with positive and negative
         sets :math:`X,Y` with positive and negative labels respectively. For

@@ -6,21 +6,7 @@
     The :mod:`biseqt.seeds` module provides tools for storing and analyzing
     matching segment pairs (aka seeds) between large numbers of sequences.
 
-    >>> from biseqt.database import DB
-    >>> from biseqt.sequence import Alphabet
-    >>> from biseqt.kmers import KmerIndex
-    >>> from biseqt.seeds import SeedIndex
-    >>> A = Alphabet('ACGT')
-    >>> db = DB('example.db', A)
-    >>> seed_index = SeedIndex(KmerIndex(db))
-    >>> db.initialize()
-    >>> with open('example.fa') as f:
-    ...     db.load_fasta(f)
-    >>> seed_index.index_seeds()
-    >>> seed_index.score_seeds(max_kmer_score=10)
-    >>> seed_index.seeds(1, 2)  # yields all the seeds for sequences 1 and 2
-    >>> diag_range = seed_index.highest_scoring_band(1, 2, min_band_score=10)
-    >>> seed_index.seeds(1, 2, diag_range)  # only yields seeds in best band
+    FIXME
 """
 import numpy as np
 from itertools import chain, combinations

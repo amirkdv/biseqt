@@ -93,7 +93,14 @@ def band_radius(expected_len, gap_prob, sensitivity):
     """Calculates the smallest band radius in the dynamic programming table
     such that an alignment of given expected length, with the given gap
     probability, stays entirely within the diagonal band with probability given
-    as sensitivity.
+    as sensitivity. This is given by:
+
+    .. math::
+        r = 2\\sqrt{g(1-g)K}
+            \\mathrm{erf}^{-1}\\left(1-\\epsilon\\right)
+
+    where :math:`g` is the gap probability, :math:`1-\\epsilon` is the desired
+    sensitivity, and :math:`K` is the given expected length.
 
     Args:
         expected_len (int):
@@ -111,30 +118,11 @@ def band_radius(expected_len, gap_prob, sensitivity):
     return max(1, int(np.ceil(radius)))
 
 
-def overlap_band_radius(len0, len1, diag, gap_prob=None, sensitivity=None):
-    """Calculates the smallest band radius in the dynamic programming table
-    such that an overlap alignment, with the given gap probability, stays
-    entirely within the diagonal band centered at the given diagonal. This is
-    given by:
+def band_radii(expected_lens, gap_prob, sensitivity):
+    assert 0 < gap_prob < 1 and 0 < sensitivity < 1
+    epsilon = 1. - sensitivity
+    C = 2 * erfcinv(epsilon) * np.sqrt(gap_prob * (1 - gap_prob))
+    return np.array([max(1, int(np.ceil(C * np.sqrt(K))))
+                     for K in expected_lens])
 
-    .. math::
-        r = 2\\sqrt{g(1-g)K}
-            \\mathrm{erf}^{-1}\\left(1-\\epsilon\\right)
 
-    where :math:`g` is the gap probability, :math:`1-\\epsilon` is the desired
-    sensitivity, and :math:`K` is the "expected" length of the alignment given
-    by :func:`expected_overlap_len`.
-
-    Args:
-        len0 (int): Length of the 1st sequence.
-        len1 (int): Length of the 2nd sequence.
-        diag (int): Starting diagonal of alignments to consider.
-        gap_prob (float): Probability of indels occuring at any position.
-        sensitivity (float): The probability that an alignment with given gap
-            probability remains entirely within the band.
-    Returns:
-        int: The smallest band radius guaranteeing the required sensitivity.
-
-    """
-    K = expected_overlap_len(len0, len1, diag, gap_prob=gap_prob),
-    return band_radius(K, gap_prob=gap_prob, sensitivity=sensitivity)
