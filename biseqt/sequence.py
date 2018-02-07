@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 from itertools import chain
+from hashlib import sha1
 
 
 class Alphabet(object):
@@ -141,6 +142,7 @@ class Sequence(object):
         contents (tuple): The contents of the sequence represented as tuple of
             integers of the same length where each letter is represented by
             its position in the alphabet.
+        content_id (string): Hex representation of the sequence SHA1.
     """
     def __init__(self, alphabet, contents=()):
         """Initializes the sequence object: translates all letters to integers
@@ -160,6 +162,7 @@ class Sequence(object):
 
         assert all(isinstance(c, int) and c < len(alphabet) for c in contents)
         self.contents = tuple(contents)
+        self.content_id = sha1(str(self)).hexdigest()
 
     def reverse(self):
         """Returns another sequence whose contents are the reverse of this
@@ -195,7 +198,7 @@ class Sequence(object):
 
     def __eq__(self, other):
         return self.alphabet == other.alphabet and \
-               self.contents == other.contents
+               self.content_id == other.content_id
 
     def __add__(self, other):
         if isinstance(other, Sequence):

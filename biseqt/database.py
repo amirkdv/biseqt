@@ -161,7 +161,6 @@ import apsw
 import json
 import logging
 import textwrap
-from hashlib import sha1
 from collections import namedtuple
 
 from .util import Logger, ProgressIndicator
@@ -175,14 +174,9 @@ class NamedSequence(Sequence):
 
     Attributes:
         name (str): The name of the sequence which need not be unique.
-        content_id (str): The SHA1 of the sequence contents in integer form.
     """
-    def __init__(self, seq, name='', content_id=None):
+    def __init__(self, seq, name=''):
         super(NamedSequence, self).__init__(seq.alphabet, seq.contents)
-        self.content_id = sha1(str(self)).hexdigest()
-        if content_id is not None:
-            assert self.content_id == content_id, \
-                'Provided content identifier does not match sequence contents'
         self.name = name
 
     def reverse(self, name=None):
