@@ -1,4 +1,6 @@
 # -*- coding: utf-8 -*-
+import pytest
+
 from tempfile import NamedTemporaryFile
 from biseqt.sequence import Alphabet
 from biseqt.seeds import SeedIndex
@@ -18,13 +20,13 @@ def test_coordinate_change():
             'conversion from diagonal coordinates should be correct'
 
 
-def test_index_integrity():
-    A = Alphabet('ACGT')
-    S = A.parse('ACGGGCTTTTCG')
-    T = A.parse('GTTTCTGGGAGC')
-    wordlen = 5
-    with NamedTemporaryFile() as f:
-        kw = {'alphabet': A, 'wordlen': wordlen, 'path': f.name}
+@pytest.mark.parametrize('in_memory', [True, False],
+                         ids=['in memory', 'on disk'])
+def test_index_integrity(in_memory):
+    def _tests(**kw):
+        A, wordlen = kw['alphabet'], kw['wordlen']
+        S = A.parse('ACGGGCTTTTCG')
+        T = A.parse('GTTTCTGGGAGC')
         index1 = SeedIndex(S, T, **kw)
         index2 = SeedIndex(S, T, **kw)
         assert set(index1.seeds()) == set(index2.seeds()), \
@@ -33,41 +35,69 @@ def test_index_integrity():
         T = A.parse('GGG' + str(S))
         index3 = SeedIndex(S, T, **kw)
         assert len(list(index3.seeds())) == len(S) - wordlen + 1,\
-            'Multiple comparisons should be allowed on the same datbase path'
+            'Multiple comparisons should work on the same datbase path'
 
-
-def test_index_seeds():
     A = Alphabet('ACGT')
     wordlen = 5
-    kw = {'alphabet': A, 'wordlen': wordlen, 'path': ':memory:'}
-
-    S = A.parse('G' * wordlen)
-    T = A.parse('TC' + str(S))
-    assert list(SeedIndex(S, T, **kw).seeds()) == [(0, 2)] and \
-        list(SeedIndex(T, S, **kw).seeds()) == [(2, 0)], \
-        'seed coordinates should be correctly calculated'
-
-    S = A.parse('A' * 10)
-    T = A.parse('A' * 20)
-    n_seeds = (len(S) - wordlen + 1) * (len(T) - wordlen + 1)
-    assert len(list(SeedIndex(S, T, **kw).seeds())) == n_seeds, \
-        'correct number of seeds should be found'
-    n_kmers = (len(S) - wordlen + 1)
-    n_seeds = n_kmers * n_kmers
-    assert len(list(SeedIndex(S, S, **kw).seeds())) == n_seeds, \
-        'self comparison should not get confused'
+    if in_memory:
+        _tests(alphabet=A, wordlen=wordlen, path=':memory:')
+    else:
+        with NamedTemporaryFile() as f:
+            _tests(alphabet=A, wordlen=wordlen, path=f.name)
 
 
-def test_count_seeds_on_diagonals():
+@pytest.mark.parametrize('in_memory', [True, False],
+                         ids=['in memory', 'on disk'])
+def test_index_seeds(in_memory):
+    def _tests(**kw):
+        print '***********', kw['path']
+        A, wordlen = kw['alphabet'], kw['wordlen']
+        S = A.parse('G' * wordlen)
+        T = A.parse('TC' + str(S))
+        assert list(SeedIndex(S, T, **kw).seeds()) == [(0, 2)] and \
+            list(SeedIndex(T, S, **kw).seeds()) == [(2, 0)], \
+            'seed coordinates should be correctly calculated'
+
+        S = A.parse('A' * 10)
+        T = A.parse('A' * 20)
+        n_seeds = (len(S) - wordlen + 1) * (len(T) - wordlen + 1)
+        assert len(list(SeedIndex(S, T, **kw).seeds())) == n_seeds, \
+            'correct number of seeds should be found'
+        n_kmers = (len(S) - wordlen + 1)
+        n_seeds = n_kmers * n_kmers
+        assert len(list(SeedIndex(S, S, **kw).seeds())) == n_seeds, \
+            'self comparison should not get confused'
+        assert len(list(SeedIndex(S, S, **kw).seeds())) == n_seeds, \
+            'repeated self comparison should not get confused'
+
     A = Alphabet('ACGT')
     wordlen = 5
-    kw = {'alphabet': A, 'wordlen': wordlen, 'path': ':memory:'}
-    S = A.parse('G' * wordlen)
-    T = A.parse('TT' + str(S))
-    d0 = len(T) - 1
+    if in_memory:
+        _tests(alphabet=A, wordlen=wordlen, path=':memory:')
+    else:
+        with NamedTemporaryFile() as f:
+            _tests(alphabet=A, wordlen=wordlen, path=f.name)
 
-    count_by_d_ = SeedIndex(S, T, **kw).seed_count_by_d_()
-    expected_count = [1 if i - d0 == -2 else 0
-                      for i in range(len(S) + len(T))]
-    assert list(count_by_d_) == expected_count, \
-        'diagonal counts should be correctly calculated'
+
+@pytest.mark.parametrize('in_memory', [True, False],
+                         ids=['in memory', 'on disk'])
+def test_count_seeds_on_diagonals(in_memory):
+    def _tests(**kw):
+        A, wordlen = kw['alphabet'], kw['wordlen']
+        S = A.parse('G' * wordlen)
+        T = A.parse('TT' + str(S))
+        d0 = len(T) - 1
+
+        count_by_d_ = SeedIndex(S, T, **kw).seed_count_by_d_()
+        expected_count = [1 if i - d0 == -2 else 0
+                          for i in range(len(S) + len(T))]
+        assert list(count_by_d_) == expected_count, \
+            'diagonal counts should be correctly calculated'
+
+    A = Alphabet('ACGT')
+    wordlen = 5
+    if in_memory:
+        _tests(alphabet=A, wordlen=wordlen, path=':memory:')
+    else:
+        with NamedTemporaryFile() as f:
+            _tests(alphabet=A, wordlen=wordlen, path=f.name)

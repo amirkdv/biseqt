@@ -78,20 +78,7 @@ class SeedIndex(KmerDBWrapper):
 
     # idempotent operation
     def _index_seeds(self):
-        """Indexes all seeds and their diagonal positions. For each kmer with
-        :math:`n` hits from *distinct* sequences :math:`n\\choose2` seeds
-        are created. If a kmer occurs multiple times in a sequence seeds
-        between different positions of the same sequence are not considered.
-        If a minimum kmer score is required it is assumed that
-        :func:`score_kmers <biseqt.kmers.KmerIndex.score_kmers>` has already
-        been called.
-
-        Keyword Args:
-            max_kmer_score: The maximum score beyond which kmers are not
-                considered for seeds. High scoring words are more likely to
-                belong to repetitive regions (cf. :func:`score_kmers
-                <biseqt.kmers.KmerIndex.score_kmers>`). Default is None in
-                which case all kmers are considered.
+        """TODO
         """
         with self.connection() as conn:
             conn.cursor().execute("""
@@ -101,8 +88,10 @@ class SeedIndex(KmerDBWrapper):
                 );
             """ % self.table)
 
-        kmer_index = KmerIndex(self.path, wordlen=self.wordlen,
-                               alphabet=self.alphabet)
+        kmer_index_name = '%dmers_%s_%s' % \
+            (self.wordlen, self.S.content_id[:8], self.T.content_id[:8])
+        kmer_index = KmerIndex(path=self.path, name=kmer_index_name,
+                               wordlen=self.wordlen, alphabet=self.alphabet)
         kmer_index.index_kmers(self.S)
         if not self.self_comp:
             kmer_index.index_kmers(self.T)
@@ -132,8 +121,6 @@ class SeedIndex(KmerDBWrapper):
             self.log('Creating SQL index for seeds table.')
             cursor.execute('CREATE INDEX %s_diagonal ON %s(d_);' %
                            (self.table, self.table))
-
-        kmer_index.drop_data()
 
     def seed_count_by_d_(self):
         q = 'SELECT COUNT(a), d_ FROM %s GROUP BY d_' % self.table
