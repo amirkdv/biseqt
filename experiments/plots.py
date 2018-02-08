@@ -1,23 +1,4 @@
 # -*- coding: utf-8 -*-
-"""
-.. wikisection:: overview
-    :title: Plots
-
-    The :mod:`biseqt.plots` module provides plotting utilities based on
-    ``matplotlib`` functionality in addition to basic tools for inspecting
-    binary classifiers.
-
-    >>> from biseqt.plots import figure, save, plot_density, plot_roc, plot_ppv
-    >>> X = ... # a list of numbers (the positive data set)
-    >>> Y = ... # a list of numbers (the negatvie data set)
-    >>> fig = biseqt.plots.figure()
-    >>> plot_density(fig.subplot(4, 1, 1), X)
-    >>> plot_density(fig.subplot(4, 1, 2), Y)
-    >>> plot_roc(fig.subplot(4, 1, 3), X, Y)
-    >>> plot_ppv(fig.subplot(4, 1, 4), X, Y)
-    >>> save(fig, '/path/to/fig.png')
-"""
-
 import numpy as np
 import scipy.stats
 import matplotlib
@@ -42,29 +23,16 @@ def _scatter(ax, *args, **kwargs):
     ax.scatter(*args, **_kwargs)
 
 
+# Initializes new figure with the AGG backend_ and adds a canvas to it.
+# cf. http://matplotlib.org/faq/usage_faq.html#what-is-a-backend
 def figure():
-    """Initializes new figure with the AGG backend_ and adds a canvas to it.
-
-    .. _backend: http://matplotlib.org/faq/usage_faq.html#what-is-a-backend
-
-    Returns:
-        matplotlib.figure.Figure
-    """
     fig = Figure()
     FigureCanvas(fig)  # add a canvas to figure
     return fig
 
 
+# kwargs are passed as is to matplotlib.figure.Figure.savefig
 def save(fig, path, **kwargs):
-    """Saves figure to path. All keyword arguments are passed as is to
-    ``matplotlib.figure.Figure.savefig``.
-
-    Args:
-        fig (matplotlib.figure.Figure): The ``matplotlib.figure.Figure`` to be
-            saved.
-        path (str): Path where figure is saved; can be an absolute path or
-            relative to current working directory.
-    """
     for ax in fig.get_axes():
         ax.grid(True)
         ax.legend()
@@ -74,46 +42,18 @@ def save(fig, path, **kwargs):
     fig.savefig(path, **_kwargs)
 
 
+# Gaussian density estimate of given sample. kwargs are passed as is to
+# matplotlib.axes.Axes.plot.
 def plot_density(ax, sample, num_points=1000, **kwargs):
-    """Plots the Guassian density estimate of the given sample. All un-named
-    keyword arguments are passed as is to ``matplotlib.axes.Axes.plot``.
-
-    Args:
-        ax (matplotlib.axes.Axes): The matplotlib axes object to use.
-        sample (list): A list of numbers; the sample set.
-
-    Keyword Args:
-        num_points (int): The sample size of the density estimate.
-    """
     density = scipy.stats.gaussian_kde(sample)
     xs = np.linspace(min(sample), max(sample), num=num_points)
     ax.plot(xs, density(xs), **kwargs)
 
 
+# Cumulative distribution obtained by integrating estimated density. Value
+# range enforces range of values over which CDF is calculated.
+# Returns xs, cdf
 def cdf(sample, num_points=1000, value_range=None):
-    """Calculate the cumulative distribution function of a given sample set
-    based on its estimated density.
-
-    Args:
-        sample (list): A list of numbers; the sample set.
-
-    Keyword Args:
-        num_points (int): The sample size of the CDF.
-        value_range (tuple): The minimum and maximum values where the CDF
-            should be calculated; default is None in which case the bounds of
-            the sample set are used.
-
-    Returns:
-        tuple:
-            A tuple containing two lists: the values at which the CDF is
-            reported and CDF values themselves.
-
-    Note:
-        The density estimation is done using ``scipy.stats.guassian_kde`` which
-        requires a "reasonably large" sample set to behave regularly. For
-        instance, if the sample size is too small (e.g. 3 data points only)
-        the calculated CDF may not necessarily approach 1 at its higher end.
-    """
     density = scipy.stats.gaussian_kde(sample)
     if value_range is None:
         value_range = min(sample), max(sample)
@@ -123,112 +63,13 @@ def cdf(sample, num_points=1000, value_range=None):
 
 
 def plot_cdf(ax, sample, num_points=1000, **kwargs):
-    """Plots the cumulative distribution of a given sample set. All unnamed
-    keyword arguments are passed as is to ``matplotlib.axes.Axes.scatter``.
-
-    Args:
-        ax (matplotlib.axes.Axes): The matplotlib axes object to use.
-        sample (list): A list of numbers; the sample set.
-
-    Keyword Args:
-        num_points (int): The sample size of the CDF.
-    """
     xs, F = cdf(sample, num_points=num_points)
     ax.set_title('Cumulative Distribution')
     _scatter(ax, xs, F, **kwargs)
 
 
+# Samples the ROC curve for given positive (X) and negative (Y) samples.
 def roc(X, Y, classifier='>', num_points=1000):
-    """Sample the ROC curve for a pair of sample sets labeled as *positive* and
-    *negative*. The ROC curve is defined by the
-    :math:`(\mathrm{FPR},\mathrm{TPR})` pairs of false and true positive rates
-    obtained for various values of threshold. The rates are defined to be:
-
-    .. math::
-        \mathrm{FPR} = \\frac{f.p.}{f.p. + t.n.}
-
-        \mathrm{TPR} = \\frac{t.p.}{t.p. + f.n.}
-
-    where :math:`t.p., f.p., t.n., f.n.` stand for true and false positives and
-    negatives.  Letting :math:`F_X,F_Y` be the cumulative distributions of the
-    sample sets we get:
-
-    .. math::
-        \mathrm{FPR} = 1 - F_Y, \\text{ and } \mathrm{TPR} = 1 - F_X
-
-    when the direction for positive selection is ``>``, and:
-
-    .. math::
-        \mathrm{FPR} = F_Y, \\text{ and } \mathrm{TPR} = F_X
-
-    when the direction for positive selection is ``<``.
-
-    Args:
-        X (list): The "positive" sample set.
-        Y (list): The "negative" sample set.
-
-    Keyword Args:
-        classifier (str): Either of ``>`` or ``<`` denoting the rule for
-            positive classification: the former indicates positive
-            classification if observed value is *larger* than threshold and
-            the latter indicates positive classification if observed value is
-            *smaller* than threshold; default is ``>``, i.e positively
-            classified values are thought to be mostly larger than negatively
-            classified values.
-        num_points (int): The sample size of the ROC curve; translates to
-            sample points of the CDF of each sample set.
-
-    Returns:
-        tuple:
-            A tuple containing three lists: the parameter values (i.e threshold
-            values) for which the ROC curve is sampled, the *false positive*
-            rates and the *true positive* rates at every sample point.
-
-    .. wikisection:: dev
-        :title: Effect of filtering on ROC curves
-
-        Consider a binary classification problem with positive and negative
-        sets :math:`X,Y` with positive and negative labels respectively. For
-        simplicity let the positive classification rule be 'lower than
-        threshold'. Then the corresponding ROC is a paremetric curve in the
-        unit square given by:
-
-        .. math::
-            \left(F_Y(t), F_X(t)\\right) \in [0,1]\\times[0,1]
-
-        where :math:`F_X,F_Y` are the cumulative distributions of the positive
-        and negative samples and :math:`t` varies over the extended real line
-        :math:`\mathbb{R}\cup\{\pm\infty\}`.
-
-        Now let :math:`f:\mathbb{R}\\to\mathbb{R}` be a *monotonic*
-        real function and for any set :math:`A` let :math:`f(A)` denote the set
-        :math:`\{f(a); a\in A\}`. If we consider the sets :math:`f(X), f(Y)` as
-        the positive and negative samples, we have:
-
-        .. math::
-            F_{f(X)}(a) = \Pr[f(X)\le a] = \Pr[X\le f^{-1}(a)]
-                = F_X (f^{-1}(a))
-
-        if :math:`f` is increasing and
-
-        .. math::
-            F_{f(X)}(a) = \Pr[f(X)\le a] = 1 - \Pr[X\le f^{-1}(a)]
-                = 1 - F_X (f^{-1}(a))
-
-        otherwise with similar results holding for :math:`Y`.
-        It follows that although the cumulative distributions :math:`F_{f(X)},
-        F_{f(Y)}` differ from the original :math:`F_X,F_Y`:
-
-        * If :math:`f` is increasing, the ROC curve is merely reparameterized
-          and thus remains unchanged.
-        * If :math:`f` is decreasing, the ROC curve is merely mirrored across
-          the main diagonal.
-
-        As a special case, this implies that the ROC of a collection of
-        positive and negative z-scores is identical to the ROC of the
-        corresponding negative-log p-values and the mirror image of the
-        ROC of the corresponding p-values.
-    """
     assert classifier in '><'
     _all = list(X) + list(Y)
     value_range = min(_all), max(_all)
@@ -238,14 +79,6 @@ def roc(X, Y, classifier='>', num_points=1000):
 
 
 def plot_roc(ax, X, Y, **kwargs):
-    """Plots the ROC curve of two sample sets, cf. :func:`roc`. All keyword
-    arguments are passed as is to ``matplotlib.axes.Axes.scatter``.
-
-    Args:
-        ax (matplotlib.axes.Axes): The matplotlib axes object to use.
-        X (list): The "positive" sample set (horizontal axis).
-        Y (list): The "negative" sample set (vertical axis).
-    """
     ax.set_xlim([-.1, 1.1])
     ax.set_ylim([-.1, 1.1])
     ax.set_xlabel('False positive rate')
@@ -254,46 +87,8 @@ def plot_roc(ax, X, Y, **kwargs):
     _scatter(ax, x, y, **kwargs)
 
 
+# Positive predictive value for given positive (X) and negative (Y) samples.
 def ppv(X, Y, classifier='>', num_points=1000):
-    """Samples the *positive predictive value* for a pair of sample sets
-    labeled as *positive* and *negative*. The positive negative predictive
-    value is defined as:
-
-    .. math::
-        \mathrm{PPV} = \\frac{t.p.}{t.p. + f.p.}
-
-    where :math:`t.p., f.p., t.n., f.n.` stand for true and false positives and
-    negatives. Depending on the classifier direction this translates to:
-
-    .. math::
-        \mathrm{PPV} = \\frac{(1-F_X)|X|}{(1-F_X)|X| + (1-F_Y)|Y|}
-
-    when the direction for positive selection is ``>``, and:
-
-    .. math::
-        \mathrm{PPV} = \\frac{F_X|Y|}{F_X|X| + F_Y|Y|}
-
-    when the direction for positive selection is ``<``.
-
-    Args:
-        X (list): The "positive" sample set.
-        Y (list): The "negative" sample set.
-
-    Keyword Args:
-        classifier (str): Either of ``>`` or ``<`` denoting the rule for
-            positive classification: the former indicates positive
-            classification if observed value is *larger* than threshold and
-            the latter indicates positive classification if observed value is
-            *smaller* than threshold; default is ``>``, i.e positively
-            classified values are thought to be mostly larger than negatively
-            classified values.
-        num_points (int): The number of sample points.
-
-    Returns:
-        tuple:
-            A tuple containing two lists: the parameter values where the PPV is
-            sampled, and PPV at each point.
-    """
     assert classifier in '><'
     _all = list(X) + list(Y)
     value_range = min(_all), max(_all)
@@ -311,41 +106,8 @@ def ppv(X, Y, classifier='>', num_points=1000):
             return params, N_X / (N_X + N_Y)
 
 
+# Negative predictive value for given positive (X) and negative (Y) samples.
 def npv(X, Y, classifier='>', num_points=1000):
-    """Samples the *negative predictive value* for a pair of sample sets
-    labeled as *positive* and *negative*. The positive negative predictive
-    value is defined as:
-
-    .. math::
-        \mathrm{NPV} = \\frac{t.n.}{t.n. + f.n.}
-
-    where :math:`t.p., f.p., t.n., f.n.` stand for true and false positives and
-    negatives. Depending on the classifier direction this translates to:
-
-    .. math::
-        \mathrm{NPV} = \\frac{F_Y|Y|}{F_X|X| + F_Y|Y|}
-
-    when the direction for positive selection is ``>``, and:
-
-    .. math::
-        \mathrm{NPV} = \\frac{(1-F_Y)|Y|}{(1-F_X)|X| + (1-F_Y)|Y|}
-
-
-    when the direction for positive selection is ``<``.
-
-    Args:
-        X (list): The "positive" sample set.
-        Y (list): The "negative" sample set.
-
-    Keyword Args:
-        classifier (str): Either of ``>`` or ``<``, cf. :func:`ppv`.
-        num_points (int): The number of sample points.
-
-    Returns:
-        tuple:
-            A tuple containing two lists: the parameter values where the PPV is
-            sampled, and NPV at each point.
-    """
     assert classifier in '><'
     _all = list(X) + list(Y)
     value_range = min(_all), max(_all)
@@ -363,34 +125,12 @@ def npv(X, Y, classifier='>', num_points=1000):
 
 
 def plot_ppv(ax, X, Y, classifier='>', num_points=1000, **kwargs):
-    """Plots the positive predictive value over a range of parameters. All
-    keyword arguments are passed as is to ``matplotlib.axes.Axes.scatter``.
-
-    Args:
-        X (list): The "positive" sample set.
-        Y (list): The "negative" sample set.
-
-    Keyword Args:
-        classifier (str): Either of ``>`` or ``<``, cf. :func:`ppv`.
-        num_points (int): The number of sample points.
-    """
     params, ppvs = ppv(X, Y, classifier=classifier, num_points=num_points)
     ax.set_title('Positive Predictive Value')
     _scatter(ax, params, ppvs, **kwargs)
 
 
 def plot_npv(ax, X, Y, classifier='>', num_points=1000, **kwargs):
-    """Plots the negative predictive value over a range of parameters. All
-    keyword arguments are passed as is to ``matplotlib.axes.Axes.scatter``.
-
-    Args:
-        X (list): The "positive" sample set.
-        Y (list): The "negative" sample set.
-
-    Keyword Args:
-        classifier (str): Either of ``>`` or ``<``, cf. :func:`ppv`.
-        num_points (int): The number of sample points.
-    """
     params, npvs = npv(X, Y, classifier=classifier, num_points=num_points)
     ax.set_title('Negative Predictive Value')
     _scatter(ax, params, npvs, **kwargs)
