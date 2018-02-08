@@ -38,7 +38,8 @@ def test_index_integrity(in_memory, wordlen):
             'Multiple index objects for the same pair should not conflict'
 
         # S = {ACG}*, T = TTTT [S] TTTT
-        S = A.parse(str(rand_seq(Alphabet('ACG'), 2 * wordlen)))
+        # NOTE S must not have non-trivial seeds with itself
+        S = A.parse('AAACCCGGGCAAGCC')
         T = A.parse(('T' * 2 * wordlen) + str(S) + ('T' * 2 * wordlen))
         index3 = SeedIndex(S, T, **kw)
         assert len(list(index3.seeds())) == len(S) - wordlen + 1,\
