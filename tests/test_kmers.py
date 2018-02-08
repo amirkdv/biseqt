@@ -35,7 +35,7 @@ def test_kmer_as_int(alphabet, wordlen):
                          [Alphabet('ACGT'), Alphabet(['00', '01', '11'])],
                          ids=['one-letter alphabet', 'two-letter alphabet'])
 @pytest.mark.parametrize('wordlen', [3, 13, 23],
-                         ids=['k = %d' % i for i in [3, 6, 9]])
+                         ids=['k=%d' % i for i in [3, 6, 9]])
 def test_as_kmer_seq(alphabet, wordlen):
     S = rand_seq(alphabet, 50)
     kmer_seq = as_kmer_seq(S, wordlen)

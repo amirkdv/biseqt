@@ -54,7 +54,7 @@ def test_index_integrity(in_memory, wordlen):
 @pytest.mark.parametrize('in_memory', [True, False],
                          ids=['in memory', 'on disk'])
 @pytest.mark.parametrize('wordlen', [3, 13],
-                         ids=['k = 3', 'k = 13'])
+                         ids=['k=3', 'k=13'])
 def test_index_seeds(in_memory, wordlen):
     def _tests(path):
         A = Alphabet('ACGT')
@@ -88,7 +88,7 @@ def test_index_seeds(in_memory, wordlen):
 @pytest.mark.parametrize('in_memory', [True, False],
                          ids=['in memory', 'on disk'])
 @pytest.mark.parametrize('wordlen', [3, 13],
-                         ids=['k = 3', 'k = 13'])
+                         ids=['k=3', 'k=13'])
 def test_seed_counts(in_memory, wordlen):
     def _tests(path):
         A = Alphabet('ACGT')

@@ -1,10 +1,14 @@
 # -*- coding: utf-8 -*-
+import pytest
 import numpy as np
 
+from biseqt.sequence import Alphabet
+from biseqt.stochastics import rand_seq, MutationProcess
 from biseqt.blot import find_peaks
 from biseqt.blot import band_radius
 from biseqt.blot import expected_overlap_len
 from biseqt.blot import band_radii
+from biseqt.blot import HomologyFinder
 
 
 def test_find_peaks():
@@ -100,3 +104,32 @@ def test_overlap_band_radius():
         'overlap band radius should increase as d goes from -|T| to 0'
     assert np.all(np.diff(radii[n:]) <= 0), \
         'overlap band radius should increase as d goes from 0 to |S|'
+
+
+@pytest.mark.parametrize('wordlen', [8, 15],
+                         ids=['k=8', 'k=15'])
+@pytest.mark.parametrize('K', [400, 1000],
+                         ids=['K=100', 'K=1000'])
+@pytest.mark.parametrize('n', [2000, 5000],
+                         ids=['n=1000', 'n=5000'])
+def test_homology_finder(wordlen, K, n):
+    gap, subst = .1, .1
+    A = Alphabet('ACGT')
+    M = MutationProcess(A, subst_probs=subst, ge_prob=gap, go_prob=gap)
+    HF_kw = {'gap_prob': gap, 'subst_prob': subst,
+             'sensitivity': .99, 'alphabet': A, 'wordlen': wordlen,
+             'path': ':memory:'}
+
+    hom = rand_seq(A, K)
+    S = A.parse(str(hom) + str(rand_seq(A, n - K)))
+    T = A.parse(str(M.mutate(hom)[0]) + str(rand_seq(A, n-K)))
+    HF = HomologyFinder(S, T, **HF_kw)
+
+    assert abs(np.nanargmax(HF.score_diagonal_bands(K)[:, 1]) - HF.d0) < K, \
+        'The highest H1 scoring diagonal band must be roughly around 0'
+
+    found_homs = list(HF.similar_segments(K))
+    assert len(found_homs) == 1, 'Only one similar segment should be found'
+    (d_min, d_max), (a_min, a_max) = found_homs[0]
+    assert d_min < 0 and d_max > 0 and a_min < K, \
+        'The coordinates of the homologous segment must be correct'
