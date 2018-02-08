@@ -14,7 +14,6 @@ Submodules
    biseqt.seeds
    biseqt.blot
    biseqt.util
-   biseqt.plots
 
 Module contents
 ---------------

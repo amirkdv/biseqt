@@ -25,6 +25,9 @@ tests: $(LIBDIR)/pwlib.so flake8
 	rm -f tests/$(COVERAGE_BADGE)
 	cd tests && PYTHONPATH=.. py.test $(PYTEST_OPTS) && coverage-badge -o $(COVERAGE_BADGE)
 
+experiments:
+	cd $@ && PYTHONPATH=.. python blot_stats.py
+
 loc:
 	find biseqt tests -type f -regex '.*\(\.py\|\.c\|\.h\)' | grep -v __pycache__ | xargs wc -l
 
@@ -61,4 +64,4 @@ docker_build:
 	cat Dockerfile | docker build -t $(DOCKER_IMG) -
 
 
-.PHONY: clean tests *.pdf loc docs todo docs/doxygen flake8
+.PHONY: clean tests *.pdf loc docs todo experiments docs/doxygen flake8
