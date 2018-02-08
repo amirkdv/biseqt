@@ -8,11 +8,6 @@ try:
 except ImportError:
     raise ImportError('numpy must be already installed')
 
-try:
-    import pysam
-except ImportError:
-    raise ImportError('pysam must be already installed')
-
 with open(path.join(path.abspath(path.dirname(__file__)), 'README.md')) as f:
     README = f.read()
 
@@ -22,8 +17,6 @@ install_requires = [
     'apsw',         # for speaking to SQLite databases
     'termcolor',    # for colored text output
     'cffi',         # for the C component
-    'python-igraph',# for bindings to igraph
-    'cairocffi',    # for igraph plots
 ]
 
 # so we don't install anything on readthedocs.io
@@ -54,11 +47,8 @@ setup(
     # However, it is still much faster to install numpy separately via pip
     # because installing by setup_requires wants to compile all the fortran and
     # C/C++ code.
-    #
-    # pysam has similar issues.
     setup_requires=[ # for setup.py to work at all
         'numpy',
-        'pysam',
     ],
     install_requires=install_requires,
     extras_require={
