@@ -45,12 +45,11 @@ def find_peaks(xs, rs, threshold):
         assert isinstance(radius, int)
         if x < threshold:
             continue
-        peak_l = max(0, idx - radius)
-        peak_r = min(len(xs) - 1, idx + radius)
+        peak_l, peak_r = max(0, idx - 1), min(len(xs) - 1, idx + 1)
         if cur_peak is None:
             cur_peak = (peak_l, peak_r)
             continue
-        if peak_l < cur_peak[1]:  # overlaps with cur_peak
+        if peak_l < cur_peak[1] + radius:  # overlaps with cur_peak
             assert peak_r >= cur_peak[1]
             cur_peak = (cur_peak[0], peak_r)
         else:

@@ -15,18 +15,18 @@ def test_find_peaks():
     threshold = 100
     radius = 3
     xs = [0, 1, 2, 3, 100, 5, 6, 7, 8]
-    #        (         ^^        )
-    assert find_peaks(xs, radius, threshold) == [(1, 7)], \
+    #              (   ^   )
+    assert find_peaks(xs, radius, threshold) == [(3, 5)], \
         'single peak should be correctly detected'
 
     xs = [0, 1, 2, 3, 100, 5, 6, 7, 8, 9, 10, 11, 100, 13, 14, 15, 16]
-    #        (         ^         )     (           ^            )
-    assert find_peaks(xs, radius, threshold) == [(1, 7), (9, 15)], \
+    #              (   ^   )                  (    ^   )
+    assert find_peaks(xs, radius, threshold) == [(3, 5), (11, 13)], \
         'two disjoint peaks should be correctly detected'
 
-    xs = [0, 1, 2, 3, 100, 5, 6, 7, 8, 100, 10, 11, 12, 13]
-    #        (         ^               ^             )
-    assert find_peaks(xs, radius, threshold) == [(1, 12)], \
+    xs = [0, 1, 2, 3, 100, 5, 6, 7, 100, 9, 10, 11, 12, 13]
+    #              (   ^             ^   )
+    assert find_peaks(xs, radius, threshold) == [(3, 9)], \
         'two overlapping peaks should be correctly merged'
 
 
