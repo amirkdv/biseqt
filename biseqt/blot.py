@@ -232,7 +232,7 @@ class HomologyFinder(SeedIndex):
         """
         return band_radii(Ks, self.gap_prob, self.sensitivity)
 
-    def score_diagonal_bands(self, seglens):
+    def score_diagonal_bands(self, seglens, edge_margin=100):
         """Scores all diagonal bands looking for specified segment lengths
         against both H0 and H1.
 
@@ -244,6 +244,10 @@ class HomologyFinder(SeedIndex):
                 center of diagonal band.
             d_radius (int):
                 radius of diagonal band.
+            edge_margin(int):
+                The width of the diagonal margin ignored on either extreme.
+                This is used to avoid division by small areas in calculating
+                scores.
 
         Returns:
             np.array: H0 and H1 scores of each diagonal band.
@@ -265,7 +269,7 @@ class HomologyFinder(SeedIndex):
             d = d_ - self.d0
             # don't score things too close to the edges, the small area
             # leads to unnecessarily high scores.
-            if d_ < seglen or d > len(self.S) - seglen:
+            if d_ < edge_margin or d > len(self.S) - edge_margin:
                 scores_by_d_[d_][0] = float('-inf')
                 scores_by_d_[d_][1] = float('-inf')
                 continue
