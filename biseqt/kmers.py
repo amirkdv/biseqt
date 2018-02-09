@@ -219,8 +219,6 @@ class KmerCache(KmerDBWrapper):
         return kmer_seq
 
 
-# TODO compare SQLite in-memory vs python in-memory and if there is a big
-# difference keep the python version from experiments
 class KmerIndex(KmerDBWrapper):
     """An index backed by SQLite for occurences of kmers in a body of
     sequences. Upon initialization the following script is executated:
