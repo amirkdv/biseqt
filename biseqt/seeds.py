@@ -83,8 +83,8 @@ class SeedIndex(KmerDBWrapper):
         if not self.self_comp:
             kmer_index.index_kmers(self.T)
 
+        kmers = kmer_index.kmers()
         def _records():
-            kmers = kmer_index.kmers()
             for kmer in kmers:
                 hits = kmer_index.hits(kmer)
                 if self.self_comp:
