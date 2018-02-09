@@ -108,12 +108,12 @@ def test_overlap_band_radius():
 
 @pytest.mark.parametrize('wordlen', [8, 15],
                          ids=['k=8', 'k=15'])
-@pytest.mark.parametrize('K', [400, 1000],
-                         ids=['K=100', 'K=1000'])
+@pytest.mark.parametrize('K', [500, 1000],
+                         ids=['K=500', 'K=1000'])
 @pytest.mark.parametrize('n', [2000, 5000],
                          ids=['n=1000', 'n=5000'])
-def test_homology_finder(wordlen, K, n):
-    gap, subst = .1, .1
+def test_local_similarity(wordlen, K, n):
+    gap, subst = .05, .05
     A = Alphabet('ACGT')
     M = MutationProcess(A, subst_probs=subst, ge_prob=gap, go_prob=gap)
     HF_kw = {'gap_prob': gap, 'subst_prob': subst,
