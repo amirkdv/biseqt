@@ -134,3 +134,26 @@ def test_local_similarity(wordlen, K, n):
     assert d_min < 0 and d_max > 0 and a_min < K, \
         'The coordinates of the homologous segment must be correct'
     assert 0 <= match_p <= 1, 'estimated match probability should be in [0, 1]'
+
+
+@pytest.mark.parametrize('wordlen', [8, 15],
+                         ids=['k=8', 'k=15'])
+@pytest.mark.parametrize('K', [500, 1000],
+                         ids=['K=500', 'K=1000'])
+@pytest.mark.parametrize('n', [2000, 5000],
+                         ids=['n=1000', 'n=5000'])
+def test_overlap_detection(wordlen, K, n):
+    gap, subst = .05, .05
+    A = Alphabet('ACGT')
+    M = MutationProcess(A, subst_probs=subst, ge_prob=gap, go_prob=gap)
+    HF_kw = {'gap_prob': gap, 'subst_prob': subst,
+             'sensitivity': .99, 'alphabet': A, 'wordlen': wordlen,
+             'path': ':memory:'}
+
+    overlap = rand_seq(A, K)
+    S = rand_seq(A, n - K) + overlap
+    T = M.mutate(overlap)[0] + rand_seq(A, n - K)
+    HF = HomologyFinder(S, T, **HF_kw)
+    (seg0, s0), (seg1, s1) = HF.highest_scoring_overlap_band()
+    assert seg0[0] < n - K < seg0[1], 'H0 must detect the correct overlap'
+    assert seg1[0] < n - K < seg1[1], 'H1 must detect the correct overlap'

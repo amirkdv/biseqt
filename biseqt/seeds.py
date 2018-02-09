@@ -79,7 +79,8 @@ class SeedIndex(KmerDBWrapper):
         kmer_index_name = '%d_%s' % (self.wordlen, self.name)
         kmer_index = KmerIndex(path=self.path, name=kmer_index_name,
                                wordlen=self.wordlen, alphabet=self.alphabet,
-                               log_level=self.log_level, kmer_cache=self.kmer_cache)
+                               log_level=self.log_level,
+                               kmer_cache=self.kmer_cache)
         kmer_index.index_kmers(self.S)
         if not self.self_comp:
             kmer_index.index_kmers(self.T)

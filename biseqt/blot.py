@@ -286,6 +286,35 @@ class HomologyFinder(SeedIndex):
             scores_by_d_[d_][0], scores_by_d_[d_][1] = s0, s1
         return scores_by_d_
 
+    def highest_scoring_overlap_band(self):
+        """Finds the highest scoring diagonal band with respect to both H0 and
+        H1 statistics with segment length calculated such that only overlap
+        similarities are considered.
+
+        Returns:
+            tuple: containing the the highest scoring band and their score for
+            each of H0 and H1 models.  ``((d0_min, d0_max), s0), ((d1_min,
+            d1_max), s1)``.
+        """
+        self.log('scoring possible overlaps between %s and %s' %
+                 (self.S.content_id[:8], self.T.content_id[:8]))
+
+        ds = range(- len(self.T) + 1, len(self.S))
+        Ks = [expected_overlap_len(len(self.S), len(self.T), d, self.gap_prob)
+              for d in ds]
+        scores_by_d_ = self.score_diagonal_bands(Ks)
+
+        d_H0_ = np.argmax(scores_by_d_[:, 0])
+        d_H1_ = np.argmax(scores_by_d_[:, 1])
+        K_H0, K_H1 = Ks[d_H0_], Ks[d_H1_]
+        s_H0, s_H1 = scores_by_d_[d_H0_, 0], scores_by_d_[d_H1_, 1]
+        r_H0, r_H1 = self.band_radius(K_H0), self.band_radius(K_H1)
+
+        d_H0, d_H1 = d_H0_ - self.d0, d_H1_ - self.d0
+        seg_H0 = (d_H0 - r_H0, d_H0 + r_H0)
+        seg_H1 = (d_H1 - r_H1, d_H1 + r_H1)
+        return (seg_H0, s_H0), (seg_H1, s_H1)
+
     def similar_segments(self, min_seglen, mode='H1'):
         """A sub-quadratic local similarity search algorithm that finds
         diagonal regions of similarity between given sequences.
