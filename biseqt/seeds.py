@@ -84,6 +84,7 @@ class SeedIndex(KmerDBWrapper):
             kmer_index.index_kmers(self.T)
 
         kmers = kmer_index.kmers()
+
         def _records():
             for kmer in kmers:
                 hits = kmer_index.hits(kmer)
@@ -119,7 +120,7 @@ class SeedIndex(KmerDBWrapper):
                 count_by_d_[d_] = count
         return count_by_d_
 
-    def seed_count_by_a(self, d_center, d_radius):
+    def seed_count_by_a(self, d_min, d_max):
         q = """
             SELECT COUNT(d_), a FROM %s
             WHERE d_ - ? BETWEEN ? AND ?
@@ -128,7 +129,6 @@ class SeedIndex(KmerDBWrapper):
         count_by_a = np.zeros(min(len(self.S), len(self.T)))
         with self.connection() as conn:
             cursor = conn.cursor()
-            d_min, d_max = d_center - d_radius, d_center + d_radius
             cursor.execute(q, (self.d0, d_min, d_max))
             for count, a in cursor:
                 count_by_a[a] = count

@@ -9,7 +9,7 @@ $(LIBDIR)/pwlib.so: $(CFILES) $(LIBDIR)/pwlib.h
 	$(GCC) $(CFILES) -o $@
 
 clean:
-	@find biseqt -regextype posix-extended -regex '.*.(pyc|swp|swo|egg|egg-info)' | \
+	@find biseqt tests -regextype posix-extended -regex '.*.(pyc|swp|swo|egg|egg-info)' | \
 		grep -v '^./.git' | tee /dev/stderr  | while read f; do rm -rf $$f; done
 	rm -f core biseqt/pwlib/pwlib.so
 	rm -rf docs/_build docs/doxygen
