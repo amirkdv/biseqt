@@ -208,9 +208,10 @@ class KmerCache(KmerDBWrapper):
                 (seq.content_id,)
             )
             for kmer_seq in cursor:
-                return eval(kmer_seq)
+                return eval(kmer_seq[0])
         # cache miss, translate to kmer sequence
-        self.log('cache miss, finding kmers of %s.' % seq.content_id[:8])
+        self.log('producing kmer representation for sequence %s' %
+                 seq.content_id[:8])
         kmer_seq = as_kmer_seq(seq, self.wordlen)
         with self.connection() as conn:
             q = 'INSERT INTO %s (seq, kmers) VALUES (?, ?)' % self.kmers_table
