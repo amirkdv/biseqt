@@ -9,11 +9,10 @@ $(LIBDIR)/pwlib.so: $(CFILES) $(LIBDIR)/pwlib.h
 	$(GCC) $(CFILES) -o $@
 
 clean:
-	@find biseqt -regextype posix-extended -regex '.*.(pyc|swp|egg|egg-info)' | \
+	@find biseqt -regextype posix-extended -regex '.*.(pyc|swp|swo|egg|egg-info)' | \
 		grep -v '^./.git' | tee /dev/stderr  | while read f; do rm -rf $$f; done
-	rm -rf build dist env
 	rm -f core biseqt/pwlib/pwlib.so
-	rm -rf docs/biseqt*.rst docs/_build docs/doxygen
+	rm -rf docs/_build docs/doxygen
 
 FLAKE8_EXCLUDE =
 flake8:
