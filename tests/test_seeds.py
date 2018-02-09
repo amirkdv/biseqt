@@ -101,8 +101,8 @@ def test_seed_counts(in_memory, wordlen):
         assert len(list(seed_index.seeds())) == seed_index.seed_count(), \
             'seeds() and seed_count() should agree'
         for d in range(-wordlen, wordlen):
-            n1 = len(list(seed_index.seeds(d_center=d, d_radius=wordlen)))
-            n2 = seed_index.seed_count(d_center=d, d_radius=wordlen)
+            n1 = len(list(seed_index.seeds(d_band=(d - wordlen, d + wordlen))))
+            n2 = seed_index.seed_count(d_band=(d - wordlen, d + wordlen))
             assert n1 == n2, 'seeds() and seed_count() should agree on bands'
 
         S = A.parse('G' * wordlen)
@@ -119,10 +119,16 @@ def test_seed_counts(in_memory, wordlen):
         S = A.parse('T' * wordlen + 'G' * wordlen)
         T = A.parse('G' * wordlen + 'T' * wordlen)
         seed_index = SeedIndex(S, T, **kw)
-        assert seed_index.seed_count() == 2 and \
-            seed_index.seed_count(d_center=-wordlen, d_radius=1) == 1 and \
-            seed_index.seed_count(d_center=wordlen, d_radius=1) == 1, \
-            'diagonal counts should be correctly calculated'
+        assert seed_index.seed_count() == 2, \
+            '%s and %s have 2 seeds of length %d' % (S, T, wordlen)
+        band = (-wordlen - 1, -wordlen + 1)
+        assert seed_index.seed_count(d_band=band) == 1, \
+            '%s and %s have 1 seed of length %d in diagonal band' % \
+            (S, T, wordlen, str(band))
+        band = (wordlen - 1, wordlen + 1)
+        assert seed_index.seed_count(d_band=band) == 1, \
+            '%s and %s have 1 seed of length %d in diagonal band' % \
+            (S, T, wordlen, str(band))
 
     if in_memory:
         _tests(':memory:')

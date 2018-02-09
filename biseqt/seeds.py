@@ -136,20 +136,16 @@ class SeedIndex(KmerDBWrapper):
 
         return count_by_a
 
-    def seeds(self, d_center=None, d_radius=None):
+    def seeds(self, d_band=None):
         """Yields the :class:`seeds <Seed>` and their respective scores for a
         given pair of sequences and a given diagonal range (cf.
         :func:`highest_scoring_band`). Only seeds that are processed by
         :func:`score_seeds` are considered.
 
-        Args:
-            id0 (int): The identifier for the first (vertical) sequence.
-            id1 (int): The idenfitier for the second (horizontal) sequence.
-
         Keyword Args:
-            diag_range (tuple): The inclusive upper and lower bounds for the
-                diagonals to consider. Default is None in which case all
-                diagonals are considered.
+            d_band (tuple|None):
+                If specified a ``(d_min, d_max)`` tuple restricting the seed
+                count to a diagonal band.
 
         Yields:
             tuple:
@@ -157,9 +153,11 @@ class SeedIndex(KmerDBWrapper):
                 ``float`` in descending order of score.
         """
         query = 'SELECT d_, a FROM %s' % self.seeds_table
-        if d_center is not None and d_radius is not None:
+        if d_band is not None:
+            assert len(d_band) == 2, 'need a 2-tuple for diagonal band'
+            d_min, d_max = d_band
             query += ' WHERE d_ - %d BETWEEN %d AND %d ' % \
-                (self.d0, d_center - d_radius, d_center + d_radius)
+                (self.d0, d_min, d_max)
 
         with self.connection() as conn:
             cursor = conn.cursor()
@@ -170,24 +168,26 @@ class SeedIndex(KmerDBWrapper):
                 if self.self_comp and i != j:
                     yield (j, i)
 
-    def seed_count(self, d_center=None, d_radius=None):
+    # FIXME change this to d_min, d_max
+    def seed_count(self, d_band=None):
         """Counts the number of seeds either in the whole table or in the
         specified diagonal band.
 
         Args:
-            d_center (int|None):
-                If specified, the diagonal number of the center of band.
-            d_radius (int|None):
-                If specified, the radius of the band.
+            d_band (tuple|None):
+                If specified a ``(d_min, d_max)`` tuple restricting the seed
+                count to a diagonal band.
 
         Returns:
             int: Number of seeds found in the entire table or in the specified
             diagonal band.
         """
         query = 'SELECT COUNT(*) FROM %s' % self.seeds_table
-        if d_center is not None and d_radius is not None:
+        if d_band is not None:
+            assert len(d_band) == 2, 'need a 2-tuple for diagonal band'
+            d_min, d_max = d_band
             query += ' WHERE d_ - %d BETWEEN %d AND %d ' % \
-                (self.d0, d_center - d_radius, d_center + d_radius)
+                (self.d0, d_min, d_max)
 
         with self.connection() as conn:
             cursor = conn.cursor()
