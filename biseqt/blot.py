@@ -181,6 +181,7 @@ class HomologyFinder(SeedIndex):
         Returns:
             tuple (float): z-scores in H0 and H1 models
         """
+        # FIXME rename pos and neg to H0 and H1
         num_seeds = kw['num_seeds']
         A = kw['area']
         K = kw['seglen']
@@ -188,24 +189,24 @@ class HomologyFinder(SeedIndex):
         if A == 0:
             return float('-inf'), float('-inf')
 
-        p_neg = 1. / len(self.alphabet)
-        pw_neg = p_neg ** self.wordlen
-        p_pos = (1 - self.gap_prob) * (1 - self.subst_prob)
-        pw_pos = p_pos ** self.wordlen
+        p_H0 = 1. / len(self.alphabet)
+        pw_H0 = p_H0 ** self.wordlen
+        p_H1 = (1 - self.gap_prob) * (1 - self.subst_prob)
+        pw_H1 = p_H1 ** self.wordlen
 
-        mu_neg = A * pw_neg
-        mu_pos = mu_neg + K * pw_pos
-        sd_neg = np.sqrt(A * (
-            (1 - pw_neg) * (pw_neg + 2 * p_neg * pw_neg / (1 - p_neg)) -
-            2 * self.wordlen * pw_neg ** 2
+        mu_H0 = A * pw_H0
+        mu_H1 = mu_H0 + K * pw_H1
+        sd_H0 = np.sqrt(A * (
+            (1 - pw_H0) * (pw_H0 + 2 * p_H0 * pw_H0 / (1 - p_H0)) -
+            2 * self.wordlen * pw_H0 ** 2
         ))
-        sd_pos = np.sqrt(sd_neg**2 + K * (
-            (1 - pw_pos) * (pw_pos + 2 * p_pos * pw_pos / (1 - p_pos)) -
-            2 * self.wordlen * pw_pos ** 2
+        sd_H1 = np.sqrt(sd_H0**2 + K * (
+            (1 - pw_H1) * (pw_H1 + 2 * p_H1 * pw_H1 / (1 - p_H1)) -
+            2 * self.wordlen * pw_H1 ** 2
         ))
-        s0 = (num_seeds - mu_neg) / sd_neg  # score under H0
-        s1 = (num_seeds - mu_pos) / sd_pos  # score under H1
-        return s0, s1
+        s_H0 = (num_seeds - mu_H0) / sd_H0  # score under H0
+        s_H1 = (num_seeds - mu_H1) / sd_H1  # score under H1
+        return s_H0, s_H1
 
     def band_radius(self, K):
         """Wraps :func:`band_radius` with our mutation parameters and sequence
