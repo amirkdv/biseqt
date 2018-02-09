@@ -21,9 +21,10 @@ class SeedIndex(KmerDBWrapper):
         S (biseqt.sequence.Sequence): The 1st sequence.
         T (biseqt.sequence.Sequence): The 2nd sequence.
     """
-    def __init__(self, S, T, **kw):
+    def __init__(self, S, T, kmer_cache=None, **kw):
         name = '%s_%s' % (S.content_id[:8], T.content_id[:8])
         super(SeedIndex, self).__init__(name=name, **kw)
+        self.kmer_cache = kmer_cache
         self.self_comp = S == T
         self.S, self.T = S, T
         self.d0 = len(self.T) - 1
@@ -78,7 +79,7 @@ class SeedIndex(KmerDBWrapper):
         kmer_index_name = '%d_%s' % (self.wordlen, self.name)
         kmer_index = KmerIndex(path=self.path, name=kmer_index_name,
                                wordlen=self.wordlen, alphabet=self.alphabet,
-                               log_level=self.log_level)
+                               log_level=self.log_level, kmer_cache=self.kmer_cache)
         kmer_index.index_kmers(self.S)
         if not self.self_comp:
             kmer_index.index_kmers(self.T)

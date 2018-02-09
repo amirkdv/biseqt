@@ -237,8 +237,12 @@ class KmerIndex(KmerDBWrapper):
           'seq'  VARCHAR,                           -- content id,
           'seqid' INTEGER PRIMARY KEY AUTOINCREMENT -- integer id.
         );
+
+    Attributes:
+        name (str):
+        cache (KmerCache): optional kmer cache object to use.
     """
-    def __init__(self, name='', **kw):
+    def __init__(self, name='', kmer_cache=None, **kw):
         self.name = name
         init_script = """
             CREATE TABLE IF NOT EXISTS %s (
@@ -256,6 +260,13 @@ class KmerIndex(KmerDBWrapper):
         """ % (self.kmers_table, self.log_table)
         kw['name'] = name
         super(KmerIndex, self).__init__(init_script=init_script, **kw)
+        if kmer_cache:
+            assert isinstance(kmer_cache, KmerCache)
+            assert kmer_cache.wordlen == self.wordlen
+            assert kmer_cache.alphabet == self.alphabet
+            self.kmer_cache = kmer_cache
+        else:
+            self.kmer_cache = None
 
     @property
     def kmers_table(self):
@@ -265,7 +276,7 @@ class KmerIndex(KmerDBWrapper):
     def log_table(self):
         return 'kmer_indexed_' + self.name
 
-    def index_kmers(self, seq, cache=None):
+    def index_kmers(self, seq):
         """Event handler for "sequence-inserted" (cf. :attr:`database.events
         <biseqt.database.events>`). Indexes all kmers observed in the given
         sequence in :attr:`hits_table`.
@@ -274,12 +285,9 @@ class KmerIndex(KmerDBWrapper):
             seq (sequence.Sequence): The sequence just inserted into the
                 database.
             seqid (int): The integer identifier to use for sequence.
-            cache (KmerCache): optional kmer cache object to use.
         """
-        if cache:
-            assert cache.wordlen == self.wordlen
-            assert cache.alphabet == self.alphabet
-            kmer_seq = cache.as_kmer_seq(seq)
+        if self.kmer_cache:
+            kmer_seq = self.kmer_cache.as_kmer_seq(seq)
         else:
             kmer_seq = as_kmer_seq(seq, self.wordlen)
 
