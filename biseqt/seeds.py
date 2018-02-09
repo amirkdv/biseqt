@@ -113,7 +113,7 @@ class SeedIndex(KmerDBWrapper):
 
     def seed_count_by_d_(self):
         q = 'SELECT COUNT(a), d_ FROM %s GROUP BY d_' % self.seeds_table
-        count_by_d_ = np.zeros(len(self.S) + len(self.T))
+        count_by_d_ = np.zeros(len(self.S) + len(self.T) - 1)
         with self.connection() as conn:
             cursor = conn.cursor()
             cursor.execute(q)

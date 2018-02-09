@@ -112,7 +112,7 @@ def test_seed_counts(in_memory, wordlen):
         seed_index = SeedIndex(S, T, **kw)
         count_by_d_ = seed_index.seed_count_by_d_()
         expected_count = [1 if i - d0 == -2 else 0
-                          for i in range(len(S) + len(T))]
+                          for i in range(len(S) + len(T) - 1)]
         assert list(count_by_d_) == expected_count, \
             'diagonal counts should be correctly calculated'
 
