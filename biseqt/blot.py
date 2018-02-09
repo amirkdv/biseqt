@@ -330,6 +330,8 @@ class HomologyFinder(SeedIndex):
             tuple: coordinates of similar region in diagonal coordinates
             ``((d_min, d_max), (a_min, a_max))``.
         """
+        self.log('finding local homologies between %s and %s' %
+                 (self.S.content_id[:8], self.T.content_id[:8]))
         assert min_seglen > 0
         threshold = {'H0': 2, 'H1': -1.5}[mode]
         key = {'H0': 0, 'H1': 1}[mode]

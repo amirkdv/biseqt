@@ -283,6 +283,7 @@ class KmerIndex(KmerDBWrapper):
             kmer_seq = as_kmer_seq(seq, self.wordlen)
 
         with self.connection() as conn:
+            self.log('indexing kmers for sequence %s' % seq.content_id[:8])
             cursor = conn.cursor()
             q = 'SELECT seqid FROM %s WHERE seq = ?' % self.log_table
             for seqid in cursor.execute(q, (seq.content_id,)):
