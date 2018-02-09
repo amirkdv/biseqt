@@ -281,42 +281,8 @@ class HomologyFinder(SeedIndex):
             scores_by_d_[d_][0], scores_by_d_[d_][1] = s0, s1
         return scores_by_d_
 
-    def score_anti_bands(self, seglen, d_center=None, d_radius=None):
-        """Scores antidiagonal bands within a given diagonal band for both H0
-        and H1.
-
-        Args:
-            seglen (int):
-                (minimum) segment length of interest.
-            d_center (int):
-                center of diagonal band.
-            d_radius (int):
-                radius of diagonal band.
-
-        Returns:
-            np.array: scores of each antidiagonal position in the band.
-        """
-        d_min, d_max = d_center - d_radius, d_center + d_radius
-        area = (d_max - d_min) * seglen
-
-        # X[a] = number of seeds in (d_min, d_max) at anti position a
-        n_by_a = self.seed_count_by_a(d_center, d_radius)
-        n_by_a_cum = np.cumsum(n_by_a)
-
-        # X[a] = (s0, s1) the scores for ROI
-        scores_by_a = -1e4 * np.ones((len(n_by_a_cum), 2))
-        for anti in range(len(n_by_a_cum)):
-            a_radius = int(np.ceil(seglen/2))
-            m = max(0, anti - a_radius)
-            M = min(len(n_by_a_cum) - 1, anti + a_radius)
-            n_in_band = n_by_a_cum[M] - n_by_a_cum[m]
-            s0, s1 = self.score_num_seeds(num_seeds=n_in_band, area=area,
-                                          seglen=seglen)
-            scores_by_a[anti][0], scores_by_a[anti][1] = s0, s1
-        return scores_by_a
-
     def similar_segments(self, min_seglen, mode='H1'):
-        """A sub-quadratic Local similarity search algorithm that finds
+        """A sub-quadratic local similarity search algorithm that finds
         diagonal regions of similarity between given sequences.
 
         Args:
@@ -326,8 +292,9 @@ class HomologyFinder(SeedIndex):
                 either 'H0' or 'H1' specifying the null hypothesis.
 
         Yields:
-            tuple: coordinates of similar region in diagonal coordinates
-            ``((d_min, d_max), (a_min, a_max))``.
+            tuple: coordinates of similar region in diagonal coordinates, with
+            a z-score, and estimated match probability:
+            ``((d_min, d_max), (a_min, a_max)), z_score, match_prob``.
         """
         self.log('finding local homologies between %s and %s' %
                  (self.S.content_id[:8], self.T.content_id[:8]))
@@ -342,10 +309,26 @@ class HomologyFinder(SeedIndex):
         d_peaks = find_peaks(scores_by_d_[:, key], d_radius, threshold)
         for d_min_, d_max_ in d_peaks:
             d_min, d_max = d_min_ - self.d0, d_max_ - self.d0
-            center, radius = (d_max + d_min) / 2, (d_max - d_min) / 2
-            scores_by_a = self.score_anti_bands(min_seglen, d_center=center,
-                                                d_radius=radius)
+            area = (d_max - d_min) * K
+            # n_by_a[a] = number of seeds in (d_min, d_max) at anti position a
+            n_by_a = self.seed_count_by_a(d_min, d_max)
+            n_by_a_cum = np.cumsum(n_by_a)
+            scores_by_a = -1e4 * np.ones((len(n_by_a_cum), 2))
+            for anti in range(len(n_by_a_cum)):
+                m = max(0, anti - a_radius)
+                M = min(len(n_by_a_cum) - 1, anti + a_radius)
+                n_in_band = n_by_a_cum[M] - n_by_a_cum[m]
+                s0, s1 = self.score_num_seeds(num_seeds=n_in_band, area=area,
+                                              seglen=K)
+                scores_by_a[anti][0], scores_by_a[anti][1] = s0, s1
+
             a_peaks = find_peaks(scores_by_a[:, key], a_radius, threshold)
 
             for (a_min, a_max) in a_peaks:
-                yield (d_min, d_max), (a_min, a_max)
+                segment = ((d_min, d_max), (a_min, a_max))
+                # estimate match probability
+                num_seeds_in_segment = n_by_a_cum[a_max] - n_by_a_cum[a_min]
+                word_p = num_seeds_in_segment / (a_max - a_min)
+                match_p = np.exp(np.log(word_p) / self.wordlen)
+                z_score = np.max(scores_by_a[a_min:a_max, key])
+                yield segment, z_score, match_p

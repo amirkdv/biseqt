@@ -130,6 +130,7 @@ def test_homology_finder(wordlen, K, n):
 
     found_homs = list(HF.similar_segments(K))
     assert len(found_homs) == 1, 'Only one similar segment should be found'
-    (d_min, d_max), (a_min, a_max) = found_homs[0]
+    ((d_min, d_max), (a_min, a_max)), score, match_p = found_homs[0]
     assert d_min < 0 and d_max > 0 and a_min < K, \
         'The coordinates of the homologous segment must be correct'
+    assert 0 <= match_p <= 1, 'estimated match probability should be in [0, 1]'
