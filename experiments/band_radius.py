@@ -4,7 +4,6 @@ from matplotlib import pyplot as plt
 from bisect import bisect_left
 from scipy.special import erf, erfcinv
 from util import color_code, with_dumpfile, savefig
-plt.rc('text', usetex=True)
 
 
 def time_in_band(K, g, r):
@@ -49,7 +48,7 @@ def sim_time_in_band(K, gs, rs, n_samples, **kw):
 
 
 def plot_time_in_band(sim_data, cutoff_epsilon, path=None):
-    assert path and dumpfile
+    assert path
     gs = sim_data['gs']
     rs = sim_data['rs']
     K = sim_data['K']
