@@ -3,7 +3,7 @@ import numpy as np
 from matplotlib import pyplot as plt
 from bisect import bisect_left
 from scipy.special import erf, erfcinv
-from util import color_code, with_dumpfile, savefig
+from util import color_code, plot_with_sd, with_dumpfile, savefig
 
 
 def time_in_band(K, g, r):
@@ -78,14 +78,7 @@ def plot_time_in_band(sim_data, cutoff_epsilon, path=None):
 
         res = sim_data['in_band'][g_idx, :, :]
 
-        num_sds = 1
-        means = res.mean(axis=1)
-        sds = np.sqrt(res.var(axis=1))
-        ys_l = means - num_sds * sds
-        ys_h = np.minimum(1, means + num_sds * sds)
-        ax_sim.plot(rs, means, lw=1.5, color=color, zorder=2)
-        ax_sim.fill_between(rs, ys_l, ys_h, facecolor=color, edgecolor=color,
-                            alpha=.2)
+        plot_with_sd(ax_sim, rs, res, axis=1, y_max=1, color=color, lw=1.5)
         ax_sim.set_xlabel('Band radius')
         ax_sim.set_ylabel('proportion of time in band')
         ax_sim.axvline(r_cutoff, color=color, lw=5, alpha=.3)

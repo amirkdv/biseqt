@@ -67,7 +67,7 @@ def with_dumpfile(func):
     def wrapped_func(*args, **kwargs):
         dumpfile = kwargs['dumpfile']
         path = os.path.join(DUMP_DIR, dumpfile)
-        if os.path.exists(path) and not kwargs.get('repeat', False):
+        if os.path.exists(path) and not kwargs.get('ignore_existing', False):
             return pickle_load(dumpfile)
         out = func(*args, **kwargs)
         pickle_dump(dumpfile, out)
@@ -86,16 +86,21 @@ def color_code(values, cmap='rainbow'):
     return [cmap((v - m) / M) for v in values]
 
 
-def plot_with_sd(ax, xs, ys, num_sds=1, axis=None, color='k', **plot_kw):
+def plot_with_sd(ax, xs, ys, axis=None, n_sds=1, y_max=None, color='k', **kw):
     """Plots the mean of given data set (with specified axis) and add a shaded
     region around specifying a given number of standard deviations."""
     means = ys.mean(axis=axis)
     sds = np.sqrt(ys.var(axis=axis))
 
-    ys_l = means - num_sds * sds
-    ys_h = means + num_sds * sds
+    ys_l = means - n_sds * sds
+    ys_h = means + n_sds * sds
 
-    ax.plot(xs, means, color=color, **plot_kw)
+    if y_max is not None:
+        assert np.all(means <= y_max), 'all means must be bounded above by max'
+        ys_l -= np.maximum(0, ys_h - y_max)
+        ys_h = np.minimum(ys_h, y_max)
+
+    ax.plot(xs, means, color=color, **kw)
     ax.fill_between(xs, ys_l, ys_h, facecolor=color, edgecolor=color, alpha=.2)
 
 
