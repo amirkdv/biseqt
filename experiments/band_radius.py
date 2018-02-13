@@ -7,13 +7,13 @@ from util import color_code, plot_with_sd, with_dumpfile, savefig
 
 
 def time_in_band(K, g, r):
-    A = r / (2 * np.sqrt(g * K))
+    A = r / (np.sqrt(2 * g * K))
     return erf(A) \
         + A * (2 / np.sqrt(np.pi) * np.exp(-A ** 2) - 4 * A * (1 - erf(A)))
 
 
 def real_sensitivity(K, g, epsilon):
-    r = erfcinv(epsilon) * 2 * np.sqrt(g * K)
+    r = erfcinv(epsilon) * np.sqrt(2 * g * K)
     return time_in_band(K, g, r)
 
 
@@ -28,8 +28,7 @@ def sim_time_in_band(K, gs, rs, n_samples, **kw):
     for g_idx, g in enumerate(gs):
         d0 = K
         for sample_idx in range(n_samples):
-            print '%d / %d' % (sample_idx + 1, n_samples)
-            path = np.random.choice(['M', 'I', 'D'], p=[1-2*g, g, g], size=K)
+            path = np.random.choice(list('MID'), p=[1-g, g / 2, g / 2], size=K)
             time_at_d_ = np.zeros(2*K)
             i, j = 0, 0
             for op in path:
