@@ -9,14 +9,15 @@ $(LIBDIR)/pwlib.so: $(CFILES) $(LIBDIR)/pwlib.h
 	$(GCC) $(CFILES) -o $@
 
 clean:
-	@find biseqt tests -regextype posix-extended -regex '.*.(pyc|swp|swo|egg|egg-info)' | \
+	@find biseqt tests experiments -regextype posix-extended -regex '.*.(pyc|swp|swo|egg|egg-info)' | \
 		grep -v '^./.git' | tee /dev/stderr  | while read f; do rm -rf $$f; done
 	rm -f core biseqt/pwlib/pwlib.so
 	rm -rf docs/_build docs/doxygen
 
+FLAKE8_INCLUDE = biseqt tests # experiments
 FLAKE8_EXCLUDE =
 flake8:
-	flake8 biseqt tests --exclude=$(FLAKE8_EXCLUDE)
+	flake8 $(FLAKE8_INCLUDE) --exclude=$(FLAKE8_EXCLUDE)
 
 PYTEST_OPTS=--cov biseqt --capture=no --cov-report=term-missing --verbose
 COVERAGE_BADGE=coverage.svg  # relative to tests/
