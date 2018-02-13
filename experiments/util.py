@@ -16,24 +16,37 @@ def log(msg, newline=True):
     sys.stderr.write('\n'.join(wrapper.wrap(msg)) + '\n' if newline else '')
 
 
+def _make_absolute(path):
+    if not os.path.isabs(path):
+        path = os.path.join(os.path.dirname(os.path.realpath(__file__)), path)
+    return path
+
+
+DATA_DIR = _make_absolute(os.getenv('DATA_DIR', 'data/'))
+PLOT_DIR = _make_absolute(os.getenv('PLOT_DIR', 'plots/'))
+DUMP_DIR = _make_absolute(os.getenv('DUMP_DIR', 'dumpfiles/'))
+
+
 # =============================================================================
-# File IO Helpers
+# IO Helpers
 # =============================================================================
 # TODO change syntax to pickle_dump(obj, path)
 def pickle_dump(path, obj, comment=None):
+    """Pickle dumps the given object to given relative path in DUMP_DIR."""
     try:
-        with open(path, 'w') as f:
+        with open(os.path.join(DUMP_DIR, path), 'w') as f:
             pickle.dump(obj, f)
     except IOError, e:
         log('Error writing to %s: %s' % (path, str(e)))
         n = np.random.choice(list('0123456789abcdef'), size=10)
-        path = '/tmp/' + ''.join(str(i) for i in n)
+        path = os.join('/tmp', ''.join(str(i) for i in n))
         with open(path, 'w') as f:
             pickle.dump(obj, f)
     log('dumped %s to %s.' % (comment if comment else 'object', path))
 
 
 def pickle_load(path):
+    path = os.path.join(DUMP_DIR, path)
     with open(path, 'rb') as f:
         return pickle.load(f)
 
@@ -53,7 +66,8 @@ def with_dumpfile(func):
     """
     def wrapped_func(*args, **kwargs):
         dumpfile = kwargs['dumpfile']
-        if os.path.exists(dumpfile) and not kwargs.get('repeat', False):
+        path = os.path.join(DUMP_DIR, dumpfile)
+        if os.path.exists(path) and not kwargs.get('repeat', False):
             return pickle_load(dumpfile)
         out = func(*args, **kwargs)
         pickle_dump(dumpfile, out)
@@ -90,7 +104,7 @@ def savefig(fig, path, grid_all=True, comment=None):
         for ax in fig.get_axes():
             ax.grid(True)
     fig.tight_layout(rect=[0, 0.03, 1, 0.95])
-    fig.savefig(path, dpi=270)
+    fig.savefig(os.path.join(PLOT_DIR, path), dpi=270)
     log('recreated plot%s at %s\n' %
         ('' if comment is None else ' "%s"' % comment, path))
 
