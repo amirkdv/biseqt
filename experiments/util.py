@@ -2,9 +2,10 @@ import os
 import sys
 import pickle
 import numpy as np
-from matplotlib import pyplot as plt
 from bisect import bisect_left
 from textwrap import TextWrapper
+from matplotlib import pyplot as plt
+import matplotlib.gridspec as gridspec
 
 
 plt.rc('text', usetex=True)
@@ -83,7 +84,7 @@ def color_code(values, cmap='rainbow'):
     """Returns an array of RGB colors of the same length as values."""
     cmap = plt.cm.get_cmap(cmap)
     m, M = 1. * min(values), 1. * max(values)
-    return [cmap((v - m) / M) for v in values]
+    return [cmap((v - m) / (M - m)) for v in values]
 
 
 def plot_with_sd(ax, xs, ys, axis=None, n_sds=1, y_max=None, color='k', **kw):
@@ -229,11 +230,10 @@ def plot_classifier(pos, neg, labels=None, name=None, classifier='>'):
 
     fig = plt.figure(figsize=(12, 8))
 
-    import matplotlib.gridspec as gridspec
-    gs = gridspec.GridSpec(2, 2, height_ratios=[2.5, 1])
-    ax_roc = fig.add_subplot(gs[0, 0])
-    ax_p_roc = fig.add_subplot(gs[0, 1])
-    ax_cdf = fig.add_subplot(gs[1, :])
+    grids = gridspec.GridSpec(2, 2, height_ratios=[2.5, 1])
+    ax_roc = fig.add_subplot(grids[0, 0])
+    ax_p_roc = fig.add_subplot(grids[0, 1])
+    ax_cdf = fig.add_subplot(grids[1, :])
 
     plot_cdf(ax_cdf, pos, color='g', label=labels[0], lw=1.5)
     plot_cdf(ax_cdf, neg, color='r', label=labels[1], lw=1.5)
