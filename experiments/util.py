@@ -146,6 +146,68 @@ def savefig(fig, path, grid_all=True, comment=None):
         ('' if comment is None else ' "%s"' % comment, path))
 
 
+# Call this after all work (e.g. plot_seeds, plot_global_alignment, etc) is
+# done on the Axes object.
+def adjust_pw_plot(ax, N0, N1):
+    ax.set_ylim(-N0 * .1, N0 * 1.1)
+    ax.set_xlim(-N1 * .1, N1 * 1.1)
+    ax.set_xlabel('Pos. in T', fontsize=12)
+    ax.set_ylabel('Pos. in S', fontsize=12)
+    ax.set_aspect('equal')
+    line_kw = {'c': 'k', 'alpha': .1, 'lw':'5'}
+    ax.axvline(x=-5,  **line_kw)
+    ax.axvline(x=N1+5, **line_kw)
+    ax.axhline(y=-5,  **line_kw)
+    ax.axhline(y=N0+5, **line_kw)
+    ax.invert_yaxis()
+    ax.xaxis.tick_top()
+    ax.xaxis.set_label_position('top')
+    ax.tick_params(labelsize=10)
+
+
+def plot_seeds(ax, seeds, N0, N1, c='k'):
+    idx_S, idx_T = [], []
+    for seed in seeds:
+        idx_S.append(seed[0])
+        idx_T.append(seed[1])
+
+    # x and y are flipped when going from matrix notation to plotting.
+    ax.scatter(idx_T, idx_S, facecolor=c, lw=0, s=2, alpha=.3)
+    ax.grid(True)
+
+
+def plot_similar_segment(ax, segment, color):
+    (d_min, d_max), (a_min, a_max) = segment
+    seg_ds = [d_min, d_min, d_max, d_max]
+    seg_as = [a_min, a_max, a_max, a_min]
+
+    seg_xs = [0, 0, 0, 0]
+    seg_ys = [0, 0, 0, 0]
+    for i in range(4):
+        d, a = seg_ds[i], seg_as[i]
+        x, y = (a + max(d, 0), a - min(d, 0))
+        # x and y is flipped between matrix notation and plotting
+        seg_xs[i], seg_ys[i] = y, x
+
+    im = ax.fill(seg_xs, seg_ys, facecolor=color, edgecolor='none', lw=1, alpha=.3)
+
+
+def plot_global_alignment(ax, opseq, **kw):
+    xs, ys = [0], [0]
+    for op in opseq:
+        if op in 'MS':
+            xs.append(xs[-1] + 1)
+            ys.append(ys[-1] + 1)
+        elif op == 'I':
+            xs.append(xs[-1])
+            ys.append(ys[-1] + 1)
+        elif op == 'D':
+            xs.append(xs[-1] + 1)
+            ys.append(ys[-1])
+
+    ax.plot(xs, ys, **kw)
+
+
 # =============================================================================
 # STATISTICAL HELPERS
 #
