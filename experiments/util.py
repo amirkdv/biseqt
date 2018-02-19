@@ -31,6 +31,38 @@ DUMP_DIR = _make_absolute(os.getenv('DUMP_DIR', 'dumpfiles/'))
 # =============================================================================
 # IO Helpers
 # =============================================================================
+# TODO if we don't need file position use biopython instead
+def load_fasta(f):
+    """Given file handle reads fasta sequences and yields tuples of (seq, name,
+       pos) containing the raw sequence, its FASTA name, and its starting
+       position in f.
+    """
+    cur_name = cur_seq = ''
+    cur_pos = 0
+
+    # NOTE `for raw_line in f` uses a read-ahead buffer which makes `f.tell()`
+    # useless for remembering where a sequence begins.
+    # cf. https://docs.python.org/2/library/stdtypes.html#file.next
+    for raw_line in iter(f.readline, ''):
+        line = raw_line.strip()
+        if not line:
+            continue
+        if line[0] == '>':
+            if cur_seq:
+                assert cur_name
+                yield cur_seq, cur_name, cur_pos
+                cur_seq, cur_name = '', ''
+            cur_name = line[1:].strip()
+            cur_pos = f.tell() - len(raw_line)
+            cur_seq = ''
+        else:
+            assert cur_name
+            cur_seq += line
+    if cur_seq:
+        assert cur_name
+        yield cur_seq, cur_name, cur_pos
+
+
 # TODO change syntax to pickle_dump(obj, path)
 def pickle_dump(path, obj, comment=None):
     """Pickle dumps the given object to given relative path in DUMP_DIR."""
@@ -56,14 +88,14 @@ def with_dumpfile(func):
     """Decorator for storing simulation results, usage:
 
         @with_dumpfile
-        sim_foo(..., **kw):
+        foo(..., **kw):
             ...
             return results # this is dumped to dumpfile
 
-        # load from dumpfile if it exists, sim_foo() will not be executed
-        res = sim_foo(..., dumpfile='foo.txt', ignore_existing=False)
-        # force a re-run of sim_foo(), dumpfile will be overwritten
-        res = sim_foo(..., dumpfile='foo.txt', ignore_existing=True)
+        # if dumpfile exists, foo() will not be executed
+        res = foo(..., dumpfile='foo.txt')
+        # force a re-run of foo(), dumpfile will be overwritten
+        res = foo(..., dumpfile='foo.txt', ignore_existing=True)
     """
     def wrapped_func(*args, **kwargs):
         dumpfile = kwargs['dumpfile']
