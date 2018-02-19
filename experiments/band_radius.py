@@ -48,7 +48,6 @@ def sim_time_in_band(K, gs, rs, n_samples, **kw):
             for sample_idx, opseq in enumerate(samples):
                 time_at_d_ = np.zeros(2*K)
                 i, j = 0, 0
-                #print len(opseq), g, 1 - 1. * opseq.count('M') / len(opseq)
                 for op in opseq:
                     d = i - j
                     time_at_d_[d + d0] += 1

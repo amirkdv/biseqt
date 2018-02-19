@@ -1,11 +1,16 @@
 import os
 import sys
+import re
 import pickle
 import numpy as np
 from bisect import bisect_left
 from textwrap import TextWrapper
 from matplotlib import pyplot as plt
 import matplotlib.gridspec as gridspec
+from Bio import AlignIO
+from itertools import combinations
+import pysam
+from biseqt.stochastics import rand_seq, MutationProcess
 
 
 plt.rc('text', usetex=True)
@@ -29,40 +34,8 @@ DUMP_DIR = _make_absolute(os.getenv('DUMP_DIR', 'dumpfiles/'))
 
 
 # =============================================================================
-# IO Helpers
+# Generic IO Helpers
 # =============================================================================
-# TODO if we don't need file position use biopython instead
-def load_fasta(f):
-    """Given file handle reads fasta sequences and yields tuples of (seq, name,
-       pos) containing the raw sequence, its FASTA name, and its starting
-       position in f.
-    """
-    cur_name = cur_seq = ''
-    cur_pos = 0
-
-    # NOTE `for raw_line in f` uses a read-ahead buffer which makes `f.tell()`
-    # useless for remembering where a sequence begins.
-    # cf. https://docs.python.org/2/library/stdtypes.html#file.next
-    for raw_line in iter(f.readline, ''):
-        line = raw_line.strip()
-        if not line:
-            continue
-        if line[0] == '>':
-            if cur_seq:
-                assert cur_name
-                yield cur_seq, cur_name, cur_pos
-                cur_seq, cur_name = '', ''
-            cur_name = line[1:].strip()
-            cur_pos = f.tell() - len(raw_line)
-            cur_seq = ''
-        else:
-            assert cur_name
-            cur_seq += line
-    if cur_seq:
-        assert cur_name
-        yield cur_seq, cur_name, cur_pos
-
-
 # TODO change syntax to pickle_dump(obj, path)
 def pickle_dump(path, obj, comment=None):
     """Pickle dumps the given object to given relative path in DUMP_DIR."""
@@ -110,6 +83,245 @@ def with_dumpfile(func):
 
 
 # =============================================================================
+# Real bio sequence and alignment helpers
+# =============================================================================
+def load_fasta(f):
+    """Given file handle reads fasta sequences and yields tuples of (seq, name,
+       pos) containing the raw sequence, its FASTA name, and its starting
+       position in f.
+    """
+    cur_name = cur_seq = ''
+    cur_pos = 0
+
+    # NOTE `for raw_line in f` uses a read-ahead buffer which makes `f.tell()`
+    # useless for remembering where a sequence begins.
+    # cf. https://docs.python.org/2/library/stdtypes.html#file.next
+    for raw_line in iter(f.readline, ''):
+        line = raw_line.strip()
+        if not line:
+            continue
+        if line[0] == '>':
+            if cur_seq:
+                assert cur_name
+                yield cur_seq, cur_name, cur_pos
+                cur_seq, cur_name = '', ''
+            cur_name = line[1:].strip()
+            cur_pos = f.tell() - len(raw_line)
+            cur_seq = ''
+        else:
+            assert cur_name
+            cur_seq += line
+    if cur_seq:
+        assert cur_name
+        yield cur_seq, cur_name, cur_pos
+
+
+# NOTE sam alignments don't have substitutions, so outputs here are MID,
+# whereas outputs of MAF are in {SMID}*.
+def sam_to_opseqs(sam_path, opseq_path):
+    """ Usage:
+        >>> sam_to_opseqs('foo.sam', 'foo_opseqs.fa')
+
+    The opseqs path will contain a single string of mutations obtained from SAM
+    alignments.
+    """
+    def _opseq_from_cigar_string(cigarstring):
+        cigar_ops = [x for x in re.split('(I|M|D)', cigarstring) if x]
+        assert len(cigar_ops) % 2 == 0, 'incomplete cigar string'
+        ops = []
+
+        # clip flanking insertion/deletions
+        if cigar_ops[1] in 'DI':
+            cigar_ops = cigar_ops[2:]
+        if cigar_ops[-1] in 'DI':
+            cigar_ops = cigar_ops[:-2]
+
+        for i in range(len(cigar_ops) / 2):
+            ops += [cigar_ops[2 * i + 1]] * int(cigar_ops[2 * i])
+        assert all(op in 'IMD' for op in ops)
+        return ''.join(ops)
+
+    samfile = pysam.AlignmentFile(sam_path)
+    log('loading SAM records from %s.' % sam_path)
+    with open(opseq_path, 'w') as f:
+        for rec in samfile.fetch():
+            opseq = _opseq_from_cigar_string(rec.cigarstring)
+            assert opseq.count('I') + opseq.count('M') + opseq.count('S') == \
+                rec.query_alignment_length
+            f.write(opseq)
+        f.write('\n')
+
+
+def seq_in_maf(alignment, id_):
+    for rec in alignment:
+        if rec.id == id_:
+            return np.array(list(rec))
+    return np.array([])
+
+
+def get_seqs_from_maf(maf_path):
+    alignments = list(AlignIO.parse(maf_path, 'maf'))
+    # NOTE trust the first alignment to have all the ids
+    ids = list(rec.id for rec in alignments[0])
+    for i in ids:
+        seq = np.concatenate([seq_in_maf(alignment, i)
+                              for alignment in alignments])
+        assert seq[0] != '-', \
+            'Alignments starting with gaps not allowed (pw vs indiv madness)'
+        yield i, ''.join(x for x in seq if x != '-')
+
+
+def get_pws_from_maf(maf_path):
+    alignments = list(AlignIO.parse(maf_path, 'maf'))
+    # NOTE trust the first alignment to have all the ids
+    ids = list(rec.id for rec in alignments[0])
+
+    for i, j in combinations(ids, 2):
+        seqs_i, seqs_j = [], []
+        for alignment in alignments:
+            seq_i_in_aln = seq_in_maf(alignment, i)
+            seq_j_in_aln = seq_in_maf(alignment, j)
+            if len(seq_i_in_aln) and len(seq_j_in_aln):
+                seqs_i.append(seq_i_in_aln)
+                seqs_j.append(seq_j_in_aln)
+        full_alignment = np.array([np.concatenate(seqs_i),
+                                   np.concatenate(seqs_j)])
+
+        # remove double gaps, e.g.
+        # AA-T
+        # AA-T
+        double_gaps = []
+        for idx in range(len(full_alignment[0, :])):
+            if full_alignment[0, idx] == full_alignment[1, idx] == '-':
+                double_gaps.append(idx)
+        full_alignment = np.delete(full_alignment, double_gaps, axis=1)
+
+        # translate alignment to SMDI opseq
+        def _let_pair_to_op(let0, let1):
+            assert let0 != '-' or let1 != '-'
+            if let0 == '-':
+                return 'I'
+            if let1 == '-':
+                return 'D'
+            if let0 == let1:
+                return 'M'
+            else:
+                return 'S'
+        opseq = ''.join(_let_pair_to_op(*full_alignment[:, idx])
+                        for idx in range(len(full_alignment[0, :])))
+        yield i, j, opseq
+
+
+# maf_to_individual_fasta('data/actb/actb-7vet.maf', 'data/actb/actb-7vet.fa')
+def maf_to_individual_fasta(maf_path, out_path):
+    """ Usage:
+        >>> maf_to_individual_fasta('foo.maf', 'foo_indiv.fa')
+
+    Each entry in output is in FASTA format where each record is:
+
+        > [id] (as per maf)
+        [seq]  (concatenated and - removed as per maf)
+    """
+    with open(out_path, 'w') as f:
+        for id_, seq in get_seqs_from_maf(maf_path):
+            f.write('> %s\n%s\n' % (id_, seq))
+
+
+# maf_to_pw_fasta('data/actb/actb-7vet.maf', 'data/actb/actb-7vet-pws.fa')
+def maf_to_pw_fasta(maf_path, out_path):
+    """ Usage:
+        >>> maf_to_pw_fasta('foo.maf', 'foo_pw.fa')
+
+    Each entry in output is in FASTA format where each record is:
+
+        > [id0]:[id1] (of pair of sequnces as per maf)
+        [opsseq]  (in SMID, concatenated and double - removed)
+    """
+    with open(out_path, 'w') as f:
+        for i, j, opseq in get_pws_from_maf(maf_path):
+            f.write('> %s:%s\n%s\n' % (i, j, opseq))
+
+
+# =============================================================================
+# Random Generation Helpers
+# =============================================================================
+def rand_seq_pair(n, alphabet, related=False, mutation_process=None):
+    if not related:
+        assert isinstance(mutation_process, MutationProcess)
+    S = rand_seq(alphabet, n)
+    if related:
+        T, _ = mutation_process.mutate(S)
+    else:
+        T = rand_seq(alphabet, n)
+    return S, T
+
+
+def rand_seq_pair_real(n, source_seq, related=False, mutation_process=None):
+    if not related:
+        assert isinstance(mutation_process, MutationProcess)
+    if related:
+        assert n < len(source_seq)
+        nS = np.random.randint(0, len(source_seq) - n)
+        S = source_seq[nS:nS + n]
+        T, _ = mutation_process.mutate(S)
+    else:
+        assert n * 2 < len(source_seq)
+        nS = np.random.randint(0, len(source_seq) - 2 * n)
+        nT = np.random.randint(nS, len(source_seq) - n)
+        S = source_seq[nS:nS + n]
+        T = source_seq[nT:nT + n]
+    return S, T
+
+
+def estimate_gap_probs_in_opseq(opseq, radius):
+    assert isinstance(radius, int)
+    assert len(opseq) > 2 * radius
+    gaps = np.zeros(len(opseq))
+    start = opseq[:2 * radius + 1]
+    n_MS = start.count('M') + start.count('S')
+    for i in range(radius, len(opseq) - radius):
+        if opseq[i - radius] in 'MS':
+            n_MS -= 1
+        if opseq[i + radius] in 'MS':
+            n_MS += 1
+        gaps[i] = 1 - n_MS / (2. * radius)
+    return gaps
+
+
+def estimate_match_probs_in_opseq(opseq, radius):
+    assert isinstance(radius, int)
+    assert len(opseq) > 2 * radius
+    matches = np.zeros(len(opseq))
+    start = opseq[:2 * radius + 1]
+    n_M = start.count('M')
+    for i in range(radius, len(opseq) - radius):
+        if opseq[i - radius] == 'M':
+            n_M -= 1
+        if opseq[i + radius] == 'M':
+            n_M += 1
+        matches[i] = 1 - n_M / (2. * radius)
+    return matches
+
+
+def rand_opseq_real(opseq, K, n_samples, gap=None, match=None,
+                    resolution=1e-3):
+    assert gap is None or match is None
+    radius = K / 2
+    if match is not None:
+        matches = estimate_match_probs_in_opseq(opseq, radius)
+        cands = [idx for idx in range(len(matches))
+                 if abs(matches[idx] - match) < resolution]
+    elif gap is not None:
+        gaps = estimate_gap_probs_in_opseq(opseq, radius)
+        cands = [idx for idx in range(len(gaps))
+                 if abs(gaps[idx] - gap) < resolution]
+    assert len(cands) > n_samples, 'not enough samples found'
+    samples = np.random.choice(cands, size=n_samples)
+    for pos in samples:
+        yield opseq[pos - radius:pos + radius]
+
+
+# =============================================================================
 # MATPLOTLIB HELPERS
 # =============================================================================
 def color_code(values, cmap='rainbow'):
@@ -154,7 +366,7 @@ def adjust_pw_plot(ax, N0, N1):
     ax.set_xlabel('Pos. in T', fontsize=12)
     ax.set_ylabel('Pos. in S', fontsize=12)
     ax.set_aspect('equal')
-    line_kw = {'c': 'k', 'alpha': .1, 'lw':'5'}
+    line_kw = {'c': 'k', 'alpha': .1, 'lw': '5'}
     ax.axvline(x=-5,  **line_kw)
     ax.axvline(x=N1+5, **line_kw)
     ax.axhline(y=-5,  **line_kw)
@@ -189,7 +401,7 @@ def plot_similar_segment(ax, segment, color):
         # x and y is flipped between matrix notation and plotting
         seg_xs[i], seg_ys[i] = y, x
 
-    im = ax.fill(seg_xs, seg_ys, facecolor=color, edgecolor='none', lw=1, alpha=.3)
+    ax.fill(seg_xs, seg_ys, facecolor=color, edgecolor='none', lw=1, alpha=.3)
 
 
 def plot_global_alignment(ax, opseq, **kw):

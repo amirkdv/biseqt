@@ -17,8 +17,11 @@ from biseqt.kmers import KmerCache
 from util import pickle_dump, pickle_load, plot_classifier
 from util import adjust_pw_plot, plot_global_alignment
 from util import plot_seeds, plot_similar_segment
+from util import plot_with_sd
 
 ALPHABET = Alphabet('ACGT')
+
+# FIXME obselete, cf. util.rand_seq_pair, and util.rand_seq_pair_real
 LEISH_PATH = os.path.join(os.path.dirname(__file__), 'data/leishmania/reference.fa')
 load_real = False
 if load_real:
@@ -27,9 +30,6 @@ if load_real:
 
     LEISH_SEQ = ALPHABET.parse(''.join([x for x in LEISH_SEQ if x in ALPHABET]))
 
-
-# FIXME absorb as much as possible into stochastics and then move to
-# experiments/util.py
 def rand_seq_pair(N, related=False, real=False, mutation_process=None):
     if not related:
         assert isinstance(mutation_process, MutationProcess)
@@ -71,7 +71,6 @@ def pad_seq_pair(S, T, pad_length, ends='right'):
 # Two scores are considered: z score wrt H0 and wrt H1
 # =======================
 # K is segment length of interest
-from util import plot_with_sd
 def plot_stats_performance_fixed_K(K, ns, n_samples, real=False, wordlen=None,
                            gap=None, subst=None, num_sds=1, banded=False,
                            replot=False, dumpfile=None):
