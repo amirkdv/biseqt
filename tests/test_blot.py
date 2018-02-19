@@ -116,19 +116,20 @@ def test_local_similarity(wordlen, K, n):
     gap, subst = .05, .05
     A = Alphabet('ACGT')
     M = MutationProcess(A, subst_probs=subst, ge_prob=gap, go_prob=gap)
-    HF_kw = {'gap_prob': gap, 'subst_prob': subst,
-             'sensitivity': .99, 'alphabet': A, 'wordlen': wordlen,
-             'path': ':memory:'}
+    HF_kw = {'g_max': .2, 'sensitivity': .99, 'alphabet': A,
+             'wordlen': wordlen, 'path': ':memory:'}
 
     hom = rand_seq(A, K)
     S = A.parse(str(hom) + str(rand_seq(A, n - K)))
     T = A.parse(str(M.mutate(hom)[0]) + str(rand_seq(A, n-K)))
     HF = HomologyFinder(S, T, **HF_kw)
 
-    assert abs(np.nanargmax(HF.score_diagonal_bands(K)[:, 1]) - HF.d0) < K, \
+    p_match = (1 - gap) * (1 - subst)
+    diagonal_scores = HF.score_diagonal_bands(K, p_match)
+    assert abs(np.nanargmax(diagonal_scores[:, 1]) - HF.d0) < K, \
         'The highest H1 scoring diagonal band must be roughly around 0'
 
-    found_homs = list(HF.similar_segments(K))
+    found_homs = list(HF.similar_segments(K, p_match))
     assert len(found_homs) == 1, 'Only one similar segment should be found'
     ((d_min, d_max), (a_min, a_max)), score, match_p = found_homs[0]
     assert d_min < 0 and d_max > 0 and a_min < K, \
@@ -146,14 +147,14 @@ def test_overlap_detection(wordlen, K, n):
     gap, subst = .05, .05
     A = Alphabet('ACGT')
     M = MutationProcess(A, subst_probs=subst, ge_prob=gap, go_prob=gap)
-    HF_kw = {'gap_prob': gap, 'subst_prob': subst,
-             'sensitivity': .99, 'alphabet': A, 'wordlen': wordlen,
-             'path': ':memory:'}
+    HF_kw = {'g_max': .2, 'sensitivity': .99, 'alphabet': A,
+             'wordlen': wordlen, 'path': ':memory:'}
 
+    p_match = (1 - gap) * (1 - subst)
     overlap = rand_seq(A, K)
     S = rand_seq(A, n - K) + overlap
     T = M.mutate(overlap)[0] + rand_seq(A, n - K)
     HF = HomologyFinder(S, T, **HF_kw)
-    (seg0, s0), (seg1, s1) = HF.highest_scoring_overlap_band()
+    (seg0, s0), (seg1, s1) = HF.highest_scoring_overlap_band(p_match)
     assert seg0[0] < n - K < seg0[1], 'H0 must detect the correct overlap'
     assert seg1[0] < n - K < seg1[1], 'H1 must detect the correct overlap'
