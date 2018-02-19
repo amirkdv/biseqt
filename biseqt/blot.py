@@ -333,7 +333,7 @@ class HomologyFinder(SeedIndex):
     def estimate_match_probability(self, num_seeds, d_band=None, a_band=None):
         K, area = self.segment_dims(d_band=d_band, a_band=a_band)
         word_p_null = (1./len(self.alphabet)) ** self.wordlen
-        word_p = (num_seeds - area * word_p_null)/ K
+        word_p = (num_seeds - area * word_p_null) / K
         match_p = np.exp(np.log(word_p) / self.wordlen)
         return min(match_p, 1)
 
@@ -384,10 +384,10 @@ class HomologyFinder(SeedIndex):
             a_peaks = find_peaks(scores_by_a[:, key], a_radius, threshold)
 
             for (a_min, a_max) in a_peaks:
+                segment = ((d_min, d_max), (a_min, a_max))
                 num_seeds_in_segment = n_by_a_cum[a_max] - n_by_a_cum[a_min]
-                match_p = self.estimate_match_probability(num_seeds_in_segment,
-                                                          d_band=(d_min, d_max),
-                                                          a_band=(a_min, a_max))
+                match_p = self.estimate_match_probability(
+                    num_seeds_in_segment, d_band=segment[0], a_band=segment[1])
                 # NOTE we if we re-score the segment based on observed seglen
                 # (i.e K_hat) we get scores that are eventually, indicative of
                 # quality only and do not depend on segment length.
@@ -396,6 +396,6 @@ class HomologyFinder(SeedIndex):
                 K_hat, area = self.segment_dims(d_band=(d_min, d_max),
                                                 a_band=(a_min, a_max))
                 z_score = self.score_num_seeds(num_seeds=num_seeds_in_segment,
-                                               area=area, seglen=K_hat, p_match=p_min)[key]
-                segment = ((d_min, d_max), (a_min, a_max))
+                                               area=area, seglen=K_hat,
+                                               p_match=p_min)[key]
                 yield segment, z_score, match_p

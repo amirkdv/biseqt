@@ -130,7 +130,6 @@ def plot_with_sd(ax, xs, ys, axis=None, n_sds=1, y_max=None, color='k', **kw):
 
     if y_max is not None:
         assert np.all(means <= y_max), 'all means must be bounded above by max'
-        ys_l -= np.maximum(0, ys_h - y_max)
         ys_h = np.minimum(ys_h, y_max)
 
     ax.plot(xs, means, color=color, **kw)
