@@ -121,7 +121,7 @@ def band_radius(expected_len, gap_prob, sensitivity):
     """
     assert 0 < gap_prob < 1 and 0 < sensitivity < 1
     epsilon = 1. - sensitivity
-    C = 2 * erfcinv(epsilon) * np.sqrt(gap_prob * (1 - gap_prob))
+    C = 2 * erfcinv(epsilon) * np.sqrt(gap_prob)
     radius = C * np.sqrt(expected_len)
     return max(1, int(np.ceil(radius)))
 
@@ -140,7 +140,7 @@ def band_radii(expected_lens, gap_prob, sensitivity):
     """
     assert 0 < gap_prob < 1 and 0 < sensitivity < 1
     epsilon = 1. - sensitivity
-    C = 2 * erfcinv(epsilon) * np.sqrt(gap_prob * (1 - gap_prob))
+    C = erfcinv(epsilon) * np.sqrt(2 * gap_prob)
     return np.array([max(1, int(np.ceil(C * np.sqrt(K))))
                      for K in expected_lens])
 
