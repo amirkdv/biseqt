@@ -145,6 +145,38 @@ def band_radii(expected_lens, gap_prob, sensitivity):
                      for K in expected_lens])
 
 
+def H0_moments(alphabet_len, wordlen, area):
+    p_H0 = 1. / alphabet_len
+    pw_H0 = p_H0 ** wordlen
+
+    # HACK for bio data, wordlen = 8
+    # pw_H0 *= 2.5
+
+    mu_H0 = area * pw_H0
+    sd_H0 = np.sqrt(area * (
+        (1 - pw_H0) * (pw_H0 + 2 * p_H0 * pw_H0 / (1 - p_H0)) -
+        2 * wordlen * pw_H0 ** 2
+    ))
+    return mu_H0, sd_H0
+
+
+def H1_moments(alphabet_len, wordlen, area, seglen, p_match):
+    mu_H0, sd_H0 = H0_moments(alphabet_len, wordlen, area)
+
+    p_H1 = p_match
+    pw_H1 = p_H1 ** wordlen
+
+    # HACK
+    # pw_H1 *= 2.5
+
+    mu_H1 = mu_H0 + seglen * pw_H1
+    sd_H1 = np.sqrt(sd_H0 ** 2 + seglen * (
+        (1 - pw_H1) * (pw_H1 + 2 * p_H1 * pw_H1 / (1 - p_H1)) -
+        2 * wordlen * pw_H1 ** 2
+    ))
+    return mu_H1, sd_H1
+
+
 class HomologyFinder(SeedIndex):
     """A homology finder based on m-dependent CLT statistics.
 
@@ -182,31 +214,18 @@ class HomologyFinder(SeedIndex):
         """
         # FIXME calculate all this stuff once, keep in object
         num_seeds = kw['num_seeds']
-        A = kw['area']
-        K = kw['seglen']
-        p_match = kw['p_match']
+        area = kw['area']
 
-        if A == 0:
+        if area == 0:
             return float('-inf'), float('-inf')
 
-        p_H0 = 1. / len(self.alphabet)
-        pw_H0 = p_H0 ** self.wordlen
-        p_H1 = p_match
-        pw_H1 = p_H1 ** self.wordlen
+        mu_H0, sd_H0 = H0_moments(len(self.alphabet), self.wordlen, area)
+        mu_H1, sd_H1 = H1_moments(len(self.alphabet), self.wordlen, area,
+                                  kw['seglen'], kw['p_match'])
 
-        mu_H0 = A * pw_H0
-        mu_H1 = mu_H0 + K * pw_H1
-        sd_H0 = np.sqrt(A * (
-            (1 - pw_H0) * (pw_H0 + 2 * p_H0 * pw_H0 / (1 - p_H0)) -
-            2 * self.wordlen * pw_H0 ** 2
-        ))
-        sd_H1 = np.sqrt(sd_H0**2 + K * (
-            (1 - pw_H1) * (pw_H1 + 2 * p_H1 * pw_H1 / (1 - p_H1)) -
-            2 * self.wordlen * pw_H1 ** 2
-        ))
-        s_H0 = (num_seeds - mu_H0) / sd_H0  # score under H0
-        s_H1 = (num_seeds - mu_H1) / sd_H1  # score under H1
-        return s_H0, s_H1
+        z_H0 = (num_seeds - mu_H0) / sd_H0  # score under H0
+        z_H1 = (num_seeds - mu_H1) / sd_H1  # score under H1
+        return z_H0, z_H1
 
     def band_radius(self, K):
         """Wraps :func:`band_radius` with our mutation parameters and sequence
