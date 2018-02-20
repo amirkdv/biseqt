@@ -239,38 +239,82 @@ def maf_to_pw_fasta(maf_path, out_path):
     """
     with open(out_path, 'w') as f:
         for i, j, opseq in get_pws_from_maf(maf_path):
+            log('producing pairwise alignment for %s, %s' % (i, j))
             f.write('> %s:%s\n%s\n' % (i, j, opseq))
 
 
 # =============================================================================
 # Random Generation Helpers
 # =============================================================================
-def rand_seq_pair(n, alphabet, related=False, mutation_process=None):
-    if not related:
-        assert isinstance(mutation_process, MutationProcess)
+def seq_pair(n, alphabet, mutation_process=None):
     S = rand_seq(alphabet, n)
-    if related:
-        T, _ = mutation_process.mutate(S)
-    else:
-        T = rand_seq(alphabet, n)
+    T, _ = mutation_process.mutate(S)
     return S, T
 
 
-def rand_seq_pair_real(n, source_seq, related=False, mutation_process=None):
-    if not related:
-        assert isinstance(mutation_process, MutationProcess)
-    if related:
-        assert n < len(source_seq)
-        nS = np.random.randint(0, len(source_seq) - n)
-        S = source_seq[nS:nS + n]
-        T, _ = mutation_process.mutate(S)
-    else:
-        assert n * 2 < len(source_seq)
-        nS = np.random.randint(0, len(source_seq) - 2 * n)
-        nT = np.random.randint(nS, len(source_seq) - n)
-        S = source_seq[nS:nS + n]
-        T = source_seq[nT:nT + n]
+def seqs_bio(ns, source_seq):
+    def _intersect(l0, l1):
+        r0, r1 = l0 + n, l1 + n
+        return min(r0, r1) >= max(l0, l1)
+    assert len(source_seq) > sum(ns)
+    starts = []
+    for n in ns:
+        start = None
+        while start is None or any(_intersect(start, l) for l in starts):
+            start = np.random.randint(0, len(source_seq) - max(ns))
+        starts.append(start)
+    return [source_seq[s:s + n] for s in starts]
+
+
+def seq_pair_bio(n, source_seq, mutation_process=None):
+    assert isinstance(mutation_process, MutationProcess)
+    assert n < len(source_seq)
+    S = seqs_bio([n], source_seq)[0]
+    T, _ = mutation_process.mutate(S)
     return S, T
+
+
+def bio_opseqs(opseq, K, n_samples, gap=None, match=None, resolution=1e-3):
+    radius = K / 2
+    cands = []
+    if match is None:
+        matches = []
+    else:
+        matches = estimate_match_probs_in_opseq(opseq, radius)
+    if gap is None:
+        gaps = []
+    else:
+        gaps = estimate_gap_probs_in_opseq(opseq, radius)
+
+    for idx in range(len(opseq) - radius):
+        if match is not None and abs(matches[idx] - match) >= resolution:
+            continue
+        if gap is not None and abs(gaps[idx] - gap) >= resolution:
+            continue
+        cands.append(idx)
+    assert len(cands) > n_samples, 'not enough samples found'
+    samples = np.random.choice(cands, size=n_samples)
+    for pos in samples:
+        yield opseq[pos - radius:pos + radius]
+
+
+def apply_opseq(S, opseq):
+    i_S = 0
+    out = ''
+    letters = S.alphabet
+    for op in opseq:
+        if op == 'M':
+            out += letters[S[i_S]]
+            i_S += 1
+        if op == 'S':
+            choices = [let for let in letters if let != letters[S[i_S]]]
+            out += np.random.choice(choices)
+            i_S += 1
+        if op == 'D':
+            i_S += 1
+        if op == 'I':
+            out += np.random.choice(letters)
+    return S.alphabet.parse(out)
 
 
 def estimate_gap_probs_in_opseq(opseq, radius):
@@ -299,26 +343,8 @@ def estimate_match_probs_in_opseq(opseq, radius):
             n_M -= 1
         if opseq[i + radius] == 'M':
             n_M += 1
-        matches[i] = 1 - n_M / (2. * radius)
+        matches[i] = n_M / (2. * radius)
     return matches
-
-
-def rand_opseq_real(opseq, K, n_samples, gap=None, match=None,
-                    resolution=1e-3):
-    assert gap is None or match is None
-    radius = K / 2
-    if match is not None:
-        matches = estimate_match_probs_in_opseq(opseq, radius)
-        cands = [idx for idx in range(len(matches))
-                 if abs(matches[idx] - match) < resolution]
-    elif gap is not None:
-        gaps = estimate_gap_probs_in_opseq(opseq, radius)
-        cands = [idx for idx in range(len(gaps))
-                 if abs(gaps[idx] - gap) < resolution]
-    assert len(cands) > n_samples, 'not enough samples found'
-    samples = np.random.choice(cands, size=n_samples)
-    for pos in samples:
-        yield opseq[pos - radius:pos + radius]
 
 
 # =============================================================================
@@ -334,6 +360,7 @@ def color_code(values, cmap='rainbow'):
 def plot_with_sd(ax, xs, ys, axis=None, n_sds=1, y_max=None, color='k', **kw):
     """Plots the mean of given data set (with specified axis) and add a shaded
     region around specifying a given number of standard deviations."""
+    assert axis is not None
     means = ys.mean(axis=axis)
     sds = np.sqrt(ys.var(axis=axis))
 
