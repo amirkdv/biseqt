@@ -561,7 +561,7 @@ def plot_roc_pv(ax, pos, neg, classifier='>', num_points=1000, **kwargs):
     ax.set_title('Predictive ROC')
 
 
-def plot_classifier(pos, neg, labels=None, name=None, classifier='>'):
+def plot_classifier(path, pos, neg, labels=None, classifier='>'):
     if labels is None:
         labels = ['positive', 'negative']
     assert len(labels) == 2
@@ -590,4 +590,4 @@ def plot_classifier(pos, neg, labels=None, name=None, classifier='>'):
         ax.set_title(title, fontsize=12)
         ax.tick_params(labelsize=12)
 
-    savefig(fig, 'classifier_%s.png' % name, comment='classifier plot')
+    savefig(fig, path, comment='classifier plot')
