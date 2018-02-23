@@ -14,8 +14,8 @@ clean:
 	rm -f core biseqt/pwlib/pwlib.so
 	rm -rf docs/_build docs/doxygen
 
-FLAKE8_INCLUDE = biseqt tests experiments/util.py experiments/band_radius.py experiments/num_seeds.py experiments/blot_local_alignment.py experiments/blot_overlaps.py
-FLAKE8_EXCLUDE =
+FLAKE8_INCLUDE = biseqt tests experiments
+FLAKE8_EXCLUDE = experiments/blot_stats.py,experiments/overlap_stats.py,experiments/overlaps.py
 flake8:
 	flake8 $(FLAKE8_INCLUDE) --exclude=$(FLAKE8_EXCLUDE)
 

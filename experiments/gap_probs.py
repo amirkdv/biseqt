@@ -26,10 +26,12 @@ if __name__ == '__main__':
     for K, alpha, ls, lw in zip([500, 2000], [.3, .9], ['-', '--'], [1, 2]):
         radius = K / 2
         blasr_gaps = estimate_gap_probs_in_opseq(blasr_opseq, radius)
-        ax.plot(range(len(blasr_gaps)), blasr_gaps, ls=ls, c='g', label='bio. data (K = %d)' % K, alpha=alpha)
+        ax.plot(range(len(blasr_gaps)), blasr_gaps, ls=ls, c='g',
+                label='bio. data (K = %d)' % K, alpha=alpha)
 
         sim_gaps = estimate_gap_probs_in_opseq(sim_opseq, radius)
-        ax.plot(range(len(sim_gaps)), sim_gaps, ls=ls, c='k', label='sim. data (K = %d)' % K, alpha=alpha)
+        ax.plot(range(len(sim_gaps)), sim_gaps, ls=ls, c='k',
+                label='sim. data (K = %d)' % K, alpha=alpha)
 
     ax.axhline(y=blasr_gap_hat, c='k', alpha=.2, lw=3)
     ax.grid(True)
