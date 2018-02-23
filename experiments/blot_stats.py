@@ -559,146 +559,6 @@ def exp_stats_performance():
     #plot_stats_performance_estimate_seg_properties(n, Ks, g_hf, gs, n_samples,
         #real=False, subst=subst, wordlen=wordlen, dumpfile=dumpfile, replot=False)
 
-def exp_local_alignment():
-    gap = .2
-    subst = .1
-    K = 500
-
-    # HACK for debugging overlaps; if gap probs for HF are not large enough, we
-    # don't see it!
-    #gap = .2
-    #subst = .2
-    #K = 1700
-
-    wordlen = 8
-    # NOTE I can drive sensitivity to 0 and get decent results
-    HF_kw = {'g_max': .2, 'sensitivity': .9, 'alphabet': ALPHABET,
-             'wordlen': wordlen,
-             'path': 'example.db', 'log_level': logging.INFO}
-
-    M = MutationProcess(ALPHABET, subst_probs=subst, ge_prob=gap, go_prob=gap)
-
-    homs = [rand_seq(ALPHABET, i) for i in [200, 500, 1500, 2500]]
-    junk = lambda: rand_seq(ALPHABET, np.random.randint(1000, 2000))
-
-    S = junk() + homs[0] + junk() + homs[1] + junk() + homs[3] + \
-        junk() + homs[2] + junk() + homs[2] + junk() + homs[0] + junk()
-    homs = [M.mutate(homs[i])[0] for i in range(len(homs))]
-    T = junk() + homs[3] + junk() + homs[2] + junk() + homs[0] + \
-        junk() + homs[3] + junk() + homs[1] + junk() + homs[2] + junk()
-
-    #K = 2500
-    #n = 10000
-    #S, T = rand_seq_pair(K, real=False, related=True, mutation_process=M)
-    #S, T = pad_seq_pair(S, T, n - K)
-    #K = 4000 # for HF
-
-    # NOTE having a higher than reality gap probability in model allows shorter
-    # but more similar regions to leak in. However you score the final segment,
-    # i.e either based on required seglen or a_peak (a_max - a_min).
-    from util import load_fasta
-    with open('data/actb/mm10.chr5.fa') as f:
-        S, _, _ = load_fasta(f, ALPHABET).next()
-    with open('data/actb/hg38.chr7.fa') as f:
-        T, _, _ = load_fasta(f, ALPHABET).next()
-    with open('data/actb/hg38.chr7_mm10.chr5.fa') as f:
-        f.readline()
-        opseq = f.readline().strip()
-
-    #print 'mm10.chr5', S
-    #print '------------------'
-    #print 'hg38.chr7', T
-    #print '------------------'
-    #print 'opseq', opseq
-    #raise
-    K = 500
-    print K, HF_kw
-
-
-
-    fig = plt.figure()
-    gs = gridspec.GridSpec(1, 2, width_ratios=[30,1])
-    ax = plt.subplot(gs[0])
-    ax_colorbar = plt.subplot(gs[1])
-
-    cmap = plt.cm.get_cmap('jet')
-
-    max_score = 1
-
-    print 'finding homologies'
-    HF = HomologyFinder(S, T, **HF_kw)
-    scores = []
-    # FIXME two separate experiments that show that H1 is superior in not
-    # seeing shorter than desired homologies. The two methods seem to be
-    # identical. Tried H0 thresholds: 10, 50, 100
-    #for segment, score, match_p in HF.similar_segments(K, mode='H1'):
-    # FIXME why is it K_min=100, p_min=.7, mode='H1' finds stuff but p_min=.6
-    # does not?!!
-    for segment, score, match_p in HF.highest_scoring_segments(K_min=100, p_min=.7, mode='H1'):
-        if segment is None:
-            continue
-        (d_min, d_max), (a_min, a_max) = segment
-        print segment, score
-        color = cmap(score/max_score)[:3]
-        plot_similar_segment(ax, segment, color=color)
-        scores.append(score)
-
-    plot_global_alignment(ax, opseq, color='g', lw=4, alpha=.4)
-
-    norm = matplotlib.colors.Normalize(vmin=0, vmax=max_score)
-    plot_seeds(ax, HF.seeds(), len(S), len(T))
-    adjust_pw_plot(ax, len(S), len(T))
-
-    cb1 = matplotlib.colorbar.ColorbarBase(ax_colorbar, cmap=cmap, norm=norm, orientation='vertical')
-
-    fig.tight_layout()
-    fig.savefig('local alignment.png', dpi=500)
-
-def exp_conserved_sequences():
-    gap = .15
-    subst = .15
-    K = 500
-    wordlen = 8
-    HF_kw = {'gap_prob': gap, 'subst_prob': subst,
-             'sensitivity': .9, 'alphabet': ALPHABET, 'wordlen': wordlen,
-             'path': ':memory:', 'log_level': logging.INFO}
-
-    M_std = MutationProcess(ALPHABET, subst_probs=.2, ge_prob=.15, go_prob=.15)
-    M_con = MutationProcess(ALPHABET, subst_probs=.05, ge_prob=.05, go_prob=.05)
-
-    pieces = [rand_seq(ALPHABET, 10000) for _ in range(3)]
-    conserved = rand_seq(ALPHABET, 1000)
-
-    S = pieces[0] + conserved + pieces[1] + pieces[2]
-    pieces_hom = [M_std.mutate(p)[0] for p in pieces]
-    conserved_hom = M_con.mutate(conserved)[0]
-    T = pieces_hom[0] + pieces_hom[1] + conserved_hom + pieces_hom[2]
-
-    fig = plt.figure()
-    gs = gridspec.GridSpec(1, 2, width_ratios=[30,1])
-    ax = plt.subplot(gs[0])
-    ax_colorbar = plt.subplot(gs[1])
-
-    cmap = plt.cm.get_cmap('jet')
-
-    print 'finding homologies'
-    HF = HomologyFinder(S, T, **HF_kw)
-    scores = []
-    for segment, score, match_prob in HF.similar_segments(K):
-        (d_min, d_max), (a_min, a_max) = segment
-        print segment, score, match_prob
-        color = cmap(match_prob)[:3]
-        plot_similar_segment(ax, segment, color=color)
-        scores.append(score)
-
-    norm = matplotlib.colors.Normalize(vmin=0, vmax=1)
-    plot_seeds(ax, HF.seeds(), len(S), len(T))
-    adjust_pw_plot(ax, len(S), len(T))
-
-    cb1 = matplotlib.colorbar.ColorbarBase(ax_colorbar, cmap=cmap, norm=norm, orientation='vertical')
-
-    fig.tight_layout()
-    fig.savefig('conserved-sequences.png', dpi=300) # NOTE LOCAL ALIGNMENT WORKS !!! (Wed, 17 Jan 2018)
 
 # M is the mutation process to insert noise to each read, note that when
 # comparing two reads later they have both suffered mutations at the rate
@@ -738,6 +598,7 @@ def load_mapped_reads(path, max_num=100):
             if count == max_num:
                 break
     return reads, mappings
+
 
 def exp_overlap_detection():
     # NOTE when mutation probabilities for HF are lower than that of actual
@@ -840,7 +701,5 @@ def exp_overlap_detection():
                     labels=labels)
 
 if __name__ == '__main__':
-    #exp_stats_performance()
-    exp_local_alignment()
-    #exp_conserved_sequences()
-    #exp_overlap_detection()
+    exp_stats_performance()
+    exp_overlap_detection()
