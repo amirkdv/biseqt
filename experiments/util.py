@@ -52,6 +52,7 @@ def pickle_dump(path, obj, comment=None):
 
 
 def pickle_load(path):
+    log('loading dumpfile %s' % path)
     path = os.path.join(DUMP_DIR, path)
     with open(path, 'rb') as f:
         return pickle.load(f)
@@ -85,6 +86,7 @@ def with_dumpfile(func):
 # =============================================================================
 # Real bio sequence and alignment helpers
 # =============================================================================
+# TODO this is really slow on large sequences
 def load_fasta(f):
     """Given file handle reads fasta sequences and yields tuples of (seq, name,
        pos) containing the raw sequence, its FASTA name, and its starting
@@ -354,7 +356,11 @@ def color_code(values, cmap='rainbow'):
     """Returns an array of RGB colors of the same length as values."""
     cmap = plt.cm.get_cmap(cmap)
     m, M = 1. * min(values), 1. * max(values)
-    return [cmap((v - m) / (M - m)) for v in values]
+    assert len(values) == len(set(values)), 'all values should be distinct'
+    if len(values) > 1:
+        return [cmap((v - m) / (M - m)) for v in values]
+    else:
+        return [cmap(.5)]
 
 
 def plot_with_sd(ax, xs, ys, axis=None, n_sds=1, y_max=None, color='k', **kw):
@@ -381,7 +387,7 @@ def savefig(fig, path, grid_all=True, comment=None):
             ax.grid(True)
     fig.tight_layout(rect=[0, 0.03, 1, 0.95])
     fig.savefig(os.path.join(PLOT_DIR, path), dpi=270)
-    log('recreated plot%s at %s\n' %
+    log('created plot%s at %s\n' %
         ('' if comment is None else ' "%s"' % comment, path))
 
 
