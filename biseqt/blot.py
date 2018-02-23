@@ -356,6 +356,28 @@ class HomologyFinder(SeedIndex):
         match_p = np.exp(np.log(word_p) / self.wordlen)
         return min(match_p, 1)
 
+    def score_segments(self, K_min, p_min, d_band=None, mode='H1'):
+        d_min, d_max = d_band
+        assert d_min >= -len(self.T)
+        assert d_max <= len(self.S)
+        area = (d_max - d_min) * K_min
+        # n_by_a[a] = number of seeds in (d_min, d_max) at anti position a
+        n_by_a = self.seed_count_by_a(d_min, d_max)
+        n_by_a_cum = np.cumsum(n_by_a)
+        scores_by_a = -1e4 * np.ones((len(n_by_a_cum), 2))
+        a_radius = int(np.ceil(K_min / 2))
+        for anti in range(len(n_by_a_cum)):
+            m = max(0, anti - a_radius)
+            M = min(len(n_by_a_cum) - 1, anti + a_radius)
+            n_in_band = n_by_a_cum[M] - n_by_a_cum[m]
+            # NOTE the segment in question at this point has
+            # a_max - a_min = K
+            s0, s1 = self.score_num_seeds(num_seeds=n_in_band, area=area,
+                                          seglen=K_min, p_match=p_min)
+            scores_by_a[anti][0], scores_by_a[anti][1] = s0, s1
+
+        return n_by_a_cum, scores_by_a
+
     def similar_segments(self, K_min, p_min, mode='H1'):
         """A sub-quadratic local similarity search algorithm that finds
         diagonal regions of similarity between given sequences.
@@ -379,29 +401,17 @@ class HomologyFinder(SeedIndex):
         threshold = {'H0': 10, 'H1': -1.5}[mode]
         key = {'H0': 0, 'H1': 1}[mode]
         d_radius = int(np.ceil(self.band_radius(K_min)))
-        a_radius = int(np.ceil(K_min / 2))
+        a_radius = int(np.ceil(K_min / 2))  # NOTE score_segments does the same
 
         scores_by_d_ = self.score_diagonal_bands(K_min, p_min)
         d_peaks = find_peaks(scores_by_d_[:, key], d_radius, threshold)
         for d_min_, d_max_ in d_peaks:
             d_min, d_max = d_min_ - self.d0, d_max_ - self.d0
-            area = (d_max - d_min) * K_min
-            # n_by_a[a] = number of seeds in (d_min, d_max) at anti position a
-            n_by_a = self.seed_count_by_a(d_min, d_max)
-            n_by_a_cum = np.cumsum(n_by_a)
-            scores_by_a = -1e4 * np.ones((len(n_by_a_cum), 2))
-            for anti in range(len(n_by_a_cum)):
-                m = max(0, anti - a_radius)
-                M = min(len(n_by_a_cum) - 1, anti + a_radius)
-                n_in_band = n_by_a_cum[M] - n_by_a_cum[m]
-                # NOTE the segment in question at this point has
-                # a_max - a_min = K
-                s0, s1 = self.score_num_seeds(num_seeds=n_in_band, area=area,
-                                              seglen=K_min, p_match=p_min)
-                scores_by_a[anti][0], scores_by_a[anti][1] = s0, s1
-
+            d_band = (d_min, d_max)
+            n_by_a_cum, scores_by_a = self.score_segments(K_min, p_min,
+                                                          d_band=d_band,
+                                                          mode=mode)
             a_peaks = find_peaks(scores_by_a[:, key], a_radius, threshold)
-
             for (a_min, a_max) in a_peaks:
                 segment = ((d_min, d_max), (a_min, a_max))
                 num_seeds_in_segment = n_by_a_cum[a_max] - n_by_a_cum[a_min]
