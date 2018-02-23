@@ -19,24 +19,20 @@ def sim_count_seeds(ns, n_samples, gap=None, subst=None, banded=False, **kw):
 
     sim_data = {
         'time': {'pos': _zero(), 'neg': _zero()},
-        'n_seeds': {'pos': _zero(), 'neg': _zero()},
+        'n_seeds': {
+            'full': {'pos': _zero(), 'neg': _zero()},
+            'banded': {'pos': _zero(), 'neg': _zero()},
+        },
         'gap': gap,
         'match': (1 - gap) * (1 - subst),
         'ns': ns,
         'wordlen': kw['wordlen'],
-        'banded': banded,
     }
     A = Alphabet('ACGT')
     M = MutationProcess(A, go_prob=gap, ge_prob=gap, subst_probs=subst)
     for n_idx, n in enumerate(ns):
-        # FIXME perform banded and non-banded experiments in one-go!! here and
-        # in sim_count_seeds_bio; need to fix plot_count_seeds, and
-        # plot_count_seeds_moments to produce two plots each (banded and not)
-        if banded:
-            radius = band_radius(n, gap, 1 - 1e-4)
-            d_band = (-radius, radius)
-        else:
-            d_band = None
+        radius = band_radius(n, gap, 1 - 1e-4)
+        d_band = (-radius, radius)
         log('n = %d' % n)
         for idx in range(n_samples):
             S_rel, T_rel = seq_pair(n, A, mutation_process=M)
@@ -47,14 +43,19 @@ def sim_count_seeds(ns, n_samples, gap=None, subst=None, banded=False, **kw):
                 seed_index = SeedIndex(S, T, wordlen=kw['wordlen'],
                                        path=kw.get('path', ':memory:'),
                                        alphabet=A, log_level=WARN)
-                n_seeds = seed_index.seed_count(d_band=d_band)
+                # full table
+                n_seeds = seed_index.seed_count(d_band=None)
                 sim_data['time'][key][n_idx][idx] = 1000 * (time() - t)
-                sim_data['n_seeds'][key][n_idx][idx] = n_seeds
+                sim_data['n_seeds']['full'][key][n_idx][idx] = n_seeds
+
+                # banded
+                n_seeds = seed_index.seed_count(d_band=d_band)
+                sim_data['n_seeds']['banded'][key][n_idx][idx] = n_seeds
     return sim_data
 
 
 @with_dumpfile
-def sim_count_seeds_bio(ns, n_samples, gap=None, match=None, banded=False,
+def sim_count_seeds_bio(ns, n_samples, gap=None, match=None,
                         bio_source_seq=None, bio_source_opseq=None, **kw):
     log('simulating # of seeds: %d samples, ns = %s' % (n_samples, str(ns)))
 
@@ -62,12 +63,14 @@ def sim_count_seeds_bio(ns, n_samples, gap=None, match=None, banded=False,
 
     sim_data = {
         'time': {'pos': _zero(), 'neg': _zero()},
-        'n_seeds': {'pos': _zero(), 'neg': _zero()},
+        'n_seeds': {
+            'full': {'pos': _zero(), 'neg': _zero()},
+            'banded': {'pos': _zero(), 'neg': _zero()},
+        },
         'gap': gap,
         'match': match,
         'ns': ns,
         'wordlen': kw['wordlen'],
-        'banded': banded,
     }
     A = Alphabet('ACGT')
     for n_idx, n in enumerate(ns):
@@ -76,11 +79,8 @@ def sim_count_seeds_bio(ns, n_samples, gap=None, match=None, banded=False,
         # opseqs
         opseqs = list(bio_opseqs(bio_source_opseq, n, n_samples, gap=None,
                                  match=match))
-        if banded:
-            radius = band_radius(n, gap, 1 - 1e-4)
-            d_band = (-radius, radius)
-        else:
-            d_band = None
+        radius = band_radius(n, gap, 1 - 1e-4)
+        d_band = (-radius, radius)
         for idx in range(n_samples):
             S_urel, T_urel = seqs_bio([n, n], bio_source_seq)
             S_rel = seqs_bio([n], bio_source_seq)[0]
@@ -91,13 +91,17 @@ def sim_count_seeds_bio(ns, n_samples, gap=None, match=None, banded=False,
                 seed_index = SeedIndex(S, T, wordlen=kw['wordlen'],
                                        path=kw.get('path', ':memory:'),
                                        alphabet=A, log_level=WARN)
-                n_seeds = seed_index.seed_count(d_band=d_band)
+                # full table
+                n_seeds = seed_index.seed_count(d_band=None)
                 sim_data['time'][key][n_idx][idx] = 1000 * (time() - t)
-                sim_data['n_seeds'][key][n_idx][idx] = n_seeds
+                sim_data['n_seeds']['full'][key][n_idx][idx] = n_seeds
+
+                # banded
+                n_seeds = seed_index.seed_count(d_band=d_band)
+                sim_data['n_seeds']['banded'][key][n_idx][idx] = n_seeds
     return sim_data
 
 
-# automatically banded
 @with_dumpfile
 def sim_count_seeds_fixed_K(ns, K, n_samples, gap=None, subst=None, **kw):
     log('simulating # of seeds: %d samples, ns = %s' % (n_samples, str(ns)))
@@ -105,7 +109,9 @@ def sim_count_seeds_fixed_K(ns, K, n_samples, gap=None, subst=None, **kw):
     def _zero(): return np.zeros((len(ns), n_samples))
 
     sim_data = {
-        'n_seeds': {'pos': _zero(), 'neg': _zero()},
+        'n_seeds': {  # only consider banded
+            'banded': {'pos': _zero(), 'neg': _zero()},
+        },
         'gap': gap,
         'match': (1 - gap) * (1 - subst),
         'ns': ns,
@@ -130,7 +136,7 @@ def sim_count_seeds_fixed_K(ns, K, n_samples, gap=None, subst=None, **kw):
                                        path=kw.get('path', ':memory:'),
                                        alphabet=A, log_level=WARN)
                 n_seeds = seed_index.seed_count(d_band=d_band)
-                sim_data['n_seeds'][key][n_idx][idx] = n_seeds
+                sim_data['n_seeds']['banded'][key][n_idx][idx] = n_seeds
     return sim_data
 
 
@@ -143,7 +149,9 @@ def sim_count_seeds_fixed_K_bio(ns, K, n_samples, gap=None, match=None,
     def _zero(): return np.zeros((len(ns), n_samples))
 
     sim_data = {
-        'n_seeds': {'pos': _zero(), 'neg': _zero()},
+        'n_seeds': {  # only consider banded
+            'banded': {'pos': _zero(), 'neg': _zero()},
+        },
         'gap': gap,
         'match': match,
         'ns': ns,
@@ -173,39 +181,52 @@ def sim_count_seeds_fixed_K_bio(ns, K, n_samples, gap=None, match=None,
                                        path=kw.get('path', ':memory:'),
                                        alphabet=A, log_level=WARN)
                 n_seeds = seed_index.seed_count(d_band=d_band)
-                sim_data['n_seeds'][key][n_idx][idx] = n_seeds
+                sim_data['n_seeds']['banded'][key][n_idx][idx] = n_seeds
     return sim_data
 
 
-def plot_count_seeds(sim_data, suffix=''):
+def plot_num_and_time_seeds(sim_data, suffix=''):
     log('plotting # of seed stats')
-    fig = plt.figure(figsize=(11, 5))
-    ax_n = fig.add_subplot(1, 2, 1)
-    ax_t = fig.add_subplot(1, 2, 2)
+    fig_n = plt.figure(figsize=(11, 5))
+    ax_full = fig_n.add_subplot(1, 2, 1)
+    ax_banded = fig_n.add_subplot(1, 2, 2)
+
+    fig_t = plt.figure(figsize=(6, 5))
+    ax_t = fig_t.add_subplot(1, 1, 1)
 
     ns = sim_data['ns']
     wordlen = sim_data['wordlen']
     kw = {'n_sds': 1, 'marker': 'o', 'markersize': 5, 'axis': 1}
-    plot_with_sd(ax_n, ns, sim_data['n_seeds']['pos'], color='g',
-                 label='homologous', **kw)
-    plot_with_sd(ax_n, ns, sim_data['n_seeds']['neg'], color='r',
-                 label='nonhomologous', **kw)
+    pos = sim_data['n_seeds']['full']['pos']
+    neg = sim_data['n_seeds']['full']['neg']
+    plot_with_sd(ax_full, ns, pos, color='g', label='homologous', **kw)
+    plot_with_sd(ax_full, ns, neg, color='r', label='nonhomologous', **kw)
+
+    pos = sim_data['n_seeds']['banded']['pos']
+    neg = sim_data['n_seeds']['banded']['neg']
+    plot_with_sd(ax_banded, ns, pos, color='g', label='homologous', **kw)
+    plot_with_sd(ax_banded, ns, neg, color='r', label='nonhomologous', **kw)
 
     plot_with_sd(ax_t, ns, sim_data['time']['pos'], color='g', **kw)
     plot_with_sd(ax_t, ns, sim_data['time']['neg'], color='r', **kw)
-
-    ax_n.set_ylabel('No. of matching kmers', fontsize=10)
     ax_t.set_ylabel('Time to find matching kmers (ms)', fontsize=10)
-    for ax in [ax_t, ax_n]:
+
+    for ax in [ax_t, ax_full, ax_banded]:
         ax.set_xlabel('(non)homologous sequence length', fontsize=10)
         ax.grid(True)
         ax.tick_params(axis='x', labelsize=10)
         ax.tick_params(axis='y', labelsize=10)
 
-    ax_n.legend(loc='upper left', fontsize=10)
-    n_samples = sim_data['n_seeds']['pos'].shape[1]
-    fig.suptitle('wordlen = %d, no. samples = %d' % (wordlen, n_samples))
-    savefig(fig, 'num_seeds%s.png' % suffix)
+    for key, ax in zip(['full', 'banded'], [ax_full, ax_banded]):
+        ax.set_ylabel('No. of matching kmers (%s)' % key, fontsize=10)
+        ax.legend(loc='upper left', fontsize=10)
+        ax.legend(loc='upper left', fontsize=10)
+
+    n_samples = sim_data['time']['pos'].shape[1]
+    for fig in [fig_n, fig_t]:
+        fig.suptitle('wordlen = %d, no. samples = %d' % (wordlen, n_samples))
+    savefig(fig_n, 'num_seeds%s.png' % suffix)
+    savefig(fig_t, 'time_seeds%s.png' % suffix)
 
 
 def plot_count_seeds_fixed_K(sim_data, suffix=''):
@@ -216,15 +237,15 @@ def plot_count_seeds_fixed_K(sim_data, suffix=''):
     fig = plt.figure(figsize=(7, 5))
     ax = fig.add_subplot(1, 1, 1)
     kw = {'n_sds': 1, 'marker': 'o', 'markersize': 3, 'alpha': .7, 'axis': 1}
-    plot_with_sd(ax, ns, sim_data['n_seeds']['pos'], color='g',
-                 label='homologous', **kw)
-    plot_with_sd(ax, ns, sim_data['n_seeds']['neg'], color='r',
-                 label='non-homologous', **kw)
+    pos = sim_data['n_seeds']['banded']['pos']
+    neg = sim_data['n_seeds']['banded']['neg']
+    plot_with_sd(ax, ns, pos, color='g', label='homologous', **kw)
+    plot_with_sd(ax, ns, neg, color='r', label='non-homologous', **kw)
     ax.set_xlabel('full sequence length')
     ax.set_ylabel('No. of exactly matching kmers')
 
     ax.legend(loc='upper left', fontsize=10)
-    n_samples = sim_data['n_seeds']['pos'].shape[1]
+    n_samples = pos.shape[1]
     fig.suptitle('K = %d, wordlen = %d, no. samples = %d' %
                  (K, wordlen, n_samples))
     savefig(fig, 'num_seeds%s.png' % suffix)
@@ -235,54 +256,59 @@ def plot_count_seeds_fixed_K(sim_data, suffix=''):
 # homologous or not (i.e. as in sim_count_seeds{,_bio}), otherwise it's a fixed
 # number (i.e. as in sim_count_seeds_fixed_K{,_bio}).
 def plot_count_seeds_moments(sim_data, K=None, suffix=''):
-    ns, gap, match = sim_data['ns'], sim_data['gap'], sim_data['match']
-    wordlen, banded = sim_data['wordlen'], sim_data['banded']
-
-    fig = plt.figure(figsize=(12, 5))
-    ax_mu = fig.add_subplot(1, 2, 1)
-    ax_sd = fig.add_subplot(1, 2, 2)
+    ns, wordlen = sim_data['ns'], sim_data['wordlen']
+    gap, match = sim_data['gap'], sim_data['match']
 
     kw = {'marker': 'o', 'markersize': 3, 'lw': 1.5, 'alpha': .7}
 
-    mus_H0, sds_H0 = [], []
-    mus_H1, sds_H1 = [], []
-    for n in ns:
-        K_ = n if K is None else K
-        assert 0 < K_ <= n
-        if banded:
-            radius = band_radius(K_, gap, 1 - 1e-4)
-            area = 2 * radius * n
-        else:
-            area = n ** 2
-        mu_H0, sd_H0 = H0_moments(4, wordlen, area)
-        mus_H0.append(mu_H0)
-        sds_H0.append(sd_H0)
+    for key in ['full', 'banded']:
+        if key not in sim_data['n_seeds']:
+            # sometimes (e.g. fixed K, we don't bother with full table)
+            continue
+        mus_H0, sds_H0 = [], []
+        mus_H1, sds_H1 = [], []
+        for n in ns:
+            K_ = n if K is None else K
+            assert 0 < K_ <= n
+            if key == 'banded':
+                radius = band_radius(K_, gap, 1 - 1e-4)
+                area = 2 * radius * n
+            else:
+                area = n ** 2
+            mu_H0, sd_H0 = H0_moments(4, wordlen, area)
+            mus_H0.append(mu_H0)
+            sds_H0.append(sd_H0)
 
-        mu_H1, sd_H1 = H1_moments(4, wordlen, area, K_, match)
-        mus_H1.append(mu_H1)
-        sds_H1.append(sd_H1)
+            mu_H1, sd_H1 = H1_moments(4, wordlen, area, K_, match)
+            mus_H1.append(mu_H1)
+            sds_H1.append(sd_H1)
 
-    ax_mu.plot(ns, sim_data['n_seeds']['neg'].mean(axis=1), color='r', **kw)
-    ax_mu.plot(ns, mus_H0, color='r', ls='--', **kw)
-    ax_mu.plot(ns, sim_data['n_seeds']['pos'].mean(axis=1), color='g', **kw)
-    ax_mu.plot(ns, mus_H1, color='g', ls='--', **kw)
+        fig = plt.figure(figsize=(12, 5))
+        ax_mu = fig.add_subplot(1, 2, 1)
+        ax_sd = fig.add_subplot(1, 2, 2)
 
-    ax_sd.plot(ns, np.sqrt(sim_data['n_seeds']['neg'].var(axis=1)), color='r',
-               **kw)
-    ax_sd.plot(ns, sds_H0, color='r', ls='--', **kw)
-    ax_sd.plot(ns, np.sqrt(sim_data['n_seeds']['pos'].var(axis=1)), color='g',
-               **kw)
-    ax_sd.plot(ns, sds_H1, color='g', ls='--', **kw)
+        pos = sim_data['n_seeds'][key]['pos']
+        neg = sim_data['n_seeds'][key]['neg']
+        ax_mu.plot(ns, neg.mean(axis=1), color='r', **kw)
+        ax_mu.plot(ns, mus_H0, color='r', ls='--', **kw)
+        ax_mu.plot(ns, pos.mean(axis=1), color='g', **kw)
+        ax_mu.plot(ns, mus_H1, color='g', ls='--', **kw)
 
-    for ax in [ax_sd, ax_mu]:
-        ax.grid(True)
-        ax.set_xlabel('(non)-homologous sequence length')
-    ax_sd.set_ylabel('standard deviation of no. of matching kmers')
-    ax_mu.set_ylabel('expected no. of matching kmers')
+        ax_sd.plot(ns, np.sqrt(neg.var(axis=1)), color='r', **kw)
+        ax_sd.plot(ns, sds_H0, color='r', ls='--', **kw)
+        ax_sd.plot(ns, np.sqrt(pos.var(axis=1)), color='g', **kw)
+        ax_sd.plot(ns, sds_H1, color='g', ls='--', **kw)
 
-    n_samples = sim_data['n_seeds']['pos'].shape[1]
-    fig.suptitle('wordlen = %d, no. samples = %d' % (wordlen, n_samples))
-    savefig(fig, 'num_seeds_moments%s.png' % suffix)
+        for ax in [ax_sd, ax_mu]:
+            ax.grid(True)
+            ax.set_xlabel('(non)-homologous sequence length')
+            ax.set_ylim(-1, None)
+        ax_sd.set_ylabel('standard deviation of no. of matching kmers')
+        ax_mu.set_ylabel('expected no. of matching kmers')
+
+        n_samples = pos.shape[1]
+        fig.suptitle('wordlen = %d, no. samples = %d' % (wordlen, n_samples))
+        savefig(fig, 'num_seeds_moments[%s]%s.png' % (key, suffix))
 
 
 def exp_count_seeds():
@@ -291,21 +317,13 @@ def exp_count_seeds():
     subst = .1
     n_samples = 50
     wordlen = 8
-    dumpfile = 'num_seeds.txt'
-    sim_data = sim_count_seeds(ns, n_samples, gap=gap, subst=subst,
-                               wordlen=wordlen, banded=False,
-                               dumpfile=dumpfile,
-                               ignore_existing=False)
-    plot_count_seeds(sim_data)
-    plot_count_seeds_moments(sim_data)
-
-    suffix = '[banded]'
+    suffix = '[w=%d]' % wordlen
     dumpfile = 'num_seeds%s.txt' % suffix
     sim_data = sim_count_seeds(ns, n_samples, gap=gap, subst=subst,
-                               wordlen=wordlen, banded=True,
+                               wordlen=wordlen,
                                dumpfile=dumpfile,
                                ignore_existing=False)
-    plot_count_seeds(sim_data, suffix=suffix)
+    plot_num_and_time_seeds(sim_data, suffix=suffix)
     plot_count_seeds_moments(sim_data, suffix=suffix)
 
     # ===============
@@ -313,33 +331,22 @@ def exp_count_seeds():
     # ===============
     match = (1 - gap) * (1 - subst)
     A = Alphabet('ACGT')
-    with open('data/leishmenia/reference.fa') as f:
+    with open('data/acta2/acta2-7vet.fa') as f:
         bio_source_seq = ''.join(s for s, _, _ in load_fasta(f))
         bio_source_seq = bio_source_seq.upper()
         bio_source_seq = ''.join(x for x in bio_source_seq if x in 'ACGT')
-    with open('data/leishmenia/blasr_opseqs.fa') as f:
-        bio_source_opseq = f.read().strip()
+    with open('data/acta2/acta2_opseqs.fa') as f:
+        bio_source_opseq = ''.join(s for s, _, _ in load_fasta(f))
 
-    suffix = '[bio]'
+    suffix = '[w=%d][bio]' % wordlen
     dumpfile = 'num_seeds%s.txt' % suffix
     sim_data_bio = sim_count_seeds_bio(ns, n_samples, gap=gap, match=match,
-                                       wordlen=wordlen, banded=False,
+                                       wordlen=wordlen,
                                        bio_source_seq=A.parse(bio_source_seq),
                                        bio_source_opseq=bio_source_opseq,
                                        dumpfile=dumpfile,
                                        ignore_existing=False)
-    plot_count_seeds(sim_data_bio, suffix=suffix)
-    plot_count_seeds_moments(sim_data_bio, suffix=suffix)
-
-    suffix = '[banded][bio]'
-    dumpfile = 'num_seeds%s.txt' % suffix
-    sim_data_bio = sim_count_seeds_bio(ns, n_samples, gap=gap, match=match,
-                                       wordlen=wordlen, banded=True,
-                                       bio_source_seq=A.parse(bio_source_seq),
-                                       bio_source_opseq=bio_source_opseq,
-                                       dumpfile=dumpfile,
-                                       ignore_existing=False)
-    plot_count_seeds(sim_data_bio, suffix=suffix)
+    plot_num_and_time_seeds(sim_data_bio, suffix=suffix)
     plot_count_seeds_moments(sim_data_bio, suffix=suffix)
 
 
@@ -364,7 +371,7 @@ def exp_count_seeds_fixed_K():
     subst = .1
     n_samples = 50
     wordlen = 8
-    suffix = '[fixed_K]'
+    suffix = '[fixed_K][w=%d]' % wordlen
     dumpfile = 'num_seeds%s.txt' % suffix
     sim_data = sim_count_seeds_fixed_K(
         ns, K, n_samples, gap=gap, subst=subst,
@@ -385,7 +392,7 @@ def exp_count_seeds_fixed_K():
     with open('data/acta2/acta2_opseqs.fa') as f:
         bio_source_opseq = ''.join(s for s, _, _ in load_fasta(f))
 
-    suffix = '[fixed_K][bio]'
+    suffix = '[fixed_K][w=%d][bio]' % wordlen
     dumpfile = 'num_seeds%s.txt' % suffix
     match = (1 - gap) * (1 - subst)
     sim_data_bio = sim_count_seeds_fixed_K_bio(
