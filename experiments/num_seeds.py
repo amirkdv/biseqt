@@ -6,11 +6,14 @@ from biseqt.sequence import Alphabet
 from biseqt.stochastics import rand_seq, MutationProcess
 from biseqt.seeds import SeedIndex
 from biseqt.blot import band_radius, H0_moments, H1_moments
-from util import seq_pair, seqs_bio, bio_opseqs, apply_opseq, load_fasta
+from util import seq_pair, sample_bio_seqs, sample_bio_opseqs
+from util import apply_opseq, load_fasta
 from util import plot_with_sd, with_dumpfile, log, savefig
 from logging import WARN
 
 
+# FIXME _bio versions are really similar to non-bio versions, merge them?
+# FIXME keyword arguments are split between kw and else, merge them!
 @with_dumpfile
 def sim_count_seeds(ns, n_samples, gap=None, subst=None, banded=False, **kw):
     log('simulating # of seeds: %d samples, ns = %s' % (n_samples, str(ns)))
@@ -76,14 +79,14 @@ def sim_count_seeds_bio(ns, n_samples, gap=None, match=None,
     for n_idx, n in enumerate(ns):
         log('n = %d' % n)
         # NOTE just use gap for band radius purposes, use match for finding
-        # opseqs
-        opseqs = list(bio_opseqs(bio_source_opseq, n, n_samples, gap=None,
-                                 match=match))
+        # opseqs; TODO is this OK?
+        opseqs = list(sample_bio_opseqs(bio_source_opseq, n, n_samples,
+                                        gap=None, match=match))
         radius = band_radius(n, gap, 1 - 1e-4)
         d_band = (-radius, radius)
         for idx in range(n_samples):
-            S_urel, T_urel = seqs_bio([n, n], bio_source_seq)
-            S_rel = seqs_bio([n], bio_source_seq)[0]
+            S_urel, T_urel = sample_bio_seqs([n, n], bio_source_seq)
+            S_rel = sample_bio_seqs([n], bio_source_seq)[0]
             T_rel = apply_opseq(S_rel, opseqs[idx])
             for key, (S, T) in zip(['pos', 'neg'],
                                    [(S_rel, T_rel), (S_urel, T_urel)]):
@@ -161,17 +164,17 @@ def sim_count_seeds_fixed_K_bio(ns, K, n_samples, gap=None, match=None,
     assert min(ns) >= K
     A = Alphabet('ACGT')
     # NOTE just use gap for band radius purposes, use match for finding opseqs
-    opseqs = list(bio_opseqs(bio_source_opseq, K, n_samples, gap=None,
-                             match=match))
+    opseqs = list(sample_bio_opseqs(bio_source_opseq, K, n_samples, gap=None,
+                                    match=match))
     for n_idx, n in enumerate(ns):
         log('n = %d' % n)
         radius = band_radius(K, gap, 1 - 1e-4)
         d_band = (-radius, radius)
         for idx in range(n_samples):
-            S_urel, T_urel = seqs_bio([n, n], bio_source_seq)
-            S_rel = seqs_bio([K], bio_source_seq)[0]
+            S_urel, T_urel = sample_bio_seqs([n, n], bio_source_seq)
+            S_rel = sample_bio_seqs([K], bio_source_seq)[0]
             T_rel = apply_opseq(S_rel, opseqs[idx])
-            junk = seqs_bio([n - K, n - K], bio_source_seq)
+            junk = sample_bio_seqs([n - K, n - K], bio_source_seq)
             S_rel += junk[0]
             T_rel += junk[1]
 
@@ -216,6 +219,10 @@ def plot_num_and_time_seeds(sim_data, suffix=''):
         ax.grid(True)
         ax.tick_params(axis='x', labelsize=10)
         ax.tick_params(axis='y', labelsize=10)
+
+    for ax in [ax_full, ax_banded]:
+        _ns = np.arange(ax.get_ylim()[1])
+        ax.plot(_ns, _ns, color='k', alpha=.4, ls='--')
 
     for key, ax in zip(['full', 'banded'], [ax_full, ax_banded]):
         ax.set_ylabel('No. of matching kmers (%s)' % key, fontsize=10)

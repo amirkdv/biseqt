@@ -254,7 +254,7 @@ def seq_pair(n, alphabet, mutation_process=None):
     return S, T
 
 
-def seqs_bio(ns, source_seq):
+def sample_bio_seqs(ns, source_seq):
     def _intersect(l0, l1):
         r0, r1 = l0 + n, l1 + n
         return min(r0, r1) >= max(l0, l1)
@@ -268,15 +268,8 @@ def seqs_bio(ns, source_seq):
     return [source_seq[s:s + n] for s in starts]
 
 
-def seq_pair_bio(n, source_seq, mutation_process=None):
-    assert isinstance(mutation_process, MutationProcess)
-    assert n < len(source_seq)
-    S = seqs_bio([n], source_seq)[0]
-    T, _ = mutation_process.mutate(S)
-    return S, T
-
-
-def bio_opseqs(opseq, K, n_samples, gap=None, match=None, resolution=1e-3):
+def sample_bio_opseqs(opseq, K, n_samples, gap=None, match=None,
+                      resolution=1e-3):
     radius = K / 2
     cands = []
     if match is None:
