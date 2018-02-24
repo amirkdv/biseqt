@@ -6,11 +6,12 @@ import numpy as np
 from bisect import bisect_left
 from textwrap import TextWrapper
 from matplotlib import pyplot as plt
+import matplotlib
 import matplotlib.gridspec as gridspec
 from Bio import AlignIO
 from itertools import combinations
 import pysam
-from biseqt.stochastics import rand_seq, MutationProcess
+from biseqt.stochastics import rand_seq
 
 
 plt.rc('text', usetex=True)
@@ -403,7 +404,7 @@ def adjust_pw_plot(ax, N0, N1):
     ax.tick_params(labelsize=10)
 
 
-def plot_seeds(ax, seeds, N0, N1, c='k'):
+def plot_seeds(ax, seeds, c='k'):
     idx_S, idx_T = [], []
     for seed in seeds:
         idx_S.append(seed[0])
@@ -414,7 +415,22 @@ def plot_seeds(ax, seeds, N0, N1, c='k'):
     ax.grid(True)
 
 
-def plot_similar_segment(ax, segment, color):
+def plot_scored_seeds(ax, ax_colorbar, scored_seeds):
+    idx_S, idx_T, cs = [], [], []
+    cmap = plt.cm.get_cmap('jet')
+    max_score = max(score for _, score in scored_seeds)
+    for (i, j), score in scored_seeds:
+        idx_S.append(i)
+        idx_T.append(j)
+        cs.append(cmap(score/max_score)[:3])
+    # x and y are flipped when going from matrix notation to plotting.
+    ax.scatter(idx_T, idx_S, facecolor=cs, lw=0, s=2, alpha=.9)
+    norm = matplotlib.colors.Normalize(vmin=0, vmax=max_score)
+    matplotlib.colorbar.ColorbarBase(ax_colorbar, cmap=cmap, norm=norm,
+                                     orientation='vertical')
+
+
+def plot_similar_segment(ax, segment, color='k', **kw):
     (d_min, d_max), (a_min, a_max) = segment
     seg_ds = [d_min, d_min, d_max, d_max]
     seg_as = [a_min, a_max, a_max, a_min]
@@ -427,7 +443,7 @@ def plot_similar_segment(ax, segment, color):
         # x and y is flipped between matrix notation and plotting
         seg_xs[i], seg_ys[i] = y, x
 
-    ax.fill(seg_xs, seg_ys, facecolor=color, edgecolor='none', lw=1, alpha=.3)
+    ax.fill(seg_xs, seg_ys, facecolor=color, edgecolor=color, **kw)
 
 
 def plot_global_alignment(ax, opseq, **kw):

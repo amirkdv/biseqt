@@ -10,6 +10,7 @@
 """
 import numpy as np
 from itertools import chain, combinations
+from scipy.spatial import cKDTree
 
 from .kmers import KmerIndex, KmerDBWrapper
 
@@ -136,6 +137,34 @@ class SeedIndex(KmerDBWrapper):
                 count_by_a[a] = count
 
         return count_by_a
+
+    def count_all_seed_neighbors(self, d_radius, a_radius):
+        """For each seed finds the number of seeds in its neighborhood defined
+        by:
+
+            |d - d'| < d_radius & |a - a'| < a_radius
+
+        This is done using a Quad-Tree in O(m lg m) time where m is the number
+        of seeds.
+
+        Returns:
+            list: list of tuples ``((d, a), num_neighs)``
+        """
+        # normalize the two diameters so we can use a standard L∞ neighborhood.
+        # typically a_diam is larger, so scale up d values proportionally
+        d_coeff = 1. * a_radius / d_radius
+        radius = a_radius
+
+        all_seeds = list(self.to_diagonal_coordinates(i, j)
+                         for i, j in self.seeds())
+        all_seeds_scaled = np.array([(d * d_coeff, a) for d, a in all_seeds])
+        quad_tree = cKDTree(all_seeds_scaled)
+        all_neighs = quad_tree.query_ball_tree(quad_tree, radius,
+                                               p=float('inf'))
+        # neighs[i] is the indices of the neighbors of all_seeds[i]; this
+        # always contains the seed itself (i.e always: i in neighs[i])
+        neigh_counts = [len(neighs) - 1 for neighs in all_neighs]
+        return zip(all_seeds, neigh_counts)
 
     def seeds(self, d_band=None):
         """Yields the :class:`seeds <Seed>` and their respective scores for a

@@ -151,6 +151,7 @@ def H0_moments(alphabet_len, wordlen, area):
 
     # HACK for bio data, wordlen = 8
     # pw_H0 *= 2.5
+    # pw_H0 *= .82 # NOTE doesn't fix problem
 
     mu_H0 = area * pw_H0
     sd_H0 = np.sqrt(area * (
@@ -378,6 +379,22 @@ class HomologyFinder(SeedIndex):
 
         return n_by_a_cum, scores_by_a
 
+    def score_seeds(self, K_min, p_min):
+        """Counts neighbors of each seed in an appropriate sense using a
+        Quad-Tree and scores each seed by scoring the segment centered at the
+        coordinates of that seed, cf. ``SeedIndex::count_all_seed_neighbors``.
+
+        Returns:
+            list: list of tuples ``((d, a), (s0, s1))``
+        """
+        d_radius = int(np.ceil(self.band_radius(K_min)))
+        a_radius = int(np.ceil(K_min / 2))
+        area = 4 * d_radius * a_radius
+        kw = {'area': area, 'seglen': K_min, 'p_match': p_min}
+        all_seed_neighbors = self.count_all_seed_neighbors(d_radius, a_radius)
+        return [((d, a), self.score_num_seeds(num_seeds=n, **kw))
+                for (d, a), n in all_seed_neighbors]
+
     def similar_segments(self, K_min, p_min, mode='H1'):
         """A sub-quadratic local similarity search algorithm that finds
         diagonal regions of similarity between given sequences.
@@ -397,14 +414,18 @@ class HomologyFinder(SeedIndex):
         """
         self.log('finding local homologies between %s and %s' %
                  (self.S.content_id[:8], self.T.content_id[:8]))
-        assert K_min > 0
-        threshold = {'H0': 10, 'H1': -1.5}[mode]
+        threshold = {'H0': 5, 'H1': -1.5}[mode]
         key = {'H0': 0, 'H1': 1}[mode]
         d_radius = int(np.ceil(self.band_radius(K_min)))
-        a_radius = int(np.ceil(K_min / 2))  # NOTE score_segments does the same
+        a_radius = int(np.ceil(K_min / 2))
 
-        scores_by_d_ = self.score_diagonal_bands(K_min, p_min)
-        d_peaks = find_peaks(scores_by_d_[:, key], d_radius, threshold)
+        all_seeds_scored = self.score_seeds(K_min, p_min)
+        scores_by_d_ = float('-inf') * np.ones(len(self.S) + len(self.T) - 1)
+        for (d, a), scores in all_seeds_scored:
+            d_ = d + self.d0
+            scores_by_d_[d_] = max(scores_by_d_[d_], scores[key])
+
+        d_peaks = find_peaks(scores_by_d_, d_radius, threshold)
         for d_min_, d_max_ in d_peaks:
             d_min, d_max = d_min_ - self.d0, d_max_ - self.d0
             d_band = (d_min, d_max)

@@ -124,7 +124,7 @@ def test_local_similarity(wordlen, K, n):
     T = A.parse(str(M.mutate(hom)[0]) + str(rand_seq(A, n-K)))
     HF = HomologyFinder(S, T, **HF_kw)
 
-    p_match = (1 - gap) * (1 - subst)
+    p_match = (1 - gap) * (1 - subst) * .9
     diagonal_scores = HF.score_diagonal_bands(K, p_match)
     assert abs(np.nanargmax(diagonal_scores[:, 1]) - HF.d0) < K, \
         'The highest H1 scoring diagonal band must be roughly around 0'
@@ -132,7 +132,7 @@ def test_local_similarity(wordlen, K, n):
     found_homs = list(HF.similar_segments(K, p_match))
     assert len(found_homs) == 1, 'Only one similar segment should be found'
     ((d_min, d_max), (a_min, a_max)), score, match_p = found_homs[0]
-    assert d_min < 0 and d_max > 0 and a_min < K, \
+    assert d_min < 10 and d_max > -10 and a_min < K, \
         'The coordinates of the homologous segment must be correct'
     assert 0 <= match_p <= 1, 'estimated match probability should be in [0, 1]'
 
