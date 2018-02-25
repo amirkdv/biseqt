@@ -3,562 +3,381 @@ import os
 import matplotlib.gridspec as gridspec
 import matplotlib
 from matplotlib import pyplot as plt
-from itertools import combinations
+from itertools import combinations, product
 
 import logging
 
 from biseqt.util import ProgressIndicator
-from biseqt.blot import HomologyFinder, band_radius
-from biseqt.blot import band_radius
+from biseqt.blot import HomologyFinder
 from biseqt.sequence import Alphabet
 from biseqt.stochastics import rand_seq, MutationProcess, rand_read
 from biseqt.kmers import KmerCache
 
-from util import pickle_dump, pickle_load
-from util import adjust_pw_plot, plot_global_alignment
-from util import plot_seeds, plot_similar_segment
-from util import plot_with_sd
-
-ALPHABET = Alphabet('ACGT')
-
-# FIXME obselete, cf. util.rand_seq_pair, and util.rand_seq_pair_real
-LEISH_PATH = os.path.join(os.path.dirname(__file__), 'data/leishmania/reference.fa')
-load_real = False
-if load_real:
-    with open(LEISH_PATH) as f:
-        LEISH_SEQ = ''.join([x.strip().upper() for x in f.readlines() if x[0] != '>'])
-
-    LEISH_SEQ = ALPHABET.parse(''.join([x for x in LEISH_SEQ if x in ALPHABET]))
-
-def rand_seq_pair(N, related=False, real=False, mutation_process=None):
-    if not related:
-        assert isinstance(mutation_process, MutationProcess)
-    if not real:
-        S = rand_seq(ALPHABET, N)
-        if related:
-            T, _ = mutation_process.mutate(S)
-        else:
-            T = rand_seq(ALPHABET, N)
-    else:
-        if related:
-            assert N < len(LEISH_SEQ)
-            nS = np.random.randint(0, len(LEISH_SEQ) - N)
-            S = LEISH_SEQ[nS:nS+N]
-            T, _ = mutation_process.mutate(S)
-        else:
-            assert N * 2 < len(LEISH_SEQ)
-            nS = np.random.randint(0, len(LEISH_SEQ) - 2 * N)
-            nT = np.random.randint(nS, len(LEISH_SEQ) - N)
-            S = LEISH_SEQ[nS:nS+N]
-            T = LEISH_SEQ[nT:nT+N]
-    return S, T
+from util import plot_with_sd, color_code
+from util import with_dumpfile, log, savefig, load_fasta
+from util import seq_pair, sample_bio_opseqs, sample_bio_seqs, apply_opseq
 
 
-# Add unrelated sequences to the end of the given sequences
-def pad_seq_pair(S, T, pad_length, ends='right'):
-    assert pad_length >= 0
-    junk = lambda : rand_seq(ALPHABET, pad_length)
-    if ends in ['both', 'left']:
-        S = junk() + S
-        T = junk() + T
-    if ends in ['both', 'right']:
-        S = S + junk()
-        T = T + junk()
-    return S, T
-
-# =======================
-# Performance of Statistics in separating +/- cases
-# Two scores are considered: z score wrt H0 and wrt H1
-# =======================
-# K is segment length of interest
-def plot_stats_performance_fixed_K(K, ns, n_samples, real=False, wordlen=None,
-                           gap=None, subst=None, num_sds=1, banded=False,
-                           replot=False, dumpfile=None):
-    if replot:
-        results = pickle_load(dumpfile)
-    else:
-        M = MutationProcess(ALPHABET, subst_probs=subst, ge_prob=gap, go_prob=gap)
+@with_dumpfile
+def sim_stats_fixed_K(K, ns, n_samples, **kw):
+    def _zero():
         shape = (len(ns), n_samples)
-        HF_kw = {'gap_prob': gap, 'subst_prob': subst,
-                 'sensitivity': .9, 'alphabet': ALPHABET, 'wordlen': wordlen,
-                 'path': ':memory:', 'log_level': logging.WARNING}
-        results = {
-            'H0': {'pos': np.zeros(shape), 'neg': np.zeros(shape)},
-            'H1': {'pos': np.zeros(shape), 'neg': np.zeros(shape)},
-            'banded': banded,
-            'HF_kw': HF_kw,
-            # FIXME put in other info as well
-        }
-        for n_idx, n in enumerate(ns):
-            print 'n = %d (%d/%d)' % (n, n_idx+1, len(ns))
-            for i in range(n_samples):
-                S, T = rand_seq_pair(K, real=real, related=False, mutation_process=M)
-                S, T = pad_seq_pair(S, T, n-K)
+        return {'pos': np.zeros(shape), 'neg': np.zeros(shape)}
+
+    A = Alphabet('ACGT')
+    wordlen, bio, p_match = kw['wordlen'], kw['bio'], kw['p_match']
+    HF_kw = {
+        'g_max': kw.get('g_max', .6),
+        'sensitivity': kw.get('sensitivity', .99),
+        'wordlen': wordlen,
+        'alphabet': A,
+        'path': kw.get('db_path', ':memory:'),
+        'log_level': kw.get('log_level', logging.WARNING),
+    }
+    sim_data = {
+        'scores': {
+            'band': {'H0': _zero(), 'H1': _zero()},
+            'segment': {'H0': _zero(), 'H1': _zero()},
+        },
+        'HF_kw': HF_kw,
+        'K': K,
+        'ns': ns,
+        'bio': bio,
+        'p_match': p_match,
+    }
+    if bio:
+        bio_source_seq = kw['bio_source_seq']
+        bio_source_opseq = kw['bio_source_opseq']
+        opseqs = list(sample_bio_opseqs(bio_source_opseq, K, n_samples,
+                                        gap=None, match=p_match))
+    else:
+        # NOTE distribute the burden of p_match evenly on gap and subst:
+        subst = gap = 1 - np.sqrt(p_match)
+        assert abs((1 - gap) * (1 - subst) - p_match) < 1e-3
+        M = MutationProcess(A, subst_probs=subst, ge_prob=gap, go_prob=gap)
+
+    for n_idx, n in enumerate(ns):
+        log('evaluating scores for K = %d, n = %d (%d/%d)' %
+            (K, n, n_idx + 1, len(ns)))
+        for idx in range(n_samples):
+            if bio:
+                S_urel, T_urel = sample_bio_seqs([n, n], bio_source_seq)
+                S_rel = sample_bio_seqs([K], bio_source_seq)[0]
+                T_rel = apply_opseq(S_rel, opseqs[idx])
+                junk = sample_bio_seqs([n - K, n - K], bio_source_seq)
+                S_rel += junk[0]
+                T_rel += junk[1]
+            else:
+                S_rel, T_rel = seq_pair(K, A, mutation_process=M)
+                S_rel += rand_seq(A, n - K)
+                T_rel += rand_seq(A, n - K)
+                S_urel, T_urel = rand_seq(A, n), rand_seq(A, n)
+
+            for key, (S, T) in zip(['pos', 'neg'],
+                                   [(S_rel, T_rel), (S_urel, T_urel)]):
                 HF = HomologyFinder(S, T, **HF_kw)
-                if banded:
-                    radius = HF.band_radius(K)
-                    A = 2 * n * radius
-                    num_seeds = HF.seed_count(d_band=(-radius, radius))
-                else:
-                    A = n ** 2
-                    num_seeds = HF.seed_count()
-                s0, s1 = HF.score_num_seeds(num_seeds=num_seeds, area=A, seglen=K)
-                results['H0']['neg'][n_idx][i] = s0
-                results['H1']['neg'][n_idx][i] = s1
 
-            for i in range(n_samples):
-                S, T = rand_seq_pair(K, real=real, related=True, mutation_process=M)
-                S, T = pad_seq_pair(S, T, n-K)
+                # band score
+                # NOTE assume exact knowledge of K and p_match
+                scores_by_d_ = HF.score_diagonal_bands(K, p_match)
+                s0, s1 = scores_by_d_[HF.d0]
+                sim_data['scores']['band']['H0'][key][n_idx][idx] = s0
+                sim_data['scores']['band']['H1'][key][n_idx][idx] = s1
+
+                # segment score
+                d_radius = int(np.ceil(HF.band_radius(K)))
+                d_band = (-d_radius, d_radius)
+                _, scores_by_a = HF.score_segments(K, p_match, d_band=d_band)
+                s0, s1 = scores_by_a[int(K/2)]
+                sim_data['scores']['segment']['H0'][key][n_idx][idx] = s0
+                sim_data['scores']['segment']['H1'][key][n_idx][idx] = s1
+    return sim_data
+
+
+@with_dumpfile
+def sim_stats_varying_K_p(Ks, ps, n_samples, **kw):
+    def _zero():
+        shape = (len(Ks), len(ps), n_samples)
+        return {'pos': np.zeros(shape), 'neg': np.zeros(shape)}
+
+    A = Alphabet('ACGT')
+    wordlen, bio = kw['wordlen'], kw['bio']
+    HF_kw = {
+        'g_max': kw.get('g_max', .6),
+        'sensitivity': kw.get('sensitivity', .99),
+        'wordlen': wordlen,
+        'alphabet': A,
+        'path': kw.get('db_path', ':memory:'),
+        'log_level': kw.get('log_level', logging.WARNING),
+    }
+    sim_data = {
+        'scores': {'H0': _zero(), 'H1': _zero()},
+        'K_hat': {'H0': _zero(), 'H1': _zero()},
+        'p_hat': {'H0': _zero(), 'H1': _zero()},
+        'HF_kw': HF_kw,
+        'Ks': Ks,
+        'ps': ps,
+        'bio': bio,
+    }
+    if bio:
+        bio_source_seq = kw['bio_source_seq']
+        bio_source_opseq = kw['bio_source_opseq']
+
+    for (K_idx, K), (p_idx, p_match) in product(enumerate(Ks), enumerate(ps)):
+        if bio:
+            opseqs = list(sample_bio_opseqs(bio_source_opseq, K, n_samples,
+                                                 gap=None, match=p_match))
+        log('evaluating scores for K = %d, p = %.2f' % (K, p_match))
+        for idx in range(n_samples):
+            if bio:
+                S_urel, T_urel = sample_bio_seqs([K, K], bio_source_seq)
+                S_rel = sample_bio_seqs([K], bio_source_seq)[0]
+                T_rel = apply_opseq(S_rel, opseqs[idx])
+                junk = sample_bio_seqs([K / 2] * 4, bio_source_seq)
+                S_rel = junk[0] + S_rel + junk[1]
+                T_rel = junk[2] + T_rel + junk[3]
+            else:
+                # NOTE distribute the burden of p_match evenly on gap and subst
+                subst = gap = 1 - np.sqrt(p_match)
+                assert abs((1 - gap) * (1 - subst) - p_match) < 1e-3
+                M = MutationProcess(A, subst_probs=subst, ge_prob=gap,
+                                    go_prob=gap)
+                S_rel, T_rel = seq_pair(K, A, mutation_process=M)
+                S_rel = rand_seq(A, K / 2) + S_rel + rand_seq(A, K / 2)
+                T_rel = rand_seq(A, K / 2) + T_rel + rand_seq(A, K / 2)
+                S_urel, T_urel = rand_seq(A, K), rand_seq(A, K)
+
+            for key, (S, T) in zip(['pos', 'neg'],
+                                   [(S_rel, T_rel), (S_urel, T_urel)]):
                 HF = HomologyFinder(S, T, **HF_kw)
-                if banded:
-                    radius = HF.band_radius(K)
-                    A = n * radius
-                    num_seeds = HF.seed_count(d_band=(-radius, radius))
+                scored_seeds = HF.score_seeds(K, p_match)
+
+                if scored_seeds:
+                    s0 = max(s0 for _, (s0, s1) in scored_seeds)
+                    s1 = max(s1 for _, (s0, s1) in scored_seeds)
                 else:
-                    A = n ** 2
-                    num_seeds = HF.seed_count()
-                s0, s1 = HF.score_num_seeds(num_seeds=num_seeds, area=A, seglen=K)
-                results['H0']['pos'][n_idx][i] = s0
-                results['H1']['pos'][n_idx][i] = s1
+                    s0 = s1 = float('-inf')
+                sim_data['scores']['H0'][key][K_idx][p_idx][idx] = s0
+                sim_data['scores']['H1'][key][K_idx][p_idx][idx] = s1
 
-        if dumpfile:
-            pickle_dump(dumpfile, results, comment='stats performance')
-
-    fig = plt.figure(figsize=(15, 6))
-    ax_H0 = fig.add_subplot(1, 2, 1)
-    ax_H1 = fig.add_subplot(1, 2, 2)
-
-
-    kw = {'marker': 'o', 'markersize': 5, 'lw': 2, 'alpha': .8}
-    _ns = [n/1000. for n in ns]
-
-    for key, ax in zip(['H0', 'H1'], [ax_H0, ax_H1]):
-        for case, color in zip(['pos', 'neg'], ['g', 'r']):
-            plot_with_sd(ax, _ns, results[key][case], axis=1, color=color, **kw)
-            ax.grid(True)
-
-        ax.set_ylabel('%s score' % key, fontsize=14)
-        ax.set_xlabel('sequence length (kb)', fontsize=14)
-
-    fig.suptitle('word len. = %d, segment len. = %d, # samples = %d' % (wordlen, K, n_samples), fontweight='bold')
-    fig.tight_layout(rect=[0, 0.03, 1, 0.95])
-    fig.savefig('stats performance - banded', dpi=300)
+                if key == 'neg':
+                    continue
+                # estimate segment probabilities with unknown K, p
+                p_min = .4
+                K_min = 100
+                for mode in ['H0', 'H1']:
+                    results = list(HF.similar_segments(K_min, p_min,
+                                                       mode=mode))
+                    scores = [score for _, score, _ in results]
+                    if not scores:
+                        continue
+                    segment, _, p_hat = results[np.argmax(scores)]
+                    _, (a_min, a_max) = segment
+                    K_hat = a_max - a_min
+                    sim_data['K_hat'][mode][key][K_idx][p_idx][idx] = K_hat
+                    sim_data['p_hat'][mode][key][K_idx][p_idx][idx] = p_hat
+    return sim_data
 
 
-def plot_stats_performance_unknown_K(n, Ks_hf, Ks_true, n_samples,
-                                     real=False, wordlen=None, gap=None, subst=None,
-                                     num_sds=1, replot=False, dumpfile=None):
-    assert n > max(Ks)
-    assert np.all(np.diff(Ks) > 0)
-    if replot:
-        results = pickle_load(dumpfile)
-    else:
-        a
-        M = MutationProcess(ALPHABET, subst_probs=subst, ge_prob=gap, go_prob=gap)
-        shape = (len(Ks_true), len(Ks_hf), n_samples)
-        HF_kw = {'gap_prob': gap, 'subst_prob': subst,
-                 'sensitivity': .9, 'alphabet': ALPHABET, 'wordlen': wordlen,
-                 'path': ':memory:', 'log_level': logging.WARNING}
-        _zero = lambda: {'pos': np.zeros(shape), 'neg': np.zeros(shape)}
-        results = {
-            'H0': {'band': _zero(), 'segment': _zero()},
-            'H1': {'band': _zero(), 'segment': _zero()},
-            'HF_kw': HF_kw,
-            'n_samples': n_samples,
-            'Ks_hf': Ks_hf,
-            'Ks_true': Ks_true,
-            'real': real,
-        }
-        for K_true_idx, K_true in enumerate(Ks_true):
-            for K_hf_idx, K_hf in enumerate(Ks_hf):
-                print 'K_true = %d, K_hf = %d' % (K_true, K_hf)
-                for i in range(n_samples):
-                    for case in ['neg', 'pos']:
-                        if case == 'pos':
-                            S, T = rand_seq_pair(K_true, real=real, related=True, mutation_process=M)
-                            S, T = pad_seq_pair(S, T, (n - K_true)/2, ends='both')
-                        else:
-                            S, T = rand_seq_pair(n, real=real, related=False, mutation_process=M)
-                        HF = HomologyFinder(S, T, **HF_kw)
-                        radius = HF.band_radius(K_hf)
-                        A = 2 * K_hf * radius
-                        num_seeds = HF.seed_count(d_band=(-radius, radius))
-                        s0_band, s1_band = HF.score_num_seeds(num_seeds=num_seeds, area=A, seglen=K_hf)
-                        results['H0']['band'][case][K_true_idx][K_hf_idx][i] = s0_band
-                        results['H1']['band'][case][K_true_idx][K_hf_idx][i] = s1_band
+def plot_stats_fixed_K(sim_data, suffix=''):
+    K, ns, p_match = sim_data['K'], sim_data['ns'], sim_data['p_match']
+    wordlen = sim_data['HF_kw']['wordlen']
+    n_samples = sim_data['scores']['band']['H0']['pos'].shape[1]
+    scores = sim_data['scores']
 
-                        s0_segs = [s for _, s, _ in HF.highest_scoring_segments(K_hf, mode='H0')]
-                        s1_segs = [s for _, s, _ in HF.highest_scoring_segments(K_hf, mode='H1')]
-                        results['H0']['segment'][case][K_true_idx][K_hf_idx][i] = max(s0_segs)
-                        results['H1']['segment'][case][K_true_idx][K_hf_idx][i] = max(s1_segs)
+    for key in ['band', 'segment']:
+        fig = plt.figure(figsize=(11, 5))
+        ax_H0 = fig.add_subplot(1, 2, 1)
+        ax_H1 = fig.add_subplot(1, 2, 2)
+        scores = sim_data['scores'][key]
 
-        if dumpfile:
-            pickle_dump(dumpfile, results, comment='stats performance')
+        kw = {'marker': 'o', 'markersize': 3, 'alpha': .8}
+        for mode, ax in zip(['H0', 'H1'], [ax_H0, ax_H1]):
+            for case, color in zip(['pos', 'neg'], ['g', 'r']):
+                plot_with_sd(ax, ns, scores[mode][case], axis=1, color=color,
+                             **kw)
+            ax.set_ylabel('%s score' % mode, fontsize=10)
+            ax.set_xlabel('sequence length', fontsize=10)
 
-
-    cmap = plt.cm.get_cmap('brg')
-    colors = [cmap(i/(1.*len(Ks_hf)))[:3] for i in range(len(Ks_hf))]
-    Ks_true, Ks_hf = results['Ks_true'], results['Ks_hf']
-    wordlen, n_samples = results['HF_kw']['wordlen'], results['n_samples']
-    gap, subst = results['HF_kw']['gap_prob'], results['HF_kw']['subst_prob']
-
-    for stat in ['band', 'segment']:
-        fig_roc = plt.figure(figsize=(12, 6)) # ROC curves for each of K_hf's
-        ax_H0_roc = fig_roc.add_subplot(1, 2, 1)
-        ax_H1_roc = fig_roc.add_subplot(1, 2, 2)
-
-        fig_all = plt.figure(figsize=(12, 6)) # separate plots for each K_hf with var
-        ax_H0_all = fig_all.add_subplot(1, 2, 1)
-        ax_H1_all = fig_all.add_subplot(1, 2, 2)
-        for K_hf_idx, K_hf in enumerate(Ks_hf):
-            color = colors[K_hf_idx]
-            for key, ax_all in zip(['H0', 'H1'], [ax_H0_all, ax_H1_all]):
-                for ls, case in zip(['--', '-'], ['neg', 'pos']):
-                    res = results[key][stat][case][:, K_hf_idx, :]
-                    means = res.mean(axis=1)
-                    sds = np.sqrt(res.var(axis=1))
-
-                    ax_all.fill_between(Ks_true, means - num_sds * sds, means + num_sds * sds, facecolor=color, edgecolor=color, alpha=.2)
-
-                    label = None if case == 'neg' else 'K = %d' % K_hf
-                    ax_all.plot(Ks_true, means, lw=1, ls=ls, alpha=.7, c=color, label=label)
-
-                ax_all.set_xlabel('True length of homologous region', fontsize=10)
-                ax_all.set_ylabel('%s %s score' % (stat, key), fontsize=10)
-                ax_all.grid(True)
-                ax_all.axvline(x=K_hf, lw=4, alpha=.3, color=color)
-            ax_H0_all.legend(loc='upper left', fontsize=10)
-
-            # roc curves
-            from bisect import bisect_left
-            from plots import plot_roc
-            K_true_idx = bisect_left(Ks_true, K_hf)
-            #K_true_idx = 0
-            label = 'K = %d' % K_hf
-            pos_H0 = results['H0'][stat]['pos'][K_true_idx:, K_hf_idx, :].flatten()
-            neg_H0 = np.concatenate([
-                results['H0'][stat]['pos'][:K_true_idx, K_hf_idx, :].flatten(),
-                results['H0'][stat]['neg'][:, K_hf_idx, :].flatten()
-            ])
-
-            pos_H1 = results['H1'][stat]['pos'][K_true_idx:, K_hf_idx, :].flatten()
-            neg_H1 = np.concatenate([
-                results['H1'][stat]['pos'][:K_true_idx, K_hf_idx, :].flatten(),
-                results['H1'][stat]['neg'][:, K_hf_idx, :].flatten()
-            ])
-            plot_roc(ax_H0_roc, pos_H0, neg_H0, lw=1.5, alpha=.8, classifier='>', color=color, label=label)
-            plot_roc(ax_H1_roc, pos_H1, neg_H1, lw=1.5, alpha=.8, classifier='>', color=color, label=label)
-
-        for mode, ax in zip(['H0', 'H1'], [ax_H0_roc, ax_H1_roc]):
-            ax.grid(True)
-            ax.set_title('ROC curve for %s %s score' % (stat, mode))
-            ax.legend(loc='lower right', fontsize=10)
-        title = 'word len. = %d, # samples = %d, seq. len = %d, ' % \
-                (wordlen, n_samples, max(Ks_true)) + \
-                'gap = %.2f, subst = %.2f' % (gap, subst)
-        for _fig in [fig_all, fig_roc]:
-            _fig.suptitle(title, fontsize=12)
-            _fig.tight_layout(rect=[0, 0.03, 1, 0.95])
-        fig_all.savefig('stats performance - banded - unknown K - max over peak - all [%s].png' % stat, dpi=300)
-        fig_roc.savefig('stats performance - banded - unknown K - max over peak - ROC [%s].png' % stat, dpi=300)
-
-
-def plot_stats_performance_unknown_g(n, K, gs_hf, gs_true, n_samples,
-                                      real=False, wordlen=None, subst=None,
-                                      num_sds=1, replot=False, dumpfile=None):
-    assert n > max(Ks)
-    assert np.all(np.diff(Ks) > 0)
-    if replot:
-        results = pickle_load(dumpfile)
-    else:
-        shape = (len(gs_true), len(gs_hf), n_samples)
-        HF_kw = {'subst_prob': subst,
-                 'sensitivity': .9, 'alphabet': ALPHABET, 'wordlen': wordlen,
-                 'path': ':memory:', 'log_level': logging.WARNING}
-        _zero = lambda: {'pos': np.zeros(shape), 'neg': np.zeros(shape)}
-        results = {
-            'H0': {'band': _zero(), 'segment': _zero()},
-            'H1': {'band': _zero(), 'segment': _zero()},
-            'HF_kw': HF_kw,
-            'n_samples': n_samples,
-            'gs_hf': gs_hf,
-            'gs_true': gs_true,
-            'n': n,
-            'K': K,
-            'real': real,
-        }
-        for g_true_idx, g_true in enumerate(gs_true):
-            M = MutationProcess(ALPHABET, subst_probs=subst, ge_prob=g_true, go_prob=g_true)
-            for g_hf_idx, g_hf in enumerate(gs_hf):
-                print 'g_true = %.2f, g_hf = %.2f' % (g_true, g_hf)
-                for i in range(n_samples):
-                    for case in ['neg', 'pos']:
-                        if case == 'pos':
-                            S, T = rand_seq_pair(K, real=real, related=True, mutation_process=M)
-                            S, T = pad_seq_pair(S, T, n - K)
-                        else:
-                            S, T = rand_seq_pair(n, real=real, related=False, mutation_process=M)
-                        HF_kw['gap_prob'] = g_hf
-                        HF = HomologyFinder(S, T, **HF_kw)
-                        radius = HF.band_radius(K)
-                        A = 2 * K * radius
-                        num_seeds = HF.seed_count(d_band=(-radius, radius))
-                        s0_band, s1_band = HF.score_num_seeds(num_seeds=num_seeds, area=A, seglen=K)
-                        results['H0']['band'][case][g_true_idx][g_hf_idx][i] = s0_band
-                        results['H1']['band'][case][g_true_idx][g_hf_idx][i] = s1_band
-
-                        s0_segs = [s for _, s, _ in HF.highest_scoring_segments(K, mode='H0')]
-                        s1_segs = [s for _, s, _ in HF.highest_scoring_segments(K, mode='H1')]
-                        results['H0']['segment'][case][g_true_idx][g_hf_idx][i] = max(s0_segs)
-                        results['H1']['segment'][case][g_true_idx][g_hf_idx][i] = max(s1_segs)
-
-        if dumpfile:
-            pickle_dump(dumpfile, results, comment='stats performance')
-
-
-    cmap = plt.cm.get_cmap('brg')
-    colors = [cmap(i/(1.*len(gs_hf)))[:3] for i in range(len(gs_hf))]
-    gs_true, gs_hf = results['gs_true'], results['gs_hf']
-    wordlen, n_samples = results['HF_kw']['wordlen'], results['n_samples']
-    n, K, subst = results['n'], results['K'], results['HF_kw']['subst_prob']
-
-    for stat in ['band', 'segment']:
-        fig_roc = plt.figure(figsize=(12, 6)) # ROC curves for each of g_hf's
-        ax_H0_roc = fig_roc.add_subplot(1, 2, 1)
-        ax_H1_roc = fig_roc.add_subplot(1, 2, 2)
-
-        fig_all = plt.figure(figsize=(12, 6)) # separate plots for each g_hf with var
-        ax_H0_all = fig_all.add_subplot(1, 2, 1)
-        ax_H1_all = fig_all.add_subplot(1, 2, 2)
-        for g_hf_idx, g_hf in enumerate(gs_hf):
-            color = colors[g_hf_idx]
-            for key, ax_all in zip(['H0', 'H1'], [ax_H0_all, ax_H1_all]):
-                for ls, case in zip(['--', '-'], ['neg', 'pos']):
-                    res = results[key][stat][case][:, g_hf_idx, :]
-                    means = res.mean(axis=1)
-                    sds = np.sqrt(res.var(axis=1))
-
-                    ax_all.fill_between(gs_true, means - num_sds * sds, means + num_sds * sds, facecolor=color, edgecolor=color, alpha=.2)
-
-                    label = None if case == 'neg' else 'g = %.2f' % g_hf
-                    ax_all.plot(gs_true, means, lw=1, ls=ls, alpha=.7, c=color, label=label)
-
-                ax_all.set_xlabel('True gap probability of homologous region', fontsize=10)
-                ax_all.set_ylabel('%s %s score' % (stat, key), fontsize=10)
-                ax_all.grid(True)
-                ax_all.axvline(x=g_hf, lw=4, alpha=.3, color=color)
-            ax_H0_all.legend(loc='upper right', fontsize=10)
-
-            # roc curves
-            from bisect import bisect_left
-            from plots import plot_roc
-            g_true_idx = bisect_left(gs_true, g_hf)
-            label = 'g = %.2f' % g_hf
-            # NOTE pos and neg are different from 'unknown K' experiment, here
-            # if g_true < g_hf we count it as positive.
-            pos_H0 = results['H0'][stat]['pos'][:g_true_idx, g_hf_idx, :].flatten()
-            neg_H0 = np.concatenate([
-                results['H0'][stat]['pos'][g_true_idx:, g_hf_idx, :].flatten(),
-                results['H0'][stat]['neg'][:, g_hf_idx, :].flatten()
-            ])
-
-            pos_H1 = results['H1'][stat]['pos'][:g_true_idx, g_hf_idx, :].flatten()
-            neg_H1 = np.concatenate([
-                results['H1'][stat]['pos'][g_true_idx:, g_hf_idx, :].flatten(),
-                results['H1'][stat]['neg'][:, g_hf_idx, :].flatten()
-            ])
-            plot_roc(ax_H0_roc, pos_H0, neg_H0, lw=1.5, alpha=.8, classifier='>', color=color, label=label)
-            plot_roc(ax_H1_roc, pos_H1, neg_H1, lw=1.5, alpha=.8, classifier='>', color=color, label=label)
-
-        for mode, ax in zip(['H0', 'H1'], [ax_H0_roc, ax_H1_roc]):
-            ax.grid(True)
-            ax.set_title('ROC curve for %s %s score' % (stat, mode))
-            ax.legend(loc='lower right', fontsize=10)
-        title = 'word len. = %d, # samples = %d, seq. len = %d, ' % \
-                (wordlen, n_samples, n) + \
-                'homology len = %d, subst = %.2f' % (K, subst)
-        for _fig in [fig_all, fig_roc]:
-            _fig.suptitle(title, fontsize=12)
-            _fig.tight_layout(rect=[0, 0.03, 1, 0.95])
-        fig_all.savefig('stats performance - banded - unknown g - rescore seg - all [%s].png' % stat, dpi=300)
-        fig_roc.savefig('stats performance - banded - unknown g - rescore seg - ROC [%s].png' % stat, dpi=300)
-
-def plot_stats_performance_estimate_seg_properties(n, Ks, g_hf, gs, n_samples,
-                                      real=False, wordlen=None, subst=None,
-                                      num_sds=1, replot=False, dumpfile=None):
-    assert n > max(Ks)
-    assert np.all(np.diff(Ks) > 0)
-    if replot:
-        results = pickle_load(dumpfile)
-    else:
-        shape = (len(gs), len(Ks), n_samples)
-        HF_kw = {'subst_prob': subst,
-                 'sensitivity': .9, 'alphabet': ALPHABET, 'wordlen': wordlen,
-                 'path': ':memory:', 'log_level': logging.WARNING}
-        _zero = lambda: np.zeros(shape)
-        results = {
-            'H0': {'match_p': _zero(), 'length': _zero()},
-            'H1': {'match_p': _zero(), 'length': _zero()},
-            'HF_kw': HF_kw,
-            'n_samples': n_samples,
-            'g_hf': g_hf,
-            'gs': gs,
-            'Ks': Ks,
-            'n': n,
-            'real': real,
-        }
-        for g_idx, g in enumerate(gs):
-            M = MutationProcess(ALPHABET, subst_probs=subst, ge_prob=g, go_prob=g)
-            for K_idx, K in enumerate(Ks):
-                print 'g = %.2f, K= %d' % (g, K)
-                for i in range(n_samples):
-                    S, T = rand_seq_pair(K, real=real, related=True, mutation_process=M)
-                    S, T = pad_seq_pair(S, T, (n - K)/2, ends='both')
-
-                    # NOTE if g_hf is not given, use an exact model
-                    HF = HomologyFinder(S, T, gap_prob=g_hf if g_hf is not None else g,**HF_kw)
-
-                    for mode in ['H0', 'H1']:
-                        for segment, _, match_p in HF.highest_scoring_segments(K, mode=mode):
-                            if not segment:
-                                continue
-                            (d_min, d_max), (a_min, a_max) = segment
-                            if d_min <= 0 <= d_max:
-                                results[mode]['match_p'][g_idx][K_idx][i] = match_p
-                                results[mode]['length'][g_idx][K_idx][i] = a_max - a_min
-                                print S.content_id[:8], T.content_id[:8], mode, match_p, a_max - a_min
-                                break
-                        # if we get to here without setting estimated match p
-                        # and homology length, they will just be 0
-
-        if dumpfile:
-            pickle_dump(dumpfile, results, comment='stats performance')
-
-
-    cmap = plt.cm.get_cmap('brg')
-    colors = [cmap(i/(1.*len(gs)))[:3] for i in range(len(gs))]
-    gs, Ks, n, subst = results['gs'], results['Ks'], results['n'], results['HF_kw']['subst_prob']
-    wordlen, n_samples = results['HF_kw']['wordlen'], results['n_samples']
-    g_hf = results['g_hf']
-
-    # Estimated match probability
-    fig_H0 = plt.figure(figsize=(12, 6))
-    ax_H0_p = fig_H0.add_subplot(1, 2, 1)
-    ax_H0_K = fig_H0.add_subplot(1, 2, 2)
-    # Estimated length
-    fig_H1 = plt.figure(figsize=(12, 6))
-    ax_H1_p = fig_H1.add_subplot(1, 2, 1)
-    ax_H1_K = fig_H1.add_subplot(1, 2, 2)
-    for g_idx, g in enumerate(gs):
-        color = colors[g_idx]
-        for key, ax in zip(['H0', 'H1'], [ax_H0_p, ax_H1_p]):
-            ax.set_ylim(.7, 1.1)
-            res = results[key]['match_p'][g_idx, :, :]
-            # HACK
-            if not np.count_nonzero(res):
-                continue
-            res[res == 0] = 'nan'
-            means = np.nanmean(res, axis=1)
-            sds = np.sqrt(np.nanvar(res, axis=1))
-
-            true_match = (1 - g) * (1 - subst)
-            label = 'p = %.2f' % true_match
-            ax.plot(Ks, means, lw=2, alpha=.7, c=color, label=label)
-            ax.fill_between(Ks, means - num_sds * sds, means + num_sds * sds, facecolor=color, edgecolor=color, alpha=.1)
-
-            ax.set_xlabel('Length of homologous region', fontsize=10)
-            ax.set_ylabel('Estimated match probability from %s segment' % key, fontsize=10)
-            ax.grid(True)
-            ax.axhline(y=true_match, lw=1.5, ls='--', alpha=.8, color=color)
-        ax_H0_p.legend(loc='upper right', fontsize=10)
-        for key, ax in zip(['H0', 'H1'], [ax_H0_K, ax_H1_K]):
-            ax.set_xlim(0, 1.1 * max(Ks))
-            res = results[key]['length'][g_idx, :, :]
-
-            # HACK
-            if not np.count_nonzero(res):
-                continue
-            res[res == 0] = 'nan'
-            means = np.nanmean(res, axis=1)
-            sds = np.sqrt(np.nanvar(res, axis=1))
-
-            true_match = (1 - g) * (1 - subst)
-            label = 'p = %.2f' % true_match
-            ax.plot(Ks, means, lw=2, alpha=.7, c=color, label=label)
-            ax.fill_between(Ks, means - num_sds * sds, means + num_sds * sds, facecolor=color, edgecolor=color, alpha=.1)
-
-            ax.set_xlabel('Length of homologous region', fontsize=10)
-            ax.set_ylabel('Estimated length from %s segment' % key, fontsize=10)
-            ax.grid(True)
-        ax_H0_K.legend(loc='upper left', fontsize=10)
-        ax_H1_K.legend(loc='upper left', fontsize=10)
-        _Ks = np.insert(Ks, [0], 0)
-        ax_H0_K.plot(_Ks, _Ks, lw=1, ls='--', alpha=.3, c='k')
-        ax_H1_K.plot(_Ks, _Ks, lw=1, ls='--', alpha=.3, c='k')
-
-    title = 'word len. = %d, seq. len = %d, # samples = %d, subst = %.2f, model gap = %s' % \
-            (wordlen, n, n_samples, subst, 'exact' if g_hf is None else str(round(g_hf, 2)))
-    for fig, mode in zip([fig_H0, fig_H1], ['H0', 'H1']):
-        fig.suptitle(title, fontsize=12)
+        fig.suptitle('K = %d, w = %d, no. samples = %d, match prob= %.2f' %
+                     (K, wordlen, n_samples, p_match), fontsize=10)
         fig.tight_layout(rect=[0, 0.03, 1, 0.95])
-        fig.savefig('stats performance - banded - homology properties %s%s.png' % (mode, ' (exact)' if g_hf is None else ''), dpi=300)
+        savefig(fig, 'stats[%s]%s.png' % (key, suffix))
 
-# FIXME there are 3 different experiments in here now
-def exp_stats_performance():
-    K = 500 # similar segment length
-    ns = [i*K for i in range(1, 11)] # sequence lengths
-    n_samples = 100 # number samples for each n
+
+def plot_stats_varying_K_p(sim_data, select_Ks, select_ps, suffix=''):
+    Ks, ps = sim_data['Ks'], sim_data['ps']
+    wordlen = sim_data['HF_kw']['wordlen']
+    n_samples = sim_data['scores']['H0']['pos'].shape[2]
+    scores = sim_data['scores']
+    K_hats = sim_data['K_hat']
+    p_hats = sim_data['p_hat']
+
+    assert all(K in Ks for K in select_Ks)
+    assert all(p in ps for p in select_ps)
+
+    kw = {'marker': 'o', 'markersize': 3, 'alpha': .8}
+
+    # varying K for select ps
+    fig_by_K = plt.figure(figsize=(11, 5))
+    ax_H0 = fig_by_K.add_subplot(1, 2, 1)
+    ax_H1 = fig_by_K.add_subplot(1, 2, 2)
+    for mode, ax in zip(['H0', 'H1'], [ax_H0, ax_H1]):
+        colors = color_code(select_ps)
+        for p, color in zip(select_ps, colors):
+            p_idx = ps.index(p)
+            for case, ls in zip(['pos', 'neg'], ['-', '--']):
+                label = '' if case == 'neg' else 'p = %.2f' % p
+                plot_with_sd(ax, Ks, scores[mode][case][:,p_idx,:], axis=1,
+                             color=color, ls=ls, label=label, **kw)
+        ax.set_ylabel('%s score' % mode, fontsize=10)
+        ax.set_xlabel('homology length', fontsize=10)
+    ax_H0.legend(loc='upper left', fontsize=10)
+    ax_H1.legend(loc='lower left', fontsize=10)
+    fig_by_K.suptitle('w = %d, no. samples = %d' % (wordlen, n_samples),
+                      fontsize=10)
+    fig_by_K.tight_layout(rect=[0, 0.03, 1, 0.95])
+    savefig(fig_by_K, 'stats[score-by-K]%s.png' % suffix)
+
+    # varying p for select Ks
+    fig_by_p = plt.figure(figsize=(11, 5))
+    ax_H0 = fig_by_p.add_subplot(1, 2, 1)
+    ax_H1 = fig_by_p.add_subplot(1, 2, 2)
+    for mode, ax in zip(['H0', 'H1'], [ax_H0, ax_H1]):
+        colors = color_code(select_Ks)
+        for K, color in zip(select_Ks, colors):
+            K_idx = Ks.index(K)
+            for case, ls in zip(['pos', 'neg'], ['-', '--']):
+                label = '' if case == 'neg' else 'K = %d' % K
+                plot_with_sd(ax, ps, scores[mode][case][K_idx,:,:], axis=1,
+                             color=color, ls=ls, label=label, **kw)
+        ax.set_ylabel('%s score' % mode, fontsize=10)
+        ax.set_xlabel('homology match probability', fontsize=10)
+    ax_H0.legend(loc='upper left', fontsize=10)
+    ax_H1.legend(loc='lower left', fontsize=10)
+    fig_by_p.suptitle('w = %d, no. samples = %d' % (wordlen, n_samples),
+                      fontsize=10)
+    fig_by_p.tight_layout(rect=[0, 0.03, 1, 0.95])
+    savefig(fig_by_p, 'stats[score-by-p]%s.png' % suffix)
+
+    # estimated Ks for select ps
+    fig_K_hat = plt.figure(figsize=(11, 5))
+    ax_H0 = fig_K_hat.add_subplot(1, 2, 1)
+    ax_H1 = fig_K_hat.add_subplot(1, 2, 2)
+    for mode, ax in zip(['H0', 'H1'], [ax_H0, ax_H1]):
+        colors = color_code(select_ps)
+        for p, color in zip(select_ps, colors):
+            p_idx = ps.index(p)
+            plot_with_sd(ax, Ks, K_hats[mode]['pos'][:,p_idx,:], axis=1,
+                         color=color, label='p = %.2f' % p, **kw)
+        ax.set_ylabel('%s estimated homology length' % mode, fontsize=10)
+        ax.set_xlabel('true homology length', fontsize=10)
+        ax.plot(Ks, Ks, ls='--', c='k', lw=5, alpha=.2)
+        ax.legend(loc='upper left', fontsize=10)
+    fig_K_hat.suptitle('w = %d, no. samples = %d' % (wordlen, n_samples),
+                       fontsize=10)
+    fig_K_hat.tight_layout(rect=[0, 0.03, 1, 0.95])
+    savefig(fig_K_hat, 'stats[K-hat]%s.png' % suffix)
+
+    # estimated ps for select Ks
+    fig_p_hat = plt.figure(figsize=(11, 5))
+    ax_H0 = fig_p_hat.add_subplot(1, 2, 1)
+    ax_H1 = fig_p_hat.add_subplot(1, 2, 2)
+    for mode, ax in zip(['H0', 'H1'], [ax_H0, ax_H1]):
+        colors = color_code(select_Ks)
+        for K, color in zip(select_Ks, colors):
+            K_idx = Ks.index(K)
+            plot_with_sd(ax, ps, p_hats[mode]['pos'][K_idx,:,:], axis=1,
+                         color=color, label='K = %d' % K, **kw)
+        ax.set_ylabel('%s estimated match probability' % mode,
+                      fontsize=10)
+        ax.set_xlabel('true match probability', fontsize=10)
+        ax.plot(ps, ps, ls='--', c='k', lw=5, alpha=.2)
+        ax.set_ylim(0, 1)
+        ax.legend(loc='upper left', fontsize=10)
+    fig_p_hat.suptitle('w = %d, no. samples = %d' % (wordlen, n_samples),
+                       fontsize=10)
+    fig_p_hat.tight_layout(rect=[0, 0.03, 1, 0.95])
+    savefig(fig_p_hat, 'stats[p-hat]%s.png' % suffix)
+
+
+# the point of this experiment is: band score is unreliable and segment score
+# is reliable. After this experiment we exclusively look at segment score.
+def exp_stats_performance_fixed_K():
+    K = 200  # similar segment length
+    ns = [K * 2 ** i for i in range(8)]  # sequence lengths
+    n_samples = 50  # number samples for each n
 
     wordlen = 8
-    gap = .1
-    subst = .1
-    dumpfile = 'stats_performance_banded K=%d.txt' % K
-    plot_stats_performance_fixed_K(K, ns, n_samples, real=False, banded=True, subst=subst, gap=gap, wordlen=wordlen, dumpfile=dumpfile, replot=True)
-    raise
+    p_match = .8
+    suffix = '[K=%d]' % K
+    dumpfile = 'stats%s.txt' % suffix
+    sim_data = sim_stats_fixed_K(
+        K, ns, n_samples, p_match=p_match, wordlen=wordlen, bio=False,
+        dumpfile=dumpfile, ignore_existing=False)
+    plot_stats_fixed_K(sim_data, suffix=suffix)
 
-    # NOTE unknown K experiment
-    Ks_hf = [500, 1000, 2000, 4000]
-    Ks_true = [i*300 for i in range(1, 17)] # sequence lengths
-    n_samples = 50 # number samples for each n
-    n = 50000
+    # ===============
+    # Biological Data
+    # ===============
+    suffix = '[K=%d][bio]' % K
+    dumpfile = 'stats%s.txt' % suffix
+    A = Alphabet('ACGT')
+    with open('data/acta2/acta2-7vet.fa') as f:
+        bio_source_seq = ''.join(s for s, _, _ in load_fasta(f))
+        bio_source_seq = bio_source_seq.upper()
+        bio_source_seq = ''.join(x for x in bio_source_seq if x in 'ACGT')
+        bio_source_seq = A.parse(bio_source_seq)
+    with open('data/acta2/acta2_opseqs.fa') as f:
+        bio_source_opseq = ''.join(s for s, _, _ in load_fasta(f))
+    sim_data = sim_stats_fixed_K(
+        K, ns, n_samples, p_match=p_match, wordlen=wordlen, bio=True,
+        bio_source_opseq=bio_source_opseq, bio_source_seq=bio_source_seq,
+        dumpfile=dumpfile, ignore_existing=False)
+    plot_stats_fixed_K(sim_data, suffix=suffix)
 
-    dumpfile = 'stats_performance_banded_unknown_K_max_over_peak.txt'
-    plot_stats_performance_unknown_K(n, Ks_hf, Ks_true, n_samples,
-        real=False, subst=subst, gap=gap, wordlen=wordlen, dumpfile=dumpfile, replot=False)
 
-    # ==========================
-    # NOTE this is the unkonwn gap experiment
-    # TODO we're still at 70% identity and above, move subst to get to lower
-    # values? subst = .3, gap = .3 gives .49 which should be enough.
-    #subst = .02
-    #gs_hf = [.04, .08, .12, .16]
-    ##Ks_hf = [1000, 2000, 4000]
-    #gs_true = np.arange(.01, .22, .02)
-    #K = 500
-    #n = 25000
-    #n_samples = 10 # number samples for each n
+def exp_stats_performance_varying_K_p():
+    Ks = [200 * i for i in range(1, 9)]
+    select_Ks = Ks[0], Ks[2], Ks[4]
 
-    #dumpfile = 'stats_performance_banded_unknown_g_rescore_seg.txt'
-    #plot_stats_performance_unknown_g(n, K, gs_hf, gs_true, n_samples,
-        #real=False, subst=subst, wordlen=wordlen, dumpfile=dumpfile, replot=False)
+    ps = [1 - .06 * i for i in range(1, 9)]
+    select_ps = ps[0], ps[2], ps[4]
 
-    #raise
-    # ===============================
-    # NOTE this is length/prob estimation experiment
-    #subst = .02
-    ##Ks_hf = [1000, 2000, 4000]
-    #gs = [.02, .08, .14, .2]
-    #Ks = [i*200 for i in range(2, 31)] # sequence lengths
-    #n = 12000
-    #n_samples = 10 # number samples for each n
+    n_samples = 50  # number samples for each n
 
-    #g_hf = .1
-    #dumpfile = 'stats_performance_banded_estimate_seg_properties.txt'
-    ##g_hf = None
-    ##dumpfile = 'stats_performance_banded_estimate_seg_properties[exact].txt'
-    #plot_stats_performance_estimate_seg_properties(n, Ks, g_hf, gs, n_samples,
-        #real=False, subst=subst, wordlen=wordlen, dumpfile=dumpfile, replot=False)
+    wordlen = 8
+    p_match = .8
+    suffix = '[varying-K-p]'
+    dumpfile = 'stats%s.txt' % suffix
+    sim_data = sim_stats_varying_K_p(
+        Ks, ps, n_samples, wordlen=wordlen, bio=False,
+        dumpfile=dumpfile, ignore_existing=False)
+    plot_stats_varying_K_p(sim_data, select_Ks, select_ps, suffix=suffix)
 
+    # ===============
+    # Biological Data
+    # ===============
+    suffix = '[varying-K-p][bio]'
+    dumpfile = 'stats%s.txt' % suffix
+    A = Alphabet('ACGT')
+    with open('data/acta2/acta2-7vet.fa') as f:
+        bio_source_seq = ''.join(s for s, _, _ in load_fasta(f))
+        bio_source_seq = bio_source_seq.upper()
+        bio_source_seq = ''.join(x for x in bio_source_seq if x in 'ACGT')
+        bio_source_seq = A.parse(bio_source_seq)
+    with open('data/acta2/acta2_opseqs.fa') as f:
+        bio_source_opseq = ''.join(s for s, _, _ in load_fasta(f))
+    sim_data = sim_stats_varying_K_p(
+        Ks, ps, n_samples, wordlen=wordlen, bio=True,
+        bio_source_opseq=bio_source_opseq, bio_source_seq=bio_source_seq,
+        dumpfile=dumpfile, ignore_existing=False)
+    plot_stats_varying_K_p(sim_data, select_Ks, select_ps, suffix=suffix)
+
+# TODO find local similarities between all pairs of actin genes and report:
+#       1. tpr: no. of captured M positions / true homology length
+#       2. ppv: no. of captured M positions / sum segment lengths
 
 if __name__ == '__main__':
-    exp_stats_performance()
+    # exp_stats_performance_fixed_K()
+    exp_stats_performance_varying_K_p()

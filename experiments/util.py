@@ -346,13 +346,13 @@ def estimate_match_probs_in_opseq(opseq, radius):
 # =============================================================================
 # MATPLOTLIB HELPERS
 # =============================================================================
-def color_code(values, cmap='rainbow'):
+def color_code(values, cmap='nipy_spectral'):
     """Returns an array of RGB colors of the same length as values."""
     cmap = plt.cm.get_cmap(cmap)
     m, M = 1. * min(values), 1. * max(values)
     assert len(values) == len(set(values)), 'all values should be distinct'
     if len(values) > 1:
-        return [cmap((v - m) / (M - m)) for v in values]
+        return [cmap(.1 + .8 * (v - m) / (M - m)) for v in values]
     else:
         return [cmap(.5)]
 
