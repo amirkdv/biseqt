@@ -1,12 +1,18 @@
 # -*- coding: utf-8 -*-
 """
 .. wikisection:: overview
-    :title: Statistical Seed Analysis
+    :title: (5) Seeds (exactly matching kmers)
 
     The :mod:`biseqt.seeds` module provides tools for storing and analyzing
-    matching segment pairs (aka seeds) between large numbers of sequences.
+    exactly matching kmers, aka seeds.
 
-    FIXME
+    >>> from biseqt.seeds import SeedIndex
+    >>> from biseqt.sequence import Sequence, Alphabet
+    >>> A = Alphabet('ACGT')
+    >>> S, T = A.parse('TAAGCGT'), A.parse('GGCGTAA')
+    >>> seed_index = SeedIndex(S, T, path=':memory:', wordlen=3, alphabet=A)
+    >>> list(seed_index.seeds())
+    [(4, 2), (3, 1), (0, 4)]
 """
 import numpy as np
 from itertools import chain, combinations
@@ -183,6 +189,8 @@ class SeedIndex(KmerDBWrapper):
 
         all_seeds = list(self.to_diagonal_coordinates(i, j)
                          for i, j in self.seeds())
+        if not all_seeds:
+            return []
         all_seeds_scaled = np.array([(d * d_coeff, a) for d, a in all_seeds])
         quad_tree = cKDTree(all_seeds_scaled)
         all_neighs = quad_tree.query_ball_tree(quad_tree, radius,

@@ -1,4 +1,29 @@
 # -*- coding: utf-8 -*-
+"""
+.. wikisection:: overview
+    :title: (1) Alphabets and Sequences
+
+    An :class:`Alphabet` is defined by a list of letters and a
+    :class:`Sequence` is a list of letters from an alphabet.
+
+    >>> from biseqt.sequence import Alphabet, Sequence
+    >>> A = Alphabet('ACGT')
+    >>> S = A.parse('AACTTCG')
+    >>> print S.contents
+    (0, 0, 1, 3, 3, 1, 2)
+    >>> print S[:3]
+    AAC
+    >>> print S.content_id[:8]
+    'd9f235b1a44358cc80237d5e5c46c06d81a83e46' # SHA1 of sequence contents
+
+    The letters in an alphabet not need be single characters but all must have
+    the same length.
+
+    >>> A = Alphabet(['A1', 'A2', 'A3', 'A4'])
+    >>> S = A.parse('A1A1A3A2')
+    >>> print len(S)
+    4
+"""
 from itertools import chain
 from hashlib import sha1
 

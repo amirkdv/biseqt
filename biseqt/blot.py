@@ -1,6 +1,22 @@
 # -*- coding: utf-8 -*-
-# TODO
 """
+.. wikisection:: overview
+    :title: (6) Alignment-free local homology detection with Word-Blot
+
+    The :mod:`biseqt.blot` module implements the Word-Blot algorithm.
+
+    >>> from biseqt.blot import HomologyFinder
+    >>> from biseqt.sequence import Sequence, Alphabet
+    >>> from biseqt.stochastics import rand_seq, MutationProcess
+    >>> A = Alphabet('ACGT')
+    >>> S = rand_seq(A, 100)
+    >>> M = MutationProcess(A, go_prob=.1, ge_prob=.1, subst_probs=.2)
+    >>> T, _ = M.mutate(S)
+    >>> HF = HomologyFinder(S, T, wordlen=5, alphabet=A, g_max=.5, \
+                            sensitivity=.99)
+    >>> list(HF.similar_segments(50, .7))
+    [(((-28, 7), (0, 99)), 1.1988215486845972, 0.7630903108462143)]
+    >>>
 """
 import numpy as np
 from scipy.special import erfcinv

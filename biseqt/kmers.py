@@ -2,22 +2,155 @@
 # FIXME docs
 """
 .. wikisection:: overview
-    :title: Kmers
+    :title: (4) Handling Kmers
 
-    The :mod:`biseqt.kmers` module provides tools for k-mer analysis.
+    The :mod:`biseqt.kmers` module provides tools for k-mer analysis. Kmers are
+    represented as integer (and hence a maximum word length is imposed by
+    integer size of the machine).
 
-    >>> from biseqt.database import DB
-    >>> from biseqt.sequence import Alphabet
-    >>> from biseqt.kmers import KmerIndex
+    >>> from biseqt.sequence import Alphabet, Sequence
+    >>> from biseqt.kmers import as_kmer_seq, KmerIndex
     >>> A = Alphabet('ACGT')
-    >>> db = DB('example.db', A)
-    >>> kmer_index = KmerIndex(db)
-    >>> db.initialize()
-    >>> with open('example.fa') as f:
-    ...     db.load_fasta(f)
-    >>> kmer_index.kmers()  # yields (kmer, hits)
-    >>> kmer_index.score_kmers()  # repetitive kmers get higher scores
-    >>> kmer_index.kmers(max_score=10)  # exclude high scoring kmers
+    >>> S = A.parse('AAACGCGT')
+    >>> wordlen = 3
+    >>> as_kmer_seq(S, wordlen)
+    [0, 1, 6, 25, 38, 27]
+    >>> kmer_index = KmerIndex(path=':memory:', alphabet=A, wordlen=wordlen)
+    >>> kmer_index.index_kmers(S)
+    1 # the internal 'id' assigned to sequence S
+    >>> kmer_index.kmers()
+    [0, 1, 6, 25, 27, 38]
+    >>> kmer_index.hits(27)
+    [(1, 5)] # (seqid, position)
+
+.. wikisection:: dev
+    :title: Insert-or-Append Queries
+
+    It may be useful to perform an SQL query which either inserts a new record
+    or appends the given value to some column in case of conflict. This is
+    achived by using one of SQLite's conflict resolution mechanisms_ ``ON
+    CONFLICT REPLACE`` or in short ``OR REPLACE``. For instance, consider a
+    table::
+
+        id | field
+        1  | foo
+
+    where we wish ``INSERT INTO ... (id, field) VALUES (2, 'bar')`` to give::
+
+        id | field
+        1  | foo
+        2  | bar
+
+    and ``INSERT INTO ... (id, field) VALUES (1, 'bar')`` to give::
+
+        id | field
+        1  | foo,bar
+
+    This can be implemented by using the following query format:
+
+    .. code-block:: sql
+
+        INSERT INTO ... (id, field) VALUES
+        SELECT ?, IFNULL(SELECT field FROM ... WHERE id = ?, "") || ?
+
+    invoked like this:
+
+    .. code-block:: python
+
+        id, field = ...
+        conn = apsw.Connection('example.db')
+        conn.cursor().execute(query, (id, id, ',' + field))
+
+    Note that this pattern only works if the ``id`` column has a unique
+    constraint on it. Otherwise, no conflict will arise to be resolved and new
+    values will appear in new records instead of being appended to old ones.
+
+    .. _mechanisms: https://www.sqlite.org/lang_conflict.html
+
+
+.. wikisection:: dev
+    :title: SQLite Performance Tuning
+
+    Tuning strategy naturally depends on the balance between the volume of
+    insert vs. select queries and the concurrency requirements. Here we will
+    assume:
+
+    * The volume of inserts is much larger than selects,
+    * Application logic can be trusted with respecting unique constraints (i.e
+      the code creating data does not violate semantic constraints).
+    * Usage pattern consists of bulk of inserts followed by bulk of selects
+      (e.g. not interleaved).
+
+    Under these circumstances, the following guidelines are suggested:
+
+    * Create indices after bulk inserts not before. For instance, instead of:
+
+      .. code-block:: sql
+
+        CREATE TABLE foo ('f1' int, 'f2' int, UNIQUE(f1, f2))
+        -- INSERT INTO foo VALUES ...
+
+      it's more performant to say:
+
+      .. code-block:: sql
+
+        CREATE TABLE foo ('f1' int, 'f2' int)
+        -- INSERT INTO foo VALUES ...
+        CREATE UNIQUE INDEX foo_index ON foo (f1, f2)
+
+    * If there is no concern about data corruption upon application or
+      operating sytem crash journaling can be turned off as well, from `docs
+      <journaling_docs>`_:
+
+          | If the application crashes in the middle of a transaction when the
+          | OFF journaling mode is set, then the database file will very likely
+          | go corrupt.
+
+      To turn off journaling:
+
+      .. code-block:: sql
+
+        PRAGMA journaling_mode = OFF
+
+      Note that turning off journaling breaks rollbacks:
+
+        | The OFF journaling mode disables the rollback journal completely. No
+        | rollback journal is ever created and hence there is never a rollback
+        | journal to delete. The OFF journaling mode disables the atomic commit
+        | and rollback capabilities of SQLite.
+    * When a table has a unique integer key it should be declared as ``INTEGER
+      PRIMARY KEY`` so that it would take over the default ``rowid`` field.
+      This saves space (and thus a small amount of time) on both the field and
+      the corresponding index.
+    * Foreign key constraints, if enforced, slow down bulk inserts
+      significantly. However, by default, `foreign key checks`_ are turned off.
+      To turn it on:
+
+      .. code-block:: sql
+
+        PRAGMA foreign_keys = ON;
+
+      Note that this default maybe modified by compile time flags (i.e foreign
+      keys may be turned on by default). Furthermore, if foreign keys are
+      turned on, consider deferring_ foreign key enforcement to transaction
+      commits and and keep in mind that ``pysqlite`` (following python's
+      DB-API) fudges with transaction beginning and ends.
+    * Larger `page sizes <pagesize_docs>`_ can marginally improve read/write
+      performance. To increase the page size:
+
+      .. code-block:: sql
+
+        PRAGMA page_size = 65536
+
+    .. _journaling_docs: https://www.sqlite.org/pragma.html#pragma_journal_mode
+    .. _pagesize_docs: https://www.sqlite.org/pragma.html#pragma_page_size
+    .. _foreign key checks: https://www.sqlite.org/foreignkeys.html#fk_enable
+    .. _deferring: https://www.sqlite.org/foreignkeys.html#fk_deferred
+    .. rubric: References
+
+        * http://stackoverflow.com/a/1712873
+        * http://codereview.stackexchange.com/q/26822
+        * http://stackoverflow.com/q/3134900
 """
 
 import struct
@@ -28,11 +161,9 @@ import logging
 from .util import Logger
 from .sequence import Alphabet, Sequence
 
-# FIXME docs
 DIGITS = '0123456789abcdefghijklmnopqrstuvwxyz'
 
 
-# FIXME update docs
 def kmer_as_int(contents, alphabet):
     """Calculates the integer representation of a kmer by treating its
     contents as digits in the base of alphabet length. For instance, in the
@@ -105,7 +236,8 @@ class KmerDBWrapper(object):
     Attributes:
         name (str): String name used as a suffix for table names.
         path (str): Path to the SQLite datbase (or ``:memory:``).
-        alphabet (sequence.Alphabet): The alphabet for sequences in the database.
+        alphabet (sequence.Alphabet):
+            The alphabet for sequences in the database.
         wordlen (int): Length of kmers of interest to this index.
         init_script (str): SQL script to be executed upon initialization;
             typically creates tables needed by the class.

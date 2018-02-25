@@ -1,6 +1,26 @@
 # -*- coding: utf-8 -*-
-"""This modules provides various pairwise sequence alignment algorithms
-implemented in `pwlib <biseqt.pwlib.html>`_."""
+"""
+.. wikisection:: overview
+    :title: (3) Pairwise Alignment
+
+    The :mod:`pw` module exposes the pairwise sequence alignment algorithms
+    implemented in C in `pwlib <biseqt.pwlib.html>`_.
+
+    >>> from biseqt.sequence import Alphabet, Sequence
+    >>> from biseqt.pw import Aligner
+    >>> A = Alphabet('ACGT')
+    >>> S = A.parse('AAACGCGT')
+    >>> T = A.parse('AACGCCTT')
+    >>> with Aligner(S, T) as aligner:
+    ...     score = aligner.solve()
+    ...     aln = aligner.traceback()
+    >>> print type(aln)
+    <class 'biseqt.pw.Alignment'>
+    >>> print aln
+    origin[0]: AAACGC-GT-
+    mutant[0]: AA-CGCC-TT
+    >>> print aln.render_term() # same as above but with colored output
+"""
 import os
 import termcolor
 import re
@@ -98,18 +118,7 @@ class Aligner(object):
     """Provides a context that solves a pairwise alignment problem.  Memory is
     allocated upon entering the context and is freed upon leaving it.  All
     alignment calculations (:func:`solve` and :func:`traceback`) are explicitly
-    invoked by the caller:
-
-        >>> A = biseqt.sequence.Alphabet('ACGT')
-        >>> S = A.parse('AAAA')
-        >>> T = A.parse('AGA')
-        >>> aligner = biseqt.pw.Aligner(S, T)
-        >>> with aligner:
-        ...    print 'score is', aligner.solve()
-        ...    print aligner.traceback()
-        score is 2.0
-        origin[0]: AAAA
-        mutant[0]: AGA-
+    invoked by the caller.
 
     Args:
         origin (sequence.Sequence): The original ("from") sequence.

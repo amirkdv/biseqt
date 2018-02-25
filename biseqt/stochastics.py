@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
 .. wikisection:: overview
-    :title: Random Processes
+    :title: (2) Random Processes
 
     The :mod:`biseqt.stochastics` module provides a collection of tools for
     statistical calculations and for simulating random processes.
@@ -10,21 +10,13 @@
     >>> from biseqt.stochastics import rand_seq, MutationProcess
     >>> A = Alphabet('ACGT')
     >>> seq = rand_seq(A, 10)
-    >>> seq
-    Sequence(Alphabet(["A","C","G","T"]), \
-    contents=(1, 3, 3, 2, 2, 0, 0, 0, 0, 0))
     >>> print(seq)
     CTTGGAAAAA
 
-    >>> P = MutationProcess(A, go_prob=.1, ge_prob=.2, subst_probs=.3)
-    >>> mutant, transcript = P.mutate(seq)
-    >>> transcript
-    "SMIMMMMSSMS"
-
-    >>> from biseqt.io import pw_render_term
-    >>> print(pw_render_term(transcript, seq, mutant, colored=False))
-    origin[0]: CT-TGGAAAAA
-    mutant[0]: ATCTGGATCAT
+    >>> M = MutationProcess(A, go_prob=.1, ge_prob=.2, subst_probs=.3)
+    >>> mutant, transcript = M.mutate(seq)
+    >>> print transcript
+    SMIMMMMSSMS
 """
 from math import log
 from itertools import product
