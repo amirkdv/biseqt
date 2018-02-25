@@ -103,10 +103,12 @@ class KmerDBWrapper(object):
     """Generic wrapper for an SQLite database for Kmers.
 
     Attributes:
-        path (str): Path to the SQLite datbase (on disk or ':memory:' for RAM).
-        alphabet (Alphabet): The alphabet for sequences in the database.
+        name (str): String name used as a suffix for table names.
+        path (str): Path to the SQLite datbase (or ``:memory:``).
+        alphabet (sequence.Alphabet): The alphabet for sequences in the database.
         wordlen (int): Length of kmers of interest to this index.
-        init_script (str): SQL script to be executed in __init__
+        init_script (str): SQL script to be executed upon initialization;
+            typically creates tables needed by the class.
     """
     def __init__(self, name='', path=':memory:', alphabet=None, wordlen=None,
                  log_level=logging.INFO, init_script=None):
@@ -162,7 +164,7 @@ class KmerDBWrapper(object):
 
 
 class KmerCache(KmerDBWrapper):
-    """A cache backed by SQLite for represetnations of sequences as integer
+    """A cache backed by SQLite for representations of sequences as integer
     sequences. Upon initialization the following SQL script is executed
 
     .. code-block:: sql
@@ -174,8 +176,9 @@ class KmerCache(KmerDBWrapper):
         );
 
     This implies that any time only one ``KmerCache`` can exist with the same
-    path. FIXME is parallel :memory: ok with this? We want kmercache on disk
-    anyway though!
+    path.
+    FIXME: using the same database for different word lengths / alphabets is
+    quietly accepted (and wrong results returned).
     """
     def __init__(self, name='', **kw):
         self.name = name
@@ -191,6 +194,8 @@ class KmerCache(KmerDBWrapper):
 
     @property
     def kmers_table(self):
+        """The kmer hits table name ``seq_kmers_[name]``, cf.
+        :attr:`KmerDBWrapper.name`."""
         return 'seq_kmers_%s' % self.name
 
     def cached_seqs(self):
@@ -201,6 +206,16 @@ class KmerCache(KmerDBWrapper):
             return [x[0] for x in cursor]
 
     def as_kmer_seq(self, seq):
+        """Return the integer representation of a given sequence.
+
+        Args:
+            seq (sequence.Sequence): input sequence.
+
+        Returns:
+            list: list of integers of length ``n-w+1`` containing kmers in
+                input sequence represented as an integer, cf.
+                :func:`as_kmer_seq`.
+        """
         with self.connection() as conn:
             cursor = conn.cursor()
             cursor.execute(
@@ -238,7 +253,8 @@ class KmerIndex(KmerDBWrapper):
 
     Attributes:
         name (str):
-        cache (KmerCache): optional kmer cache object to use.
+        cache (KmerCache): optional :class:`KmerCache` object to use for
+            retrieving integer representations of sequences.
     """
     def __init__(self, name='', kmer_cache=None, **kw):
         self.name = name
@@ -268,16 +284,19 @@ class KmerIndex(KmerDBWrapper):
 
     @property
     def kmers_table(self):
+        """The kmer hits table name ``kmers_[name]``, cf.
+        :attr:`KmerDBWrapper.name`."""
         return 'kmers_' + self.name
 
     @property
     def log_table(self):
+        """The log table name ``kmer_indexed_[name]``, cf.
+        :attr:`KmerDBWrapper.name`."""
         return 'kmer_indexed_' + self.name
 
     def index_kmers(self, seq):
-        """Event handler for "sequence-inserted" (cf. :attr:`database.events
-        <biseqt.database.events>`). Indexes all kmers observed in the given
-        sequence in :attr:`hits_table`.
+        """ Indexes all kmers observed in the given sequence in
+        :attr:`kmers_table`.
 
         Args:
             seq (sequence.Sequence): The sequence just inserted into the
@@ -335,10 +354,10 @@ class KmerIndex(KmerDBWrapper):
             return list(conn.cursor().execute(query, (kmer,)))
 
     def kmers(self):
-        """All observed kmers.
+        """Returns all observed kmers.
 
         Returns:
-            list: kmers in integer representation.
+            list: list of kmers in integer representation.
         """
         self.create_sql_index()  # FIXME do we need this?
         query = 'SELECT DISTINCT kmer FROM %s' % self.kmers_table
@@ -348,6 +367,7 @@ class KmerIndex(KmerDBWrapper):
             return [x[0] for x in cursor]
 
     def drop_data(self):
+        """Drop all tables created by this object."""
         with self.connection() as conn:
             conn.cursor().execute('DROP TABLE %s; DROP TABLE %s;' %
                                   (self.kmers_table, self.logs_table))

@@ -21,6 +21,8 @@ class SeedIndex(KmerDBWrapper):
     Attributes:
         S (biseqt.sequence.Sequence): The 1st sequence.
         T (biseqt.sequence.Sequence): The 2nd sequence.
+        cache (KmerCache): optional :class:`KmerCache` object to use for
+            retrieving integer representations of sequences.
     """
     def __init__(self, S, T, kmer_cache=None, **kw):
         name = '%s_%s' % (S.content_id[:8], T.content_id[:8])
@@ -39,16 +41,34 @@ class SeedIndex(KmerDBWrapper):
 
     @property
     def seeds_table(self):
+        """The seeds table name ``seeds_[name]``, cf.
+        :attr:`KmerDBWrapper.name`."""
         return 'seeds_' + self.name
 
     @classmethod
     def to_diagonal_coordinates(cls, i, j):
+        """Convert standard coordinates to diagonal coordinates via:
+
+        .. math::
+            \\begin{aligned}
+                d & = i - j \\\\
+                a & = \min(i, j)
+            \\end{aligned}
+        """
         d = i - j
         a = min(i, j)
         return d, a
 
     @classmethod
     def to_ij_coordinates(cls, d, a):
+        """Convert diagonal coordinates to standard coordinates:
+
+        .. math::
+            \\begin{aligned}
+                i & = a + max(d, 0) \\\\
+                j & = a - min(d, 0)
+            \\end{aligned}
+        """
         i = a + max(d, 0)
         j = a - min(d, 0)
         return (i, j)
@@ -67,8 +87,6 @@ class SeedIndex(KmerDBWrapper):
 
     # idempotent operation
     def _index_seeds(self):
-        """TODO
-        """
         with self.connection() as conn:
             conn.cursor().execute("""
                 CREATE TABLE %s (
@@ -114,6 +132,9 @@ class SeedIndex(KmerDBWrapper):
                            (self.seeds_table, self.seeds_table))
 
     def seed_count_by_d_(self):
+        """Number of seeds in each diagonal position. Diagonals are
+        ordered from smallest :math:`-|T|` to largest :math:`|S|`.
+        """
         q = 'SELECT COUNT(a), d_ FROM %s GROUP BY d_' % self.seeds_table
         count_by_d_ = np.zeros(len(self.S) + len(self.T) - 1)
         with self.connection() as conn:
@@ -124,6 +145,9 @@ class SeedIndex(KmerDBWrapper):
         return count_by_d_
 
     def seed_count_by_a(self, d_min, d_max):
+        """Number of seeds at each antidiagonal position in a givan diagonal
+        band.
+        """
         q = """
             SELECT COUNT(d_), a FROM %s
             WHERE d_ - ? BETWEEN ? AND ?
@@ -142,13 +166,15 @@ class SeedIndex(KmerDBWrapper):
         """For each seed finds the number of seeds in its neighborhood defined
         by:
 
-            |d - d'| < d_radius & |a - a'| < a_radius
+        .. math::
 
-        This is done using a Quad-Tree in O(m lg m) time where m is the number
-        of seeds.
+            V_{(d, a)} = \\{(d', a'): |d - d'| < r_d,  |a - a'| < r_a \\}
+
+        This is done using a Quad-Tree in ``O(m lg m)`` time where m is the
+        number of seeds.
 
         Returns:
-            list: list of tuples ``((d, a), num_neighs)``
+            list: tuples ``((d, a), num_neighs)``
         """
         # normalize the two diameters so we can use a standard L∞ neighborhood.
         # typically a_diam is larger, so scale up d values proportionally
@@ -167,10 +193,7 @@ class SeedIndex(KmerDBWrapper):
         return zip(all_seeds, neigh_counts)
 
     def seeds(self, d_band=None):
-        """Yields the :class:`seeds <Seed>` and their respective scores for a
-        given pair of sequences and a given diagonal range (cf.
-        :func:`highest_scoring_band`). Only seeds that are processed by
-        :func:`score_seeds` are considered.
+        """Yields all seeds, optionally those within a diagonal band.
 
         Keyword Args:
             d_band (tuple|None):
@@ -179,8 +202,7 @@ class SeedIndex(KmerDBWrapper):
 
         Yields:
             tuple:
-                The :class:`Seed` object and the score of its diagonal as a
-                ``float`` in descending order of score.
+                seeds coordinates :math:`(i, j)`.
         """
         query = 'SELECT d_, a FROM %s' % self.seeds_table
         if d_band is not None:

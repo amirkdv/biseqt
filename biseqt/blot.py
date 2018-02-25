@@ -1,17 +1,6 @@
 # -*- coding: utf-8 -*-
 # TODO
 """
-Diagonals are numbered as follows in the dynamic programming table::
-
-    0 -1 -2 -3 ... -len1
-    1
-    2
-    3
-    .
-    .
-    .
-    +len0
-
 """
 import numpy as np
 from scipy.special import erfcinv
@@ -104,8 +93,8 @@ def band_radius(expected_len, gap_prob, sensitivity):
     as sensitivity. This is given by:
 
     .. math::
-        r = 2\\sqrt{g(1-g)K}
-            \\mathrm{erf}^{-1}\\left(1-\\epsilon\\right)
+        r = \\mathrm{erf}^{-1}\\left(1-\\epsilon\\right)
+            \\sqrt{2gK}
 
     where :math:`g` is the gap probability, :math:`1-\\epsilon` is the desired
     sensitivity, and :math:`K` is the given expected length.
@@ -121,7 +110,7 @@ def band_radius(expected_len, gap_prob, sensitivity):
     """
     assert 0 < gap_prob < 1 and 0 < sensitivity < 1
     epsilon = 1. - sensitivity
-    C = 2 * erfcinv(epsilon) * np.sqrt(gap_prob)
+    C = erfcinv(epsilon) * np.sqrt(2 * gap_prob)
     radius = C * np.sqrt(expected_len)
     return max(1, int(np.ceil(radius)))
 
@@ -146,12 +135,23 @@ def band_radii(expected_lens, gap_prob, sensitivity):
 
 
 def H0_moments(alphabet_len, wordlen, area):
+    """The mean and standrad deviation of the limiting normal distribution
+    under the :math:`H_0` (unrelated) model given by:
+
+    .. math::
+        \\begin{aligned}
+            \mu_0 & = Ap^w \\\\
+            \sigma_0^2 & =
+                A(1 - p^w)\left(p^w + \\frac{2p^{w+1}}{1 - p}\\right)
+                - 2wp^{2w}
+        \\end{aligned}
+
+    where :math:`w` is the word length, :math:`A` is the area of the ROI, and
+    :math:`p = \\frac{1}{|\Sigma|}` with :math:`|\Sigma|` being the alphabet
+    length.
+    """
     p_H0 = 1. / alphabet_len
     pw_H0 = p_H0 ** wordlen
-
-    # HACK for bio data, wordlen = 8
-    # pw_H0 *= 2.5
-    # pw_H0 *= .82 # NOTE doesn't fix problem
 
     mu_H0 = area * pw_H0
     sd_H0 = np.sqrt(area * (
@@ -162,13 +162,25 @@ def H0_moments(alphabet_len, wordlen, area):
 
 
 def H1_moments(alphabet_len, wordlen, area, seglen, p_match):
+    """The mean and standrad deviation of the limiting normal distribution under
+    the :math:`H_0` (related) model given by:
+
+    .. math::
+        \\begin{aligned}
+            \mu_1 & = \mu_0 + Kp^w \\\\
+            \sigma_1^2 & = \sigma_0^2
+                + K(1 - p^w)\left(p^w + \\frac{2p^{w+1}}{1 - p}\\right)
+                - 2wp^{2w}
+        \\end{aligned}
+
+    where :math:`w` is the word length, :math:`A` is the area of the ROI, and
+    :math:`p = \\frac{1}{|\Sigma|}` with :math:`|\Sigma|` being the alphabet
+    length.
+    """
     mu_H0, sd_H0 = H0_moments(alphabet_len, wordlen, area)
 
     p_H1 = p_match
     pw_H1 = p_H1 ** wordlen
-
-    # HACK
-    # pw_H1 *= 2.5
 
     mu_H1 = mu_H0 + seglen * pw_H1
     sd_H1 = np.sqrt(sd_H0 ** 2 + seglen * (
@@ -197,8 +209,11 @@ class HomologyFinder(SeedIndex):
     def score_num_seeds(self, **kw):
         """Calculates our key central statistics based on m-dependent CLT. For
         a given observation of number of seeds in a region of interest (ROI),
-        calculates the z-core against the H0 (unrelated) and H1 (related)
-        models.
+        calculates the z-core against the :math:`H_0` (unrelated) and
+        :math:`H_1` (related) models. In either case, the distribution of
+        number of seeds, being a sum of m-dependent identically distributed
+        random variables, is asymptotically normal with parameters given by
+        :func:`H0_moments`, :func:`H1_moments`.
 
         Keyword Args:
             num_seeds (int):
@@ -257,7 +272,7 @@ class HomologyFinder(SeedIndex):
         against both H0 and H1.
 
         Args:
-            seglens (list|int):
+            Ks (list|int):
                 (minimum) segment lengths of interest for each diagonal
                 position or constant number.
             d_center (int):
@@ -341,6 +356,17 @@ class HomologyFinder(SeedIndex):
 
     # returns area and alignment length
     def segment_dims(self, d_band=None, a_band=None):
+        """Calculate the edit path length :math:`K` and the area of the given
+        diagonal/antiodiagonal segment.
+
+        Keyword Args:
+            d_band (tuple): lower and upper diagonals limiting the segment.
+            a_band (tuple): lower and upper antidiagonal positions limiting the
+                segment.
+
+        Returns:
+            tuple: edit path length and segment area.
+        """
         a_min, a_max = a_band
         d_min, d_max = d_band
         L = (a_max - a_min)
@@ -351,6 +377,20 @@ class HomologyFinder(SeedIndex):
         return K, area
 
     def estimate_match_probability(self, num_seeds, d_band=None, a_band=None):
+        """Estimate the edit path match probability given the provided observed
+        number of seeds in given sigment.
+
+        Args:
+            num_seeds (int): number of seeds observed in segment.
+
+        Keywords Args:
+            d_band (tuple): lower and upper diagonals limiting the segment.
+            a_band (tuple): lower and upper antidiagonal positions limiting the
+                segment.
+
+        Returns:
+            float: estimated match probability
+        """
         K, area = self.segment_dims(d_band=d_band, a_band=a_band)
         word_p_null = (1./len(self.alphabet)) ** self.wordlen
         word_p = (num_seeds - area * word_p_null) / K
@@ -358,6 +398,21 @@ class HomologyFinder(SeedIndex):
         return min(match_p, 1)
 
     def score_segments(self, K_min, p_min, d_band=None, mode='H1'):
+        """Score all antidiagonal segments in the given diagonal band with
+        provided probabilities :math:`K,p` for both :math:`H_0, H_1` models.
+
+        Args:
+            K_min (int):
+                minimum required length of homology.
+            p_min (float):
+                Minimum required match probability at each position.
+
+        Keyword Args:
+            mode (str):
+                either 'H0' or 'H1' specifying the null hypothesis.
+            d_band (tuple): lower and upper diagonals limiting segments of
+                interest.
+        """
         d_min, d_max = d_band
         assert d_min >= -len(self.T)
         assert d_max <= len(self.S)
@@ -382,7 +437,8 @@ class HomologyFinder(SeedIndex):
     def score_seeds(self, K_min, p_min):
         """Counts neighbors of each seed in an appropriate sense using a
         Quad-Tree and scores each seed by scoring the segment centered at the
-        coordinates of that seed, cf. ``SeedIndex::count_all_seed_neighbors``.
+        coordinates of that seed, cf.
+        :func:`SeedIndex.count_all_seed_neighbors`.
 
         Returns:
             list: list of tuples ``((d, a), (s0, s1))``
@@ -396,14 +452,19 @@ class HomologyFinder(SeedIndex):
                 for (d, a), n in all_seed_neighbors]
 
     def similar_segments(self, K_min, p_min, mode='H1'):
-        """A sub-quadratic local similarity search algorithm that finds
-        diagonal regions of similarity between given sequences.
+        """Find all local homologies of given minium length and match
+        probability according to either specified model (:math:`H_0,H_1`).
+        Additionally the match probability of each segment is estimated and the
+        reported score is based on estimated coordinates of each similar
+        segment.
 
         Args:
             K_min (int):
                 minimum required length of homology.
             p_min (float):
                 Minimum required match probability at each position.
+
+        Keyword Args:
             mode (str):
                 either 'H0' or 'H1' specifying the null hypothesis.
 
