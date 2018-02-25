@@ -174,8 +174,7 @@ def H1_moments(alphabet_len, wordlen, area, seglen, p_match):
         \\end{aligned}
 
     where :math:`w` is the word length, :math:`A` is the area of the ROI, and
-    :math:`p = \\frac{1}{|\Sigma|}` with :math:`|\Sigma|` being the alphabet
-    length.
+    :math:`p` is the given match probbaility.
     """
     mu_H0, sd_H0 = H0_moments(alphabet_len, wordlen, area)
 
