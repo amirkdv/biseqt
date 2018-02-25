@@ -37,8 +37,7 @@ DUMP_DIR = _make_absolute(os.getenv('DUMP_DIR', 'dumpfiles/'))
 # =============================================================================
 # Generic IO Helpers
 # =============================================================================
-# TODO change syntax to pickle_dump(obj, path)
-def pickle_dump(path, obj, comment=None):
+def pickle_dump(obj, path, comment=None):
     """Pickle dumps the given object to given relative path in DUMP_DIR."""
     try:
         with open(os.path.join(DUMP_DIR, path), 'w') as f:
@@ -78,7 +77,7 @@ def with_dumpfile(func):
         if os.path.exists(path) and not kwargs.get('ignore_existing', False):
             return pickle_load(dumpfile)
         out = func(*args, **kwargs)
-        pickle_dump(dumpfile, out)
+        pickle_dump(out, dumpfile)
         return out
 
     return wrapped_func
