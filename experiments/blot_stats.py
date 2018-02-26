@@ -1,17 +1,12 @@
 import numpy as np
-import os
-import matplotlib.gridspec as gridspec
-import matplotlib
 from matplotlib import pyplot as plt
-from itertools import combinations, product
+from itertools import product
 
 import logging
 
-from biseqt.util import ProgressIndicator
 from biseqt.blot import HomologyFinder
 from biseqt.sequence import Alphabet
-from biseqt.stochastics import rand_seq, MutationProcess, rand_read
-from biseqt.kmers import KmerCache
+from biseqt.stochastics import rand_seq, MutationProcess
 
 from util import plot_with_sd, color_code
 from util import with_dumpfile, log, savefig, load_fasta
@@ -129,7 +124,7 @@ def sim_stats_varying_K_p(Ks, ps, n_samples, **kw):
     for (K_idx, K), (p_idx, p_match) in product(enumerate(Ks), enumerate(ps)):
         if bio:
             opseqs = list(sample_bio_opseqs(bio_source_opseq, K, n_samples,
-                                                 gap=None, match=p_match))
+                                            gap=None, match=p_match))
         log('evaluating scores for K = %d, p = %.2f' % (K, p_match))
         for idx in range(n_samples):
             if bio:
@@ -206,13 +201,11 @@ def sim_stats_real_homologies(seqs, pws, **kw):
         'HF_kw': HF_kw,
         'similar_segments_kw': similar_segments_kw
     }
-    segments = {key: [] for key in pws}
     for idx, (id1, id2) in enumerate(pws):
         log('finding all local homologies between %s and %s' %
             (id1, id2))
         S = seqs[id1]
         T = seqs[id2]
-        opseq = pws[(id1, id2)]
         HF = HomologyFinder(S, T, **HF_kw)
         sim_data['seeds'][(id1, id2)] = list(HF.seeds())
         for segment, _, _ in HF.similar_segments(**similar_segments_kw):
@@ -270,7 +263,7 @@ def plot_stats_varying_K_p(sim_data, select_Ks, select_ps, suffix=''):
             p_idx = ps.index(p)
             for case, ls in zip(['pos', 'neg'], ['-', '--']):
                 label = '' if case == 'neg' else 'p = %.2f' % p
-                plot_with_sd(ax, Ks, scores[mode][case][:,p_idx,:], axis=1,
+                plot_with_sd(ax, Ks, scores[mode][case][:, p_idx, :], axis=1,
                              color=color, ls=ls, label=label, **kw)
         ax.set_ylabel('%s score' % mode, fontsize=10)
         ax.set_xlabel('homology length', fontsize=10)
@@ -291,7 +284,7 @@ def plot_stats_varying_K_p(sim_data, select_Ks, select_ps, suffix=''):
             K_idx = Ks.index(K)
             for case, ls in zip(['pos', 'neg'], ['-', '--']):
                 label = '' if case == 'neg' else 'K = %d' % K
-                plot_with_sd(ax, ps, scores[mode][case][K_idx,:,:], axis=1,
+                plot_with_sd(ax, ps, scores[mode][case][K_idx, :, :], axis=1,
                              color=color, ls=ls, label=label, **kw)
         ax.set_ylabel('%s score' % mode, fontsize=10)
         ax.set_xlabel('homology match probability', fontsize=10)
@@ -310,7 +303,7 @@ def plot_stats_varying_K_p(sim_data, select_Ks, select_ps, suffix=''):
         colors = color_code(select_ps)
         for p, color in zip(select_ps, colors):
             p_idx = ps.index(p)
-            plot_with_sd(ax, Ks, K_hats[mode]['pos'][:,p_idx,:], axis=1,
+            plot_with_sd(ax, Ks, K_hats[mode]['pos'][:, p_idx, :], axis=1,
                          color=color, label='p = %.2f' % p, **kw)
         ax.set_ylabel('%s estimated homology length' % mode, fontsize=10)
         ax.set_xlabel('true homology length', fontsize=10)
@@ -329,7 +322,7 @@ def plot_stats_varying_K_p(sim_data, select_Ks, select_ps, suffix=''):
         colors = color_code(select_Ks)
         for K, color in zip(select_Ks, colors):
             K_idx = Ks.index(K)
-            plot_with_sd(ax, ps, p_hats[mode]['pos'][K_idx,:,:], axis=1,
+            plot_with_sd(ax, ps, p_hats[mode]['pos'][K_idx, :, :], axis=1,
                          color=color, label='K = %d' % K, **kw)
         ax.set_ylabel('%s estimated match probability' % mode,
                       fontsize=10)
@@ -353,11 +346,10 @@ def plot_stats_real_homologies(sim_data, suffix=''):
         ax = fig.add_subplot(fig_num, fig_num, idx+1)
         opseq = pws[(id1, id2)]
         segments = sim_data['segments'][(id1, id2)]
-        m_len = opseq.count('M')
         ms_len = opseq.count('M') + opseq.count('S')
         hom_len = sum(a_max - a_min for _, (a_min, a_max) in segments)
         path = zip(*opseq_path(opseq))
-        m_in_seg, ms_in_seg = 0, 0
+        ms_in_seg = 0
         for op, (i, j) in zip(opseq, path):
             if op not in 'MS':
                 continue
@@ -365,9 +357,6 @@ def plot_stats_real_homologies(sim_data, suffix=''):
             for (d_min, d_max), (a_min, a_max) in segments:
                 if d_min <= d <= d_max and a_min <= a <= a_max:
                     ms_in_seg += 1
-                    if op == 'M':
-                        m_in_seg += 1
-                    break
         tpr[(id1, id2)] = ms_in_seg * 1. / ms_len
         ppv[(id1, id2)] = ms_in_seg * 1. / hom_len
         log('comparison between %s and %s, tpr = %.2f, ppv = %.2f' %
@@ -452,7 +441,6 @@ def exp_stats_performance_varying_K_p():
     n_samples = 50  # number samples for each n
 
     wordlen = 8
-    p_match = .8
     suffix = '[varying-K-p]'
     dumpfile = 'stats%s.txt' % suffix
     sim_data = sim_stats_varying_K_p(

@@ -15,7 +15,7 @@ clean:
 	rm -rf docs/_build docs/doxygen
 
 FLAKE8_INCLUDE = biseqt tests experiments
-FLAKE8_EXCLUDE = experiments/blot_stats.py,experiments/overlap_stats.py,experiments/overlaps.py
+FLAKE8_EXCLUDE =
 flake8:
 	flake8 $(FLAKE8_INCLUDE) --exclude=$(FLAKE8_EXCLUDE)
 
