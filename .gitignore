@@ -3,12 +3,8 @@
 *.swo
 *.so
 
-*.db
-*.fa
 *.pdf
 *.gml
-*.png
-*.svg
 
 *.egg-info
 *.egg
@@ -24,3 +20,10 @@ workspace/
 matplotlibrc
 
 tests/.coverage
+
+experiments/plots
+experiments/dumpfiles
+experiments/data
+!experiments/plots/.gitkeep
+!experiments/data/.gitkeep
+!experiments/dumpfiles/.gitkeep
