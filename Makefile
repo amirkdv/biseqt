@@ -25,8 +25,9 @@ tests: $(LIBDIR)/pwlib.so flake8
 	rm -f tests/$(COVERAGE_BADGE)
 	cd tests && PYTHONPATH=.. py.test $(PYTEST_OPTS) && coverage-badge -o $(COVERAGE_BADGE)
 
+EXPERIMENTS = band_radius.py num_seeds.py blot_local_alignment.py blot_overlaps.py blot_stats.py
 experiments:
-	cd $@ && PYTHONPATH=.. python blot_stats.py
+	cd $@ && for exp in $(EXPERIMENTS); do PYTHONPATH=.. python $$exp; done
 
 loc:
 	find biseqt tests -type f -regex '.*\(\.py\|\.c\|\.h\)' | grep -v __pycache__ | xargs wc -l

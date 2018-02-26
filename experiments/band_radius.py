@@ -130,8 +130,7 @@ def exp_time_in_band():
 
     dumpfile = 'band_radius.txt'
     plot_path = 'band_radius.png'
-    sim_data = sim_time_in_band(K, gs, rs, n_samples, dumpfile=dumpfile,
-                                ignore_existing=True)
+    sim_data = sim_time_in_band(K, gs, rs, n_samples, dumpfile=dumpfile)
     plot_time_in_band(sim_data, cutoff_epsilon, path=plot_path)
 
 

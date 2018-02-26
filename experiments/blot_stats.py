@@ -229,10 +229,12 @@ def plot_stats_fixed_K(sim_data, suffix=''):
         kw = {'marker': 'o', 'markersize': 3, 'alpha': .8}
         for mode, ax in zip(['H0', 'H1'], [ax_H0, ax_H1]):
             for case, color in zip(['pos', 'neg'], ['g', 'r']):
+                label = ('' if case == 'pos' else 'non-') + 'homologous'
                 plot_with_sd(ax, ns, scores[mode][case], axis=1, color=color,
-                             **kw)
-            ax.set_ylabel('%s score' % mode, fontsize=10)
+                             label=label, **kw)
+            ax.set_ylabel('%s %s score' % (mode, key), fontsize=10)
             ax.set_xlabel('sequence length', fontsize=10)
+        ax_H0.legend(loc='upper right', fontsize=10)
 
         fig.suptitle('K = %d, w = %d, no. samples = %d, match prob= %.2f' %
                      (K, wordlen, n_samples, p_match), fontsize=10)

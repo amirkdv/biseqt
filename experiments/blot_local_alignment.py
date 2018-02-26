@@ -45,7 +45,7 @@ def exp_local_alignment():
 
     scored_seeds = HF.score_seeds(K_min=K, p_min=match)
     # convert to ij coordinates and leave only the H0 score
-    scored_seeds = [(HF.to_ij_coordinates(d, a), s0)
+    scored_seeds = [(HF.to_ij_coordinates(d, a), s1)
                     for (d, a), (s0, s1) in scored_seeds]
     plot_scored_seeds(ax, ax_colorbar, scored_seeds)
 
@@ -57,6 +57,7 @@ def exp_local_alignment():
         plot_similar_segment(ax, segment, lw=5, alpha=.2)
 
     adjust_pw_plot(ax, len(S), len(T))
+    fig.suptitle('Local alignment with H1 score', fontsize=10)
 
     fig.tight_layout()
     savefig(fig, 'local_alignment.png')
@@ -108,6 +109,7 @@ def exp_conserved_sequences():
     matplotlib.colorbar.ColorbarBase(ax_colorbar, cmap=cmap, norm=norm,
                                      orientation='vertical')
 
+    fig.suptitle('Uncovering mutation probability variability', fontsize=10)
     fig.tight_layout()
     savefig(fig, 'conserved_sequences.png')
 

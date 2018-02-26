@@ -210,18 +210,22 @@ def plot_num_and_time_seeds(sim_data, suffix=''):
     plot_with_sd(ax_banded, ns, pos, color='g', label='homologous', **kw)
     plot_with_sd(ax_banded, ns, neg, color='r', label='nonhomologous', **kw)
 
-    plot_with_sd(ax_t, ns, sim_data['time']['pos'], color='g', **kw)
-    plot_with_sd(ax_t, ns, sim_data['time']['neg'], color='r', **kw)
-    ax_t.set_ylabel('Time to find matching kmers (ms)', fontsize=10)
+    plot_with_sd(ax_t, ns, sim_data['time']['pos'], color='g',
+                 label='homologous', **kw)
+    plot_with_sd(ax_t, ns, sim_data['time']['neg'], color='r',
+                 label='non-homologous', **kw)
+    ax_t.set_ylabel('Time to find all matching kmers (ms)', fontsize=10)
 
     for ax in [ax_t, ax_full, ax_banded]:
         ax.set_xlabel('(non)homologous sequence length', fontsize=10)
         ax.grid(True)
         ax.tick_params(axis='x', labelsize=10)
         ax.tick_params(axis='y', labelsize=10)
+        ax.legend(fontsize=10)
 
     for ax in [ax_full, ax_banded]:
-        _ns = np.arange(ax.get_ylim()[1])
+        n_max = min(ax.get_ylim()[1], ax.get_xlim()[1])
+        _ns = np.arange(n_max)
         ax.plot(_ns, _ns, color='k', alpha=.4, ls='--')
 
     for key, ax in zip(['full', 'banded'], [ax_full, ax_banded]):

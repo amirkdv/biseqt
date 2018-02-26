@@ -130,10 +130,6 @@ def exp_overlap_detection():
     db_path = 'overlaps.db'
     dumpfile = 'overlap_scores.txt'
 
-    # FIXME currently running process will overwrite bio plots
-    # reads_path = 'data/leishmania/reads_mapped.fa'
-    # db_path = 'overlaps[bio].db'
-    # dumpfile = 'overlap_scores[bio].txt'
     sim_data = sim_overlap_discovery(
         reads_path, wordlen=wordlen, db_path=db_path,
         gap=hf_gap, p_match=hf_match,
@@ -142,9 +138,32 @@ def exp_overlap_detection():
     scores = sim_data['scores']
     labels = ['overlapping', 'non-overlapping']
     plot_classifier('overlap[H0].png', scores['s0_pos'], scores['s0_neg'],
-                    labels=labels)
+                    labels=labels,
+                    title='Overlap discovery with H0 (sim. data)')
     plot_classifier('overlap[H1].png', scores['s1_pos'], scores['s1_neg'],
-                    labels=labels)
+                    labels=labels,
+                    title='Overlap discovery with H1 (sim. data)')
+
+    # ===============
+    # Biological Data
+    # ===============
+    reads_path = 'data/leishmania/reads_mapped.fa'
+    db_path = 'overlaps[bio].db'
+    dumpfile = 'overlap_scores[bio].txt'
+
+    sim_data = sim_overlap_discovery(
+        reads_path, wordlen=wordlen, db_path=db_path,
+        gap=hf_gap, p_match=hf_match,
+        dumpfile=dumpfile, ignore_existing=False)
+
+    scores = sim_data['scores']
+    labels = ['overlapping', 'non-overlapping']
+    plot_classifier('overlap[H0][bio].png', scores['s0_pos'], scores['s0_neg'],
+                    labels=labels,
+                    title='Overlap discovery with H0 (bio. data)')
+    plot_classifier('overlap[H1][bio].png', scores['s1_pos'], scores['s1_neg'],
+                    labels=labels,
+                    title='Overlap discovery with H1 (bio. data)')
 
 
 if __name__ == '__main__':
