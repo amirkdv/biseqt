@@ -383,9 +383,6 @@ def plot_stats_real_homologies(sim_data, suffix=''):
         wobble = np.random.randint(-10, 10) / 500.
         rotation = [0, 90][np.random.randint(0, 2)]
         label = '/'.join(p.split('.')[0] for p in pair)
-        # dx = wobble if rotation == 0 else -.04
-        # dy = wobble if rotation == 90 else .01
-        rotation = 0
         dx = .01
         dy = wobble
         ax.text(tpr[pair] + dx, ppv[pair] + dy, label,
