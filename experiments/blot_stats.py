@@ -17,6 +17,9 @@ from util import plot_with_sd, color_code
 from util import with_dumpfile, log, savefig, load_fasta
 from util import seq_pair, sample_bio_opseqs, sample_bio_seqs, apply_opseq
 
+from util import plot_global_alignment, plot_similar_segment
+from util import adjust_pw_plot, plot_seeds, opseq_path
+
 
 @with_dumpfile
 def sim_stats_fixed_K(K, ns, n_samples, **kw):
@@ -179,6 +182,45 @@ def sim_stats_varying_K_p(Ks, ps, n_samples, **kw):
     return sim_data
 
 
+@with_dumpfile
+def sim_stats_real_homologies(seqs, pws, **kw):
+    A = Alphabet('ACGT')
+    mode, threshold = kw['mode'], kw['threshold']
+    wordlen, K_min, p_min = kw['wordlen'], kw['K_min'], kw['p_min']
+    HF_kw = {
+        'g_max': kw.get('g_max', .3),
+        'sensitivity': kw.get('sensitivity', .99),
+        'wordlen': wordlen,
+        'alphabet': A,
+        'path': kw.get('db_path', ':memory:'),
+        'log_level': kw.get('log_level', logging.WARNING),
+    }
+    similar_segments_kw = {
+        'K_min': K_min, 'p_min': p_min, 'mode': mode, 'threshold': threshold,
+    }
+    sim_data = {
+        'pws': pws,
+        'seqlens': {name: len(seqs[name]) for name in seqs},
+        'segments': {key: [] for key in pws},
+        'seeds': {key: [] for key in pws},
+        'HF_kw': HF_kw,
+        'similar_segments_kw': similar_segments_kw
+    }
+    segments = {key: [] for key in pws}
+    for idx, (id1, id2) in enumerate(pws):
+        log('finding all local homologies between %s and %s' %
+            (id1, id2))
+        S = seqs[id1]
+        T = seqs[id2]
+        opseq = pws[(id1, id2)]
+        HF = HomologyFinder(S, T, **HF_kw)
+        sim_data['seeds'][(id1, id2)] = list(HF.seeds())
+        for segment, _, _ in HF.similar_segments(**similar_segments_kw):
+            sim_data['segments'][(id1, id2)].append(segment)
+            # print segment
+    return sim_data
+
+
 def plot_stats_fixed_K(sim_data, suffix=''):
     K, ns, p_match = sim_data['K'], sim_data['ns'], sim_data['p_match']
     wordlen = sim_data['HF_kw']['wordlen']
@@ -301,6 +343,69 @@ def plot_stats_varying_K_p(sim_data, select_Ks, select_ps, suffix=''):
     savefig(fig_p_hat, 'stats[p-hat]%s.png' % suffix)
 
 
+def plot_stats_real_homologies(sim_data, suffix=''):
+    seqlens = sim_data['seqlens']
+    pws = sim_data['pws']
+    fig_num = int(np.ceil(np.sqrt(len(pws))))
+    fig = plt.figure(figsize=(6*fig_num, 5*fig_num))
+    tpr, ppv = {}, {}
+    for idx, (id1, id2) in enumerate(pws):
+        ax = fig.add_subplot(fig_num, fig_num, idx+1)
+        opseq = pws[(id1, id2)]
+        segments = sim_data['segments'][(id1, id2)]
+        m_len = opseq.count('M')
+        ms_len = opseq.count('M') + opseq.count('S')
+        hom_len = sum(a_max - a_min for _, (a_min, a_max) in segments)
+        path = zip(*opseq_path(opseq))
+        m_in_seg, ms_in_seg = 0, 0
+        for op, (i, j) in zip(opseq, path):
+            if op not in 'MS':
+                continue
+            d, a = i - j, min(i, j)
+            for (d_min, d_max), (a_min, a_max) in segments:
+                if d_min <= d <= d_max and a_min <= a <= a_max:
+                    ms_in_seg += 1
+                    if op == 'M':
+                        m_in_seg += 1
+                    break
+        tpr[(id1, id2)] = ms_in_seg * 1. / ms_len
+        ppv[(id1, id2)] = ms_in_seg * 1. / hom_len
+        log('comparison between %s and %s, tpr = %.2f, ppv = %.2f' %
+            (id1, id2, tpr[(id1, id2)], ppv[(id1, id2)]))
+
+        for segment in segments:
+            plot_similar_segment(ax, segment, lw=3, alpha=.2)
+        plot_seeds(ax, sim_data['seeds'][(id1, id2)])
+        plot_global_alignment(ax, opseq, c='g', lw=5, alpha=.3)
+        adjust_pw_plot(ax, seqlens[id1], seqlens[id2])
+        ax.set_xlabel(id1, fontsize=10)
+        ax.set_ylabel(id2, fontsize=10)
+    savefig(fig, 'real_homologies[seeds]%s.png' % suffix)
+
+    fig = plt.figure()
+    ax = fig.add_subplot(1, 1, 1)
+    pairs = pws.keys()
+    colors = color_code(range(len(pairs)), cmap='brg')
+    for color, pair in zip(colors, pairs):
+        ax.scatter([tpr[pair]], [ppv[pair]], s=30, alpha=.8, c=color, lw=0)
+    for color, pair in zip(colors, pairs):
+        wobble = np.random.randint(-10, 10) / 500.
+        rotation = [0, 90][np.random.randint(0, 2)]
+        label = '/'.join(p.split('.')[0] for p in pair)
+        # dx = wobble if rotation == 0 else -.04
+        # dy = wobble if rotation == 90 else .01
+        rotation = 0
+        dx = .01
+        dy = wobble
+        ax.text(tpr[pair] + dx, ppv[pair] + dy, label,
+                color=color, fontsize=6, alpha=.5, rotation=rotation)
+    ax.set_xlabel('true positive rate')
+    ax.set_ylabel('positive predictive value')
+    ax.set_xlim(-.1, 1.2)
+    ax.set_ylim(-.1, 1.2)
+    savefig(fig, 'real_homologies[performance]%s.png' % suffix, dpi=500)
+
+
 # the point of this experiment is: band score is unreliable and segment score
 # is reliable. After this experiment we exclusively look at segment score.
 def exp_stats_performance_fixed_K():
@@ -374,10 +479,37 @@ def exp_stats_performance_varying_K_p():
         dumpfile=dumpfile, ignore_existing=False)
     plot_stats_varying_K_p(sim_data, select_Ks, select_ps, suffix=suffix)
 
-# TODO find local similarities between all pairs of actin genes and report:
-#       1. tpr: no. of captured M positions / true homology length
-#       2. ppv: no. of captured M positions / sum segment lengths
+
+def exp_stats_real_homologies():
+    wordlen = 8
+    p_min = .6
+    K_min = 50
+    threshold = 1.5
+    mode = 'H1'
+    A = Alphabet('ACGT')
+
+    suffix = '[actb]'
+    dumpfile = 'real_homologies%s.txt' % suffix
+    seqs = 'data/actb/actb-7vet.fa'
+    pws = 'data/actb/actb-7vet-pws.fa'
+
+    # suffix = '[acta2]'
+    # dumpfile = 'real_homologies%s.txt' % suffix
+    # seqs = 'data/acta2/acta2-7vet.fa'
+    # pws = 'data/acta2/acta2-7vet-pws.fa'
+
+    with open(seqs) as f:
+        seqs = {name: A.parse(seq.upper())
+                for seq, name, _ in load_fasta(f)}
+    with open(pws) as f:
+        pws = {tuple(name.split(':')): seq for seq, name, _ in load_fasta(f)}
+    sim_data = sim_stats_real_homologies(
+        seqs, pws, wordlen=wordlen, p_min=p_min, K_min=K_min, mode=mode,
+        threshold=threshold, dumpfile=dumpfile, ignore_existing=False)
+    plot_stats_real_homologies(sim_data, suffix=suffix)
+
 
 if __name__ == '__main__':
-    # exp_stats_performance_fixed_K()
+    exp_stats_performance_fixed_K()
     exp_stats_performance_varying_K_p()
+    exp_stats_real_homologies()

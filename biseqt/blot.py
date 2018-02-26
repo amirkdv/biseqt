@@ -466,7 +466,7 @@ class HomologyFinder(SeedIndex):
         return [((d, a), self.score_num_seeds(num_seeds=n, **kw))
                 for (d, a), n in all_seed_neighbors]
 
-    def similar_segments(self, K_min, p_min, mode='H1'):
+    def similar_segments(self, K_min, p_min, mode='H1', threshold=None):
         """Find all local homologies of given minium length and match
         probability according to either specified model (:math:`H_0,H_1`).
         Additionally the match probability of each segment is estimated and the
@@ -490,7 +490,8 @@ class HomologyFinder(SeedIndex):
         """
         self.log('finding local homologies between %s and %s' %
                  (self.S.content_id[:8], self.T.content_id[:8]))
-        threshold = {'H0': 5, 'H1': -1.5}[mode]
+        if threshold is None:
+            threshold = {'H0': 5, 'H1': 0}[mode]
         key = {'H0': 0, 'H1': 1}[mode]
         d_radius = int(np.ceil(self.band_radius(K_min)))
         a_radius = int(np.ceil(K_min / 2))

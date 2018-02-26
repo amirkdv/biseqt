@@ -374,12 +374,12 @@ def plot_with_sd(ax, xs, ys, axis=None, n_sds=1, y_max=None, color='k', **kw):
     ax.fill_between(xs, ys_l, ys_h, facecolor=color, edgecolor=color, alpha=.2)
 
 
-def savefig(fig, path, grid_all=True, comment=None):
+def savefig(fig, path, dpi=270, grid_all=True, comment=None):
     if grid_all:
         for ax in fig.get_axes():
             ax.grid(True)
     fig.tight_layout(rect=[0, 0.03, 1, 0.95])
-    fig.savefig(os.path.join(PLOT_DIR, path), dpi=270)
+    fig.savefig(os.path.join(PLOT_DIR, path), dpi=dpi)
     log('created plot%s at %s\n' %
         ('' if comment is None else ' "%s"' % comment, path))
 
@@ -389,8 +389,6 @@ def savefig(fig, path, grid_all=True, comment=None):
 def adjust_pw_plot(ax, N0, N1):
     ax.set_ylim(-N0 * .1, N0 * 1.1)
     ax.set_xlim(-N1 * .1, N1 * 1.1)
-    ax.set_xlabel('Pos. in T', fontsize=12)
-    ax.set_ylabel('Pos. in S', fontsize=12)
     ax.set_aspect('equal')
     line_kw = {'c': 'k', 'alpha': .1, 'lw': '5'}
     ax.axvline(x=-5,  **line_kw)
@@ -404,13 +402,12 @@ def adjust_pw_plot(ax, N0, N1):
 
 
 def plot_seeds(ax, seeds, c='k'):
-    idx_S, idx_T = [], []
+    xs, ys = [], []
     for seed in seeds:
-        idx_S.append(seed[0])
-        idx_T.append(seed[1])
+        ys.append(seed[0])
+        xs.append(seed[1])
 
-    # x and y are flipped when going from matrix notation to plotting.
-    ax.scatter(idx_T, idx_S, facecolor=c, lw=0, s=2, alpha=.3)
+    ax.scatter(xs, ys, facecolor=c, lw=0, s=2, alpha=.3)
     ax.grid(True)
 
 
@@ -423,7 +420,7 @@ def plot_scored_seeds(ax, ax_colorbar, scored_seeds):
         idx_T.append(j)
         cs.append(cmap(score/max_score)[:3])
     # x and y are flipped when going from matrix notation to plotting.
-    ax.scatter(idx_T, idx_S, facecolor=cs, lw=0, s=2, alpha=.9)
+    ax.scatter(idx_T, idx_S, facecolor=cs, lw=0, s=1, alpha=.9)
     norm = matplotlib.colors.Normalize(vmin=0, vmax=max_score)
     matplotlib.colorbar.ColorbarBase(ax_colorbar, cmap=cmap, norm=norm,
                                      orientation='vertical')
@@ -445,19 +442,23 @@ def plot_similar_segment(ax, segment, color='k', **kw):
     ax.fill(seg_xs, seg_ys, facecolor=color, edgecolor=color, **kw)
 
 
-def plot_global_alignment(ax, opseq, **kw):
+def opseq_path(opseq):
     xs, ys = [0], [0]
     for op in opseq:
         if op in 'MS':
             xs.append(xs[-1] + 1)
             ys.append(ys[-1] + 1)
-        elif op == 'I':
-            xs.append(xs[-1])
-            ys.append(ys[-1] + 1)
         elif op == 'D':
             xs.append(xs[-1] + 1)
             ys.append(ys[-1])
+        elif op == 'I':
+            xs.append(xs[-1])
+            ys.append(ys[-1] + 1)
+    return xs, ys
 
+
+def plot_global_alignment(ax, opseq, **kw):
+    ys, xs = opseq_path(opseq)
     ax.plot(xs, ys, **kw)
 
 

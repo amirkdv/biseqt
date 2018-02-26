@@ -156,5 +156,7 @@ def test_overlap_detection(wordlen, K, n):
     T = M.mutate(overlap)[0] + rand_seq(A, n - K)
     HF = HomologyFinder(S, T, **HF_kw)
     (seg0, s0), (seg1, s1) = HF.highest_scoring_overlap_band(p_match)
-    assert seg0[0] * .8 < n - K < 1.25 * seg0[1], 'H0 must detect the correct overlap'
-    assert seg1[0] * .8 < n - K < 1.25 * seg1[1], 'H1 must detect the correct overlap'
+    assert seg0[0] * .8 < n - K < 1.25 * seg0[1], \
+        'H0 must detect the correct overlap'
+    assert seg1[0] * .8 < n - K < 1.25 * seg1[1], \
+        'H1 must detect the correct overlap'
