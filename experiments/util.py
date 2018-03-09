@@ -8,6 +8,7 @@ from textwrap import TextWrapper
 from matplotlib import pyplot as plt
 import matplotlib
 import matplotlib.gridspec as gridspec
+from mpl_toolkits.axes_grid1 import make_axes_locatable
 from Bio import AlignIO
 from itertools import combinations
 import pysam
@@ -411,7 +412,7 @@ def plot_seeds(ax, seeds, c='k'):
     ax.grid(True)
 
 
-def plot_scored_seeds(ax, ax_colorbar, scored_seeds):
+def plot_scored_seeds(ax, scored_seeds):
     idx_S, idx_T, cs = [], [], []
     cmap = plt.cm.get_cmap('jet')
     max_score = max(score for _, score in scored_seeds)
@@ -421,8 +422,12 @@ def plot_scored_seeds(ax, ax_colorbar, scored_seeds):
         cs.append(cmap(score/max_score)[:3])
     # x and y are flipped when going from matrix notation to plotting.
     ax.scatter(idx_T, idx_S, facecolor=cs, lw=0, s=1, alpha=.9)
+
+    # colorbar Axes
+    ax_c = make_axes_locatable(ax).append_axes('right', size='4%', pad=0.05)
+
     norm = matplotlib.colors.Normalize(vmin=0, vmax=max_score)
-    matplotlib.colorbar.ColorbarBase(ax_colorbar, cmap=cmap, norm=norm,
+    matplotlib.colorbar.ColorbarBase(ax_c, cmap=cmap, norm=norm,
                                      orientation='vertical')
 
 
