@@ -44,7 +44,7 @@ def exp_local_alignment():
     match = (1 - gap) * (1 - subst)
 
     scored_seeds = HF.score_seeds(K_min=K, p_min=match)
-    # convert to ij coordinates and leave only the H0 score
+    # convert to ij coordinates and leave only the H1 score
     scored_seeds = [(HF.to_ij_coordinates(d, a), s1)
                     for (d, a), (s0, s1) in scored_seeds]
     plot_scored_seeds(ax, ax_colorbar, scored_seeds)
@@ -61,6 +61,64 @@ def exp_local_alignment():
 
     fig.tight_layout()
     savefig(fig, 'local_alignment.png')
+
+
+def exp_repeat_regions():
+    gap = .2
+    subst = .1
+    K = 500
+    wordlen = 8
+    A = Alphabet('ACGT')
+
+    # NOTE I can drive sensitivity to 0 and get decent results
+    HF_kw = {'g_max': .2, 'sensitivity': .9, 'alphabet': A, 'wordlen': wordlen,
+             'path': ':memory:', 'log_level': logging.INFO}
+
+    M = MutationProcess(A, subst_probs=subst, ge_prob=gap, go_prob=gap)
+
+    homs = [rand_seq(A, i) for i in [K/2, K, 2 * K, 4 * K]]
+
+    def junk(): return rand_seq(A, np.random.randint(2 * K, 4 * K))
+
+    junks = [junk() for _ in range(2 * len(homs))]
+    S = sum([junks[2 * i] + rep + junks[2 * i + 1] + rep
+             for i, rep in enumerate(homs)], A.parse('')) + junk()
+    homs = [M.mutate(homs[i])[0] for i in range(len(homs))]
+    T = S
+
+    fig = plt.figure(figsize=(10, 5))
+    ax_H0 = fig.add_subplot(1, 2, 1)
+    ax_H1 = fig.add_subplot(1, 2, 2)
+
+    log('finding repeat regions')
+    HF = HomologyFinder(S, T, **HF_kw)
+    match = (1 - gap) * (1 - subst)
+
+    scored_seeds = HF.score_seeds(K_min=K, p_min=match)
+    # convert to ij coordinates and exclude half of the table (mirror image)
+    scored_seeds = [(HF.to_ij_coordinates(d, a), scores)
+                    for (d, a), scores in scored_seeds if d <= 0]
+
+    for idx, (mode, thresh, ax) in enumerate(zip(['H0', 'H1'],
+                                                       [10, 0],
+                                                       [ax_H0, ax_H1])):
+        seeds = [((i, j), scores[idx]) for (i, j), scores in scored_seeds]
+        plot_scored_seeds(ax, seeds)
+        kw = {'K_min': K, 'p_min': match, 'mode': mode, 'threshold': thresh}
+        for segment, score, match_p in HF.similar_segments(**kw):
+            if segment is None:
+                continue
+            (d_min, d_max), (a_min, a_max) = segment
+            log('(%s) repeat region %s, score = %.2f' %
+                (mode, str(segment), score))
+            plot_similar_segment(ax, segment, lw=5, alpha=.2)
+        adjust_pw_plot(ax, len(S), len(T))
+        ax.set_title('Repeat regions (%s score)' % mode, y=1.05, fontsize=10)
+
+    fig.suptitle('word len. = %d, min. hom. len = %d, min.match = %.2f' %
+                 (wordlen, K, match), fontsize=8)
+    fig.tight_layout()
+    savefig(fig, 'repeat_regions.png')
 
 
 def exp_conserved_sequences():
@@ -116,4 +174,5 @@ def exp_conserved_sequences():
 
 if __name__ == '__main__':
     exp_local_alignment()
+    exp_repeat_regions()
     exp_conserved_sequences()
