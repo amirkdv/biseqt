@@ -188,7 +188,7 @@ class SeedIndex(KmerDBWrapper):
         radius = a_radius
 
         all_seeds = list(self.to_diagonal_coordinates(i, j)
-                         for i, j in self.seeds())
+                         for i, j in self.seeds(exclude_trivial=True))
         if not all_seeds:
             return []
         all_seeds_scaled = np.array([(d * d_coeff, a) for d, a in all_seeds])
@@ -200,7 +200,7 @@ class SeedIndex(KmerDBWrapper):
         neigh_counts = [len(neighs) - 1 for neighs in all_neighs]
         return zip(all_seeds, neigh_counts)
 
-    def seeds(self, d_band=None):
+    def seeds(self, d_band=None, exclude_trivial=False):
         """Yields all seeds, optionally those within a diagonal band.
 
         Keyword Args:
@@ -224,6 +224,8 @@ class SeedIndex(KmerDBWrapper):
             cursor.execute(query)
             for d_, a in cursor:
                 i, j = self.to_ij_coordinates(d_ - self.d0, a)
+                if self.self_comp and exclude_trivial and i == j:
+                    continue
                 yield (i, j)
                 if self.self_comp and i != j:
                     yield (j, i)
