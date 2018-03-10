@@ -80,9 +80,9 @@ def exp_repeat_regions():
 
     def junk(): return rand_seq(A, np.random.randint(2 * K, 4 * K))
 
-    junks = [junk() for _ in range(2 * len(homs))]
-    S = sum([junks[2 * i] + rep + junks[2 * i + 1] + rep
-             for i, rep in enumerate(homs)], A.parse('')) + junk()
+    junks = [junk() for _ in range(3 * len(homs))]
+    S = sum([junks[3 * i] + R + junks[3 * i + 1] + R + junks[3 * i + 2] + R
+             for i, R in enumerate(homs)], A.parse('')) + junk()
     homs = [M.mutate(homs[i])[0] for i in range(len(homs))]
     T = S
 
@@ -100,8 +100,7 @@ def exp_repeat_regions():
                     for (d, a), scores in scored_seeds if d <= 0]
 
     for idx, (mode, thresh, ax) in enumerate(zip(['H0', 'H1'],
-                                                       [10, 0],
-                                                       [ax_H0, ax_H1])):
+                                                 [10, 0], [ax_H0, ax_H1])):
         seeds = [((i, j), scores[idx]) for (i, j), scores in scored_seeds]
         plot_scored_seeds(ax, seeds)
         kw = {'K_min': K, 'p_min': match, 'mode': mode, 'threshold': thresh}
