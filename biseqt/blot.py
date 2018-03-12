@@ -150,7 +150,7 @@ def band_radii(expected_lens, gap_prob, sensitivity):
                      for K in expected_lens])
 
 
-def H0_moments(alphabet_len, wordlen, area):
+def H0_moments(alphabet_len, wordlen, area, n_seqs=2):
     """The mean and standrad deviation of the limiting normal distribution
     under the :math:`H_0` (unrelated) model given by:
 
@@ -166,7 +166,7 @@ def H0_moments(alphabet_len, wordlen, area):
     :math:`p = \\frac{1}{|\Sigma|}` with :math:`|\Sigma|` being the alphabet
     length.
     """
-    p_H0 = 1. / alphabet_len
+    p_H0 = 1. / alphabet_len ** (n_seqs - 1)
     pw_H0 = p_H0 ** wordlen
 
     mu_H0 = area * pw_H0
@@ -177,7 +177,7 @@ def H0_moments(alphabet_len, wordlen, area):
     return mu_H0, sd_H0
 
 
-def H1_moments(alphabet_len, wordlen, area, seglen, p_match):
+def H1_moments(alphabet_len, wordlen, area, seglen, p_match, n_seqs=2):
     """The mean and standrad deviation of the limiting normal distribution under
     the :math:`H_0` (related) model given by:
 
@@ -194,7 +194,7 @@ def H1_moments(alphabet_len, wordlen, area, seglen, p_match):
     """
     mu_H0, sd_H0 = H0_moments(alphabet_len, wordlen, area)
 
-    p_H1 = p_match
+    p_H1 = p_match ** (n_seqs - 1)
     pw_H1 = p_H1 ** wordlen
 
     mu_H1 = mu_H0 + seglen * pw_H1
@@ -214,12 +214,13 @@ class HomologyFinder(SeedIndex):
         sensitivity (float):
             Desired sensitivity of bands.
     """
-    def __init__(self, S, T, g_max=None, sensitivity=None, **kw):
+    def __init__(self, *seqs, **kw):
+        g_max, sensitivity = kw.pop('g_max'), kw.pop('sensitivity')
         assert 0 < g_max < 1 and 0 < sensitivity < 1
         self.g_max = g_max
         self.sensitivity = sensitivity
-        super(HomologyFinder, self).__init__(S, T, **kw)
-        self._n_by_d_ = self.seed_count_by_d_()
+        super(HomologyFinder, self).__init__(*seqs, **kw)
+        # self._n_by_d_ = self.seed_count_by_d_()
 
     def score_num_seeds(self, **kw):
         """Calculates our key central statistics based on m-dependent CLT. For
@@ -250,9 +251,11 @@ class HomologyFinder(SeedIndex):
         if area == 0:
             return float('-inf'), float('-inf')
 
-        mu_H0, sd_H0 = H0_moments(len(self.alphabet), self.wordlen, area)
+        mu_H0, sd_H0 = H0_moments(len(self.alphabet), self.wordlen, area,
+                                  n_seqs=len(self.seqs))
         mu_H1, sd_H1 = H1_moments(len(self.alphabet), self.wordlen, area,
-                                  kw['seglen'], kw['p_match'])
+                                  kw['seglen'], kw['p_match'],
+                                  n_seqs=len(self.seqs))
 
         z_H0 = (num_seeds - mu_H0) / sd_H0  # score under H0
         z_H1 = (num_seeds - mu_H1) / sd_H1  # score under H1
@@ -460,11 +463,15 @@ class HomologyFinder(SeedIndex):
         """
         d_radius = int(np.ceil(self.band_radius(K_min)))
         a_radius = int(np.ceil(K_min / 2))
-        area = 4 * d_radius * a_radius
+        # area = 4 * d_radius * a_radius
+        # FIXME this is n-d volume now; note that moments are still calculated
+        # under pairwise assumption; p_H0 and p_H1 must be updated to reflect
+        # multiple sequence comparison (just raise to power N - 1)
+        area = (2 * d_radius) ** (len(self.seqs) - 1) * 2 * a_radius
         kw = {'area': area, 'seglen': K_min, 'p_match': p_min}
         all_seed_neighbors = self.count_all_seed_neighbors(d_radius, a_radius)
-        return [((d, a), self.score_num_seeds(num_seeds=n, **kw))
-                for (d, a), n in all_seed_neighbors]
+        return [((ds, a), self.score_num_seeds(num_seeds=n, **kw))
+                for (ds, a), n in all_seed_neighbors]
 
     def similar_segments(self, K_min, p_min, mode='H1', threshold=None):
         """Find all local homologies of given minium length and match

@@ -15,7 +15,6 @@
     [(4, 2), (3, 1), (0, 4)]
 """
 import numpy as np
-from itertools import chain, combinations
 from scipy.spatial import cKDTree
 
 from .kmers import KmerIndex, KmerDBWrapper
@@ -30,19 +29,19 @@ class SeedIndex(KmerDBWrapper):
         cache (KmerCache): optional :class:`KmerCache` object to use for
             retrieving integer representations of sequences.
     """
-    def __init__(self, S, T, kmer_cache=None, **kw):
-        name = '%s_%s' % (S.content_id[:8], T.content_id[:8])
+    def __init__(self, *seqs, **kw):
+        assert(len(seqs)) > 1
+        name = '_'.join(S.content_id[:8] for S in seqs)
         super(SeedIndex, self).__init__(name=name, **kw)
-        self.kmer_cache = kmer_cache
-        self.self_comp = S == T
-        self.S, self.T = S, T
-        self.d0 = len(self.T) - 1
+        self.kmer_cache = kw.get('kmer_cache', None)
+        self.self_comp = len(seqs) == 2 and seqs[0] == seqs[1]
+        self.seqs = seqs
+        self.d0s = [len(T) - 1 for T in seqs[1:]]
+
         if self._table_exists():
-            self.log('seeds for %s and %s already indexed, skipping' %
-                     (S.content_id[:8], T.content_id[:8]))
+            self.log('Seeds for %s already indexed, skipping' % name)
         else:
-            self.log('Indexing seeds for %s and %s.' %
-                     (S.content_id[:8], T.content_id[:8]))
+            self.log('Indexing seeds for %s.' % name)
             self._index_seeds()
 
     @property
@@ -52,7 +51,7 @@ class SeedIndex(KmerDBWrapper):
         return 'seeds_' + self.name
 
     @classmethod
-    def to_diagonal_coordinates(cls, i, j):
+    def to_diagonal_coordinates(cls, *idxs):
         """Convert standard coordinates to diagonal coordinates via:
 
         .. math::
@@ -61,12 +60,12 @@ class SeedIndex(KmerDBWrapper):
                 a & = \min(i, j)
             \\end{aligned}
         """
-        d = i - j
-        a = min(i, j)
-        return d, a
+        ds = [idxs[0] - idxs[k] for k in range(1, len(idxs))]
+        a = min(idxs)
+        return ds, a
 
     @classmethod
-    def to_ij_coordinates(cls, d, a):
+    def to_ij_coordinates(cls, ds, a):
         """Convert diagonal coordinates to standard coordinates:
 
         .. math::
@@ -75,6 +74,10 @@ class SeedIndex(KmerDBWrapper):
                 j & = a - min(d, 0)
             \\end{aligned}
         """
+        idxs_ = [0] + [-d for d in ds]
+        diff = a - min(idxs_)
+        idxs = [diff + idx for idx in idxs_]
+        return tuple(idxs)
         i = a + max(d, 0)
         j = a - min(d, 0)
         return (i, j)
@@ -96,7 +99,7 @@ class SeedIndex(KmerDBWrapper):
         with self.connection() as conn:
             conn.cursor().execute("""
                 CREATE TABLE %s (
-                  'd_' INTEGER,     -- zero-adjusted diagonal position
+                  'ds' VARCHAR,     -- comma separated diagonal positions
                   'a'  INTEGER      -- antidiagonal position
                 );
             """ % self.seeds_table)
@@ -106,35 +109,37 @@ class SeedIndex(KmerDBWrapper):
                                wordlen=self.wordlen, alphabet=self.alphabet,
                                log_level=self.log_level,
                                kmer_cache=self.kmer_cache)
-        kmer_index.index_kmers(self.S)
-        if not self.self_comp:
-            kmer_index.index_kmers(self.T)
+        if self.self_comp:
+            kmer_index.index_kmers(self.seqs[0])
+        else:
+            for seq in self.seqs:
+                kmer_index.index_kmers(seq)
 
         kmers = kmer_index.kmers()
 
         def _records():
             for kmer in kmers:
                 hits = kmer_index.hits(kmer)
-                if self.self_comp:
-                    pairs = chain(combinations(hits, 2),
-                                  [(x, x) for x in hits])
-                else:
-                    pairs = (((id0, pos0), (id1, pos1))
-                             for (id0, pos0), (id1, pos1)
-                             in combinations(hits, 2)
-                             if id0 != id1)
-                for (id0, pos0), (id1, pos1) in pairs:
-                    d, a = self.to_diagonal_coordinates(pos0, pos1)
-                    yield d + self.d0, a
+                from itertools import groupby, product
+                hits = {seqid: [c[1] for c in seq_hits]
+                        for seqid, seq_hits in groupby(hits,
+                                                       key=lambda c: c[0])}
+                # only consider kmers present in all sequences
+                if len(hits) < len(self.seqs):
+                    continue
+                # FIXME deal with self_comp: let 1 argument mean self_comp not
+                # two identical sequences.
+                for idxs in product(*hits.values()):
+                    # NOTE we're storing d values and not d_
+                    ds, a = self.to_diagonal_coordinates(*idxs)
+                    yield ','.join(str(d) for d in ds), a
 
         with self.connection() as conn:
             cursor = conn.cursor()
-            cursor.executemany(
-                'INSERT INTO %s (d_, a) VALUES (?, ?)' % self.seeds_table,
-                _records()
-            )
+            query = 'INSERT INTO %s (ds, a) VALUES (?, ?)' % self.seeds_table
+            cursor.executemany(query, _records())
             self.log('Creating SQL index for table %s.' % self.seeds_table)
-            cursor.execute('CREATE INDEX %s_diagonal ON %s(d_);' %
+            cursor.execute('CREATE INDEX %s_diagonal ON %s(ds);' %
                            (self.seeds_table, self.seeds_table))
 
     def seed_count_by_d_(self):
@@ -187,11 +192,11 @@ class SeedIndex(KmerDBWrapper):
         d_coeff = 1. * a_radius / d_radius
         radius = a_radius
 
-        all_seeds = list(self.to_diagonal_coordinates(i, j)
-                         for i, j in self.seeds(exclude_trivial=True))
+        all_seeds = list(self.seeds())
         if not all_seeds:
             return []
-        all_seeds_scaled = np.array([(d * d_coeff, a) for d, a in all_seeds])
+        all_seeds_scaled = np.array([[d * d_coeff for d in ds] + [a]
+                                     for ds, a in all_seeds])
         quad_tree = cKDTree(all_seeds_scaled)
         all_neighs = quad_tree.query_ball_tree(quad_tree, radius,
                                                p=float('inf'))
@@ -212,8 +217,9 @@ class SeedIndex(KmerDBWrapper):
             tuple:
                 seeds coordinates :math:`(i, j)`.
         """
-        query = 'SELECT d_, a FROM %s' % self.seeds_table
+        query = 'SELECT ds, a FROM %s' % self.seeds_table
         if d_band is not None:
+            raise NotImplementedError
             assert len(d_band) == 2, 'need a 2-tuple for diagonal band'
             d_min, d_max = d_band
             query += ' WHERE d_ - %d BETWEEN %d AND %d ' % \
@@ -222,13 +228,10 @@ class SeedIndex(KmerDBWrapper):
         with self.connection() as conn:
             cursor = conn.cursor()
             cursor.execute(query)
-            for d_, a in cursor:
-                i, j = self.to_ij_coordinates(d_ - self.d0, a)
-                if self.self_comp and exclude_trivial and i == j:
-                    continue
-                yield (i, j)
-                if self.self_comp and i != j:
-                    yield (j, i)
+            for ds, a in cursor:
+                ds = [int(i) for i in ds.split(',')]
+                # FIXME deal with self_comp
+                yield ds, a
 
     # FIXME change this to d_min, d_max
     def seed_count(self, d_band=None):
