@@ -165,6 +165,10 @@ def seq_in_maf(alignment, id_):
 def get_seqs_from_maf(maf_path):
     alignments = list(AlignIO.parse(maf_path, 'maf'))
     # NOTE trust the first alignment to have all the ids
+    # FIXME this assumption is violated in real data sets! use this instead:
+    # ids = set()
+    # for alignment in alignments:
+    #     ids = ids.union(set(rec.id for rec in alignment))
     ids = list(rec.id for rec in alignments[0])
     for i in ids:
         seq = np.concatenate([seq_in_maf(alignment, i)
