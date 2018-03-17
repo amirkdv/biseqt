@@ -14,6 +14,7 @@ from util import seq_pair, sample_bio_opseqs, sample_bio_seqs, apply_opseq
 
 from util import plot_global_alignment, plot_similar_segment
 from util import adjust_pw_plot, plot_seeds, opseq_path
+from util import estimate_match_probs_in_opseq
 
 
 @with_dumpfile
@@ -214,6 +215,49 @@ def sim_stats_real_homologies(seqs, pws, **kw):
     return sim_data
 
 
+@with_dumpfile
+def sim_similarity_profile(seqs, pws, **kw):
+    A = Alphabet('ACGT')
+    mode, threshold = kw['mode'], kw['threshold']
+    wordlen, K_min, p_min = kw['wordlen'], kw['K_min'], kw['p_min']
+    HF_kw = {
+        'g_max': kw.get('g_max', .3),
+        'sensitivity': kw.get('sensitivity', .99),
+        'wordlen': wordlen,
+        'alphabet': A,
+        'path': kw.get('db_path', ':memory:'),
+        'log_level': kw.get('log_level', logging.WARNING),
+    }
+    similar_segments_kw = {
+        'K_min': K_min, 'p_min': p_min, 'mode': mode, 'threshold': threshold,
+    }
+    sim_data = {
+        'pws': pws,
+        'seqlens': {name: len(seqs[name]) for name in seqs},
+        'similarity': {key: [np.zeros(len(seqs[key[0]])),
+                             np.zeros(len(seqs[key[1]]))] for key in pws},
+        'HF_kw': HF_kw,
+        'similar_segments_kw': similar_segments_kw
+    }
+    for idx, (id1, id2) in enumerate(pws):
+        log('finding all local homologies between %s and %s' %
+            (id1, id2))
+        S = seqs[id1]
+        T = seqs[id2]
+        HF = HomologyFinder(S, T, **HF_kw)
+        for segment, _, p_hat in HF.similar_segments(**similar_segments_kw):
+            (d_min, d_max), (a_min, a_max) = segment
+            d = (d_min + d_max) / 2
+            i_start, j_start = HF.to_ij_coordinates(d, a_min)
+            i_end, j_end = HF.to_ij_coordinates(d, a_max)
+            res = sim_data['similarity'][(id1, id2)]
+            for i in range(max(i_start, 0), min(i_end, len(seqs[id1]))):
+                res[0][i] = max(res[0][i], p_hat)
+            for j in range(max(j_start, 0), min(j_end, len(seqs[id2]))):
+                res[1][j] = max(res[1][j], p_hat)
+    return sim_data
+
+
 def plot_stats_fixed_K(sim_data, suffix=''):
     K, ns, p_match = sim_data['K'], sim_data['ns'], sim_data['p_match']
     wordlen = sim_data['HF_kw']['wordlen']
@@ -394,6 +438,29 @@ def plot_stats_real_homologies(sim_data, suffix=''):
     savefig(fig, 'real_homologies[performance]%s.png' % suffix, dpi=500)
 
 
+def plot_similarity_profile(sim_data, suffix=''):
+    seqlens = sim_data['seqlens']
+    pws = sim_data['pws']
+
+    fig_num = int(np.ceil(np.sqrt(len(pws))))
+    fig = plt.figure(figsize=(6*fig_num, 5*fig_num))
+
+    for idx, key in enumerate(pws.keys()):
+        log('plotting %s / %s' % key)
+        ax = fig.add_subplot(fig_num, fig_num, idx+1)
+        opseq = pws[key]
+        radius = sim_data['similar_segments_kw']['K_min'] / 2
+        ps_hat = sim_data['similarity'][key][0]
+        ps_true = estimate_match_probs_in_opseq(opseq, radius)
+        ax.scatter(range(seqlens[key[0]]), ps_hat, c='k', alpha=.4, s=1)
+        ax.scatter(range(len(ps_true)), ps_true, c='g', alpha=.4, s=1)
+        ax.grid()
+        ax.set_xlabel('position in %s' % key[0])  # FIXME not quite
+        ax.set_ylabel('match probability')
+        ax.set_title('%s vs %s ' % key)
+    savefig(fig, 'similarity_profile%s.png' % suffix)
+
+
 # the point of this experiment is: band score is unreliable and segment score
 # is reliable. After this experiment we exclusively look at segment score.
 def exp_stats_performance_fixed_K():
@@ -496,7 +563,37 @@ def exp_stats_real_homologies():
     plot_stats_real_homologies(sim_data, suffix=suffix)
 
 
+def exp_similarity_profile():
+    wordlen = 8
+    p_min = .6
+    K_min = 50
+    threshold = 1.5
+    mode = 'H1'
+    A = Alphabet('ACGT')
+
+    suffix = '[actb]'
+    dumpfile = 'similarity_profile%s.txt' % suffix
+    seqs = 'data/actb/actb-7vet.fa'
+    pws = 'data/actb/actb-7vet-pws.fa'
+
+    # suffix = '[acta2]'
+    # dumpfile = 'real_homologies%s.txt' % suffix
+    # seqs = 'data/acta2/acta2-7vet.fa'
+    # pws = 'data/acta2/acta2-7vet-pws.fa'
+
+    with open(seqs) as f:
+        seqs = {name: A.parse(seq.upper())
+                for seq, name, _ in load_fasta(f)}
+    with open(pws) as f:
+        pws = {tuple(name.split(':')): seq for seq, name, _ in load_fasta(f)}
+    sim_data = sim_similarity_profile(
+        seqs, pws, wordlen=wordlen, p_min=p_min, K_min=K_min, mode=mode,
+        threshold=threshold, dumpfile=dumpfile, ignore_existing=False)
+    plot_similarity_profile(sim_data, suffix=suffix)
+
+
 if __name__ == '__main__':
     exp_stats_performance_fixed_K()
     exp_stats_performance_varying_K_p()
     exp_stats_real_homologies()
+    exp_similarity_profile()
