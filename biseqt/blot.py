@@ -464,7 +464,11 @@ class HomologyFinder(SeedIndex):
         :func:`SeedIndex.count_all_seed_neighbors`.
 
         Returns:
-            list: list of tuples ``((d, a), (s0, s1))``
+            list: list of tuples ``((d, a), p, (s0, s1))`` where ``(d, a)``
+                  is the diagonal coordinates of the seed, ``p`` is the
+                  estimated match probability of a segment of length K_min
+                  centered at the seed and ``(s0, s1)`` are the z-scores with
+                  respect to H0 and H1.
         """
         d_radius = int(np.ceil(self.band_radius(K_min)))
         a_radius = int(np.ceil(K_min / 2))

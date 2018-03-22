@@ -367,6 +367,25 @@ def estimate_match_probs_in_opseq(opseq, radius, projection=None):
     return probs
 
 
+def fill_in_unknown(seq, alphabet):
+    def _filter(s): return s if s != 'N' else np.random.choice(alphabet)
+
+    return ''.join(_filter(s) for s in seq)
+
+
+def seeds_from_opseq(opseq, wordlen):
+    i, j = 0, 0
+    for idx, op in enumerate(opseq):
+        if opseq[idx:idx + wordlen] == 'M' * wordlen:
+            yield i, j
+        if op in 'MS':
+            i, j = i + 1, j + 1
+        elif op in 'D':
+            i = i + 1
+        elif op in 'I':
+            j = j + 1
+        else:
+            raise ValueError('op %s not understood' % op)
 
 
 # =============================================================================
