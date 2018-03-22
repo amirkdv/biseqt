@@ -469,9 +469,19 @@ class HomologyFinder(SeedIndex):
         d_radius = int(np.ceil(self.band_radius(K_min)))
         a_radius = int(np.ceil(K_min / 2))
         area = 4 * d_radius * a_radius
-        kw = {'area': area, 'seglen': K_min, 'p_match': p_min}
         all_seed_neighbors = self.count_all_seed_neighbors(d_radius, a_radius)
-        return [((d, a), self.score_num_seeds(num_seeds=n, **kw))
+
+        def _p(d, a, n):
+            return self.estimate_match_probability(
+                n, d_band=(d - d_radius, d + d_radius),
+                a_band=(a - a_radius, a + a_radius)
+            )
+
+        def _z(d, a, n):
+            return self.score_num_seeds(num_seeds=n, area=area,
+                                        seglen=K_min, p_match=p_min)
+
+        return [((d, a), _p(d, a, n), _z(d, a, n))
                 for (d, a), n in all_seed_neighbors]
 
     def similar_segments(self, K_min, p_min, mode='H1', threshold=None):
@@ -496,8 +506,9 @@ class HomologyFinder(SeedIndex):
             a z-score, and estimated match probability:
             ``((d_min, d_max), (a_min, a_max)), z_score, match_prob``.
         """
-        self.log('finding local homologies between %s and %s' %
-                 (self.S.content_id[:8], self.T.content_id[:8]))
+        self.log('finding local homologies between %s (%d) and %s (%d)' %
+                 (self.S.content_id[:8], len(self.S),
+                  self.T.content_id[:8], len(self.T)))
         if threshold is None:
             threshold = {'H0': 5, 'H1': 0}[mode]
         key = {'H0': 0, 'H1': 1}[mode]
@@ -506,7 +517,7 @@ class HomologyFinder(SeedIndex):
 
         all_seeds_scored = self.score_seeds(K_min, p_min)
         scores_by_d_ = float('-inf') * np.ones(len(self.S) + len(self.T) - 1)
-        for (d, a), scores in all_seeds_scored:
+        for (d, a), _, scores in all_seeds_scored:
             d_ = d + self.d0
             scores_by_d_[d_] = max(scores_by_d_[d_], scores[key])
 
