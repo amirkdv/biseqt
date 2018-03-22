@@ -332,19 +332,41 @@ def estimate_gap_probs_in_opseq(opseq, radius):
     return gaps
 
 
-def estimate_match_probs_in_opseq(opseq, radius):
+# if projection is either of 1 or 2, the positions are projected on either of
+# the first sequences; if None positions are against the opseq
+def estimate_match_probs_in_opseq(opseq, radius, projection=None):
     assert isinstance(radius, int)
+    assert all(op in 'MSID' for op in opseq)
     assert len(opseq) > 2 * radius
-    matches = np.zeros(len(opseq))
-    start = opseq[:2 * radius + 1]
+    probs = np.zeros(len(opseq))
+    start = opseq[:2 * radius]
     n_M = start.count('M')
     for i in range(radius, len(opseq) - radius):
         if opseq[i - radius] == 'M':
             n_M -= 1
         if opseq[i + radius] == 'M':
             n_M += 1
-        matches[i] = n_M / (2. * radius)
-    return matches
+        probs[i] = n_M / (2. * radius)
+
+    assert len(probs) == len(opseq)
+    if projection is not None:
+        probs_proj = np.zeros(len(opseq))  # guaranteed upper bound for length
+        assert projection in [1, 2]
+        i, j = 0, 0
+        for op, prob in zip(opseq, probs):
+            probs_proj[{1: i, 2: j}[projection]] = prob
+            if op in 'MS':
+                i += 1
+                j += 1
+            elif op == 'D':
+                i += 1
+            elif op == 'I':
+                j += 1
+        probs = probs_proj[:{1: i, 2: j}[projection]]
+
+    return probs
+
+
 
 
 # =============================================================================
