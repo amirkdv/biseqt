@@ -184,9 +184,13 @@ def get_pws_from_maf(maf_path):
         for alignment in alignments:
             seq_i_in_aln = seq_in_maf(alignment, i)
             seq_j_in_aln = seq_in_maf(alignment, j)
-            if len(seq_i_in_aln) and len(seq_j_in_aln):
-                seqs_i.append(seq_i_in_aln)
-                seqs_j.append(seq_j_in_aln)
+            if len(seq_i_in_aln) == 0:
+                seq_i_in_aln = ['-'] * len(seq_j_in_aln)
+            elif len(seq_j_in_aln) == 0:
+                seq_j_in_aln = ['-'] * len(seq_i_in_aln)
+            assert len(seq_i_in_aln) == len(seq_j_in_aln)
+            seqs_i.append(seq_i_in_aln)
+            seqs_j.append(seq_j_in_aln)
         full_alignment = np.array([np.concatenate(seqs_i),
                                    np.concatenate(seqs_j)])
 
