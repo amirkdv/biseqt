@@ -18,10 +18,14 @@
     [(((-28, 7), (0, 99)), 1.1988215486845972, 0.7630903108462143)]
     >>>
 """
+import warnings
 import numpy as np
 from scipy.special import erfcinv
-
 from .seeds import SeedIndex
+
+
+# so we can catch numpy warnings
+warnings.filterwarnings('error')
 
 
 # A band (i-r, i+r) is considered of interest if xs[i] >threshold. This
@@ -409,7 +413,11 @@ class HomologyFinder(SeedIndex):
         K, area = self.segment_dims(d_band=d_band, a_band=a_band)
         word_p_null = (1./len(self.alphabet)) ** self.wordlen
         word_p = (num_seeds - area * word_p_null) / K
-        match_p = np.exp(np.log(word_p) / self.wordlen)
+        try:
+            match_p = np.exp(np.log(word_p) / self.wordlen)
+        except Warning:
+            # presumably this happened because word_p was too small for log
+            match_p = 0
         return min(match_p, 1)
 
     def score_segments(self, K_min, p_min, d_band=None, mode='H1'):
