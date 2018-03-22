@@ -438,16 +438,17 @@ def plot_seeds(ax, seeds, c='k'):
     ax.grid(True)
 
 
-def plot_scored_seeds(ax, scored_seeds):
-    idx_S, idx_T, cs = [], [], []
+def plot_scored_seeds(ax, scored_seeds, threshold=5):
+    idx_S, idx_T, cs, ss = [], [], [], []
     cmap = plt.cm.get_cmap('jet')
     max_score = max(score for _, score in scored_seeds)
     for (i, j), score in scored_seeds:
         idx_S.append(i)
         idx_T.append(j)
         cs.append(cmap(score/max_score)[:3])
+        ss.append(10 if threshold and score > threshold else 1)
     # x and y are flipped when going from matrix notation to plotting.
-    ax.scatter(idx_T, idx_S, facecolor=cs, lw=0, s=1, alpha=.9)
+    ax.scatter(idx_T, idx_S, facecolor=cs, s=ss, lw=0, alpha=.7)
 
     # colorbar Axes
     ax_c = make_axes_locatable(ax).append_axes('right', size='4%', pad=0.05)
