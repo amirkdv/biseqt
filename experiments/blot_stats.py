@@ -5,7 +5,7 @@ from scipy.ndimage.filters import gaussian_filter1d
 
 import logging
 
-from biseqt.blot import HomologyFinder
+from biseqt.blot import HomologyFinder, find_peaks
 from biseqt.sequence import Alphabet
 from biseqt.stochastics import rand_seq, MutationProcess
 
@@ -16,10 +16,7 @@ from util import seq_pair, sample_bio_opseqs, sample_bio_seqs, apply_opseq
 from util import plot_global_alignment
 from util import adjust_pw_plot
 from util import estimate_match_probs_in_opseq, fill_in_unknown
-from util import seeds_from_opseq
-from util import plot_classifier
 from util import plot_scored_seeds
-from util import plot_cdf
 
 
 @with_dumpfile
@@ -194,12 +191,16 @@ def sim_stats_real_homologies(seqs, pws, **kw):
         'alphabet': A,
         'path': kw.get('db_path', ':memory:'),
         'log_level': kw.get('log_level', logging.WARNING),
+        # HACK mask CG-rich and homopolymeric regions
+        'mask': [set(x) for x in [[0], [1], [2], [3], [1, 2], [0, 3]]],
     }
     similar_segments_kw = {'K_min': K_min, 'p_min': p_min}
     sim_data = {
         'pws': pws,
         'seqlens': {name: len(seqs[name]) for name in seqs},
-        'similarity': {key: np.zeros(len(seqs[key[0]])) for key in pws},
+        'similarity': {key: [np.zeros(len(seqs[key[0]])),
+                             np.zeros(len(seqs[key[1]]))]
+                       for key in pws},
         'seeds': {key: [] for key in pws},
         'HF_kw': HF_kw,
         'similar_segments_kw': similar_segments_kw
@@ -211,15 +212,18 @@ def sim_stats_real_homologies(seqs, pws, **kw):
         T = seqs[id2]
 
         HF = HomologyFinder(S, T, **HF_kw)
-        scored_seeds = [(HF.to_ij_coordinates(d, a), p, scores)
-                        for (d, a), p, scores in HF.score_seeds(K_min, p_min)]
-        sim_data['seeds'][(id1, id2)] = {seed: {'p': p, 'score': scores[1]}
-                                         for seed, p, scores in scored_seeds}
+        sim_data['seeds'][(id1, id2)] = {
+            HF.to_ij_coordinates(*rec['seed']): rec['p']
+            for rec in HF.score_seeds(K_min)
+        }
         log('-> found %d exactly matching %d-mers' %
             (len(sim_data['seeds'][(id1, id2)]), wordlen))
-        for (pos, _), p_hat, _ in scored_seeds:
-            res = sim_data['similarity'][(id1, id2)]
-            for i in range(pos, pos + wordlen):
+        for (pos1, pos2), p_hat in sim_data['seeds'][(id1, id2)].items():
+            res = sim_data['similarity'][(id1, id2)][0]
+            for i in range(pos1, pos1 + wordlen):
+                res[i] = max(res[i], p_hat)
+            res = sim_data['similarity'][(id1, id2)][1]
+            for i in range(pos2, pos2 + wordlen):
                 res[i] = max(res[i], p_hat)
     return sim_data
 
@@ -358,43 +362,38 @@ def plot_stats_real_homologies(sim_data, suffix=''):
     seqlens = sim_data['seqlens']
     pws = sim_data['pws']
     K_min = sim_data['similar_segments_kw']['K_min']
-    wordlen = sim_data['HF_kw']['wordlen']
     fig_num = int(np.ceil(np.sqrt(len(pws))))
-
-    fig = plt.figure()
-    ax = fig.add_subplot(1, 1, 1)
-    colors = color_code(range(len(pws)))
-
-    pos, neg = [], []
-    for (key, opseq), color in zip(pws.items(), colors):
-        pos_key = []
-        real_seeds = list(seeds_from_opseq(opseq, wordlen))
-        for seed in real_seeds:
-            score = sim_data['seeds'][key][seed]['score']
-            pos_key.append(score)
-            sim_data['seeds'][key][seed]['visited'] = True
-        for seed, info in sim_data['seeds'][key].items():
-            if 'visited' not in info:
-                neg.append(info['score'])
-        plot_cdf(ax, pos_key, color=color, alpha=.6, lw=1, label='%s/%s' % key)
-        pos += pos_key
-    ax.legend(loc='best', fontsize=6)
-    ax.set_title('Score cumulative distribution')
-    ax.set_xlim(None, ax.get_xlim()[1] * 1.4)
-    savefig(fig, 'real_homologies[scores]%s.png' % suffix)
-    plot_classifier('real_homologies[performance]%s.png' % suffix,
-                    pos, neg, labels=['homologous', 'non-homologous'])
 
     fig_seeds = plt.figure(figsize=(6 * fig_num, 5 * fig_num))
     fig_sim = plt.figure(figsize=(8 * fig_num, 4 * fig_num))
+    fig_cons = plt.figure(figsize=(6, 4))
+    ax_cons = fig_cons.add_subplot(1, 1, 1)
+
+    colors_cons = color_code(range(len(pws)))
+    p_cons = .7
+
+    def _conserved(ps):
+        return sum([range(*r) for r in find_peaks(ps, 10, p_cons)], [])
 
     for idx, ((id1, id2), opseq) in enumerate(pws.items()):
         ax_seeds = fig_seeds.add_subplot(fig_num, fig_num, idx + 1)
 
         ax_sim = fig_sim.add_subplot(fig_num, fig_num, idx + 1)
         radius = K_min / 2
-        ps_hat = sim_data['similarity'][(id1, id2)]
+
+        ps_hat = sim_data['similarity'][(id1, id2)][0]
         ps_true = estimate_match_probs_in_opseq(opseq, radius, projection=1)
+
+        log(id1 + '/' + id2)
+        cons_hat = _conserved(ps_hat)
+        cons_true = _conserved(ps_true)
+        tp = len(set(cons_hat).intersection(set(cons_true)))
+        tpr = 1. * tp / len(cons_true)
+        ppv = 1. * tp / len(cons_hat)
+        print tpr, ppv
+        color = colors_cons[idx]
+        ax_cons.scatter([tpr], [ppv], s=20, c=color, lw=0, alpha=.4,
+                        label='%s/%s' % (id1.split('.')[0], id2.split('.')[0]))
 
         # smooth for ease of visual inspection
         ps_hat = gaussian_filter1d(ps_hat, radius)
@@ -402,19 +401,28 @@ def plot_stats_real_homologies(sim_data, suffix=''):
         ax_sim.plot(range(len(ps_hat)), ps_hat, c='k', alpha=.8, lw=1)
         ax_sim.plot(range(len(ps_true)), ps_true, c='g', alpha=.3, lw=2)
         ax_sim.set_title('%s/%s' % (id1, id2))
+        # ax_sim.fill_between(range(len(ps_true)), ps_true,
+        #                     where=ps_true >= p_cons, color='g', alpha=.1)
+        ax_sim.set_xlabel('position in %s' % id1)
+        ax_sim.set_ylabel('match probability (window: %d)' % K_min)
 
-        # NOTE use threshold=10 for acta2, default 5 for actb is good
         plot_scored_seeds(ax_seeds,
-                          [(seed, info['score']) for seed, info
-                           in sim_data['seeds'][(id1, id2)].items()],
-                          threshold=10)
+                          sim_data['seeds'][(id1, id2)].items(),
+                          threshold=.7)
         plot_global_alignment(ax_seeds, opseq, c='k', lw=5, alpha=.2)
         adjust_pw_plot(ax_seeds, seqlens[id1], seqlens[id2])
         ax_seeds.set_ylabel(id1, fontsize=10)
         ax_seeds.set_xlabel(id2, fontsize=10)
 
+    ax_cons.set_xlim(-.1, 1.1)
+    ax_cons.set_ylim(-.1, 1.1)
+    ax_cons.legend(loc='best', fontsize=4)
+    ax_cons.set_xlabel('True positive rate')
+    ax_cons.set_ylabel('Positive predictive value')
+    ax_cons.set_title('Highly conserved ($\hat{p} > %.2f$) regions' % p_cons)
     savefig(fig_seeds, 'real_homologies[seeds]%s.png' % suffix)
     savefig(fig_sim, 'real_homologies[similarity]%s.png' % suffix)
+    savefig(fig_cons, 'real_homologies[conservation]%s.png' % suffix)
 
 
 # the point of this experiment is: band score is unreliable and segment score
@@ -491,11 +499,11 @@ def exp_stats_performance_varying_K_p():
 
 
 def exp_stats_real_homologies():
-    p_min = .6
+    p_min = .5
     A = Alphabet('ACGT')
 
-    wordlen = 8
-    K_min = 50
+    wordlen = 5
+    K_min = 100
     suffix = '[actb]'
     dumpfile = 'real_homologies%s.txt' % suffix
     seqs_path = 'data/actb/actb-7vet.fa'
@@ -508,6 +516,26 @@ def exp_stats_real_homologies():
     # seqs_path = 'data/acta2/acta2-7vet.fa'
     # pws_path = 'data/acta2/acta2-7vet-pws.fa'
 
+    # wordlen = 8
+    # K_min = 50
+    # suffix = '[acta1]'
+    # dumpfile = 'real_homologies%s.txt' % suffix
+    # seqs_path = 'data/acta1/acta1-7vet.fa'
+    # pws_path = 'data/acta1/acta1-7vet-pws.fa'
+
+    # wordlen = 8
+    # K_min = 50
+    # suffix = '[ngf]'
+    # dumpfile = 'real_homologies%s.txt' % suffix
+    # seqs_path = 'data/ngf/ngf-7vet.fa'
+    # pws_path = 'data/ngf/ngf-7vet-pws.fa'
+
+    # NOTE anything "acta2" is actually "actn2"
+    # FIXME the acta2 thing we're using is not actually a gene (what is it?)
+    # also, all our examples (aside from acta2) are short. I'm not sure
+    # if we're looking at full genes or just exons because the
+    # extents on genome browser suggest longer sequences than we actually get
+    # from maf (assuming our conversion code is correct)
     # names = ['hg38.chr1', 'rn5.chr17', 'canFam3.chr4', 'mm10.chr13']
     # names = ['hg38.chr1', 'panTro4.chr1', 'canFam3.chr4']
 

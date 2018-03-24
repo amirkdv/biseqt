@@ -14,9 +14,7 @@
     >>> list(seed_index.seeds())
     [(4, 2), (3, 1), (0, 4)]
 """
-import numpy as np
 from itertools import chain, combinations
-from scipy.spatial import cKDTree
 
 from .kmers import KmerIndex, KmerDBWrapper
 
@@ -135,72 +133,10 @@ class SeedIndex(KmerDBWrapper):
                 'INSERT INTO %s (d_, a) VALUES (?, ?)' % self.seeds_table,
                 _records()
             )
+            # FIXME is this necessary?
             self.log('Creating SQL index for table %s.' % self.seeds_table)
             cursor.execute('CREATE INDEX %s_diagonal ON %s(d_);' %
                            (self.seeds_table, self.seeds_table))
-
-    def seed_count_by_d_(self):
-        """Number of seeds in each diagonal position. Diagonals are
-        ordered from smallest :math:`-|T|` to largest :math:`|S|`.
-        """
-        q = 'SELECT COUNT(a), d_ FROM %s GROUP BY d_' % self.seeds_table
-        count_by_d_ = np.zeros(len(self.S) + len(self.T) - 1)
-        with self.connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute(q)
-            for count, d_ in cursor:
-                count_by_d_[d_] = count
-        return count_by_d_
-
-    def seed_count_by_a(self, d_min, d_max):
-        """Number of seeds at each antidiagonal position in a givan diagonal
-        band.
-        """
-        q = """
-            SELECT COUNT(d_), a FROM %s
-            WHERE d_ - ? BETWEEN ? AND ?
-            GROUP BY a
-        """ % self.seeds_table
-        count_by_a = np.zeros(min(len(self.S), len(self.T)))
-        with self.connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute(q, (self.d0, d_min, d_max))
-            for count, a in cursor:
-                count_by_a[a] = count
-
-        return count_by_a
-
-    def count_all_seed_neighbors(self, d_radius, a_radius):
-        """For each seed finds the number of seeds in its neighborhood defined
-        by:
-
-        .. math::
-
-            V_{(d, a)} = \\{(d', a'): |d - d'| < r_d,  |a - a'| < r_a \\}
-
-        This is done using a Quad-Tree in ``O(m lg m)`` time where m is the
-        number of seeds.
-
-        Returns:
-            list: tuples ``((d, a), num_neighs)``
-        """
-        # normalize the two diameters so we can use a standard L∞ neighborhood.
-        # typically a_diam is larger, so scale up d values proportionally
-        d_coeff = 1. * a_radius / d_radius
-        radius = a_radius
-
-        all_seeds = list(self.to_diagonal_coordinates(i, j)
-                         for i, j in self.seeds(exclude_trivial=True))
-        if not all_seeds:
-            return []
-        all_seeds_scaled = np.array([(d * d_coeff, a) for d, a in all_seeds])
-        quad_tree = cKDTree(all_seeds_scaled)
-        all_neighs = quad_tree.query_ball_tree(quad_tree, radius,
-                                               p=float('inf'))
-        # neighs[i] is the indices of the neighbors of all_seeds[i]; this
-        # always contains the seed itself (i.e always: i in neighs[i])
-        neigh_counts = [len(neighs) - 1 for neighs in all_neighs]
-        return zip(all_seeds, neigh_counts)
 
     def seeds(self, d_band=None, exclude_trivial=False):
         """Yields all seeds, optionally those within a diagonal band.
@@ -220,6 +156,7 @@ class SeedIndex(KmerDBWrapper):
             d_min, d_max = d_band
             query += ' WHERE d_ - %d BETWEEN %d AND %d ' % \
                 (self.d0, d_min, d_max)
+        query += ' ORDER BY rowid'
 
         with self.connection() as conn:
             cursor = conn.cursor()

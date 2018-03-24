@@ -8,7 +8,7 @@ from biseqt.blot import find_peaks
 from biseqt.blot import band_radius
 from biseqt.blot import expected_overlap_len
 from biseqt.blot import band_radii
-from biseqt.blot import HomologyFinder
+from biseqt.blot import HomologyFinder, OverlapFinder
 
 
 def test_find_peaks():
@@ -125,16 +125,15 @@ def test_local_similarity(wordlen, K, n):
     HF = HomologyFinder(S, T, **HF_kw)
 
     p_match = (1 - gap) * (1 - subst) * .9
-    diagonal_scores = HF.score_diagonal_bands(K, p_match)
-    assert abs(np.nanargmax(diagonal_scores[:, 1]) - HF.d0) < K, \
-        'The highest H1 scoring diagonal band must be roughly around 0'
 
     found_homs = list(HF.similar_segments(K, p_match))
     assert len(found_homs) == 1, 'Only one similar segment should be found'
-    ((d_min, d_max), (a_min, a_max)), score, match_p = found_homs[0]
+    rec = found_homs[0]
+    ((d_min, d_max), (a_min, a_max)) = rec['segment']
     assert d_min < 10 and d_max > -10 and a_min < K, \
         'The coordinates of the homologous segment must be correct'
-    assert 0 <= match_p <= 1, 'estimated match probability should be in [0, 1]'
+    assert 0.8 * p_match <= rec['p'] <= 1.2 * p_match, \
+        'estimated match prob should be roughly close to true value'
 
 
 @pytest.mark.parametrize('wordlen', [8, 15],
@@ -154,8 +153,8 @@ def test_overlap_detection(wordlen, K, n):
     overlap = rand_seq(A, K)
     S = rand_seq(A, n - K) + overlap
     T = M.mutate(overlap)[0] + rand_seq(A, n - K)
-    HF = HomologyFinder(S, T, **HF_kw)
-    (seg0, s0), (seg1, s1) = HF.highest_scoring_overlap_band(p_match)
+    OF = OverlapFinder(S, T, **HF_kw)
+    (seg0, s0), (seg1, s1) = OF.highest_scoring_overlap_band(p_match)
     assert seg0[0] * .8 < n - K < 1.25 * seg0[1], \
         'H0 must detect the correct overlap'
     assert seg1[0] * .8 < n - K < 1.25 * seg1[1], \

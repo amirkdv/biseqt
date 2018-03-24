@@ -21,6 +21,7 @@
 import warnings
 import numpy as np
 from scipy.special import erfcinv
+from scipy.spatial import cKDTree
 from .seeds import SeedIndex
 
 
@@ -223,8 +224,10 @@ class HomologyFinder(SeedIndex):
         self.g_max = g_max
         self.sensitivity = sensitivity
         super(HomologyFinder, self).__init__(S, T, **kw)
-        self._n_by_d_ = self.seed_count_by_d_()
 
+    # NOTE if p_min method works the whole H0/H1 score becomes unnecessary
+    # (note that p estimation incorporates both models anyway; all model info
+    # is still used). We should also probably report the scores anyway?
     def score_num_seeds(self, **kw):
         """Calculates our key central statistics based on m-dependent CLT. For
         a given observation of number of seeds in a region of interest (ROI),
@@ -274,106 +277,6 @@ class HomologyFinder(SeedIndex):
         """
         return band_radius(K, self.g_max, self.sensitivity)
 
-    def band_radii(self, Ks):
-        """Wraps :func:`band_radii` with our mutation parameters and sequence
-        lengths.
-
-        Args:
-            K (int): expected alignment lengths of interest.
-
-        Returns:
-            int: radius of band for desired :attr:`sensitivity`.
-        """
-        return band_radii(Ks, self.g_max, self.sensitivity)
-
-    def score_diagonal_bands(self, Ks, p_match, edge_margin=100):
-        """Scores all diagonal bands looking for specified segment lengths
-        against both H0 and H1.
-
-        Args:
-            Ks (list|int):
-                (minimum) segment lengths of interest for each diagonal
-                position or constant number.
-            d_center (int):
-                center of diagonal band.
-            d_radius (int):
-                radius of diagonal band.
-            edge_margin(int):
-                The width of the diagonal margin ignored on either extreme.
-                This is used to avoid division by small areas in calculating
-                scores.
-
-        Returns:
-            np.array: H0 and H1 scores of each diagonal band.
-        """
-        try:
-            iter(Ks)
-            radii = self.band_radii(Ks)
-        except TypeError:
-            radius = self.band_radius(Ks)
-            Ks = np.ones(len(self._n_by_d_)) * Ks
-            radii = np.ones(len(self._n_by_d_)) * radius
-
-        assert len(Ks) == len(radii) == len(self._n_by_d_)
-        n_by_d_cum = np.cumsum(self._n_by_d_)
-        # Each band gets two scores, one for H0 and one for H1
-        scores_by_d_ = np.zeros((len(n_by_d_cum), 2))
-        for d_ in range(len(self._n_by_d_)):
-            K = Ks[d_]
-            d = d_ - self.d0
-            # don't score things too close to the edges, the small area
-            # leads to unnecessarily high scores.
-            if d_ < edge_margin or d > len(self.S) - edge_margin:
-                scores_by_d_[d_][0] = float('-inf')
-                scores_by_d_[d_][1] = float('-inf')
-                continue
-
-            radius = radii[d_]
-            m = int(max(0, d_ - radius))
-            M = int(min(len(self._n_by_d_) - 1, d_ + radius))
-            n_in_band = n_by_d_cum[M] - n_by_d_cum[m]
-
-            L = wall_to_wall_distance(len(self.S), len(self.T), d)
-            area = L * radius * 2
-            s0, s1 = self.score_num_seeds(num_seeds=n_in_band, area=area,
-                                          seglen=K, p_match=p_match)
-            scores_by_d_[d_][0], scores_by_d_[d_][1] = s0, s1
-        return scores_by_d_
-
-    def highest_scoring_overlap_band(self, p_min):
-        """Finds the highest scoring diagonal band with respect to both H0 and
-        H1 statistics with segment length calculated such that only overlap
-        similarities are considered.
-
-        Returns:
-            tuple: containing the the highest scoring band and their score for
-            each of H0 and H1 models.  ``((d0_min, d0_max), s0), ((d1_min,
-            d1_max), s1)``.
-        """
-        self.log('scoring possible overlaps between %s and %s' %
-                 (self.S.content_id[:8], self.T.content_id[:8]))
-
-        # FIXME embed this directly in for loop below (only user), the name is
-        # confusing (wrt indexing)
-        ds = range(- len(self.T) + 1, len(self.S))
-        # NOTE we are using 1 - p as an (over)estimate of g (g_max may be too
-        # wild).
-        Ks = [expected_overlap_len(len(self.S), len(self.T), d, 1 - p_min)
-              for d in ds]
-        scores_by_d_ = self.score_diagonal_bands(Ks, p_min)
-
-        d_H0_ = np.argmax(scores_by_d_[:, 0])
-        d_H1_ = np.argmax(scores_by_d_[:, 1])
-        K_H0, K_H1 = Ks[d_H0_], Ks[d_H1_]
-        s_H0, s_H1 = scores_by_d_[d_H0_, 0], scores_by_d_[d_H1_, 1]
-        r_H0, r_H1 = self.band_radius(K_H0), self.band_radius(K_H1)
-
-        d_H0, d_H1 = d_H0_ - self.d0, d_H1_ - self.d0
-        seg_H0 = (d_H0 - r_H0, d_H0 + r_H0)
-        seg_H1 = (d_H1 - r_H1, d_H1 + r_H1)
-        return (seg_H0, s_H0), (seg_H1, s_H1)
-
-    # returns area and alignment length
     def segment_dims(self, d_band=None, a_band=None):
         """Calculate the edit path length :math:`K` and the area of the given
         diagonal/antiodiagonal segment.
@@ -420,132 +323,248 @@ class HomologyFinder(SeedIndex):
             match_p = 0
         return min(match_p, 1)
 
-    def score_segments(self, K_min, p_min, d_band=None, mode='H1'):
-        """Score all antidiagonal segments in the given diagonal band with
-        provided probabilities :math:`K,p` for both :math:`H_0, H_1` models.
+    def find_all_neighbors(self, d_radius, a_radius):
+        """For each seed finds all seeds in its neighborhood defined by:
 
-        Args:
-            K_min (int):
-                minimum required length of homology.
-            p_min (float):
-                Minimum required match probability at each position.
+        .. math::
 
-        Keyword Args:
-            mode (str):
-                either 'H0' or 'H1' specifying the null hypothesis.
-            d_band (tuple): lower and upper diagonals limiting segments of
-                interest.
-        """
-        d_min, d_max = d_band
-        assert d_min >= -len(self.T)
-        assert d_max <= len(self.S)
-        area = (d_max - d_min) * K_min
-        # n_by_a[a] = number of seeds in (d_min, d_max) at anti position a
-        n_by_a = self.seed_count_by_a(d_min, d_max)
-        n_by_a_cum = np.cumsum(n_by_a)
-        scores_by_a = -1e4 * np.ones((len(n_by_a_cum), 2))
-        a_radius = int(np.ceil(K_min / 2))
-        for anti in range(len(n_by_a_cum)):
-            m = max(0, anti - a_radius)
-            M = min(len(n_by_a_cum) - 1, anti + a_radius)
-            n_in_band = n_by_a_cum[M] - n_by_a_cum[m]
-            # NOTE the segment in question at this point has
-            # a_max - a_min = K
-            s0, s1 = self.score_num_seeds(num_seeds=n_in_band, area=area,
-                                          seglen=K_min, p_match=p_min)
-            scores_by_a[anti][0], scores_by_a[anti][1] = s0, s1
+            V_{(d, a)} = \\{(d', a'): |d - d'| < r_d,  |a - a'| < r_a \\}
 
-        return n_by_a_cum, scores_by_a
-
-    def score_seeds(self, K_min, p_min):
-        """Counts neighbors of each seed in an appropriate sense using a
-        Quad-Tree and scores each seed by scoring the segment centered at the
-        coordinates of that seed, cf.
-        :func:`SeedIndex.count_all_seed_neighbors`.
+        This is done using a Quad-Tree in ``O(m lg m)`` time where m is the
+        number of seeds.
 
         Returns:
-            list: list of tuples ``((d, a), p, (s0, s1))`` where ``(d, a)``
-                  is the diagonal coordinates of the seed, ``p`` is the
-                  estimated match probability of a segment of length K_min
-                  centered at the seed and ``(s0, s1)`` are the z-scores with
-                  respect to H0 and H1.
+            list: tuples ``((d, a), neighs)`` where ``neighs`` is a list of
+                  neighbor indices.
         """
-        d_radius = int(np.ceil(self.band_radius(K_min)))
-        a_radius = int(np.ceil(K_min / 2))
-        area = 4 * d_radius * a_radius
-        all_seed_neighbors = self.count_all_seed_neighbors(d_radius, a_radius)
+        # normalize the two diameters so we can use a standard L∞ neighborhood.
+        # typically a_diam is larger, so scale up d values proportionally
+        d_coeff = 1. * a_radius / d_radius
+        radius = a_radius
+
+        all_seeds = list(self.to_diagonal_coordinates(i, j)
+                         for i, j in self.seeds(exclude_trivial=True))
+        if not all_seeds:
+            return []
+        all_seeds_scaled = np.array([(d * d_coeff, a) for d, a in all_seeds])
+        quad_tree = cKDTree(all_seeds_scaled)
+        all_neighs = quad_tree.query_ball_tree(quad_tree, radius,
+                                               p=float('inf'))
+        # all_neighs[i] is the indices of the neighbors of all_seeds[i]; this
+        # always contains the seed itself (i.e always: i in neighs[i])
+        for idx, _ in enumerate(all_neighs):
+            all_neighs[idx].remove(idx)
+        return zip(all_seeds, all_neighs)
+
+    def score_seeds(self, K):
+        """Find the neighbors of each seed in the sense of
+        :func:`find_all_neighbors` and estimates the match probability of the
+        segment centered at the coordinates of each seed.
+
+        Args:
+            K (int): the similarity legnth of interest that dictates
+                neighborhood shapes and estimated match probabilities.
+
+        Returns:
+            list: list of tuples ``((d, a), neighs, p)`` where ``(d, a)``
+                  is the diagonal coordinates of the seed, ``neighs`` is a list
+                  of integer indices of seeds in its diagonal/antidiagonal
+                  neighborhood, and ``p`` is the estimated match probability of
+                  a segment of length ``K`` centered at the seed.
+        """
+        d_radius = int(np.ceil(self.band_radius(K)))
+        a_radius = int(np.ceil(K / 2))
+        seeds_with_neighs = self.find_all_neighbors(d_radius, a_radius)
 
         def _p(d, a, n):
-            return self.estimate_match_probability(
-                n, d_band=(d - d_radius, d + d_radius),
-                a_band=(a - a_radius, a + a_radius)
-            )
+            d_band = (d - d_radius, d + d_radius)
+            a_band = (a - a_radius, a + a_radius)
+            return self.estimate_match_probability(n, d_band=d_band,
+                                                   a_band=a_band)
 
-        def _z(d, a, n):
-            return self.score_num_seeds(num_seeds=n, area=area,
-                                        seglen=K_min, p_match=p_min)
+        return [{'seed': (d, a), 'neighs': neighs, 'p': _p(d, a, len(neighs))}
+                for (d, a), neighs in seeds_with_neighs]
 
-        return [((d, a), _p(d, a, n), _z(d, a, n))
-                for (d, a), n in all_seed_neighbors]
-
-    def similar_segments(self, K_min, p_min, mode='H1', threshold=None):
-        """Find all local homologies of given minium length and match
-        probability according to either specified model (:math:`H_0,H_1`).
-        Additionally the match probability of each segment is estimated and the
-        reported score is based on estimated coordinates of each similar
-        segment.
+    def similar_segments(self, K_min, p_min):
+        """Find all maximal local similarities of given minium length and match
+        probability. Additionally for each segment, the match probability is
+        estimated and H0/H1 scores are calculated.
 
         Args:
             K_min (int):
                 minimum required length of homology.
             p_min (float):
                 Minimum required match probability at each position.
-
-        Keyword Args:
-            mode (str):
-                either 'H0' or 'H1' specifying the null hypothesis.
 
         Yields:
             tuple: coordinates of similar region in diagonal coordinates, with
             a z-score, and estimated match probability:
             ``((d_min, d_max), (a_min, a_max)), z_score, match_prob``.
         """
-        self.log('finding local homologies between %s (%d) and %s (%d)' %
-                 (self.S.content_id[:8], len(self.S),
-                  self.T.content_id[:8], len(self.T)))
-        if threshold is None:
-            threshold = {'H0': 5, 'H1': 0}[mode]
-        key = {'H0': 0, 'H1': 1}[mode]
+        self.log('finding local homologies between %s and %s' %
+                 (self.S.content_id[:8], self.T.content_id[:8]))
         d_radius = int(np.ceil(self.band_radius(K_min)))
         a_radius = int(np.ceil(K_min / 2))
+        scored_seeds = self.score_seeds(K_min)
 
-        all_seeds_scored = self.score_seeds(K_min, p_min)
-        scores_by_d_ = float('-inf') * np.ones(len(self.S) + len(self.T) - 1)
-        for (d, a), _, scores in all_seeds_scored:
-            d_ = d + self.d0
-            scores_by_d_[d_] = max(scores_by_d_[d_], scores[key])
+        def _update_seg(seg, seed):
+            d, a = seed
+            if seg is None:
+                d_band = (d - d_radius, d + d_radius)
+                a_band = (a - a_radius, a + a_radius)
+                return (d_band, a_band), True
+            (d_min, d_max), (a_min, a_max) = seg
+            updated = d > d_max or d < d_min or a > a_max or a < a_min
+            d_min, d_max = min(d, d_min), max(d, d_max)
+            a_min, a_max = min(a, a_min), max(a, a_max)
+            seg = (d_min, d_max), (a_min, a_max)
+            return seg, updated
 
-        d_peaks = find_peaks(scores_by_d_, d_radius, threshold)
-        for d_min_, d_max_ in d_peaks:
-            d_min, d_max = d_min_ - self.d0, d_max_ - self.d0
-            d_band = (d_min, d_max)
-            n_by_a_cum, scores_by_a = self.score_segments(K_min, p_min,
-                                                          d_band=d_band,
-                                                          mode=mode)
-            a_peaks = find_peaks(scores_by_a[:, key], a_radius, threshold)
-            for (a_min, a_max) in a_peaks:
-                segment = ((d_min, d_max), (a_min, a_max))
-                num_seeds_in_segment = n_by_a_cum[a_max] - n_by_a_cum[a_min]
-                match_p = self.estimate_match_probability(
-                    num_seeds_in_segment, d_band=segment[0], a_band=segment[1])
-                # NOTE we if we re-score the segment based on observed seglen
-                # (i.e K_hat) we get scores that are eventually, indicative of
-                # quality only and do not depend on segment length.
-                #
-                # z_score = np.max(scores_by_a[a_min:a_max, key])
-                K_hat, area = self.segment_dims(d_band=(d_min, d_max),
-                                                a_band=(a_min, a_max))
-                z_score = self.score_num_seeds(num_seeds=num_seeds_in_segment,
-                                               area=area, seglen=K_hat,
-                                               p_match=p_min)[key]
-                yield segment, z_score, match_p
+        avail = [rec['p'] >= p_min for rec in scored_seeds]
+        while True:
+            try:
+                seed_idx = avail.index(True)
+            except ValueError:
+                break
+            stack = [seed_idx]
+            avail[seed_idx] = False
+            ps_in_seg = [scored_seeds[seed_idx]['p']]
+            seg = None
+            while stack:
+                idx = stack.pop()
+                ps_in_seg.append(scored_seeds[idx]['p'])
+                seg, _ = _update_seg(seg, scored_seeds[idx]['seed'])
+                for neigh in scored_seeds[idx]['neighs']:
+                    if avail[neigh]:
+                        stack.append(neigh)
+                        avail[neigh] = False
+            if seg is None:
+                break
+            n = self.seed_count(d_band=seg[0], a_band=seg[1])
+            # NOTE the following is more justifiable but it matches the
+            # average. TODO turn this in into an experiment to justify
+            # p_hat = self.estimate_match_probability(
+            #   n, d_band=seg[0], a_band=seg[1])
+            p_hat = sum(ps_in_seg) / len(ps_in_seg)
+            K_hat = seg[1][1] - seg[1][0]
+            K_hat, area_hat = self.segment_dims(d_band=seg[0], a_band=seg[1])
+            # FIXME what should the score be based against? p_min? p_hat?
+            scores = self.score_num_seeds(num_seeds=n, area=area_hat,
+                                          seglen=K_hat, p_match=p_min)
+            yield {'segment': seg, 'p': p_hat, 'scores': scores}
+
+
+class OverlapFinder(HomologyFinder):
+    """A specialized version of HomologyFinder for detecting overlap
+    (suffix-prefix) similarities between sequences (e.g. in a sequencing
+    context)."""
+
+    def band_radii(self, Ks):
+        """Wraps :func:`band_radii` with our mutation parameters and sequence
+        lengths.
+
+        Args:
+            K (int): expected alignment lengths of interest.
+
+        Returns:
+            int: radius of band for desired :attr:`sensitivity`.
+        """
+        return band_radii(Ks, self.g_max, self.sensitivity)
+
+    def seed_count_by_d_(self):
+        """Number of seeds in each diagonal position. Diagonals are
+        ordered from smallest :math:`-|T|` to largest :math:`|S|`.
+        """
+        q = 'SELECT COUNT(a), d_ FROM %s GROUP BY d_' % self.seeds_table
+        count_by_d_ = np.zeros(len(self.S) + len(self.T) - 1)
+        with self.connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(q)
+            for count, d_ in cursor:
+                count_by_d_[d_] = count
+        return count_by_d_
+
+    def score_diagonal_bands(self, Ks, p_match, edge_margin=100):
+        """Scores all diagonal bands looking for specified segment lengths
+        against both H0 and H1.
+
+        Args:
+            Ks (list|int):
+                (minimum) segment lengths of interest for each diagonal
+                position or constant number.
+            d_center (int):
+                center of diagonal band.
+            d_radius (int):
+                radius of diagonal band.
+            edge_margin(int):
+                The width of the diagonal margin ignored on either extreme.
+                This is used to avoid division by small areas in calculating
+                scores.
+
+        Returns:
+            np.array: H0 and H1 scores of each diagonal band.
+        """
+        n_by_d_ = self.seed_count_by_d_()
+        try:
+            iter(Ks)
+            radii = self.band_radii(Ks)
+        except TypeError:
+            radius = self.band_radius(Ks)
+            Ks = np.ones(len(n_by_d_)) * Ks
+            radii = np.ones(len(n_by_d_)) * radius
+
+        assert len(Ks) == len(radii) == len(n_by_d_)
+        n_by_d_cum = np.cumsum(n_by_d_)
+        # Each band gets two scores, one for H0 and one for H1
+        scores_by_d_ = np.zeros((len(n_by_d_cum), 2))
+        for d_ in range(len(n_by_d_)):
+            K = Ks[d_]
+            d = d_ - self.d0
+            # don't score things too close to the edges, the small area
+            # leads to unnecessarily high scores.
+            if d_ < edge_margin or d > len(self.S) - edge_margin:
+                scores_by_d_[d_][0] = float('-inf')
+                scores_by_d_[d_][1] = float('-inf')
+                continue
+
+            radius = radii[d_]
+            m = int(max(0, d_ - radius))
+            M = int(min(len(n_by_d_) - 1, d_ + radius))
+            n_in_band = n_by_d_cum[M] - n_by_d_cum[m]
+
+            L = wall_to_wall_distance(len(self.S), len(self.T), d)
+            area = L * radius * 2
+            s0, s1 = self.score_num_seeds(num_seeds=n_in_band, area=area,
+                                          seglen=K, p_match=p_match)
+            scores_by_d_[d_][0], scores_by_d_[d_][1] = s0, s1
+        return scores_by_d_
+
+    def highest_scoring_overlap_band(self, p_min):
+        """Finds the highest scoring diagonal band with respect to both H0 and
+        H1 statistics with segment length calculated such that only overlap
+        similarities are considered.
+
+        Returns:
+            tuple: containing the the highest scoring band and their score for
+            each of H0 and H1 models.  ``((d0_min, d0_max), s0), ((d1_min,
+            d1_max), s1)``.
+        """
+        self.log('scoring possible overlaps between %s and %s' %
+                 (self.S.content_id[:8], self.T.content_id[:8]))
+
+        # NOTE we are using 1 - p as an (over)estimate of g (g_max may be too
+        # wild).
+        Ks = [expected_overlap_len(len(self.S), len(self.T), d, 1 - p_min)
+              for d in range(- len(self.T) + 1, len(self.S))]
+        scores_by_d_ = self.score_diagonal_bands(Ks, p_min)
+
+        d_H0_ = np.argmax(scores_by_d_[:, 0])
+        d_H1_ = np.argmax(scores_by_d_[:, 1])
+        K_H0, K_H1 = Ks[d_H0_], Ks[d_H1_]
+        s_H0, s_H1 = scores_by_d_[d_H0_, 0], scores_by_d_[d_H1_, 1]
+        r_H0, r_H1 = self.band_radius(K_H0), self.band_radius(K_H1)
+
+        d_H0, d_H1 = d_H0_ - self.d0, d_H1_ - self.d0
+        seg_H0 = (d_H0 - r_H0, d_H0 + r_H0)
+        seg_H1 = (d_H1 - r_H1, d_H1 + r_H1)
+        return (seg_H0, s_H0), (seg_H1, s_H1)

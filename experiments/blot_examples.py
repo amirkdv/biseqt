@@ -35,26 +35,23 @@ def exp_local_alignment():
         junk() + homs[3] + junk() + homs[1] + junk() + homs[2] + junk()
 
     fig = plt.figure()
-    gs = gridspec.GridSpec(1, 2, width_ratios=[30, 1])
-    ax = plt.subplot(gs[0])
-    ax_colorbar = plt.subplot(gs[1])
+    ax = fig.add_subplot(1, 1, 1)
 
-    log('finding homologies')
     HF = HomologyFinder(S, T, **HF_kw)
     match = (1 - gap) * (1 - subst)
 
-    scored_seeds = HF.score_seeds(K_min=K, p_min=match)
+    scored_seeds = HF.score_seeds(K)
     # convert to ij coordinates and leave only the H1 score
-    scored_seeds = [(HF.to_ij_coordinates(d, a), s1)
-                    for (d, a), (s0, s1) in scored_seeds]
-    plot_scored_seeds(ax, ax_colorbar, scored_seeds)
+    scored_seeds = [(HF.to_ij_coordinates(*rec['seed']), rec['p'])
+                    for rec in scored_seeds]
+    plot_scored_seeds(ax, scored_seeds, extent=[0, 1], threshold=match * .9)
 
-    for segment, score, match_p in HF.similar_segments(K_min=K, p_min=match):
-        if segment is None:
-            continue
-        (d_min, d_max), (a_min, a_max) = segment
-        log('homologous segment %s, score = %.2f' % (str(segment), score))
-        plot_similar_segment(ax, segment, lw=5, alpha=.2)
+    for rec in HF.similar_segments(K_min=K, p_min=match):
+        (d_min, d_max), (a_min, a_max) = rec['segment']
+        log('similar segment (len = %d), p=%.2f, scores=%.2f, %.2f --> %s' %
+            (a_max - a_min, rec['p'], rec['scores'][0], rec['scores'][1],
+             str(rec['segment'])))
+        plot_similar_segment(ax, rec['segment'], lw=5, alpha=.2)
 
     adjust_pw_plot(ax, len(S), len(T))
     fig.suptitle('Local alignment with H1 score', fontsize=10)
@@ -147,7 +144,6 @@ def exp_conserved_sequences():
 
     cmap = plt.cm.get_cmap('jet')
 
-    log('finding homologies')
     HF = HomologyFinder(S, T, **HF_kw)
     scores = []
     subst = (1 - gap) * (1 - subst)
