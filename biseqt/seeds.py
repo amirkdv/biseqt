@@ -232,8 +232,7 @@ class SeedIndex(KmerDBWrapper):
                 if self.self_comp and i != j:
                     yield (j, i)
 
-    # FIXME change this to d_min, d_max
-    def seed_count(self, d_band=None):
+    def seed_count(self, d_band=None, a_band=None):
         """Counts the number of seeds either in the whole table or in the
         specified diagonal band.
 
@@ -247,11 +246,20 @@ class SeedIndex(KmerDBWrapper):
             diagonal band.
         """
         query = 'SELECT COUNT(*) FROM %s' % self.seeds_table
+        conds = []
         if d_band is not None:
             assert len(d_band) == 2, 'need a 2-tuple for diagonal band'
             d_min, d_max = d_band
-            query += ' WHERE d_ - %d BETWEEN %d AND %d ' % \
-                (self.d0, d_min, d_max)
+            cond = 'd_ - %d BETWEEN %d AND %d' % \
+                   (self.d0, d_min, d_max)
+            conds.append(cond)
+
+        if a_band is not None:
+            assert len(a_band) == 2, 'need a 2-tuple for antidiagonal band'
+            conds.append('a BETWEEN %d AND %d' % a_band)
+
+        if conds:
+            query += ' WHERE ' + ' AND '.join(conds)
 
         with self.connection() as conn:
             cursor = conn.cursor()
