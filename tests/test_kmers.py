@@ -1,9 +1,10 @@
 # -*- coding: utf-8 -*-
 import pytest
 from itertools import product
+from random import choice
 
 from biseqt.stochastics import rand_seq
-from biseqt.sequence import Alphabet
+from biseqt.sequence import Alphabet, Sequence
 from biseqt.kmers import kmer_as_int, as_kmer_seq, KmerIndex, KmerCache
 
 
@@ -29,6 +30,28 @@ def test_kmer_as_int(alphabet, wordlen):
     as_ints = [kmer_as_int(kmer, alphabet) for kmer in kmers]
     assert len(set(as_ints)) == len(alphabet) ** wordlen, \
         'for a fixed k the integer representation of kmers must be unique'
+
+
+@pytest.mark.parametrize('alphabet',
+                         [Alphabet('ACGT'), Alphabet(['00', '01', '11'])],
+                         ids=['one-letter alphabet', 'two-letter alphabet'])
+@pytest.mark.parametrize('wordlen', [3, 6, 9],
+                         ids=['w = %d' % i for i in [3, 6, 9]])
+def test_kmer_as_int_masked(alphabet, wordlen):
+    S = Sequence(alphabet, contents=tuple([0] * 10))
+    mask = [set([0])]
+    assert all(i is None for i in as_kmer_seq(S, wordlen, mask=mask)), \
+        'masking %s-only kmers should leave no kmers in %s' % (alphabet[0], S)
+    S = Sequence(alphabet, contents=tuple([0] * 10 + [1]))
+    n = sum(i for i in as_kmer_seq(S, wordlen, mask=mask) if i is not None)
+    assert n == 1, 'masking %s-only kmers should leave 1 kmer in %s' % S
+
+    mask = [set([1]), set([2]), set([1, 2])]  # e.g. CG mask
+    S = Sequence(alphabet,
+                 contents=tuple([choice([1, 2]) for _ in range(10)] + [0]))
+    n = sum(int(i is not None) for i in as_kmer_seq(S, wordlen, mask=mask))
+    assert n == 1, 'masking %s-only kmers should leave one %d-mer in %s' % \
+                   ((alphabet[1] + alphabet[2]), wordlen, S)
 
 
 @pytest.mark.parametrize('alphabet',

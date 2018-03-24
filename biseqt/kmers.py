@@ -212,19 +212,30 @@ def kmer_as_int(contents, alphabet):
     return int(as_str, len(alphabet))
 
 
-def as_kmer_seq(seq, wordlen):
+def as_kmer_seq(seq, wordlen, mask=[]):
     """A generator for kmer hit tuples of the form ``(kmer, pos)``. Kmers
     are represented in integer form (cf. :func:`kmer_as_int`).
 
     Args:
         seq (sequence.Sequence): The sequence to be scanned.
+        wordlen (int): Size of kmers.
+        mask (list): A list of sets of integers ``(i_1, ..., i_k)`` which mask
+            kmers (represented by ``None``) if the kmer content (set of letters
+            appearing in the kmer, represented as integers as in
+            :attr:`Sequence.contents`) matches the set.
 
     Returns:
         list: of integers representing kmers.
     """
     assert isinstance(seq, Sequence)
+    assert all(isinstance(lets, set) for lets in mask)
     kmers = []
     for pos in range(len(seq) - wordlen + 1):
+        if mask:
+            lets = set(seq[pos: pos + wordlen])
+            if lets in mask:
+                kmers.append(None)
+                continue
         kmer = kmer_as_int(seq.contents[pos: pos + wordlen], seq.alphabet)
         kmers.append(kmer)
     return kmers
@@ -239,12 +250,16 @@ class KmerDBWrapper(object):
         alphabet (sequence.Alphabet):
             The alphabet for sequences in the database.
         wordlen (int): Length of kmers of interest to this index.
+        mask (list): A list of sets of integers which mask kmers (represented
+            by ``None``), cf. :func:`as_kmer_seq`.
         init_script (str): SQL script to be executed upon initialization;
             typically creates tables needed by the class.
     """
     def __init__(self, name='', path=':memory:', alphabet=None, wordlen=None,
-                 log_level=logging.INFO, init_script=None):
+                 mask=[], log_level=logging.INFO, init_script=None):
         self.name = name
+        assert all(isinstance(lets, set) for lets in mask)
+        self.mask = mask
         assert isinstance(wordlen, int)
         assert isinstance(alphabet, Alphabet)
         assert len(alphabet) <= len(DIGITS), \
@@ -359,7 +374,8 @@ class KmerCache(KmerDBWrapper):
         # cache miss, translate to kmer sequence
         self.log('producing kmer representation for sequence %s' %
                  seq.content_id[:8])
-        kmer_seq = as_kmer_seq(seq, self.wordlen)
+        kmer_seq = [i for i in as_kmer_seq(seq, self.wordlen, mask=self.mask)
+                    if i is not None]
         with self.connection() as conn:
             q = 'INSERT INTO %s (seq, kmers) VALUES (?, ?)' % self.kmers_table
             conn.cursor().execute(q, (seq.content_id, repr(kmer_seq)))
@@ -438,10 +454,11 @@ class KmerIndex(KmerDBWrapper):
         if self.kmer_cache:
             kmer_seq = self.kmer_cache.as_kmer_seq(seq)
         else:
-            kmer_seq = as_kmer_seq(seq, self.wordlen)
+            kmer_seq = as_kmer_seq(seq, self.wordlen, mask=self.mask)
 
         with self.connection() as conn:
-            self.log('indexing kmers for sequence %s' % seq.content_id[:8])
+            self.log('indexing %d-mers for sequence %s (%d)' %
+                     (self.wordlen, seq.content_id[:8], len(seq)))
             cursor = conn.cursor()
             q = 'SELECT seqid FROM %s WHERE seq = ?' % self.log_table
             for seqid in cursor.execute(q, (seq.content_id,)):

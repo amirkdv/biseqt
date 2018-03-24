@@ -41,8 +41,8 @@ class SeedIndex(KmerDBWrapper):
             self.log('seeds for %s and %s already indexed, skipping' %
                      (S.content_id[:8], T.content_id[:8]))
         else:
-            self.log('Indexing seeds for %s and %s.' %
-                     (S.content_id[:8], T.content_id[:8]))
+            self.log('Indexing seeds for %s (%d) and %s (%d).' %
+                     (S.content_id[:8], len(S), T.content_id[:8], len(T)))
             self._index_seeds()
 
     @property
@@ -104,7 +104,7 @@ class SeedIndex(KmerDBWrapper):
         kmer_index_name = '%d_%s' % (self.wordlen, self.name)
         kmer_index = KmerIndex(path=self.path, name=kmer_index_name,
                                wordlen=self.wordlen, alphabet=self.alphabet,
-                               log_level=self.log_level,
+                               log_level=self.log_level, mask=self.mask,
                                kmer_cache=self.kmer_cache)
         kmer_index.index_kmers(self.S)
         if not self.self_comp:
@@ -114,6 +114,8 @@ class SeedIndex(KmerDBWrapper):
 
         def _records():
             for kmer in kmers:
+                if kmer is None:  # masked
+                    continue
                 hits = kmer_index.hits(kmer)
                 if self.self_comp:
                     pairs = chain(combinations(hits, 2),
