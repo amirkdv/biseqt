@@ -253,6 +253,7 @@ class Aligner(object):
         """Frees the allocated memory for the dynamic programming table."""
         lib.dptable_free(self.c_dptable)
 
+    # FIXME check whether we are in context; does it crash if we are not?
     def solve(self):
         """Populates the regions of interest in the dynamic programming table
         and reports the optimal score; if any. This function must be called

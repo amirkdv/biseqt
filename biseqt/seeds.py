@@ -112,8 +112,6 @@ class SeedIndex(KmerDBWrapper):
 
         def _records():
             for kmer in kmers:
-                if kmer is None:  # masked
-                    continue
                 hits = kmer_index.hits(kmer)
                 if self.self_comp:
                     pairs = chain(combinations(hits, 2),

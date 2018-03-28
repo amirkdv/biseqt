@@ -475,7 +475,8 @@ class KmerIndex(KmerDBWrapper):
                 VALUES (?,?,?)
             """ % self.kmers_table
             cursor.executemany(q, ((kmer, seqid, pos)
-                                   for pos, kmer in enumerate(kmer_seq)))
+                                   for pos, kmer in enumerate(kmer_seq)
+                                   if kmer is not None))
             return seqid
 
     def create_sql_index(self):
