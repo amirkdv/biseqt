@@ -21,67 +21,6 @@ from biseqt.pw import Aligner, STD_MODE, LOCAL
 
 
 @with_dumpfile
-def sim_stats_fixed_K(K, ns, n_samples, **kw):
-    def _zero():
-        shape = (len(ns), n_samples)
-        return {'pos': np.zeros(shape), 'neg': np.zeros(shape)}
-
-    A = Alphabet('ACGT')
-    wordlen, p_match = kw['wordlen'], kw['p_match']
-    HF_kw = {
-        'g_max': kw.get('g_max', .6),
-        'sensitivity': kw.get('sensitivity', .99),
-        'wordlen': wordlen,
-        'alphabet': A,
-        'path': kw.get('db_path', ':memory:'),
-        'log_level': kw.get('log_level', logging.WARNING),
-    }
-    sim_data = {
-        'scores': {
-            'band': {'H0': _zero(), 'H1': _zero()},
-            'segment': {'H0': _zero(), 'H1': _zero()},
-        },
-        'HF_kw': HF_kw,
-        'K': K,
-        'ns': ns,
-        'p_match': p_match,
-    }
-    # distribute p_match evenly over gap and subst:
-    subst = gap = 1 - np.sqrt(p_match)
-    assert abs((1 - gap) * (1 - subst) - p_match) < 1e-3
-    M = MutationProcess(A, subst_probs=subst, ge_prob=gap, go_prob=gap)
-
-    for n_idx, n in enumerate(ns):
-        log('evaluating scores for K = %d, n = %d (%d/%d)' %
-            (K, n, n_idx + 1, len(ns)))
-        for idx in range(n_samples):
-            S_rel, T_rel = seq_pair(K, A, mutation_process=M)
-            S_rel += rand_seq(A, n - K)
-            T_rel += rand_seq(A, n - K)
-            S_urel, T_urel = rand_seq(A, n), rand_seq(A, n)
-
-            for key, (S, T) in zip(['pos', 'neg'],
-                                   [(S_rel, T_rel), (S_urel, T_urel)]):
-                HF = HomologyFinder(S, T, **HF_kw)
-
-                # band score
-                # NOTE assume exact knowledge of K and p_match
-                scores_by_d_ = HF.score_diagonal_bands(K, p_match)
-                s0, s1 = scores_by_d_[HF.d0]
-                sim_data['scores']['band']['H0'][key][n_idx][idx] = s0
-                sim_data['scores']['band']['H1'][key][n_idx][idx] = s1
-
-                # segment score
-                d_radius = int(np.ceil(HF.band_radius(K)))
-                d_band = (-d_radius, d_radius)
-                _, scores_by_a = HF.score_segments(K, p_match, d_band=d_band)
-                s0, s1 = scores_by_a[int(K/2)]
-                sim_data['scores']['segment']['H0'][key][n_idx][idx] = s0
-                sim_data['scores']['segment']['H1'][key][n_idx][idx] = s1
-    return sim_data
-
-
-@with_dumpfile
 def sim_stats_varying_K_p(Ks, ps, n_samples, **kw):
     def _zero():
         shape = (len(Ks), len(ps), n_samples)
@@ -278,34 +217,6 @@ def sim_stats_real_homologies(seqs, pws, **kw):
                 #     tx = alignment.transcript
                 #     print seg_info['p'], 1. * tx.count('M') / len(tx)
     return sim_data
-
-
-def plot_stats_fixed_K(sim_data, suffix=''):
-    K, ns, p_match = sim_data['K'], sim_data['ns'], sim_data['p_match']
-    wordlen = sim_data['HF_kw']['wordlen']
-    n_samples = sim_data['scores']['band']['H0']['pos'].shape[1]
-    scores = sim_data['scores']
-
-    for key in ['band', 'segment']:
-        fig = plt.figure(figsize=(11, 5))
-        ax_H0 = fig.add_subplot(1, 2, 1)
-        ax_H1 = fig.add_subplot(1, 2, 2)
-        scores = sim_data['scores'][key]
-
-        kw = {'marker': 'o', 'markersize': 3, 'alpha': .8}
-        for mode, ax in zip(['H0', 'H1'], [ax_H0, ax_H1]):
-            for case, color in zip(['pos', 'neg'], ['g', 'r']):
-                label = ('' if case == 'pos' else 'non-') + 'homologous'
-                plot_with_sd(ax, ns, scores[mode][case], axis=1, color=color,
-                             label=label, **kw)
-            ax.set_ylabel('%s %s score' % (mode, key), fontsize=10)
-            ax.set_xlabel('sequence length', fontsize=10)
-        ax_H0.legend(loc='upper right', fontsize=10)
-
-        fig.suptitle('K = %d, w = %d, no. samples = %d, match prob= %.2f' %
-                     (K, wordlen, n_samples, p_match), fontsize=10)
-        fig.tight_layout(rect=[0, 0.03, 1, 0.95])
-        savefig(fig, 'stats[%s]%s.png' % (key, suffix))
 
 
 def plot_stats_varying_K_p(sim_data, select_Ks, select_ps, suffix=''):
@@ -591,24 +502,6 @@ def plot_stats_real_homologies(sim_data, suffix='', naming_style=None):
             'real_homologies[coords-classifier]%s.png' % suffix)
 
 
-# the point of this experiment is: band score is unreliable and segment score
-# is reliable. After this experiment we exclusively look at segment score.
-def exp_stats_performance_fixed_K():
-    K = 200  # similar segment length
-    ns = [K * 2 ** i for i in range(8)]  # sequence lengths
-    n_samples = 50  # number samples for each n
-
-    wordlen = 5
-    p_match = .8
-
-    suffix = '[K=%d]' % K
-    dumpfile = 'stats%s.txt' % suffix
-    sim_data = sim_stats_fixed_K(
-        K, ns, n_samples, p_match=p_match, wordlen=wordlen,
-        dumpfile=dumpfile, ignore_existing=False)
-    plot_stats_fixed_K(sim_data, suffix=suffix)
-
-
 def exp_stats_performance_varying_K_p():
     Ks = [200 * i for i in range(1, 9)]
     select_Ks = Ks[1], Ks[3], Ks[5]
@@ -662,6 +555,5 @@ def exp_stats_real_homologies():
 
 
 if __name__ == '__main__':
-    exp_stats_performance_fixed_K()
     exp_stats_performance_varying_K_p()
     exp_stats_real_homologies()
