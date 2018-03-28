@@ -385,7 +385,7 @@ class HomologyFinder(SeedIndex):
         return [{'seed': (d, a), 'neighs': neighs, 'p': _p(d, a, len(neighs))}
                 for (d, a), neighs in seeds_with_neighs]
 
-    def similar_segments(self, K_min, p_min):
+    def similar_segments(self, K_min, p_min, at_least_one=False):
         """Find all maximal local similarities of given minium length and match
         probability. Additionally for each segment, the match probability is
         estimated and H0/H1 scores are calculated.
@@ -421,6 +421,11 @@ class HomologyFinder(SeedIndex):
             return seg, updated
 
         avail = [rec['p'] >= p_min for rec in scored_seeds]
+        if not any(avail) and at_least_one:
+            # we're obliged to return something, let the highest probability
+            # seed go through.
+            assert len(scored_seeds), 'no seeds found while at_least_one=True'
+            avail[np.argmax([rec['p'] for rec in scored_seeds])] = True
         while True:
             try:
                 seed_idx = avail.index(True)
