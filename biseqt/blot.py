@@ -457,9 +457,8 @@ class WordBlot(SeedIndex):
             p_hat = sum(ps_in_seg) / len(ps_in_seg)
             K_hat = seg[1][1] - seg[1][0]
             K_hat, area_hat = self.segment_dims(d_band=seg[0], a_band=seg[1])
-            # FIXME what should the score be based against? p_min? p_hat?
             scores = self.score_num_seeds(num_seeds=n, area=area_hat,
-                                          seglen=K_hat, p_match=p_min)
+                                          seglen=K_hat, p_match=p_hat)
             yield {'segment': seg, 'p': p_hat, 'scores': scores}
 
 
