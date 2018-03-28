@@ -12,6 +12,7 @@ Submodules
    biseqt.kmers
    biseqt.seeds
    biseqt.blot
+   biseqt.util
 
 Module contents
 ---------------
