@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
 .. wikisection:: overview
-    :title: (6) Alignment-free local homology detection with Word-Blot
+    :title: (6) Alignment-free local similarity detection with Word-Blot
 
     The :mod:`biseqt.blot` module implements the WordBlot algorithm.
 
@@ -194,7 +194,7 @@ def H1_moments(alphabet_len, wordlen, area, seglen, p_match):
                 - 2wp^{2w}
         \\end{aligned}
 
-    where :math:`w` is the word length, :math:`K` is the homology length, and
+    where :math:`w` is the word length, :math:`K` is the similarity length, and
     :math:`p` is the match probability.
     """
     mu_H0, sd_H0 = H0_moments(alphabet_len, wordlen, area)
@@ -211,7 +211,7 @@ def H1_moments(alphabet_len, wordlen, area, seglen, p_match):
 
 
 class WordBlot(SeedIndex):
-    """A homology finder based on m-dependent CLT statistics.
+    """A similarity finder based on m-dependent CLT statistics.
 
     Attributes:
         g_max (float):
@@ -225,9 +225,6 @@ class WordBlot(SeedIndex):
         self.sensitivity = sensitivity
         super(WordBlot, self).__init__(S, T, **kw)
 
-    # NOTE if p_min method works the whole H0/H1 score becomes unnecessary
-    # (note that p estimation incorporates both models anyway; all model info
-    # is still used). We should also probably report the scores anyway?
     def score_num_seeds(self, **kw):
         """Calculates our key central statistics based on m-dependent CLT. For
         a given observation of number of seeds in a region of interest (ROI),
@@ -243,14 +240,13 @@ class WordBlot(SeedIndex):
             area (int|float):
                 Area of the ROI.
             seglen (int):
-                Homologous segment length in H1 model.
+                Similar segment length in H1 model.
             p_match (float):
-                Expected match probability at each position.
+                Expected match probability at any given position.
 
         Returns:
             tuple (float): z-scores in H0 and H1 models
         """
-        # FIXME calculate all this stuff once, keep in object
         num_seeds = kw['num_seeds']
         area = kw['area']
 
@@ -400,7 +396,7 @@ class WordBlot(SeedIndex):
 
         Args:
             K_min (int):
-                minimum required length of homology.
+                minimum required length of similarity.
             p_min (float):
                 Minimum required match probability at each position.
 
@@ -409,7 +405,7 @@ class WordBlot(SeedIndex):
             a z-score, and estimated match probability:
             ``((d_min, d_max), (a_min, a_max)), z_score, match_prob``.
         """
-        self.log('finding local homologies between %s and %s' %
+        self.log('finding local similarities between %s and %s' %
                  (self.S.content_id[:8], self.T.content_id[:8]))
         d_radius = int(np.ceil(self.band_radius(K_min)))
         a_radius = int(np.ceil(K_min / 2))
@@ -584,7 +580,8 @@ class WordBlotOverlap(WordBlot):
 
 
 class WordBlotMultiple(SeedIndexMultiple):
-    """A multiple sequence homology finder based on m-dependent CLT statistics.
+    """A multiple sequence similarity finder based on m-dependent CLT
+    statistics.
 
     Attributes:
         g_max (float):

@@ -131,7 +131,7 @@ def test_local_similarity(wordlen, K, n):
     rec = found_homs[0]
     ((d_min, d_max), (a_min, a_max)) = rec['segment']
     assert d_min < 10 and d_max > -10 and a_min < K, \
-        'The coordinates of the homologous segment must be correct'
+        'The coordinates of the similar segment must be correct'
     assert 0.8 * p_match <= rec['p'] <= 1.2 * p_match, \
         'estimated match prob should be roughly close to true value'
 
