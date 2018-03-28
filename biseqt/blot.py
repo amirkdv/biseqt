@@ -3,18 +3,18 @@
 .. wikisection:: overview
     :title: (6) Alignment-free local homology detection with Word-Blot
 
-    The :mod:`biseqt.blot` module implements the Word-Blot algorithm.
+    The :mod:`biseqt.blot` module implements the WordBlot algorithm.
 
-    >>> from biseqt.blot import HomologyFinder
+    >>> from biseqt.blot import WordBlot
     >>> from biseqt.sequence import Sequence, Alphabet
     >>> from biseqt.stochastics import rand_seq, MutationProcess
     >>> A = Alphabet('ACGT')
     >>> S = rand_seq(A, 100)
     >>> M = MutationProcess(A, go_prob=.1, ge_prob=.1, subst_probs=.2)
     >>> T, _ = M.mutate(S)
-    >>> HF = HomologyFinder(S, T, wordlen=5, alphabet=A, g_max=.5, \
+    >>> WB = WordBlot(S, T, wordlen=5, alphabet=A, g_max=.5, \
                             sensitivity=.99)
-    >>> list(HF.similar_segments(50, .7))
+    >>> list(WB.similar_segments(50, .7))
     [(((-28, 7), (0, 99)), 1.1988215486845972, 0.7630903108462143)]
     >>>
 """
@@ -210,7 +210,7 @@ def H1_moments(alphabet_len, wordlen, area, seglen, p_match):
     return mu_H1, sd_H1
 
 
-class HomologyFinder(SeedIndex):
+class WordBlot(SeedIndex):
     """A homology finder based on m-dependent CLT statistics.
 
     Attributes:
@@ -223,7 +223,7 @@ class HomologyFinder(SeedIndex):
         assert 0 < g_max < 1 and 0 < sensitivity < 1
         self.g_max = g_max
         self.sensitivity = sensitivity
-        super(HomologyFinder, self).__init__(S, T, **kw)
+        super(WordBlot, self).__init__(S, T, **kw)
 
     # NOTE if p_min method works the whole H0/H1 score becomes unnecessary
     # (note that p estimation incorporates both models anyway; all model info
@@ -459,8 +459,8 @@ class HomologyFinder(SeedIndex):
             yield {'segment': seg, 'p': p_hat, 'scores': scores}
 
 
-class OverlapFinder(HomologyFinder):
-    """A specialized version of HomologyFinder for detecting overlap
+class WordBlotOverlap(WordBlot):
+    """A specialized version of WordBlot for detecting overlap
     (suffix-prefix) similarities between sequences (e.g. in a sequencing
     context)."""
 
@@ -575,7 +575,7 @@ class OverlapFinder(HomologyFinder):
         return (seg_H0, s_H0), (seg_H1, s_H1)
 
 
-class HomologyFinderMultiple(SeedIndexMultiple):
+class WordBlotMultiple(SeedIndexMultiple):
     """A multiple sequence homology finder based on m-dependent CLT statistics.
 
     Attributes:
@@ -589,7 +589,7 @@ class HomologyFinderMultiple(SeedIndexMultiple):
         assert 0 < g_max < 1 and 0 < sensitivity < 1
         self.g_max = g_max
         self.sensitivity = sensitivity
-        super(HomologyFinderMultiple, self).__init__(*seqs, **kw)
+        super(WordBlotMultiple, self).__init__(*seqs, **kw)
 
     def band_radius(self, K):
         """Wraps :func:`band_radius` with our mutation parameters and sequence

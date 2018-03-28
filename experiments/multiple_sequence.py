@@ -3,7 +3,7 @@ import numpy as np
 
 from biseqt.sequence import Alphabet
 from biseqt.stochastics import rand_seq, MutationProcess
-from biseqt.blot import HomologyFinderMultiple
+from biseqt.blot import WordBlotMultiple
 from util import savefig, get_seqs_from_mse, plot_roc
 
 import matplotlib
@@ -49,14 +49,14 @@ def exp_three_syntehtic_sequences():
     def junk(): return rand_seq(A, K / 2)
 
     S, T1, T2 = junk() + S + junk(), junk() + T1 + junk(), junk() + T2 + junk()
-    HF_kw = {'g_max': .2, 'sensitivity': .9, 'alphabet': A, 'wordlen': wordlen,
+    WB_kw = {'g_max': .2, 'sensitivity': .9, 'alphabet': A, 'wordlen': wordlen,
              'path': ':memory:'}
-    HF = HomologyFinderMultiple(S, T1, T2, **HF_kw)
+    WB = WordBlotMultiple(S, T1, T2, **WB_kw)
 
     p_min = (1-gap) * (1-subst)
     print p_min
-    scored_seeds = [(HF.to_ij_coordinates(*rec['seed']), rec['p'])
-                    for rec in HF.score_seeds(100)]
+    scored_seeds = [(WB.to_ij_coordinates(*rec['seed']), rec['p'])
+                    for rec in WB.score_seeds(100)]
 
     fig = plt.figure()
     ax = fig.gca(projection=Axes3D.name)
@@ -68,7 +68,7 @@ def exp_three_syntehtic_sequences():
     ax.set_ylabel('Sequence 2')
     ax.set_zlabel('Sequence 3')
 
-    ax.set_title('H0 score of all exactly matching %d-mers' % wordlen)
+    ax.set_title('estimated similarity at exactly matching %d-mers' % wordlen)
 
     fig.tight_layout()
     savefig(fig, 'multiple-sequence.png', dpi=300)
@@ -115,7 +115,7 @@ def exp_biological_multiple_sequences():
     maf_path = 'data/actb/actb-7vet.maf'
     wordlen = 6
     A = Alphabet('ACGT')
-    HF_kw = {'g_max': .4, 'sensitivity': .9, 'alphabet': A,
+    WB_kw = {'g_max': .4, 'sensitivity': .9, 'alphabet': A,
              'wordlen': wordlen, 'path': ':memory:'}
 
     # 3 sequences for scatter plot
@@ -126,10 +126,10 @@ def exp_biological_multiple_sequences():
     seqs = [A.parse(seq.upper())
             for id_, seq in get_seqs_from_mse(maf_path, fmt='maf')
             if id_ in ids]
-    HF = HomologyFinderMultiple(*seqs, **HF_kw)
+    WB = WordBlotMultiple(*seqs, **WB_kw)
     p_min = .8
-    scored_seeds = [(HF.to_ij_coordinates(*rec['seed']), rec['p'])
-                    for rec in HF.score_seeds(50)]
+    scored_seeds = [(WB.to_ij_coordinates(*rec['seed']), rec['p'])
+                    for rec in WB.score_seeds(50)]
     print 'found %d seeds for %d sequences' % (len(scored_seeds), len(ids))
 
     fig = plt.figure(figsize=(10, 5))
@@ -163,9 +163,9 @@ def exp_biological_multiple_sequences():
     seqs = [A.parse(seq.upper())
             for id_, seq in get_seqs_from_mse(maf_path, fmt='maf')
             if id_ in ids]
-    HF = HomologyFinderMultiple(*seqs, **HF_kw)
-    scored_seeds = [(HF.to_ij_coordinates(*rec['seed']), rec['p'])
-                    for rec in HF.score_seeds(50)]
+    WB = WordBlotMultiple(*seqs, **WB_kw)
+    scored_seeds = [(WB.to_ij_coordinates(*rec['seed']), rec['p'])
+                    for rec in WB.score_seeds(50)]
     print 'found %d seeds for %d sequences' % (len(scored_seeds), len(ids))
     pos, neg = [], []
     for coords, p_hat in scored_seeds:

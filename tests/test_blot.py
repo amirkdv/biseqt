@@ -8,7 +8,7 @@ from biseqt.blot import find_peaks
 from biseqt.blot import band_radius
 from biseqt.blot import expected_overlap_len
 from biseqt.blot import band_radii
-from biseqt.blot import HomologyFinder, OverlapFinder
+from biseqt.blot import WordBlot, WordBlotOverlap
 
 
 def test_find_peaks():
@@ -116,17 +116,17 @@ def test_local_similarity(wordlen, K, n):
     gap, subst = .05, .05
     A = Alphabet('ACGT')
     M = MutationProcess(A, subst_probs=subst, ge_prob=gap, go_prob=gap)
-    HF_kw = {'g_max': .2, 'sensitivity': .99, 'alphabet': A,
+    WB_kw = {'g_max': .2, 'sensitivity': .99, 'alphabet': A,
              'wordlen': wordlen, 'path': ':memory:'}
 
     hom = rand_seq(A, K)
     S = A.parse(str(hom) + str(rand_seq(A, n - K)))
     T = A.parse(str(M.mutate(hom)[0]) + str(rand_seq(A, n-K)))
-    HF = HomologyFinder(S, T, **HF_kw)
+    WB = WordBlot(S, T, **WB_kw)
 
     p_match = (1 - gap) * (1 - subst) * .9
 
-    found_homs = list(HF.similar_segments(K, p_match))
+    found_homs = list(WB.similar_segments(K, p_match))
     assert len(found_homs) == 1, 'Only one similar segment should be found'
     rec = found_homs[0]
     ((d_min, d_max), (a_min, a_max)) = rec['segment']
@@ -146,15 +146,15 @@ def test_overlap_detection(wordlen, K, n):
     gap, subst = .05, .05
     A = Alphabet('ACGT')
     M = MutationProcess(A, subst_probs=subst, ge_prob=gap, go_prob=gap)
-    HF_kw = {'g_max': .2, 'sensitivity': .99, 'alphabet': A,
+    WB_kw = {'g_max': .2, 'sensitivity': .99, 'alphabet': A,
              'wordlen': wordlen, 'path': ':memory:'}
 
     p_match = (1 - gap) * (1 - subst)
     overlap = rand_seq(A, K)
     S = rand_seq(A, n - K) + overlap
     T = M.mutate(overlap)[0] + rand_seq(A, n - K)
-    OF = OverlapFinder(S, T, **HF_kw)
-    (seg0, s0), (seg1, s1) = OF.highest_scoring_overlap_band(p_match)
+    WBO = WordBlotOverlap(S, T, **WB_kw)
+    (seg0, s0), (seg1, s1) = WBO.highest_scoring_overlap_band(p_match)
     assert seg0[0] * .8 < n - K < 1.25 * seg0[1], \
         'H0 must detect the correct overlap'
     assert seg1[0] * .8 < n - K < 1.25 * seg1[1], \

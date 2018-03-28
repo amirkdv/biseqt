@@ -5,7 +5,7 @@ from scipy.ndimage.filters import gaussian_filter1d
 
 import logging
 
-from biseqt.blot import HomologyFinder, find_peaks, band_radii, band_radius
+from biseqt.blot import WordBlot, find_peaks, band_radii, band_radius
 from biseqt.sequence import Alphabet
 from biseqt.stochastics import rand_seq, MutationProcess
 
@@ -89,7 +89,7 @@ def sim_stats_varying_K_p(Ks, ps, n_samples, **kw):
 
     A = Alphabet('ACGT')
     wordlen = kw['wordlen']
-    HF_kw = {
+    WB_kw = {
         'g_max': kw.get('g_max', .6),
         'sensitivity': kw.get('sensitivity', .99),
         'wordlen': wordlen,
@@ -104,7 +104,7 @@ def sim_stats_varying_K_p(Ks, ps, n_samples, **kw):
         'd_hat': _zero(),
         'a_hat': _zero(),
         'r_hat': _zero(),
-        'HF_kw': HF_kw,
+        'WB_kw': WB_kw,
         'Ks': Ks,
         'ps': ps,
     }
@@ -128,11 +128,11 @@ def sim_stats_varying_K_p(Ks, ps, n_samples, **kw):
 
             for key, (S, T) in zip(['pos', 'neg'],
                                    [(S_rel, T_rel), (S_urel, T_urel)]):
-                HF = HomologyFinder(S, T, **HF_kw)
+                WB = WordBlot(S, T, **WB_kw)
 
                 def _len(seg): return seg[1][1] - seg[1][0]
 
-                results = list(HF.similar_segments(K_min, p_min,
+                results = list(WB.similar_segments(K_min, p_min,
                                                    at_least_one=True))
                 # pick the longest detected homology
                 sim_data['K_hat'][key][K_idx][p_idx][idx] = max(
@@ -155,7 +155,7 @@ def sim_stats_varying_K_p(Ks, ps, n_samples, **kw):
 def sim_stats_real_homologies(seqs, pws, **kw):
     A = Alphabet('ACGT')
     wordlen, K_min, p_min = kw['wordlen'], kw['K_min'], kw['p_min']
-    HF_kw = {
+    WB_kw = {
         'g_max': kw.get('g_max', .6),
         'sensitivity': kw.get('sensitivity', .99),
         'wordlen': wordlen,
@@ -188,7 +188,7 @@ def sim_stats_real_homologies(seqs, pws, **kw):
         'opseq_seeds': {key: [] for key in pws},
         'homologous_tpr': {key: 0 for key in pws},
         'segments': {key: {} for key in pws},
-        'HF_kw': HF_kw,
+        'WB_kw': WB_kw,
         'similar_segments_kw': similar_segments_kw,
         'aligner_kw': aligner_kw,
     }
@@ -198,25 +198,25 @@ def sim_stats_real_homologies(seqs, pws, **kw):
         S = seqs[id1]
         T = seqs[id2]
 
-        HF = HomologyFinder(S, T, **HF_kw)
+        WB = WordBlot(S, T, **WB_kw)
         sim_data['seeds'][(id1, id2)] = {
-            HF.to_ij_coordinates(*rec['seed']): rec['p']
-            for rec in HF.score_seeds(K_min)
+            WB.to_ij_coordinates(*rec['seed']): rec['p']
+            for rec in WB.score_seeds(K_min)
         }
         log('-> found %d exactly matching %d-mers' %
             (len(sim_data['seeds'][(id1, id2)]), wordlen))
 
         # separate +/- seeds with their estimated probabilities
-        band_r = band_radius(K_min, sim_data['HF_kw']['g_max'],
-                             sim_data['HF_kw']['sensitivity'])
+        band_r = band_radius(K_min, sim_data['WB_kw']['g_max'],
+                             sim_data['WB_kw']['sensitivity'])
         in_band = np.zeros((len(S), len(T)))
         opseq_seeds = list(seeds_from_opseq(opseq, wordlen))
         for _, seed in opseq_seeds:
-            d, a = HF.to_diagonal_coordinates(*seed)
+            d, a = WB.to_diagonal_coordinates(*seed)
             for d_ in range(d - band_r, d + band_r):
                 # FIXME what should the range be?
                 for a_ in range(a - band_r, a + band_r):
-                    i_, j_ = HF.to_ij_coordinates(d_, a_)
+                    i_, j_ = WB.to_ij_coordinates(d_, a_)
                     if 0 <= i_ < len(S) and 0 <= j_ < len(T):
                         in_band[i_, j_] = 1
         sim_data['opseq_seeds'][(id1, id2)] = opseq_seeds
@@ -229,7 +229,7 @@ def sim_stats_real_homologies(seqs, pws, **kw):
         log('separated +/- seeds')
 
         sim_data['segments'][(id1, id2)] = list(
-            HF.similar_segments(**similar_segments_kw)
+            WB.similar_segments(**similar_segments_kw)
         )
         log('found %d similar segments' %
             len(sim_data['segments'][(id1, id2)]))
@@ -248,7 +248,7 @@ def sim_stats_real_homologies(seqs, pws, **kw):
         for seg_info in sim_data['segments'][(id1, id2)]:
             (d_min, d_max), (a_min, a_max) = seg_info['segment']
             for d, a in product(range(d_min, d_max), range(a_min, a_max)):
-                i, j = HF.to_ij_coordinates(d, a)
+                i, j = WB.to_ij_coordinates(d, a)
                 if 0 <= i < len(S) and 0 <= j < len(T):
                     in_band_segs[i, j] = 1
         true_positive = np.sum(in_band_segs * hom_coords)
@@ -259,7 +259,7 @@ def sim_stats_real_homologies(seqs, pws, **kw):
         # actual alignments
         for idx, seg_info in enumerate(sim_data['segments'][(id1, id2)]):
             (d_min, d_max), (a_min, a_max) = seg_info['segment']
-            corners = [HF.to_ij_coordinates(d, a)
+            corners = [WB.to_ij_coordinates(d, a)
                        for d, a in product(*seg_info['segment'])]
             i_start = min(i for i, _ in corners)
             j_start = min(j for _, j in corners)
@@ -310,7 +310,7 @@ def plot_stats_fixed_K(sim_data, suffix=''):
 
 def plot_stats_varying_K_p(sim_data, select_Ks, select_ps, suffix=''):
     Ks, ps = sim_data['Ks'], sim_data['ps']
-    wordlen = sim_data['HF_kw']['wordlen']
+    wordlen = sim_data['WB_kw']['wordlen']
     n_samples = sim_data['scores']['H0']['pos'].shape[2]
     scores = sim_data['scores']
 
@@ -422,8 +422,8 @@ def plot_stats_varying_K_p(sim_data, select_Ks, select_ps, suffix=''):
         ax_r.set_ylim(-min(Ks), min(Ks))
         ax_r.set_xlabel('similarity length K')
         ax_r.set_ylabel('estimated diagonal band width of similarity')
-        g_max = sim_data['HF_kw']['g_max']
-        sensitivity = sim_data['HF_kw']['sensitivity']
+        g_max = sim_data['WB_kw']['g_max']
+        sensitivity = sim_data['WB_kw']['sensitivity']
         ax_r.plot(Ks, band_radii(Ks, g_max, sensitivity), **truth_kw)
         ax_r.legend(loc='best', fontsize=8)
 

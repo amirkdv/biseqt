@@ -2,7 +2,7 @@ import os
 from itertools import combinations
 import logging
 from biseqt.util import ProgressIndicator
-from biseqt.blot import HomologyFinder
+from biseqt.blot import WordBlotOverlap
 from biseqt.sequence import Alphabet
 from biseqt.stochastics import rand_seq, MutationProcess, rand_read
 from biseqt.kmers import KmerCache
@@ -78,8 +78,8 @@ def sim_overlap_discovery(reads_path, wordlen=None, db_path=None, gap=None,
     KC_kw = {'alphabet': A, 'wordlen': wordlen, 'path': db_path,
              'log_level': logging.WARN}
     kmer_cache = KmerCache(**KC_kw)
-    HF_kw = {'g_max': gap, 'sensitivity': .9, 'kmer_cache': kmer_cache}
-    HF_kw.update(**KC_kw)
+    WB_kw = {'g_max': gap, 'sensitivity': .9, 'kmer_cache': kmer_cache}
+    WB_kw.update(**KC_kw)
 
     reads, mappings = load_mapped_reads(reads_path)
 
@@ -102,8 +102,8 @@ def sim_overlap_discovery(reads_path, wordlen=None, db_path=None, gap=None,
     indic.start()
     for i, j in combinations(range(num_reads), 2):
         indic.progress()
-        HF = HomologyFinder(reads[i], reads[j], **HF_kw)
-        (seg0, s0), (seg1, s1) = HF.highest_scoring_overlap_band(p_min=p_match)
+        WB = WordBlotOverlap(reads[i], reads[j], **WB_kw)
+        (seg0, s0), (seg1, s1) = WB.highest_scoring_overlap_band(p_min=p_match)
         if _overlaps(mappings[i], mappings[j]):
             sim_data['scores']['s0_pos'].append(s0)
             sim_data['scores']['s1_pos'].append(s1)
@@ -116,9 +116,9 @@ def sim_overlap_discovery(reads_path, wordlen=None, db_path=None, gap=None,
 
 
 def exp_overlap_detection():
-    # NOTE when mutation probabilities for HF are lower than that of actual
+    # NOTE when mutation probabilities for WB are lower than that of actual
     # mutaions we don't see any of the overlaps! (which is good). Also note
-    # that since we are mutation both reads the HF and mutation probabilities
+    # that since we are mutation both reads the WB and mutation probabilities
     # are significantly different.
 
     wordlen = 8

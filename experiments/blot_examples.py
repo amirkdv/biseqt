@@ -3,7 +3,7 @@ import matplotlib.gridspec as gridspec
 import matplotlib
 import logging
 from matplotlib import pyplot as plt
-from biseqt.blot import HomologyFinder
+from biseqt.blot import WordBlot
 from biseqt.sequence import Alphabet
 from biseqt.stochastics import rand_seq, MutationProcess
 from util import plot_seeds, plot_scored_seeds
@@ -19,7 +19,7 @@ def exp_local_alignment():
     A = Alphabet('ACGT')
 
     # NOTE I can drive sensitivity to 0 and get decent results
-    HF_kw = {'g_max': .2, 'sensitivity': .9, 'alphabet': A, 'wordlen': wordlen,
+    WB_kw = {'g_max': .2, 'sensitivity': .9, 'alphabet': A, 'wordlen': wordlen,
              'path': ':memory:', 'log_level': logging.INFO}
 
     M = MutationProcess(A, subst_probs=subst, ge_prob=gap, go_prob=gap)
@@ -37,21 +37,21 @@ def exp_local_alignment():
     fig = plt.figure()
     ax = fig.add_subplot(1, 1, 1)
 
-    HF = HomologyFinder(S, T, **HF_kw)
+    WB = WordBlot(S, T, **WB_kw)
     match = (1 - gap) * (1 - subst)
 
-    scored_seeds = HF.score_seeds(K)
+    scored_seeds = WB.score_seeds(K)
     # convert to ij coordinates and leave only the H1 score
-    scored_seeds = [(HF.to_ij_coordinates(*rec['seed']), rec['p'])
+    scored_seeds = [(WB.to_ij_coordinates(*rec['seed']), rec['p'])
                     for rec in scored_seeds]
-    plot_scored_seeds(ax, scored_seeds, extent=[0, 1], threshold=match * .9)
+    plot_scored_seeds(ax, scored_seeds, extent=[0, 1], threshold=match)
 
-    for rec in HF.similar_segments(K_min=K, p_min=match):
+    for rec in WB.similar_segments(K_min=K, p_min=match):
         (d_min, d_max), (a_min, a_max) = rec['segment']
         log('similar segment (len = %d), p=%.2f, scores=%.2f, %.2f --> %s' %
             (a_max - a_min, rec['p'], rec['scores'][0], rec['scores'][1],
              str(rec['segment'])))
-        plot_similar_segment(ax, rec['segment'], lw=5, alpha=.2)
+        plot_similar_segment(ax, rec['segment'], lw=5, alpha=.2, c='b')
 
     adjust_pw_plot(ax, len(S), len(T))
     fig.suptitle('Local alignments', fontsize=10)
@@ -68,7 +68,7 @@ def exp_repeat_regions():
     A = Alphabet('ACGT')
 
     # NOTE I can drive sensitivity to 0 and get decent results
-    HF_kw = {'g_max': .2, 'sensitivity': .9, 'alphabet': A, 'wordlen': wordlen,
+    WB_kw = {'g_max': .2, 'sensitivity': .9, 'alphabet': A, 'wordlen': wordlen,
              'path': ':memory:', 'log_level': logging.INFO}
 
     M = MutationProcess(A, subst_probs=subst, ge_prob=gap, go_prob=gap)
@@ -83,33 +83,30 @@ def exp_repeat_regions():
     homs = [M.mutate(homs[i])[0] for i in range(len(homs))]
     T = S
 
-    fig = plt.figure(figsize=(10, 5))
-    ax_H0 = fig.add_subplot(1, 2, 1)
-    ax_H1 = fig.add_subplot(1, 2, 2)
+    fig = plt.figure(figsize=(6, 5))
+    ax = fig.add_subplot(1, 1, 1)
 
     log('finding repeat regions')
-    HF = HomologyFinder(S, T, **HF_kw)
+    WB = WordBlot(S, T, **WB_kw)
     match = (1 - gap) * (1 - subst)
 
-    scored_seeds = HF.score_seeds(K_min=K, p_min=match)
+    scored_seeds = WB.score_seeds(K)
     # convert to ij coordinates and exclude half of the table (mirror image)
-    scored_seeds = [(HF.to_ij_coordinates(d, a), scores)
-                    for (d, a), scores in scored_seeds if d <= 0]
+    scored_seeds = [(WB.to_ij_coordinates(*rec['seed']), rec['p'])
+                    for rec in scored_seeds if rec['seed'][0] <= 0]
 
-    for idx, (mode, thresh, ax) in enumerate(zip(['H0', 'H1'],
-                                                 [10, 0], [ax_H0, ax_H1])):
-        seeds = [((i, j), scores[idx]) for (i, j), scores in scored_seeds]
-        plot_scored_seeds(ax, seeds)
-        kw = {'K_min': K, 'p_min': match, 'mode': mode, 'threshold': thresh}
-        for segment, score, match_p in HF.similar_segments(**kw):
-            if segment is None:
-                continue
-            (d_min, d_max), (a_min, a_max) = segment
-            log('(%s) repeat region %s, score = %.2f' %
-                (mode, str(segment), score))
-            plot_similar_segment(ax, segment, lw=5, alpha=.2)
-        adjust_pw_plot(ax, len(S), len(T))
-        ax.set_title('Repeat regions (%s score)' % mode, y=1.05, fontsize=10)
+    plot_scored_seeds(ax, scored_seeds)
+    for rec in WB.similar_segments(K_min=K, p_min=match):
+        segment, scores, p_hat = rec['segment'], rec['scores'], rec['p']
+        (d_min, d_max), (a_min, a_max) = rec['segment']
+        if d_min > 0:
+            # self comparison, exclude half of the table
+            continue
+        log('repeat region %s, scores = (%.2f, %.2f), p = %.2f' %
+            (str(segment), scores[0], scores[1], p_hat))
+        plot_similar_segment(ax, segment, c='b', lw=5, alpha=.2)
+    adjust_pw_plot(ax, len(S), len(T))
+    ax.set_title('Repeat regions', y=1.05, fontsize=10)
 
     fig.suptitle('word len. = %d, min. hom. len = %d, min.match = %.2f' %
                  (wordlen, K, match), fontsize=8)
@@ -123,7 +120,7 @@ def exp_conserved_sequences():
     K = 500
     wordlen = 8
     A = Alphabet('ACGT')
-    HF_kw = {'g_max': gap, 'sensitivity': .9, 'alphabet': A,
+    WB_kw = {'g_max': gap, 'sensitivity': .9, 'alphabet': A,
              'wordlen': wordlen, 'path': ':memory:', 'log_level': logging.INFO}
 
     M_std = MutationProcess(A, subst_probs=.2, ge_prob=.15, go_prob=.15)
@@ -144,25 +141,25 @@ def exp_conserved_sequences():
 
     cmap = plt.cm.get_cmap('jet')
 
-    HF = HomologyFinder(S, T, **HF_kw)
-    scores = []
+    WB = WordBlot(S, T, **WB_kw)
     subst = (1 - gap) * (1 - subst)
-    for segment, score, match_p in HF.similar_segments(K_min=K, p_min=subst):
+    for rec in WB.similar_segments(K_min=K, p_min=subst):
+        segment, scores, p_hat = rec['segment'], rec['scores'], rec['p']
         (d_min, d_max), (a_min, a_max) = segment
-        log('homologous segment: %s, score = %.2f, estim. match = %.2f' %
-            (str(segment), score, match_p))
-        color = cmap(match_p)[:3]
-        plot_similar_segment(ax, segment, color=color, alpha=.3)
-        scores.append(score)
+        log('homologous segment: %s, scores = %.2f, %.2f, p = %.2f' %
+            (str(segment), scores[0], scores[1], p_hat))
+        color = cmap(p_hat)[:3]
+        plot_similar_segment(ax, segment, color=color, alpha=.3, lw=10)
 
     norm = matplotlib.colors.Normalize(vmin=0, vmax=1)
-    plot_seeds(ax, HF.seeds())
+    plot_seeds(ax, WB.seeds())
     adjust_pw_plot(ax, len(S), len(T))
 
     matplotlib.colorbar.ColorbarBase(ax_colorbar, cmap=cmap, norm=norm,
                                      orientation='vertical')
 
-    fig.suptitle('Uncovering mutation probability variability', fontsize=10)
+    fig.suptitle('Conserved sequences with variable sequence similarity',
+                 fontsize=10)
     fig.tight_layout()
     savefig(fig, 'conserved_sequences.png')
 
