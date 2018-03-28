@@ -164,8 +164,9 @@ def seq_in_mse(alignment, id_):
 
 def get_seqs_from_mse(mse_path, fmt='maf'):
     alignments = list(AlignIO.parse(mse_path, fmt))
-    # NOTE trust the first alignment to have all the ids
-    ids = list(rec.id for rec in alignments[0])
+    ids = set()
+    for alignment in alignments:
+        ids = ids.union(set(rec.id for rec in alignment))
     for i in ids:
         seq = np.concatenate([seq_in_mse(alignment, i)
                               for alignment in alignments])
