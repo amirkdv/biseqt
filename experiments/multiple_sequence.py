@@ -113,7 +113,7 @@ def seeds_from_maf(maf_path, wordlen, ids_of_interest=[]):
 
 def exp_biological_multiple_sequences():
     maf_path = 'data/actb/actb-7vet.maf'
-    wordlen = 5
+    wordlen = 6
     A = Alphabet('ACGT')
     HF_kw = {'g_max': .4, 'sensitivity': .9, 'alphabet': A,
              'wordlen': wordlen, 'path': ':memory:'}

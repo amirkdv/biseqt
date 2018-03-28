@@ -615,7 +615,7 @@ class HomologyFinderMultiple(SeedIndexMultiple):
         Returns:
             float: estimated match probability
         """
-        power = self.wordlen * len(self.seqs)
+        power = self.wordlen * (len(self.seqs) - 1)
         word_p_null = (1. / len(self.alphabet)) ** power
 
         if num_seeds > 0:
