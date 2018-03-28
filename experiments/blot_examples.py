@@ -54,7 +54,7 @@ def exp_local_alignment():
         plot_similar_segment(ax, rec['segment'], lw=5, alpha=.2)
 
     adjust_pw_plot(ax, len(S), len(T))
-    fig.suptitle('Local alignment with H1 score', fontsize=10)
+    fig.suptitle('Local alignments', fontsize=10)
 
     fig.tight_layout()
     savefig(fig, 'local_alignment.png')

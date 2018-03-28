@@ -6,6 +6,7 @@ from bisect import bisect_left
 from scipy.special import erf
 
 from util import log, color_code, plot_with_sd, with_dumpfile, savefig
+from util import estimate_gap_probs_in_opseq
 from real_homologies import sample_opseq
 
 from biseqt.blot import band_radius
@@ -19,8 +20,7 @@ def time_in_band(K, g, r):
 
 def sample_edit_sequences(K, g, n_samples, bio=False):
     if bio:
-        opseqs_path = 'data/leishmenia/blasr_opseqs.fa'
-        opseqs_path = 'data/acta2/acta2_opseqs.fa'
+        opseqs_path = 'data/acta2/acta2-7vet-opseqs.fa'
         with open(opseqs_path) as f:
             opseq = f.read().strip()
         return sample_opseq(opseq, K, g, n_samples)
@@ -33,15 +33,15 @@ def sample_edit_sequences(K, g, n_samples, bio=False):
 @with_dumpfile
 def sim_time_in_band(K, gs, rs, n_samples, **kw):
     sim_data = {
-        'in_band': {'sim': np.zeros((len(gs), len(rs), n_samples)),
-                    'bio': np.zeros((len(gs), len(rs), n_samples))},
+        'in_band': {'simulated': np.zeros((len(gs), len(rs), n_samples)),
+                    'biological': np.zeros((len(gs), len(rs), n_samples))},
         'gs': gs,
         'rs': rs,
         'K': K,
     }
     for g_idx, g in enumerate(gs):
         d0 = K
-        for key, bio in zip(['sim', 'bio'], [False, True]):
+        for key, bio in zip(['simulated', 'biological'], [False, True]):
             log('sampling homologies for K = %d, g = %.2f (%s data)' %
                 (K, g, key))
             samples = sample_edit_sequences(K, g, n_samples, bio=bio)
@@ -69,8 +69,7 @@ def plot_time_in_band(sim_data, cutoff_epsilon, path=None):
     gs = sim_data['gs']
     rs = sim_data['rs']
     K = sim_data['K']
-    assert sim_data['in_band']['sim'].shape == sim_data['in_band']['bio'].shape
-    n_samples = sim_data['in_band']['sim'].shape[2]
+    n_samples = sim_data['in_band']['simulated'].shape[2]
 
     fig = plt.figure(figsize=(12, 7))
 
@@ -80,11 +79,13 @@ def plot_time_in_band(sim_data, cutoff_epsilon, path=None):
     ax_sim = fig.add_subplot(grids[0, 1])  # simulation
     ax_bio = fig.add_subplot(grids[1, 1])  # biological data
 
-    colors = color_code(gs)
+    colors = color_code(gs, cmap='PuOr')
 
     for g_idx, (color, g) in enumerate(zip(colors, gs)):
-        r_lim = rs[bisect_left(sim_data['in_band']['bio'][g_idx].mean(axis=1),
-                               1 - .5 * cutoff_epsilon)]
+        r_lim = rs[bisect_left(
+            sim_data['in_band']['biological'][g_idx].mean(axis=1),
+            1 - .5 * cutoff_epsilon
+        )]
         r_cutoff = band_radius(K, g, 1 - cutoff_epsilon)
 
         vs = [erf(r / (2 * np.sqrt(g * K))) for r in rs]
@@ -96,34 +97,38 @@ def plot_time_in_band(sim_data, cutoff_epsilon, path=None):
         ax_mod.axvline(r_cutoff, color=color, lw=5, alpha=.3)
 
         ax_mod.grid(True)
-        ax_mod.set_xlabel('Band radius')
+        ax_mod.set_xlabel('diagonal band radius')
         ax_mod.set_ylabel('proportion of time in band')
         ax_mod.legend(loc='lower right', fontsize=12)
         ax_mod.set_xlim(0, r_lim)
         ax_mod.set_ylim(0, 1.2)
 
-        for key, ax in zip(['sim', 'bio'], [ax_sim, ax_bio]):
+        for key, ax in zip(['simulated', 'biological'], [ax_sim, ax_bio]):
             res = sim_data['in_band'][key][g_idx, :, :]
 
-            plot_with_sd(ax, rs, res, axis=1, y_max=1, color=color, lw=1.5)
+            r_eff = rs[bisect_left(vs, 1 - cutoff_epsilon)]
+            in_band_eff = sim_data['in_band'][key][g_idx, r_eff, :].mean()
+            label = '\%% of time in band: %d' % int(100 * in_band_eff)
+
+            plot_with_sd(ax, rs, res, axis=1, y_max=1, color=color, lw=1.5,
+                         label=label)
             ax.axvline(r_cutoff, color=color, lw=5, alpha=.3)
             ax.set_xlim(0, r_lim)
             ax.set_ylim(0, 1.2)
             ax.grid(True)
-            ax.set_title('%s. data' % key, fontsize=8)
+            ax.set_title('%s data' % key, fontsize=10)
+            ax.set_xlabel('diagonal band radius', fontsize=8)
+            ax.set_ylabel('proportion of time in band', fontsize=8)
+            ax.legend(loc='lower right', fontsize=8)
 
-            r_cutoff = rs[bisect_left(vs, 1 - cutoff_epsilon)]
-            print 'g = %.2f: effective mean time in band (%s) = %f' % \
-                (g, key, sim_data['in_band'][key][g_idx, r_cutoff, :].mean())
-
-    fig.suptitle('$K = %d$, \# samples = $%d$' % (K, n_samples))
+    fig.suptitle('$K = %d$, no. samples = $%d$' % (K, n_samples))
     fig.tight_layout(rect=[0, 0.03, 1, 0.95])
     savefig(fig, path, comment='time in band simulation')
 
 
 def exp_time_in_band():
     K = 500
-    gs = [.08, .2]
+    gs = [.05, .15]
     n_samples = 1000
     rs = range(0, 400)
     cutoff_epsilon = 1e-6  # for vertical lines showing calculated cutoff
@@ -134,5 +139,47 @@ def exp_time_in_band():
     plot_time_in_band(sim_data, cutoff_epsilon, path=plot_path)
 
 
+def exp_gap_probs():
+    opseqs_path = 'data/acta2/acta2-7vet-opseqs.fa'
+
+    with open(opseqs_path) as f:
+        opseq = f.read().strip()
+
+    fig = plt.figure(figsize=(5, 5))
+    ax = fig.add_subplot(1, 1, 1)
+
+    K = 2000
+    sample_len = 2 * K
+    gap_hat = 0
+    while gap_hat < .05:
+        start = np.random.randint(0, len(opseq) - sample_len)
+        sample = opseq[start:start + sample_len]
+        gap_hat = 1. * (sample.count('I') + sample.count('D')) / sample_len
+
+    g = gap_hat
+    sim_sample = ''.join(np.random.choice(list('MID'),
+                                          p=[1 - g, g / 2, g / 2],
+                                          size=sample_len))
+
+    radius = 200
+    gaps = estimate_gap_probs_in_opseq(sample, radius)
+    ax.plot(range(len(gaps)), gaps, c='g', lw=1, alpha=.9,
+            label='biological')
+
+    sim_gaps = estimate_gap_probs_in_opseq(sim_sample, radius)
+    ax.plot(range(len(sim_gaps)), sim_gaps, c='k', lw=1,
+            alpha=.9, label='simulated')
+
+    ax.axhline(y=gap_hat, c='k', alpha=.2, lw=3)
+    ax.grid(True)
+    ax.legend(fontsize=11)
+    ax.set_xlim(radius, sample_len - radius)
+    ax.set_xlabel('position in edit sequence')
+    ax.set_ylabel('estimated gap probability ($r=%d$)' % radius)
+    ax.set_ylim(-.1, 1)
+    savefig(fig, 'gap probabilities.png')
+
+
 if __name__ == '__main__':
     exp_time_in_band()
+    exp_gap_probs()

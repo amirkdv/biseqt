@@ -13,6 +13,7 @@ from Bio import AlignIO
 from itertools import combinations
 import pysam
 from biseqt.stochastics import rand_seq
+import re
 
 
 plt.rc('text', usetex=True)
@@ -20,7 +21,7 @@ plt.rc('text', usetex=True)
 
 def log(msg, newline=True):
     wrapper = TextWrapper(initial_indent='* ', subsequent_indent='  ',
-                          width=100)
+                          width=120)
     sys.stderr.write('\n'.join(wrapper.wrap(msg)) + '\n' if newline else '')
 
 
@@ -155,35 +156,33 @@ def sam_to_opseqs(sam_path, opseq_path):
         f.write('\n')
 
 
-def seq_in_maf(alignment, id_):
+def seq_in_mse(alignment, id_):
     for rec in alignment:
         if rec.id == id_:
             return np.array(list(rec))
     return np.array([])
 
 
-def get_seqs_from_maf(maf_path):
-    alignments = list(AlignIO.parse(maf_path, 'maf'))
+def get_seqs_from_mse(mse_path, fmt='maf'):
+    alignments = list(AlignIO.parse(mse_path, fmt))
     # NOTE trust the first alignment to have all the ids
     ids = list(rec.id for rec in alignments[0])
     for i in ids:
-        seq = np.concatenate([seq_in_maf(alignment, i)
+        seq = np.concatenate([seq_in_mse(alignment, i)
                               for alignment in alignments])
-        assert seq[0] != '-', \
-            'Alignments starting with gaps not allowed (pw vs indiv madness)'
         yield i, ''.join(x for x in seq if x != '-')
 
 
-def get_pws_from_maf(maf_path):
-    alignments = list(AlignIO.parse(maf_path, 'maf'))
+def pws_from_mse(mse_path, fmt='maf'):
+    alignments = list(AlignIO.parse(mse_path, fmt))
     # NOTE trust the first alignment to have all the ids
     ids = list(rec.id for rec in alignments[0])
 
     for i, j in combinations(ids, 2):
         seqs_i, seqs_j = [], []
         for alignment in alignments:
-            seq_i_in_aln = seq_in_maf(alignment, i)
-            seq_j_in_aln = seq_in_maf(alignment, j)
+            seq_i_in_aln = seq_in_mse(alignment, i)
+            seq_j_in_aln = seq_in_mse(alignment, j)
             if len(seq_i_in_aln) == 0:
                 seq_i_in_aln = ['-'] * len(seq_j_in_aln)
             elif len(seq_j_in_aln) == 0:
@@ -219,10 +218,35 @@ def get_pws_from_maf(maf_path):
         yield i, j, opseq
 
 
-# maf_to_individual_fasta('data/actb/actb-7vet.maf', 'data/actb/actb-7vet.fa')
-def maf_to_individual_fasta(maf_path, out_path):
+# some opseqs have long chains of insertion or deletion. This leads to weird
+# similarity stats (e.g. segment of length 150 with 98% match followed by 100
+# bases of deletion gives a total match probability of ~ 50%). For the purpose
+# of identifying the correct length of alignment we remove any stretch of N
+# deletions or insertions from the opseq
+def pws_to_opseq(pw_path, opseq_path, max_gap_length=100):
+    def _remove_long_gaps(opseqs, max_gap_length):
+        p = re.compile('D{%d,}|I{%d,}' % (max_gap_length, max_gap_length))
+        for opseq in opseqs:
+            yield p.sub('', opseq)
+
+    with open(pw_path) as f_pw:
+        log('loading pairwise opseqs from %s' % pw_path)
+        opseqs = [(name, opseq) for opseq, name, _ in load_fasta(f_pw)]
+
+    opseqs_clean = list(_remove_long_gaps([opseq for name, opseq in opseqs],
+                                         max_gap_length))
+    with open(opseq_path, 'w') as f_ops:
+        log('writing cleaned up opseqs to %s' % pw_path)
+        for (name, opseq), opseq_clean in zip(opseqs, opseqs_clean):
+            log('[%s] removed %d edit ops (out of %d) from opseq for %s' %
+                (opseq_path, len(opseq) - len(opseq_clean), len(opseq), name))
+            f_ops.write('> (cleaned, max_gap = %d) %s\n%s\n' %
+                        (max_gap_length, name, opseq_clean))
+
+
+def mse_to_individual_fasta(mse_path, out_path, fmt='maf'):
     """ Usage:
-        >>> maf_to_individual_fasta('foo.maf', 'foo_indiv.fa')
+        >>> mse_to_individual_fasta('foo.maf', 'foo_indiv.fa')
 
     Each entry in output is in FASTA format where each record is:
 
@@ -230,23 +254,25 @@ def maf_to_individual_fasta(maf_path, out_path):
         [seq]  (concatenated and - removed as per maf)
     """
     with open(out_path, 'w') as f:
-        for id_, seq in get_seqs_from_maf(maf_path):
+        for id_, seq in get_seqs_from_mse(mse_path, fmt=fmt):
+            log('[%s] extracting "%s" (%d) from MSE' %
+                (out_path, id_, len(seq)))
             f.write('> %s\n%s\n' % (id_, seq))
 
 
-# maf_to_pw_fasta('data/actb/actb-7vet.maf', 'data/actb/actb-7vet-pws.fa')
-def maf_to_pw_fasta(maf_path, out_path):
+def mse_to_pw_fasta(mse_path, out_path, fmt='maf'):
     """ Usage:
-        >>> maf_to_pw_fasta('foo.maf', 'foo_pw.fa')
+        >>> mse_to_pw_fasta('foo.maf', 'foo_pw.fa')
 
     Each entry in output is in FASTA format where each record is:
 
-        > [id0]:[id1] (of pair of sequnces as per maf)
+        > [id0]:[id1] (of pair of sequnces as per MSE)
         [opsseq]  (in SMID, concatenated and double - removed)
     """
     with open(out_path, 'w') as f:
-        for i, j, opseq in get_pws_from_maf(maf_path):
-            log('producing pairwise alignment for %s, %s' % (i, j))
+        for i, j, opseq in pws_from_mse(mse_path, fmt=fmt):
+            log('[%s] producing pairwise alignment for %s, %s' %
+                (out_path, i, j))
             f.write('> %s:%s\n%s\n' % (i, j, opseq))
 
 
@@ -342,11 +368,11 @@ def estimate_match_probs_in_opseq(opseq, radius, projection=None):
     start = opseq[:2 * radius]
     n_M = start.count('M')
     for i in range(radius, len(opseq) - radius):
+        probs[i] = n_M / (2. * radius)
         if opseq[i - radius] == 'M':
             n_M -= 1
         if opseq[i + radius] == 'M':
             n_M += 1
-        probs[i] = n_M / (2. * radius)
 
     assert len(probs) == len(opseq)
     if projection is not None:
@@ -355,14 +381,11 @@ def estimate_match_probs_in_opseq(opseq, radius, projection=None):
         i, j = 0, 0
         for op, prob in zip(opseq, probs):
             probs_proj[{1: i, 2: j}[projection]] = prob
-            if op in 'MS':
+            if op in 'MSD':
                 i += 1
+            if op in 'MSI':
                 j += 1
-            elif op == 'D':
-                i += 1
-            elif op == 'I':
-                j += 1
-        probs = probs_proj[:{1: i, 2: j}[projection]]
+        probs = probs_proj[:{1: i, 2: j}[projection] + 1]
 
     return probs
 
@@ -377,7 +400,7 @@ def seeds_from_opseq(opseq, wordlen):
     i, j = 0, 0
     for idx, op in enumerate(opseq):
         if opseq[idx:idx + wordlen] == 'M' * wordlen:
-            yield i, j
+            yield idx, (i, j)
         if op in 'MS':
             i, j = i + 1, j + 1
         elif op in 'D':
@@ -417,7 +440,7 @@ def plot_with_sd(ax, xs, ys, axis=None, n_sds=1, y_max=None, color='k', **kw):
         ys_h = np.minimum(ys_h, y_max)
 
     ax.plot(xs, means, color=color, **kw)
-    ax.fill_between(xs, ys_l, ys_h, facecolor=color, edgecolor=color, alpha=.2)
+    ax.fill_between(xs, ys_l, ys_h, facecolor=color, edgecolor=color, alpha=.1)
 
 
 def savefig(fig, path, dpi=270, grid_all=True, comment=None):
@@ -428,6 +451,7 @@ def savefig(fig, path, dpi=270, grid_all=True, comment=None):
     fig.savefig(os.path.join(PLOT_DIR, path), dpi=dpi)
     log('created plot%s at %s\n' %
         ('' if comment is None else ' "%s"' % comment, path))
+    plt.close(fig)
 
 
 # Call this after all work (e.g. plot_seeds, plot_global_alignment, etc) is
@@ -457,22 +481,26 @@ def plot_seeds(ax, seeds, c='k'):
     ax.grid(True)
 
 
-def plot_scored_seeds(ax, scored_seeds, threshold=5):
+def plot_scored_seeds(ax, scored_seeds, threshold=5, extent=None, **kw):
     idx_S, idx_T, cs, ss = [], [], [], []
-    cmap = plt.cm.get_cmap('jet')
-    max_score = max(score for _, score in scored_seeds)
+    cmap = plt.cm.get_cmap('Greys')
+    if extent is None:
+        max_score = max(score for _, score in scored_seeds)
+        min_score = min(score for _, score in scored_seeds)
+    else:
+        min_score, max_score = extent
     for (i, j), score in scored_seeds:
         idx_S.append(i)
         idx_T.append(j)
         cs.append(cmap(score/max_score)[:3])
         ss.append(10 if threshold and score > threshold else 1)
     # x and y are flipped when going from matrix notation to plotting.
-    ax.scatter(idx_T, idx_S, facecolor=cs, s=ss, lw=0, alpha=.7)
+    ax.scatter(idx_T, idx_S, facecolor=cs, s=ss, lw=0, **kw)
 
     # colorbar Axes
     ax_c = make_axes_locatable(ax).append_axes('right', size='4%', pad=0.05)
 
-    norm = matplotlib.colors.Normalize(vmin=0, vmax=max_score)
+    norm = matplotlib.colors.Normalize(vmin=min_score, vmax=max_score)
     matplotlib.colorbar.ColorbarBase(ax_c, cmap=cmap, norm=norm,
                                      orientation='vertical')
 
@@ -493,8 +521,8 @@ def plot_similar_segment(ax, segment, color='k', **kw):
     ax.fill(seg_xs, seg_ys, facecolor=color, edgecolor=color, **kw)
 
 
-def opseq_path(opseq):
-    xs, ys = [0], [0]
+def opseq_path(opseq, x0=0, y0=0):
+    xs, ys = [x0], [y0]
     for op in opseq:
         if op in 'MS':
             xs.append(xs[-1] + 1)
@@ -512,6 +540,10 @@ def plot_global_alignment(ax, opseq, **kw):
     ys, xs = opseq_path(opseq)
     ax.plot(xs, ys, **kw)
 
+
+def plot_local_alignment(ax, opseq, i, j, **kw):
+    ys, xs = opseq_path(opseq, x0=i, y0=j)
+    ax.plot(xs, ys, **kw)
 
 # =============================================================================
 # STATISTICAL HELPERS
@@ -626,6 +658,7 @@ def plot_classifier(path, pos, neg, labels=None, classifier='>', title=''):
         labels = ['positive', 'negative']
     assert len(labels) == 2
 
+    log('plotting classifier')
     fig = plt.figure(figsize=(12, 8))
 
     grids = gridspec.GridSpec(2, 2, height_ratios=[2.5, 1])
@@ -646,7 +679,9 @@ def plot_classifier(path, pos, neg, labels=None, classifier='>', title=''):
     plot_roc_pv(ax_p_roc, pos, neg, classifier=classifier, **kw)
 
     for [ax, ax_title] in zip([ax_cdf, ax_roc, ax_p_roc],
-                              ['Score CDF', 'ROC', 'Predictive ROC']):
+                              ['Score CDF',
+                               'ROC (%d samples)' % (len(pos) + len(neg)),
+                               'Predictive ROC']):
         ax.set_title(ax_title, fontsize=12)
         ax.tick_params(labelsize=12)
     fig.suptitle(title, fontsize=12)
