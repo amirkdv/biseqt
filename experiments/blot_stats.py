@@ -21,7 +21,7 @@ from biseqt.pw import Aligner, STD_MODE, LOCAL
 
 
 @with_dumpfile
-def sim_stats_varying_K_p(Ks, ps, n_samples, **kw):
+def sim_simulated_K_p(Ks, ps, n_samples, **kw):
     def _zero():
         shape = (len(Ks), len(ps), n_samples)
         return {'pos': np.zeros(shape), 'neg': np.zeros(shape)}
@@ -91,7 +91,7 @@ def sim_stats_varying_K_p(Ks, ps, n_samples, **kw):
 
 
 @with_dumpfile
-def sim_stats_real_homologies(seqs, pws, **kw):
+def sim_comp_aligned_genes(seqs, pws, **kw):
     A = Alphabet('ACGT')
     wordlen, K_min, p_min = kw['wordlen'], kw['K_min'], kw['p_min']
     WB_kw = {
@@ -219,7 +219,7 @@ def sim_stats_real_homologies(seqs, pws, **kw):
     return sim_data
 
 
-def plot_stats_varying_K_p(sim_data, select_Ks, select_ps, suffix=''):
+def plot_simulated_K_p(sim_data, select_Ks, select_ps, suffix=''):
     Ks, ps = sim_data['Ks'], sim_data['ps']
     wordlen = sim_data['WB_kw']['wordlen']
     n_samples = sim_data['scores']['H0']['pos'].shape[2]
@@ -250,7 +250,7 @@ def plot_stats_varying_K_p(sim_data, select_Ks, select_ps, suffix=''):
     fig_by_K.suptitle('w = %d, no. samples = %d' % (wordlen, n_samples),
                       fontsize=10)
     fig_by_K.tight_layout(rect=[0, 0.03, 1, 0.95])
-    savefig(fig_by_K, 'stats[score-by-K]%s.png' % suffix)
+    savefig(fig_by_K, 'simulations[score-by-K]%s.png' % suffix)
 
     # ======================================
     # varying p for select Ks
@@ -272,7 +272,7 @@ def plot_stats_varying_K_p(sim_data, select_Ks, select_ps, suffix=''):
     fig_by_p.suptitle('w = %d, no. samples = %d' % (wordlen, n_samples),
                       fontsize=10)
     fig_by_p.tight_layout(rect=[0, 0.03, 1, 0.95])
-    savefig(fig_by_p, 'stats[score-by-p]%s.png' % suffix)
+    savefig(fig_by_p, 'simulations[score-by-p]%s.png' % suffix)
 
     # ======================================
     K_hats = sim_data['K_hat']
@@ -310,7 +310,7 @@ def plot_stats_varying_K_p(sim_data, select_Ks, select_ps, suffix=''):
     fig_hat.suptitle('w = %d, no. samples = %d' % (wordlen, n_samples),
                      fontsize=10)
     fig_hat.tight_layout(rect=[0, 0.03, 1, 0.95])
-    savefig(fig_hat, 'stats[K,p-hat]%s.png' % suffix)
+    savefig(fig_hat, 'simulations[K,p-hat]%s.png' % suffix)
 
     # ======================================
     # estimated diagonal and antidiagonal position and band radius for select
@@ -350,10 +350,10 @@ def plot_stats_varying_K_p(sim_data, select_Ks, select_ps, suffix=''):
         ax_a.set_xlabel('similarity length K')
         ax_a.set_ylabel('estimated antidiagonal position of similarity')
         ax_a.legend(loc='best', fontsize=8)
-    savefig(fig_hat, 'stats[r,d,a-hat]%s.png' % suffix)
+    savefig(fig_hat, 'simulations[r,d,a-hat]%s.png' % suffix)
 
 
-def plot_stats_real_homologies(sim_data, suffix='', naming_style=None):
+def plot_comp_aligned_genes(sim_data, suffix='', naming_style=None):
     seqlens = sim_data['seqlens']
     pws = sim_data['pws']
     K_min = sim_data['similar_segments_kw']['K_min']
@@ -486,23 +486,23 @@ def plot_stats_real_homologies(sim_data, suffix='', naming_style=None):
     ax_K_aln.set_aspect('equal')
     ax_K_aln.set_title('Similarity length at identified segments')
 
-    plot_classifier('real_homologies[seed-classifier]%s.png' % suffix,
+    plot_classifier('comp_aligned_genes[seed-classifier]%s.png' % suffix,
                     sim_data['seed_pos'], sim_data['seed_neg'],
                     labels=['homologous', 'non-homologous'])
 
     for fig in [fig_profiles, fig_p, fig_p_aln, fig_K_aln, fig_seeds,
                 fig_coord_classifier]:
         fig.tight_layout()
-    savefig(fig_profiles, 'real_homologies[profiles]%s.png' % suffix)
-    savefig(fig_p, 'real_homologies[p-hat]%s.png' % suffix)
-    savefig(fig_p_aln, 'real_homologies[p-hat-aln]%s.png' % suffix)
-    savefig(fig_K_aln, 'real_homologies[K-hat-aln]%s.png' % suffix)
-    savefig(fig_seeds, 'real_homologies[seeds]%s.png' % suffix)
+    savefig(fig_profiles, 'comp_aligned_genes[profiles]%s.png' % suffix)
+    savefig(fig_p, 'comp_aligned_genes[p-hat]%s.png' % suffix)
+    savefig(fig_p_aln, 'comp_aligned_genes[p-hat-aln]%s.png' % suffix)
+    savefig(fig_K_aln, 'comp_aligned_genes[K-hat-aln]%s.png' % suffix)
+    savefig(fig_seeds, 'comp_aligned_genes[seeds]%s.png' % suffix)
     savefig(fig_coord_classifier,
-            'real_homologies[coords-classifier]%s.png' % suffix)
+            'comp_aligned_genes[coords-classifier]%s.png' % suffix)
 
 
-def exp_stats_performance_varying_K_p():
+def exp_simulated_K_p():
     Ks = [200 * i for i in range(1, 9)]
     select_Ks = Ks[1], Ks[3], Ks[5]
 
@@ -513,32 +513,34 @@ def exp_stats_performance_varying_K_p():
     wordlen = 5
 
     suffix = '[varying-K-p]'
-    dumpfile = 'stats%s.txt' % suffix
-    sim_data = sim_stats_varying_K_p(
+    dumpfile = 'simulations%s.txt' % suffix
+    sim_data = sim_simulated_K_p(
         Ks, ps, n_samples, wordlen=wordlen,
         dumpfile=dumpfile, ignore_existing=False)
-    plot_stats_varying_K_p(sim_data, select_Ks, select_ps, suffix=suffix)
+    plot_simulated_K_p(sim_data, select_Ks, select_ps, suffix=suffix)
 
 
-def exp_stats_real_homologies():
-    p_min = .6
+def exp_comp_aligned_genes():
     A = Alphabet('ACGT')
 
-    # wordlen = 5
-    # K_min = 100
-    # style = 'ucsc'
-    # suffix = '[actb][p=%.2f]' % p_min
-    # dumpfile = 'real_homologies%s.txt' % suffix
-    # seqs_path = 'data/actb/actb-7vet.fa'
-    # pws_path = 'data/actb/actb-7vet-pws.fa'
-
-    wordlen = 8
+    p_min = .8
+    # p_min = .6
+    wordlen = 5
     K_min = 100
-    style = 'ensembl'
-    suffix = '[irx1][p=%.2f]' % p_min
-    dumpfile = 'real_homologies%s.txt' % suffix
-    seqs_path = 'data/irx1/irx1-vert-amniota-indiv.fa'
-    pws_path = 'data/irx1/irx1-vert-amniota-pws.fa'
+    style = 'ucsc'
+    suffix = '[actb][p=%.2f]' % p_min
+    dumpfile = 'comp_aligned_genes%s.txt' % suffix
+    seqs_path = 'data/actb/actb-7vet.fa'
+    pws_path = 'data/actb/actb-7vet-pws.fa'
+
+    # p_min = .6
+    # wordlen = 8
+    # K_min = 100
+    # style = 'ensembl'
+    # suffix = '[irx1][p=%.2f]' % p_min
+    # dumpfile = 'comp_aligned_genes%s.txt' % suffix
+    # seqs_path = 'data/irx1/irx1-vert-amniota-indiv.fa'
+    # pws_path = 'data/irx1/irx1-vert-amniota-pws.fa'
 
     with open(seqs_path) as f:
         seqs = {name: A.parse(fill_in_unknown(seq.upper(), A))
@@ -548,12 +550,12 @@ def exp_stats_real_homologies():
         pws = {tuple(name.split(':')): seq for seq, name, _ in load_fasta(f)}
         pws = {key: value for key, value in pws.items()
                if key[0] in seqs and key[1] in seqs}
-    sim_data = sim_stats_real_homologies(
+    sim_data = sim_comp_aligned_genes(
         seqs, pws, wordlen=wordlen, p_min=p_min, K_min=K_min,
         dumpfile=dumpfile, ignore_existing=False)
-    plot_stats_real_homologies(sim_data, suffix=suffix, naming_style=style)
+    plot_comp_aligned_genes(sim_data, suffix=suffix, naming_style=style)
 
 
 if __name__ == '__main__':
-    exp_stats_performance_varying_K_p()
-    exp_stats_real_homologies()
+    exp_simulated_K_p()
+    exp_comp_aligned_genes()

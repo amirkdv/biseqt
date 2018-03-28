@@ -601,7 +601,6 @@ def plot_classifier(path, pos, neg, labels=None, classifier='>', title=''):
         labels = ['positive', 'negative']
     assert len(labels) == 2
 
-    log('plotting classifier')
     fig = plt.figure(figsize=(12, 8))
 
     grids = gridspec.GridSpec(2, 2, height_ratios=[2.5, 1])
