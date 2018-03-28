@@ -15,6 +15,7 @@
     [(4, 2), (3, 1), (0, 4)]
 """
 from itertools import chain, combinations
+from itertools import groupby, product
 
 from .kmers import KmerIndex, KmerDBWrapper
 
@@ -202,3 +203,139 @@ class SeedIndex(KmerDBWrapper):
             for row in cursor:
                 return row[0]
             return 0
+
+
+class SeedIndexMultiple(KmerDBWrapper):
+    """An index for seeds between multiple sequences in diagonal coordinates.
+
+    Attributes:
+        seqs (list[biseqt.sequence.Sequence]): The sequences of interest.
+        cache (KmerCache): optional :class:`KmerCache` object to use for
+            retrieving integer representations of sequences.
+    """
+    def __init__(self, *seqs, **kw):
+        assert(len(seqs)) > 2
+        name = '_'.join(S.content_id[:8] for S in seqs)
+        super(SeedIndexMultiple, self).__init__(name=name, **kw)
+        self.kmer_cache = kw.get('kmer_cache', None)
+        self.self_comp = len(seqs) == 2 and seqs[0] == seqs[1]
+        self.seqs = seqs
+        self.d0s = [len(T) - 1 for T in seqs[1:]]
+
+        if self._table_exists():
+            self.log('Seeds for %s already indexed, skipping' % name)
+        else:
+            self.log('Indexing seeds for %s.' % name)
+            self._index_seeds()
+
+    @property
+    def seeds_table(self):
+        """The seeds table name ``seeds_[name]``, cf.
+        :attr:`KmerDBWrapper.name`."""
+        return 'seeds_' + self.name
+
+    @classmethod
+    def to_diagonal_coordinates(cls, *idxs):
+        """Convert standard coordinates to diagonal coordinates via:
+
+        .. math::
+            \\begin{aligned}
+                d_k & = i_1 - i_{k+1} \ \ k = 1, 2, \ldots, n - 1 \\\\
+                a & = \min(i_1, \ldots, i_n)
+            \\end{aligned}
+        """
+        ds = [idxs[0] - idxs[k] for k in range(1, len(idxs))]
+        a = min(idxs)
+        return ds, a
+
+    @classmethod
+    def to_ij_coordinates(cls, ds, a):
+        """Convert diagonal :math:`(d_1,\ldots, d_{n-1}, a)` coordinates to
+        standard coordinates via:
+
+        .. math::
+            i_k = a - min\{d_0, -d_1, \ldots, -d_{n-1}\} + d_{k-1}
+
+        where :math:`d_0` is defined for the purpose of the above formula to be
+        zero.
+        """
+        idxs_ = [0] + [-d for d in ds]
+        diff = a - min(idxs_)
+        idxs = [diff + idx for idx in idxs_]
+        return tuple(idxs)
+
+    def _table_exists(self):
+        with self.connection() as conn:
+            q = """
+                SELECT name FROM sqlite_master
+                WHERE type='table' AND name='%s';
+            """ % self.seeds_table
+            cursor = conn.cursor()
+            cursor.execute(q)
+            for name in cursor:
+                return True
+        return False
+
+    # idempotent operation
+    def _index_seeds(self):
+        with self.connection() as conn:
+            conn.cursor().execute("""
+                CREATE TABLE %s (
+                  'ds' VARCHAR,     -- comma separated diagonal positions
+                  'a'  INTEGER      -- antidiagonal position
+                );
+            """ % self.seeds_table)
+
+        kmer_index_name = '%d_%s' % (self.wordlen, self.name)
+        kmer_index = KmerIndex(path=self.path, name=kmer_index_name,
+                               wordlen=self.wordlen, alphabet=self.alphabet,
+                               log_level=self.log_level,
+                               kmer_cache=self.kmer_cache)
+        if self.self_comp:
+            kmer_index.index_kmers(self.seqs[0])
+        else:
+            for seq in self.seqs:
+                kmer_index.index_kmers(seq)
+
+        kmers = kmer_index.kmers()
+
+        def _records():
+            for kmer in kmers:
+                if kmer is None:
+                    continue
+                hits = kmer_index.hits(kmer)
+                hits = {seqid: [c[1] for c in seq_hits]
+                        for seqid, seq_hits in groupby(hits,
+                                                       key=lambda c: c[0])}
+                # only consider kmers present in all sequences
+                if len(hits) < len(self.seqs):
+                    continue
+                # FIXME deal with self_comp: let 1 argument mean self_comp not
+                # two identical sequences.
+                for idxs in product(*hits.values()):
+                    # NOTE we're storing d values and not d_
+                    ds, a = self.to_diagonal_coordinates(*idxs)
+                    yield ','.join(str(d) for d in ds), a
+
+        with self.connection() as conn:
+            cursor = conn.cursor()
+            query = 'INSERT INTO %s (ds, a) VALUES (?, ?)' % self.seeds_table
+            cursor.executemany(query, _records())
+            self.log('Creating SQL index for table %s.' % self.seeds_table)
+            cursor.execute('CREATE INDEX %s_diagonal ON %s(ds);' %
+                           (self.seeds_table, self.seeds_table))
+
+    def seeds(self):
+        """Yields all seeds in diagonal coordinates.
+
+        Yields:
+            tuple:
+                seeds coordinates :math:`(d_1, \ldots, d_{n-1}, a)`.
+        """
+        query = 'SELECT ds, a FROM %s' % self.seeds_table
+        with self.connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(query)
+            for ds, a in cursor:
+                ds = [int(i) for i in ds.split(',')]
+                yield ds, a

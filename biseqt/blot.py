@@ -22,7 +22,7 @@ import warnings
 import numpy as np
 from scipy.special import erfcinv
 from scipy.spatial import cKDTree
-from .seeds import SeedIndex
+from .seeds import SeedIndex, SeedIndexMultiple
 
 
 # so we can catch numpy warnings
@@ -330,7 +330,7 @@ class HomologyFinder(SeedIndex):
 
             V_{(d, a)} = \\{(d', a'): |d - d'| < r_d,  |a - a'| < r_a \\}
 
-        This is done using a Quad-Tree in ``O(m lg m)`` time where m is the
+        This is done using a Quad-Tree in :math:`O(m lg m)` time where m is the
         number of seeds.
 
         Returns:
@@ -573,3 +573,120 @@ class OverlapFinder(HomologyFinder):
         seg_H0 = (d_H0 - r_H0, d_H0 + r_H0)
         seg_H1 = (d_H1 - r_H1, d_H1 + r_H1)
         return (seg_H0, s_H0), (seg_H1, s_H1)
+
+
+class HomologyFinderMultiple(SeedIndexMultiple):
+    """A multiple sequence homology finder based on m-dependent CLT statistics.
+
+    Attributes:
+        g_max (float):
+            Upper bound for indel probabilities in mutation model.
+        sensitivity (float):
+            Desired sensitivity of bands.
+    """
+    def __init__(self, *seqs, **kw):
+        g_max, sensitivity = kw.pop('g_max'), kw.pop('sensitivity')
+        assert 0 < g_max < 1 and 0 < sensitivity < 1
+        self.g_max = g_max
+        self.sensitivity = sensitivity
+        super(HomologyFinderMultiple, self).__init__(*seqs, **kw)
+
+    def band_radius(self, K):
+        """Wraps :func:`band_radius` with our mutation parameters and sequence
+        lengths.
+
+        Args:
+            K (int): expected alignment length of interest.
+
+        Returns:
+            int: radius of band for desired :attr:`sensitivity`.
+        """
+        return band_radius(K, self.g_max, self.sensitivity)
+
+    def estimate_match_probability(self, num_seeds, K, volume):
+        """Estimate the edit path match probability given the provided observed
+        number of seeds in given sigment.
+
+        Args:
+            num_seeds (int|float): number of seeds observed in segment.
+            K (int|float): the expected length of the alignment.
+            volume (int|float): the n-d volume of the region of interest.
+
+        Returns:
+            float: estimated match probability
+        """
+        power = self.wordlen * len(self.seqs)
+        word_p_null = (1. / len(self.alphabet)) ** power
+
+        if num_seeds > 0:
+            word_p = (num_seeds - volume * word_p_null) / K
+            try:
+                match_p = np.exp(np.log(word_p) / power)
+            except Warning:
+                # presumably this happened because word_p was too small for log
+                match_p = 0
+        else:
+            match_p = 0
+        return min(match_p, 1)
+
+    def score_seeds(self, K):
+        """Find the neighbors of each seed in the sense of
+        :func:`find_all_neighbors` and estimates the match probability of the
+        segment centered at the coordinates of each seed.
+
+        Args:
+            K (int): the similarity legnth of interest that dictates
+                neighborhood shapes and estimated match probabilities.
+
+        Returns:
+            list: list of tuples ``((d, a), neighs, p)`` where ``(d, a)``
+                  is the diagonal coordinates of the seed, ``neighs`` is a list
+                  of integer indices of seeds in its diagonal/antidiagonal
+                  neighborhood, and ``p`` is the estimated match probability of
+                  a segment of length ``K`` centered at the seed.
+        """
+        d_radius = int(np.ceil(self.band_radius(K)))
+        a_radius = int(np.ceil(K / 2))
+        seeds_with_neighs = self.find_all_neighbors(d_radius, a_radius)
+        volume = (2 * d_radius) ** (len(self.seqs) - 1) * 2 * a_radius
+
+        def _p(n):
+            return self.estimate_match_probability(n, K, volume)
+
+        return [{'seed': (ds, a), 'neighs': neighs, 'p': _p(len(neighs))}
+                for (ds, a), neighs in seeds_with_neighs]
+
+    def find_all_neighbors(self, d_radius, a_radius):
+        """For each seed finds all seeds in its neighborhood defined by:
+
+        .. math::
+
+            V_{(d_1,\ldots,d_{n-1}, a)} =
+                \\{(d_1', \ldots, d_{n-1}', a'):
+                    |d_k - d_k'| < r_d,  |a - a'| < r_a \\}
+
+        This is done using a kD-Tree in :math:`O(nm lg m)` time where m is the
+        number of seeds and n is the number of sequences.
+
+        Returns:
+            list: tuples ``((ds, a), neighs)`` where ``neighs`` is a list of
+                  neighbor indices.
+        """
+        # normalize the two diameters so we can use a standard L∞ neighborhood.
+        # typically a_diam is larger, so scale up d values proportionally
+        d_coeff = 1. * a_radius / d_radius
+        radius = a_radius
+
+        all_seeds = list(self.seeds())
+        if not all_seeds:
+            return []
+        all_seeds_scaled = np.array([[d * d_coeff for d in ds] + [a]
+                                     for ds, a in all_seeds])
+        quad_tree = cKDTree(all_seeds_scaled)
+        all_neighs = quad_tree.query_ball_tree(quad_tree, radius,
+                                               p=float('inf'))
+        # all_neighs[i] is the indices of the neighbors of all_seeds[i]; this
+        # always contains the seed itself (i.e always: i in neighs[i])
+        for idx, _ in enumerate(all_neighs):
+            all_neighs[idx].remove(idx)
+        return zip(all_seeds, all_neighs)
