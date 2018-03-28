@@ -53,7 +53,8 @@ def sim_simulated_K_p(Ks, ps, n_samples, **kw):
     assert p_min <= min(ps)
 
     for (K_idx, K), (p_idx, p_match) in product(enumerate(Ks), enumerate(ps)):
-        log('evaluating scores for K = %d, p = %.2f' % (K, p_match))
+        log('simulating (%d samples) K = %d, p = %.2f' %
+            (n_samples, K, p_match))
         for idx in range(n_samples):
             # distribute p_match evenly over gap and subst
             subst = gap = 1 - np.sqrt(p_match)
@@ -69,23 +70,29 @@ def sim_simulated_K_p(Ks, ps, n_samples, **kw):
                                    [(S_rel, T_rel), (S_urel, T_urel)]):
                 WB = WordBlot(S, T, **WB_kw)
 
+                # calculate H0/H1 scores with perfect information:
+                band_r = WB.band_radius(K)
+                num_seeds = WB.seed_count(d_band=(-band_r, band_r),
+                                          a_band=(K / 2, 3 * K / 2))
+                s0, s1 = WB.score_num_seeds(num_seeds=num_seeds,
+                                            area=2 * band_r * K,
+                                            seglen=K, p_match=p_match)
+                sim_data['scores']['H0'][key][K_idx, p_idx, idx] = s0
+                sim_data['scores']['H1'][key][K_idx, p_idx, idx] = s1
+
                 def _len(seg): return seg[1][1] - seg[1][0]
 
                 results = list(WB.similar_segments(K_min, p_min,
                                                    at_least_one=True))
                 # pick the longest detected homology
-                sim_data['K_hat'][key][K_idx][p_idx][idx] = max(
-                    _len(rec['segment']) for rec in results
-                )
                 hom = max(results, key=lambda rec: _len(rec['segment']))
                 (d_min, d_max), (a_min, a_max) = hom['segment']
-                s0, s1 = hom['scores']
-                sim_data['p_hat'][key][K_idx][p_idx][idx] = hom['p']
-                sim_data['d_hat'][key][K_idx][p_idx][idx] = (d_min + d_max) / 2
-                sim_data['a_hat'][key][K_idx][p_idx][idx] = (a_min + a_max) / 2
-                sim_data['r_hat'][key][K_idx][p_idx][idx] = (d_max - d_min) / 2
-                sim_data['scores']['H0'][key][K_idx][p_idx][idx] = s0
-                sim_data['scores']['H1'][key][K_idx][p_idx][idx] = s1
+                K_hat = _len(hom['segment'])
+                sim_data['K_hat'][key][K_idx, p_idx, idx] = K_hat
+                sim_data['p_hat'][key][K_idx, p_idx, idx] = hom['p']
+                sim_data['d_hat'][key][K_idx, p_idx, idx] = (d_min + d_max) / 2
+                sim_data['a_hat'][key][K_idx, p_idx, idx] = (a_min + a_max) / 2
+                sim_data['r_hat'][key][K_idx, p_idx, idx] = (d_max - d_min) / 2
 
     return sim_data
 
@@ -245,6 +252,8 @@ def plot_simulated_K_p(sim_data, select_Ks, select_ps, suffix=''):
                              color=color, ls=ls, label=label, **kw)
         ax.set_ylabel('%s score' % mode, fontsize=10)
         ax.set_xlabel('similarity length', fontsize=10)
+        ax.set_xticks(Ks)
+        ax.set_xticklabels(Ks, rotation=90, fontsize=6)
     ax_H0.legend(loc='best', fontsize=10)
     ax_H1.legend(loc='best', fontsize=10)
     fig_by_K.suptitle('w = %d, no. samples = %d' % (wordlen, n_samples),
@@ -267,6 +276,8 @@ def plot_simulated_K_p(sim_data, select_Ks, select_ps, suffix=''):
                              color=color, ls=ls, label=label, **kw)
         ax.set_ylabel('%s score' % mode, fontsize=10)
         ax.set_xlabel('similarity match probability', fontsize=10)
+        ax.set_xticks(ps)
+        ax.set_xticklabels(ps, rotation=90, fontsize=6)
     ax_H0.legend(loc='best', fontsize=10)
     ax_H1.legend(loc='best', fontsize=10)
     fig_by_p.suptitle('w = %d, no. samples = %d' % (wordlen, n_samples),
@@ -288,6 +299,8 @@ def plot_simulated_K_p(sim_data, select_Ks, select_ps, suffix=''):
                      color=color, label='p = %.2f' % p, **kw)
         plot_with_sd(ax_K, Ks, K_hats['neg'][:, p_idx, :], axis=1,
                      color=color, ls='--', **kw)
+        ax.set_xticks(Ks)
+        ax.set_xticklabels(Ks, rotation=90, fontsize=6)
     ax_K.set_ylabel('estimated similarity length', fontsize=10)
     ax_K.set_xlabel('true similarity length', fontsize=10)
     ax_K.plot(Ks, Ks, ls='--', c='k', lw=3, alpha=.4)
@@ -301,6 +314,8 @@ def plot_simulated_K_p(sim_data, select_Ks, select_ps, suffix=''):
                      color=color, label='K = %d' % K, **kw)
         plot_with_sd(ax_p, ps, p_hats['neg'][K_idx, :, :], axis=1,
                      color=color, ls='--', **kw)
+        ax.set_xticks(ps)
+        ax.set_xticklabels(ps, rotation=90, fontsize=6)
     ax_p.set_ylabel('estimated match probability', fontsize=10)
     ax_p.set_xlabel('true match probability', fontsize=10)
     ax_p.plot(ps, ps, ls='--', c='k', lw=3, alpha=.4)
@@ -325,32 +340,87 @@ def plot_simulated_K_p(sim_data, select_Ks, select_ps, suffix=''):
 
     colors = color_code(select_ps)
     for p, color in zip(select_ps, colors):
-        kw = {'color': color, 'alpha': .9, 'lw': 1, 'label': 'p = %.2f' % p}
+        kw = {'color': color, 'alpha': .6, 'lw': 1, 'label': 'p = %.2f' % p,
+              'marker': 'o', 'markersize': 3}
         truth_kw = {'ls': '--', 'alpha': .1, 'color': 'k', 'lw': 3}
         p_idx = ps.index(p)
 
         plot_with_sd(ax_r, Ks, r_hats[:, p_idx, :], axis=1, **kw)
-        ax_r.set_ylim(-min(Ks), min(Ks))
-        ax_r.set_xlabel('similarity length K')
-        ax_r.set_ylabel('estimated diagonal band width of similarity')
-        g_max = sim_data['WB_kw']['g_max']
-        sensitivity = sim_data['WB_kw']['sensitivity']
-        ax_r.plot(Ks, band_radii(Ks, g_max, sensitivity), **truth_kw)
-        ax_r.legend(loc='best', fontsize=8)
-
         plot_with_sd(ax_d, Ks, d_hats[:, p_idx, :], axis=1, **kw)
-        ax_d.set_ylim(-min(Ks), min(Ks))
-        ax_d.set_xlabel('similarity length K')
-        ax_d.set_ylabel('estimated diagonal position of similarity')
-        ax_d.plot(Ks, [0] * len(Ks), **truth_kw)
-        ax_d.legend(loc='best', fontsize=8)
-
         plot_with_sd(ax_a, Ks, a_hats[:, p_idx, :], axis=1, **kw)
-        ax_a.plot(Ks, Ks, **truth_kw)
-        ax_a.set_xlabel('similarity length K')
-        ax_a.set_ylabel('estimated antidiagonal position of similarity')
-        ax_a.legend(loc='best', fontsize=8)
-    savefig(fig_hat, 'simulations[r,d,a-hat]%s.png' % suffix)
+        for ax in [ax_r, ax_d, ax_a]:
+            ax.set_xticks(Ks)
+            ax.set_xticklabels(Ks, rotation=90, fontsize=6)
+
+    g_max = sim_data['WB_kw']['g_max']
+    sensitivity = sim_data['WB_kw']['sensitivity']
+
+    ax_r.set_xlabel('similarity length')
+    ax_r.set_ylabel('estimated diagonal band width of similarity')
+    ax_r.plot(Ks, band_radii(Ks, g_max, sensitivity), **truth_kw)
+    ax_r.legend(loc='best', fontsize=8)
+
+    ax_d.set_xlabel('similarity length')
+    ax_d.set_ylabel('estimated diagonal position of similarity')
+    ax_d.plot(Ks, [0] * len(Ks), **truth_kw)
+    ax_d.legend(loc='best', fontsize=8)
+
+    ax_a.plot(Ks, Ks, **truth_kw)
+    ax_a.set_xlabel('similarity length')
+    ax_a.set_ylabel('estimated antidiagonal position of similarity')
+    ax_a.legend(loc='best', fontsize=8)
+
+    savefig(fig_hat, 'simulations[r,d,a-hat][by-K]%s.png' % suffix)
+
+
+    # ======================================
+    # estimated diagonal and antidiagonal position and band radius for select
+    # match probabilities (select_ps), as a function of p
+    d_hats = sim_data['d_hat']['pos']
+    a_hats = sim_data['a_hat']['pos']
+    r_hats = sim_data['r_hat']['pos']
+    fig_hat = plt.figure(figsize=(12, 4))
+    ax_r = fig_hat.add_subplot(1, 3, 1)
+    ax_d = fig_hat.add_subplot(1, 3, 2)
+    ax_a = fig_hat.add_subplot(1, 3, 3)
+
+    colors = color_code(select_Ks)
+    for K, color in zip(select_Ks, colors):
+        kw = {'color': color, 'alpha': .6, 'lw': 1, 'label': 'K = %d' % K,
+              'marker': 'o', 'markersize': 3}
+        truth_kw = {'ls': '--', 'alpha': .1, 'color': 'k', 'lw': 3}
+        K_idx = Ks.index(K)
+
+        plot_with_sd(ax_r, ps, r_hats[K_idx, :, :], axis=1, **kw)
+        plot_with_sd(ax_d, ps, d_hats[K_idx, :, :], axis=1, **kw)
+        plot_with_sd(ax_a, ps, a_hats[K_idx, :, :], axis=1, **kw)
+
+        # true 'a' changes by K
+        ax_a.plot(ps, [K] * len(ps), **truth_kw)
+
+        for ax in [ax_r, ax_d, ax_a]:
+            ax.set_xticks(ps)
+            ax.set_xticklabels(ps, rotation=90, fontsize=6)
+
+    g_max = sim_data['WB_kw']['g_max']
+    sensitivity = sim_data['WB_kw']['sensitivity']
+
+    ax_r.plot(ps, [band_radius(max(Ks), g_max, sensitivity)] * len(ps),
+              **truth_kw)
+    ax_r.set_xlabel('similarity match probability')
+    ax_r.set_ylabel('estimated diagonal band width of similarity')
+    ax_r.legend(loc='best', fontsize=8)
+
+    ax_d.plot(ps, [0] * len(ps), **truth_kw)
+    ax_d.set_xlabel('similarity match probability')
+    ax_d.set_ylabel('estimated diagonal position of similarity')
+    ax_d.legend(loc='best', fontsize=8)
+
+    ax_a.set_xlabel('similarity match probability')
+    ax_a.set_ylabel('estimated antidiagonal position of similarity')
+    ax_a.legend(loc='best', fontsize=8)
+
+    savefig(fig_hat, 'simulations[r,d,a-hat][by-p]%s.png' % suffix)
 
 
 def plot_comp_aligned_genes(sim_data, suffix='', naming_style=None):
@@ -512,7 +582,7 @@ def exp_simulated_K_p():
     n_samples = 50  # HACK
     wordlen = 5
 
-    suffix = '[varying-K-p]'
+    suffix = ''
     dumpfile = 'simulations%s.txt' % suffix
     sim_data = sim_simulated_K_p(
         Ks, ps, n_samples, wordlen=wordlen,

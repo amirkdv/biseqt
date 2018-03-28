@@ -172,7 +172,7 @@ def plot_count_seeds_moments(sim_data, K=None, suffix=''):
             ax.set_xlabel('(non)-homologous sequence length')
             ax.set_ylim(-.1 * ax.get_ylim()[1], None)
             ax.set_xticks(ns)
-            ax.set_xticklabels(ns, rotation=30, fontsize=6)
+            ax.set_xticklabels(ns, rotation=90, fontsize=6)
 
         ax_sd.set_ylabel('standard deviation of no. of matching kmers')
         ax_mu.set_ylabel('expected no. of matching kmers')
