@@ -11,7 +11,7 @@ from biseqt.stochastics import rand_seq, MutationProcess
 
 from util import plot_with_sd, color_code, plot_classifier
 from util import with_dumpfile, log, savefig, load_fasta
-from util import seq_pair, sample_bio_opseqs, sample_bio_seqs, apply_opseq
+from util import seq_pair
 
 from util import plot_global_alignment, adjust_pw_plot
 from util import estimate_match_probs_in_opseq, fill_in_unknown
@@ -27,7 +27,7 @@ def sim_stats_fixed_K(K, ns, n_samples, **kw):
         return {'pos': np.zeros(shape), 'neg': np.zeros(shape)}
 
     A = Alphabet('ACGT')
-    wordlen, bio, p_match = kw['wordlen'], kw['bio'], kw['p_match']
+    wordlen, p_match = kw['wordlen'], kw['p_match']
     HF_kw = {
         'g_max': kw.get('g_max', .6),
         'sensitivity': kw.get('sensitivity', .99),
@@ -44,36 +44,21 @@ def sim_stats_fixed_K(K, ns, n_samples, **kw):
         'HF_kw': HF_kw,
         'K': K,
         'ns': ns,
-        'bio': bio,
         'p_match': p_match,
     }
-    if bio:
-        bio_source_seq = kw['bio_source_seq']
-        bio_source_opseq = kw['bio_source_opseq']
-        opseqs = list(sample_bio_opseqs(bio_source_opseq, K, n_samples,
-                                        gap=None, match=p_match))
-    else:
-        # NOTE distribute the burden of p_match evenly on gap and subst:
-        subst = gap = 1 - np.sqrt(p_match)
-        assert abs((1 - gap) * (1 - subst) - p_match) < 1e-3
-        M = MutationProcess(A, subst_probs=subst, ge_prob=gap, go_prob=gap)
+    # distribute p_match evenly over gap and subst:
+    subst = gap = 1 - np.sqrt(p_match)
+    assert abs((1 - gap) * (1 - subst) - p_match) < 1e-3
+    M = MutationProcess(A, subst_probs=subst, ge_prob=gap, go_prob=gap)
 
     for n_idx, n in enumerate(ns):
         log('evaluating scores for K = %d, n = %d (%d/%d)' %
             (K, n, n_idx + 1, len(ns)))
         for idx in range(n_samples):
-            if bio:
-                S_urel, T_urel = sample_bio_seqs([n, n], bio_source_seq)
-                S_rel = sample_bio_seqs([K], bio_source_seq)[0]
-                T_rel = apply_opseq(S_rel, opseqs[idx])
-                junk = sample_bio_seqs([n - K, n - K], bio_source_seq)
-                S_rel += junk[0]
-                T_rel += junk[1]
-            else:
-                S_rel, T_rel = seq_pair(K, A, mutation_process=M)
-                S_rel += rand_seq(A, n - K)
-                T_rel += rand_seq(A, n - K)
-                S_urel, T_urel = rand_seq(A, n), rand_seq(A, n)
+            S_rel, T_rel = seq_pair(K, A, mutation_process=M)
+            S_rel += rand_seq(A, n - K)
+            T_rel += rand_seq(A, n - K)
+            S_urel, T_urel = rand_seq(A, n), rand_seq(A, n)
 
             for key, (S, T) in zip(['pos', 'neg'],
                                    [(S_rel, T_rel), (S_urel, T_urel)]):
@@ -103,7 +88,7 @@ def sim_stats_varying_K_p(Ks, ps, n_samples, **kw):
         return {'pos': np.zeros(shape), 'neg': np.zeros(shape)}
 
     A = Alphabet('ACGT')
-    wordlen, bio = kw['wordlen'], kw['bio']
+    wordlen = kw['wordlen']
     HF_kw = {
         'g_max': kw.get('g_max', .6),
         'sensitivity': kw.get('sensitivity', .99),
@@ -122,39 +107,24 @@ def sim_stats_varying_K_p(Ks, ps, n_samples, **kw):
         'HF_kw': HF_kw,
         'Ks': Ks,
         'ps': ps,
-        'bio': bio,
     }
     K_min = 100
     p_min = .5
     assert K_min <= min(Ks)
     assert p_min <= min(ps)
-    if bio:
-        bio_source_seq = kw['bio_source_seq']
-        bio_source_opseq = kw['bio_source_opseq']
 
     for (K_idx, K), (p_idx, p_match) in product(enumerate(Ks), enumerate(ps)):
-        if bio:
-            opseqs = list(sample_bio_opseqs(bio_source_opseq, K, n_samples,
-                                            gap=None, match=p_match))
         log('evaluating scores for K = %d, p = %.2f' % (K, p_match))
         for idx in range(n_samples):
-            if bio:
-                S_urel, T_urel = sample_bio_seqs([K, K], bio_source_seq)
-                S_rel = sample_bio_seqs([K], bio_source_seq)[0]
-                T_rel = apply_opseq(S_rel, opseqs[idx])
-                junk = sample_bio_seqs([K / 2] * 4, bio_source_seq)
-                S_rel = junk[0] + S_rel + junk[1]
-                T_rel = junk[2] + T_rel + junk[3]
-            else:
-                # NOTE distribute the burden of p_match evenly on gap and subst
-                subst = gap = 1 - np.sqrt(p_match)
-                assert abs((1 - gap) * (1 - subst) - p_match) < 1e-3
-                M = MutationProcess(A, subst_probs=subst, ge_prob=gap,
-                                    go_prob=gap)
-                S_rel, T_rel = seq_pair(K, A, mutation_process=M)
-                S_rel = rand_seq(A, K / 2) + S_rel + rand_seq(A, K / 2)
-                T_rel = rand_seq(A, K / 2) + T_rel + rand_seq(A, K / 2)
-                S_urel, T_urel = rand_seq(A, K), rand_seq(A, K)
+            # distribute p_match evenly over gap and subst
+            subst = gap = 1 - np.sqrt(p_match)
+            assert abs((1 - gap) * (1 - subst) - p_match) < 1e-3
+            M = MutationProcess(A, subst_probs=subst, ge_prob=gap,
+                                go_prob=gap)
+            S_rel, T_rel = seq_pair(K, A, mutation_process=M)
+            S_rel = rand_seq(A, K / 2) + S_rel + rand_seq(A, K / 2)
+            T_rel = rand_seq(A, K / 2) + T_rel + rand_seq(A, K / 2)
+            S_urel, T_urel = rand_seq(A, K), rand_seq(A, K)
 
             for key, (S, T) in zip(['pos', 'neg'],
                                    [(S_rel, T_rel), (S_urel, T_urel)]):
@@ -623,7 +593,7 @@ def plot_stats_real_homologies(sim_data, suffix='', naming_style=None):
 
 # the point of this experiment is: band score is unreliable and segment score
 # is reliable. After this experiment we exclusively look at segment score.
-def exp_stats_performance_fixed_K(bio=False):
+def exp_stats_performance_fixed_K():
     K = 200  # similar segment length
     ns = [K * 2 ** i for i in range(8)]  # sequence lengths
     n_samples = 50  # number samples for each n
@@ -631,35 +601,15 @@ def exp_stats_performance_fixed_K(bio=False):
     wordlen = 5
     p_match = .8
 
-    if not bio:
-        suffix = '[K=%d]' % K
-        dumpfile = 'stats%s.txt' % suffix
-        sim_data = sim_stats_fixed_K(
-            K, ns, n_samples, p_match=p_match, wordlen=wordlen, bio=False,
-            dumpfile=dumpfile, ignore_existing=False)
-        plot_stats_fixed_K(sim_data, suffix=suffix)
-    else:
-        # ===============
-        # Biological Data
-        # ===============
-        suffix = '[K=%d][bio]' % K
-        dumpfile = 'stats%s.txt' % suffix
-        A = Alphabet('ACGT')
-        with open('data/actb/actb-7vet.fa') as f:
-            bio_source_seq = ''.join(s for s, _, _ in load_fasta(f))
-            bio_source_seq = bio_source_seq.upper()
-            bio_source_seq = ''.join(x for x in bio_source_seq if x in 'ACGT')
-            bio_source_seq = A.parse(bio_source_seq)
-        with open('data/actb/actb-7vet-pws.fa') as f:
-            bio_source_opseq = ''.join(s for s, _, _ in load_fasta(f))
-        sim_data = sim_stats_fixed_K(
-            K, ns, n_samples, p_match=p_match, wordlen=wordlen, bio=True,
-            bio_source_opseq=bio_source_opseq, bio_source_seq=bio_source_seq,
-            dumpfile=dumpfile, ignore_existing=False)
-        plot_stats_fixed_K(sim_data, suffix=suffix)
+    suffix = '[K=%d]' % K
+    dumpfile = 'stats%s.txt' % suffix
+    sim_data = sim_stats_fixed_K(
+        K, ns, n_samples, p_match=p_match, wordlen=wordlen,
+        dumpfile=dumpfile, ignore_existing=False)
+    plot_stats_fixed_K(sim_data, suffix=suffix)
 
 
-def exp_stats_performance_varying_K_p(bio=False):
+def exp_stats_performance_varying_K_p():
     Ks = [200 * i for i in range(1, 9)]
     select_Ks = Ks[1], Ks[3], Ks[5]
 
@@ -669,32 +619,12 @@ def exp_stats_performance_varying_K_p(bio=False):
     n_samples = 50  # HACK
     wordlen = 5
 
-    if not bio:
-        suffix = '[varying-K-p]'
-        dumpfile = 'stats%s.txt' % suffix
-        sim_data = sim_stats_varying_K_p(
-            Ks, ps, n_samples, wordlen=wordlen, bio=False,
-            dumpfile=dumpfile, ignore_existing=False)
-        plot_stats_varying_K_p(sim_data, select_Ks, select_ps, suffix=suffix)
-    else:
-        # ===============
-        # Biological Data
-        # ===============
-        suffix = '[varying-K-p][bio]'
-        dumpfile = 'stats%s.txt' % suffix
-        A = Alphabet('ACGT')
-        with open('data/acta2/acta2-7vet.fa') as f:
-            bio_source_seq = ''.join(s for s, _, _ in load_fasta(f))
-            bio_source_seq = bio_source_seq.upper()
-            bio_source_seq = ''.join(x for x in bio_source_seq if x in 'ACGT')
-            bio_source_seq = A.parse(bio_source_seq)
-        with open('data/acta2/acta2-7vet-opseqs.fa') as f:
-            bio_source_opseq = ''.join(s for s, _, _ in load_fasta(f))
-        sim_data = sim_stats_varying_K_p(
-            Ks, ps, n_samples, wordlen=wordlen, bio=True,
-            bio_source_opseq=bio_source_opseq, bio_source_seq=bio_source_seq,
-            dumpfile=dumpfile, ignore_existing=False)
-        plot_stats_varying_K_p(sim_data, select_Ks, select_ps, suffix=suffix)
+    suffix = '[varying-K-p]'
+    dumpfile = 'stats%s.txt' % suffix
+    sim_data = sim_stats_varying_K_p(
+        Ks, ps, n_samples, wordlen=wordlen,
+        dumpfile=dumpfile, ignore_existing=False)
+    plot_stats_varying_K_p(sim_data, select_Ks, select_ps, suffix=suffix)
 
 
 def exp_stats_real_homologies():
@@ -717,36 +647,6 @@ def exp_stats_real_homologies():
     seqs_path = 'data/irx1/irx1-vert-amniota-indiv.fa'
     pws_path = 'data/irx1/irx1-vert-amniota-pws.fa'
 
-    # wordlen = 12
-    # K_min = 200
-    # suffix = '[acta2]'
-    # dumpfile = 'real_homologies%s.txt' % suffix
-    # seqs_path = 'data/acta2/acta2-7vet.fa'
-    # pws_path = 'data/acta2/acta2-7vet-pws.fa'
-
-    # wordlen = 8
-    # K_min = 50
-    # suffix = '[acta1]'
-    # dumpfile = 'real_homologies%s.txt' % suffix
-    # seqs_path = 'data/acta1/acta1-7vet.fa'
-    # pws_path = 'data/acta1/acta1-7vet-pws.fa'
-
-    # wordlen = 8
-    # K_min = 50
-    # suffix = '[ngf]'
-    # dumpfile = 'real_homologies%s.txt' % suffix
-    # seqs_path = 'data/ngf/ngf-7vet.fa'
-    # pws_path = 'data/ngf/ngf-7vet-pws.fa'
-
-    # NOTE anything "acta2" is actually "actn2" (actinin)
-    # FIXME the acta2 thing we're using is not actually a gene (what is it?)
-    # also, all our examples (aside from acta2) are short. I'm not sure
-    # if we're looking at full genes or just exons because the
-    # extents on genome browser suggest longer sequences than we actually get
-    # from maf (assuming our conversion code is correct)
-    # names = ['hg38.chr1', 'rn5.chr17', 'canFam3.chr4', 'mm10.chr13']
-    # names = ['hg38.chr1', 'panTro4.chr1', 'canFam3.chr4']
-
     with open(seqs_path) as f:
         seqs = {name: A.parse(fill_in_unknown(seq.upper(), A))
                 # for seq, name, _ in load_fasta(f) if name in names}
@@ -762,8 +662,6 @@ def exp_stats_real_homologies():
 
 
 if __name__ == '__main__':
-    exp_stats_performance_fixed_K(bio=False)
-    exp_stats_performance_fixed_K(bio=True)
-    exp_stats_performance_varying_K_p(bio=False)
-    exp_stats_performance_varying_K_p(bio=True)
+    exp_stats_performance_fixed_K()
+    exp_stats_performance_varying_K_p()
     exp_stats_real_homologies()
