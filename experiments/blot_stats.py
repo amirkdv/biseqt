@@ -15,9 +15,10 @@ from util import seq_pair, sample_bio_opseqs, sample_bio_seqs, apply_opseq
 
 from util import plot_global_alignment, adjust_pw_plot
 from util import estimate_match_probs_in_opseq, fill_in_unknown
-from util import plot_scored_seeds, plot_similar_segment, seeds_from_opseq
+from util import plot_scored_seeds, seeds_from_opseq
 from util import opseq_path, plot_local_alignment
 from biseqt.pw import Aligner, STD_MODE, LOCAL
+
 
 @with_dumpfile
 def sim_stats_fixed_K(K, ns, n_samples, **kw):
@@ -159,7 +160,7 @@ def sim_stats_varying_K_p(Ks, ps, n_samples, **kw):
                                    [(S_rel, T_rel), (S_urel, T_urel)]):
                 HF = HomologyFinder(S, T, **HF_kw)
 
-                def _len(seg): return seg[1][1] - seg [1][0]
+                def _len(seg): return seg[1][1] - seg[1][0]
 
                 results = list(HF.similar_segments(K_min, p_min,
                                                    at_least_one=True))
@@ -196,7 +197,7 @@ def sim_stats_real_homologies(seqs, pws, **kw):
     }
     qM = 1
     qS = qG = -1
-    aligner_kw ={
+    aligner_kw = {
         'match_score': qM,
         'mismatch_score': qS,
         'ge_score': qG,
@@ -246,9 +247,8 @@ def sim_stats_real_homologies(seqs, pws, **kw):
                 # FIXME what should the range be?
                 for a_ in range(a - band_r, a + band_r):
                     i_, j_ = HF.to_ij_coordinates(d_, a_)
-                    if 0 <= i_ < in_band.shape[0] and \
-                       0 <= j_ < in_band.shape[1]:
-                       in_band[i_, j_] = 1
+                    if 0 <= i_ < len(S) and 0 <= j_ < len(T):
+                        in_band[i_, j_] = 1
         sim_data['opseq_seeds'][(id1, id2)] = opseq_seeds
 
         for seed, p in sim_data['seeds'][(id1, id2)].items():
@@ -304,9 +304,9 @@ def sim_stats_real_homologies(seqs, pws, **kw):
                 sim_data['segments'][(id1, id2)][idx]['alignment'] = alignment
                 sim_data['segments'][(id1, id2)][idx]['frame'] = \
                     (i_start, i_end), (j_start, j_end)
-                if alignment is not None:
-                    tx = alignment.transcript
-                    # print seg_info['p'], 1. * tx.count('M') / len(tx)
+                # if alignment is not None:
+                #     tx = alignment.transcript
+                #     print seg_info['p'], 1. * tx.count('M') / len(tx)
     return sim_data
 
 
@@ -393,7 +393,6 @@ def plot_stats_varying_K_p(sim_data, select_Ks, select_ps, suffix=''):
     fig_by_p.tight_layout(rect=[0, 0.03, 1, 0.95])
     savefig(fig_by_p, 'stats[score-by-p]%s.png' % suffix)
 
-
     # ======================================
     K_hats = sim_data['K_hat']
     p_hats = sim_data['p_hat']
@@ -443,7 +442,6 @@ def plot_stats_varying_K_p(sim_data, select_Ks, select_ps, suffix=''):
     ax_d = fig_hat.add_subplot(1, 3, 2)
     ax_a = fig_hat.add_subplot(1, 3, 3)
 
-    n_points = d_hats.shape[0] * d_hats.shape[1] * d_hats.shape[2]
     colors = color_code(select_ps)
     for p, color in zip(select_ps, colors):
         kw = {'color': color, 'alpha': .9, 'lw': 1, 'label': 'p = %.2f' % p}
@@ -485,10 +483,8 @@ def plot_stats_real_homologies(sim_data, suffix='', naming_style=None):
     fig_p = plt.figure(figsize=(6, 4))
     fig_p_aln = plt.figure(figsize=(6, 4))
     fig_K_aln = plt.figure(figsize=(6, 4))
-    fig_seed_classifier = plt.figure(figsize=(6, 4))
     fig_coord_classifier = plt.figure(figsize=(6, 4))
 
-    ax_seed_classifier = fig_seed_classifier.add_subplot(1, 1, 1)
     ax_coord_classifier = fig_coord_classifier.add_subplot(1, 1, 1)
 
     ax_p = fig_p.add_subplot(1, 1, 1)
@@ -497,7 +493,6 @@ def plot_stats_real_homologies(sim_data, suffix='', naming_style=None):
 
     ax_K_aln = fig_K_aln.add_subplot(1, 1, 1)
 
-    wordlen = sim_data['HF_kw']['wordlen']
     p_min = sim_data['similar_segments_kw']['p_min']
 
     labels = []
@@ -577,7 +572,7 @@ def plot_stats_real_homologies(sim_data, suffix='', naming_style=None):
             ax_p_aln.scatter([p_hat], [p_aln], lw=0, color='b', s=10, alpha=.5)
             ax_K_aln.scatter([K_hat], [K_aln], lw=0, color='b', s=10, alpha=.5)
 
-    tprs = [sim_data['homologous_tpr'][key] for key in pws]
+    tprs = [sim_data['homologous_tpr'][key_] for key_ in pws]
     ax_coord_classifier.bar(range(len(labels)), tprs, color='g', alpha=.9,
                             align='center', width=.4)
     ax_coord_classifier.set_xticks(range(len(pws)))
@@ -603,7 +598,8 @@ def plot_stats_real_homologies(sim_data, suffix='', naming_style=None):
     ax_p_aln.set_title('Match probability at identified segments')
 
     min_K, max_K = ax_K_aln.get_xlim()
-    ax_K_aln.plot([min_K, max_K], [min_K, max_K], lw=1, ls='--', alpha=.8, c='k')
+    ax_K_aln.plot([min_K, max_K], [min_K, max_K], lw=1, ls='--', alpha=.8,
+                  c='k')
     ax_K_aln.set_xlabel('estimated similarity length', fontsize=8)
     ax_K_aln.set_ylabel('local alignment length', fontsize=8)
     ax_K_aln.set_aspect('equal')
@@ -613,9 +609,8 @@ def plot_stats_real_homologies(sim_data, suffix='', naming_style=None):
                     sim_data['seed_pos'], sim_data['seed_neg'],
                     labels=['homologous', 'non-homologous'])
 
-
-    for idx, fig in enumerate([fig_profiles, fig_p, fig_p_aln, fig_K_aln, fig_seeds,
-                  fig_coord_classifier]):
+    for fig in [fig_profiles, fig_p, fig_p_aln, fig_K_aln, fig_seeds,
+                fig_coord_classifier]:
         fig.tight_layout()
     savefig(fig_profiles, 'real_homologies[profiles]%s.png' % suffix)
     savefig(fig_p, 'real_homologies[p-hat]%s.png' % suffix)
@@ -671,7 +666,7 @@ def exp_stats_performance_varying_K_p(bio=False):
     ps = [1 - .06 * i for i in range(1, 9)]
     select_ps = ps[1], ps[3], ps[5]
 
-    n_samples = 50 # HACK
+    n_samples = 50  # HACK
     wordlen = 5
 
     if not bio:

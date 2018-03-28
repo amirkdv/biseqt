@@ -13,7 +13,6 @@ from Bio import AlignIO
 from itertools import combinations
 import pysam
 from biseqt.stochastics import rand_seq
-import re
 
 
 plt.rc('text', usetex=True)
@@ -234,7 +233,7 @@ def pws_to_opseq(pw_path, opseq_path, max_gap_length=100):
         opseqs = [(name, opseq) for opseq, name, _ in load_fasta(f_pw)]
 
     opseqs_clean = list(_remove_long_gaps([opseq for name, opseq in opseqs],
-                                         max_gap_length))
+                                          max_gap_length))
     with open(opseq_path, 'w') as f_ops:
         log('writing cleaned up opseqs to %s' % pw_path)
         for (name, opseq), opseq_clean in zip(opseqs, opseqs_clean):
@@ -544,6 +543,7 @@ def plot_global_alignment(ax, opseq, **kw):
 def plot_local_alignment(ax, opseq, i, j, **kw):
     ys, xs = opseq_path(opseq, x0=i, y0=j)
     ax.plot(xs, ys, **kw)
+
 
 # =============================================================================
 # STATISTICAL HELPERS
