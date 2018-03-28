@@ -300,15 +300,23 @@ class WordBlot(SeedIndex):
 
     def estimate_match_probability(self, num_seeds, d_band=None, a_band=None):
         """Estimate the edit path match probability given the provided observed
-        number of seeds in given sigment.
+        number of seeds :math:`n` in given sigment:
+
+        .. math::
+            \hat{p} = \\left(\\frac{n - Ap_\circ^w}{K}\\right)^{\\frac{1}{w}}
+
+        where :math:`n, A, p_\circ, K, w` are the number of seeds, segment
+        area, null probability of matching nucleotides, segment length, and the
+        word length, respectively.
 
         Args:
             num_seeds (int): number of seeds observed in segment.
 
         Keywords Args:
-            d_band (tuple): lower and upper diagonals limiting the segment.
-            a_band (tuple): lower and upper antidiagonal positions limiting the
-                segment.
+            d_band (tuple):
+                lower and upper diagonals limiting the segment.
+            a_band (tuple):
+                lower and upper antidiagonal positions limiting the segment.
 
         Returns:
             float: estimated match probability
@@ -328,7 +336,7 @@ class WordBlot(SeedIndex):
 
         .. math::
 
-            V_{(d, a)} = \\{(d', a'): |d - d'| < r_d,  |a - a'| < r_a \\}
+            U_{(d, a)} = \\{(d', a'): |d - d'| < r_d,  |a - a'| < r_a \\}
 
         This is done using a Quad-Tree in :math:`O(m lg m)` time where m is the
         number of seeds.
@@ -367,10 +375,10 @@ class WordBlot(SeedIndex):
 
         Returns:
             list: list of tuples ``((d, a), neighs, p)`` where ``(d, a)``
-                  is the diagonal coordinates of the seed, ``neighs`` is a list
-                  of integer indices of seeds in its diagonal/antidiagonal
-                  neighborhood, and ``p`` is the estimated match probability of
-                  a segment of length ``K`` centered at the seed.
+              is the diagonal coordinates of the seed, ``neighs`` is a list
+              of integer indices of seeds in its diagonal/antidiagonal
+              neighborhood, and ``p`` is the estimated match probability of
+              a segment of length ``K`` centered at the seed.
         """
         d_radius = int(np.ceil(self.band_radius(K)))
         a_radius = int(np.ceil(K / 2))
@@ -607,6 +615,15 @@ class WordBlotMultiple(SeedIndexMultiple):
         """Estimate the edit path match probability given the provided observed
         number of seeds in given sigment.
 
+        .. math::
+            \hat{p} = \\left(
+                            \\frac{n - Vp_\circ^{w(N-1)}}{K}
+                      \\right)^{\\frac{1}{w(N-1)}}
+
+        where :math:`n, N, V, p_\circ, w` are the number of seeds, number of
+        sequences, segment n-d volume, null probability of matching
+        nucleotides, and word length, respectively.
+
         Args:
             num_seeds (int|float): number of seeds observed in segment.
             K (int|float): the expected length of the alignment.
@@ -661,7 +678,7 @@ class WordBlotMultiple(SeedIndexMultiple):
 
         .. math::
 
-            V_{(d_1,\ldots,d_{n-1}, a)} =
+            U_{(d_1,\ldots,d_{n-1}, a)} =
                 \\{(d_1', \ldots, d_{n-1}', a'):
                     |d_k - d_k'| < r_d,  |a - a'| < r_a \\}
 
