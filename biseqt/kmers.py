@@ -290,6 +290,7 @@ class KmerDBWrapper(object):
         if self.init_script:
             with self.connection() as conn:
                 conn.cursor().execute(self.init_script)
+                conn.cursor().execute('PRAGMA journaling_mode = OFF;')
 
     # FIXME compare with old-tip and figure out what the deal with resetting is
     def connection(self, reset=False):
