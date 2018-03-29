@@ -13,6 +13,7 @@ from Bio import AlignIO
 from itertools import combinations
 import pysam
 from biseqt.stochastics import rand_seq
+from scipy.ndimage.filters import gaussian_filter1d
 
 
 plt.rc('text', usetex=True)
@@ -512,13 +513,17 @@ def empirical_cdf(sample):
     return _empirical_cdf
 
 
-def plot_cdf(ax, sample, num_points=1000, **kwargs):
+def plot_cdf(ax, sample, num_points=1000, smooth_radius=None, **kwargs):
     sample = np.sort(sample)
     F = empirical_cdf(sample)
     m, M = sample[0], sample[-1]
     w = .05 * (M - m)
     xs = np.linspace(m - w, M + w, num_points)
-    ax.plot(xs, F(xs), **kwargs)
+    if smooth_radius is None:
+        ys = F(xs)
+    else:
+        ys = gaussian_filter1d(F(xs), smooth_radius)
+    ax.plot(xs, ys, **kwargs)
     ax.set_ylim([-.1, 1.1])
     ax.set_title('Cumulative Distribution')
 
@@ -621,7 +626,7 @@ def plot_classifier(path, pos, neg, labels=None, classifier='>', title=''):
     plot_roc_pv(ax_p_roc, pos, neg, classifier=classifier, **kw)
 
     for [ax, ax_title] in zip([ax_cdf, ax_roc, ax_p_roc],
-                              ['Score CDF',
+                              ['Classifier statistic CDF',
                                'ROC (%d samples)' % (len(pos) + len(neg)),
                                'Predictive ROC']):
         ax.set_title(ax_title, fontsize=12)
