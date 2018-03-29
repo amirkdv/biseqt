@@ -78,6 +78,21 @@ class SeedIndex(KmerDBWrapper):
         j = a - min(d, 0)
         return (i, j)
 
+    @classmethod
+    def to_ij_coordinates_seg(cls, seg):
+        """Convert a segment in diagonal coordinates to standard coordinates
+        according to :func:`to_ij_coordinates`.
+
+        Args:
+            seg (tuple): :math:`(d_{min}, d_{max}), (a_{min}, a_{max})`
+        """
+        corners = [cls.to_ij_coordinates(d, a) for d, a in product(*seg)]
+        i_start = min(i for i, _ in corners)
+        j_start = min(j for _, j in corners)
+        i_end = max(i for i, j in corners)
+        j_end = max(j for _, j in corners)
+        return (i_start, i_end), (j_start, j_end)
+
     def _table_exists(self):
         with self.connection() as conn:
             q = """

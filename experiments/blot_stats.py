@@ -204,13 +204,8 @@ def sim_comp_aligned_genes(seqs, pws, **kw):
 
         # actual alignments
         for idx, seg_info in enumerate(sim_data['segments'][(id1, id2)]):
-            (d_min, d_max), (a_min, a_max) = seg_info['segment']
-            corners = [WB.to_ij_coordinates(d, a)
-                       for d, a in product(*seg_info['segment'])]
-            i_start = min(i for i, _ in corners)
-            j_start = min(j for _, j in corners)
-            i_end = max(i for i, j in corners)
-            j_end = max(j for _, j in corners)
+            seg = seg_info['segment']
+            (i_start, i_end), (j_start, j_end) = WB.to_ij_coordinates_seg(seg)
             S_ = S[i_start: i_end]
             T_ = T[j_start: j_end]
             aligner = Aligner(S_, T_, **aligner_kw)
