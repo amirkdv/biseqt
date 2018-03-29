@@ -479,103 +479,88 @@ class WordBlotOverlap(WordBlot):
         """
         return band_radii(Ks, self.g_max, self.sensitivity)
 
-    def seed_count_by_d_(self):
-        """Number of seeds in each diagonal position. Diagonals are
-        ordered from smallest :math:`-|T|` to largest :math:`|S|`.
-        """
-        q = 'SELECT COUNT(a), d_ FROM %s GROUP BY d_' % self.seeds_table
-        count_by_d_ = np.zeros(len(self.S) + len(self.T) - 1)
-        with self.connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute(q)
-            for count, d_ in cursor:
-                count_by_d_[d_] = count
-        return count_by_d_
+    def score_seeds(self, p_min):
+        """For each seed finds all seeds in its neighborhood defined by:
 
-    def score_diagonal_bands(self, Ks, p_match, edge_margin=100):
-        """Scores all diagonal bands looking for specified segment lengths
-        against both H0 and H1.
+        .. math::
 
-        Args:
-            Ks (list|int):
-                (minimum) segment lengths of interest for each diagonal
-                position or constant number.
-            d_center (int):
-                center of diagonal band.
-            d_radius (int):
-                radius of diagonal band.
-            edge_margin(int):
-                The width of the diagonal margin ignored on either extreme.
-                This is used to avoid division by small areas in calculating
-                scores.
+            U_{(d, a)} = \\{(d', a'): |d - d'| < r_d(d),  |a - a'| < r_a(d) \\}
+
+        in such a way that each seed's neighborhood is the entire diagonal band
+        containing it. Each seed recieves an estimated match probability for a
+        similarity on its diagonal band and a z-score with respect to the H1
+        model.
 
         Returns:
-            np.array: H0 and H1 scores of each diagonal band.
+            list: dicts with keys ``seed`` (diagonal coordinates of seed),
+                  ``p`` (estimated match probability of overlap alignment),
+                  ``L`` (the length of an alignment through the seed's band
+                  according to sequence lengths), ``score`` (the z-score with
+                  respect to H1), and ``r`` (band radius at the seed's
+                  coordinates).
         """
-        n_by_d_ = self.seed_count_by_d_()
-        try:
-            iter(Ks)
-            radii = self.band_radii(Ks)
-        except TypeError:
-            radius = self.band_radius(Ks)
-            Ks = np.ones(len(n_by_d_)) * Ks
-            radii = np.ones(len(n_by_d_)) * radius
+        # use 1 - p_min as an overestimate of gap prob
+        gap_prob = 1 - p_min
 
-        assert len(Ks) == len(radii) == len(n_by_d_)
-        n_by_d_cum = np.cumsum(n_by_d_)
-        # Each band gets two scores, one for H0 and one for H1
-        scores_by_d_ = np.zeros((len(n_by_d_cum), 2))
-        for d_ in range(len(n_by_d_)):
-            K = Ks[d_]
-            d = d_ - self.d0
-            # don't score things too close to the edges, the small area
-            # leads to unnecessarily high scores.
-            if d_ < edge_margin or d > len(self.S) - edge_margin:
-                scores_by_d_[d_][0] = float('-inf')
-                scores_by_d_[d_][1] = float('-inf')
-                continue
+        def _len(d):
+            return expected_overlap_len(len(self.S), len(self.T), d, gap_prob)
 
-            radius = radii[d_]
-            m = int(max(0, d_ - radius))
-            M = int(min(len(n_by_d_) - 1, d_ + radius))
-            n_in_band = n_by_d_cum[M] - n_by_d_cum[m]
+        def _rad(d):
+            return np.ceil(self.band_radius(_len(d)))
 
-            L = wall_to_wall_distance(len(self.S), len(self.T), d)
-            area = L * radius * 2
-            s0, s1 = self.score_num_seeds(num_seeds=n_in_band, area=area,
-                                          seglen=K, p_match=p_match)
-            scores_by_d_[d_][0], scores_by_d_[d_][1] = s0, s1
-        return scores_by_d_
+        all_seeds = list(self.to_diagonal_coordinates(i, j)
+                         for i, j in self.seeds(exclude_trivial=True))
+        if not all_seeds:
+            return []
+        all_seeds_scaled = np.array([(d / _rad(d), a / _len(d))
+                                     for d, a in all_seeds])
+        quad_tree = cKDTree(all_seeds_scaled)
+        all_neighs = quad_tree.query_ball_tree(quad_tree, 1, p=float('inf'))
+        # all_neighs[i] is the indices of the neighbors of all_seeds[i]; this
+        # always contains the seed itself (i.e always: i in neighs[i])
+        for idx, _ in enumerate(all_neighs):
+            all_neighs[idx].remove(idx)
+        seeds_with_neighs = zip(all_seeds, all_neighs)
+
+        def _p(d, n):
+            L = _len(d)
+            d_radius = int(np.ceil(self.band_radius(L)))
+            area = 2 * d_radius * L
+            word_p_null = (1./len(self.alphabet)) ** self.wordlen
+            word_p = (n - area * word_p_null) / L
+            try:
+                match_p = np.exp(np.log(word_p) / self.wordlen)
+            except Warning:
+                # presumably this happened because word_p was too small for log
+                match_p = 0
+            return min(match_p, 1)
+
+        return [{'seed': (d, a), 'r': _rad(d), 'L': _len(d),
+                 'p': _p(d, len(neighs))}
+                for (d, a), neighs in seeds_with_neighs]
 
     def highest_scoring_overlap_band(self, p_min):
-        """Finds the highest scoring diagonal band with respect to both H0 and
-        H1 statistics with segment length calculated such that only overlap
-        similarities are considered.
+        """Finds the highest scoring diagonal band according to probabiliy
+        estimations of :func:`score_seeds`.
 
         Returns:
-            tuple: containing the the highest scoring band and their score for
-            each of H0 and H1 models.  ``((d0_min, d0_max), s0), ((d1_min,
-            d1_max), s1)``.
+            dict: with same keys ``p, score, d_band`` consistent with the
+                  output of :func:`score_seeds` for the highest scoring
+                  diagonal band.
         """
-        self.log('scoring possible overlaps between %s and %s' %
-                 (self.S.content_id[:8], self.T.content_id[:8]))
-
-        # NOTE we are using 1 - p as an (over)estimate of g (g_max may be too
-        # wild).
-        Ks = [expected_overlap_len(len(self.S), len(self.T), d, 1 - p_min)
-              for d in range(- len(self.T) + 1, len(self.S))]
-        scores_by_d_ = self.score_diagonal_bands(Ks, p_min)
-
-        d_H0_ = np.argmax(scores_by_d_[:, 0])
-        d_H1_ = np.argmax(scores_by_d_[:, 1])
-        K_H0, K_H1 = Ks[d_H0_], Ks[d_H1_]
-        s_H0, s_H1 = scores_by_d_[d_H0_, 0], scores_by_d_[d_H1_, 1]
-        r_H0, r_H1 = self.band_radius(K_H0), self.band_radius(K_H1)
-
-        d_H0, d_H1 = d_H0_ - self.d0, d_H1_ - self.d0
-        seg_H0 = (d_H0 - r_H0, d_H0 + r_H0)
-        seg_H1 = (d_H1 - r_H1, d_H1 + r_H1)
-        return (seg_H0, s_H0), (seg_H1, s_H1)
+        scored_seeds = self.score_seeds(p_min)
+        if not scored_seeds:
+            return None
+        idx = max(range(len(scored_seeds)), key=lambda i: scored_seeds[i]['p'])
+        seed, rad = scored_seeds[idx]['seed'], scored_seeds[idx]['r']
+        p_hat, overlap_len = scored_seeds[idx]['p'], scored_seeds[idx]['L']
+        d_band = seed[0] - rad, seed[1] + rad
+        area = 2 * rad * overlap_len
+        mu_H1, sd_H1 = H1_moments(len(self.alphabet), self.wordlen, area,
+                                  overlap_len, p_hat)
+        num_seeds = self.seed_count(d_band=d_band)
+        z_H1 = (num_seeds - mu_H1) / sd_H1
+        return {'d_band': d_band, 'p': p_hat, 'score': z_H1}
 
 
 class WordBlotMultiple(SeedIndexMultiple):
