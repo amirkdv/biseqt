@@ -131,57 +131,6 @@ def exp_repeat_regions():
     savefig(fig, 'repeat_regions.png')
 
 
-def exp_conserved_sequences():
-    gap = .15
-    subst = .15
-    K = 500
-    wordlen = 8
-    A = Alphabet('ACGT')
-    WB_kw = {'g_max': gap, 'sensitivity': .9, 'alphabet': A,
-             'wordlen': wordlen, 'path': ':memory:', 'log_level': logging.INFO}
-
-    M_std = MutationProcess(A, subst_probs=.2, ge_prob=.15, go_prob=.15)
-    M_con = MutationProcess(A, subst_probs=.05, ge_prob=.05, go_prob=.05)
-
-    pieces = [rand_seq(A, 10000) for _ in range(3)]
-    conserved = rand_seq(A, 1000)
-
-    S = pieces[0] + conserved + pieces[1] + pieces[2]
-    pieces_hom = [M_std.mutate(p)[0] for p in pieces]
-    conserved_hom = M_con.mutate(conserved)[0]
-    T = pieces_hom[0] + pieces_hom[1] + conserved_hom + pieces_hom[2]
-
-    fig = plt.figure()
-    gs = gridspec.GridSpec(1, 2, width_ratios=[30, 1])
-    ax = plt.subplot(gs[0])
-    ax_colorbar = plt.subplot(gs[1])
-
-    cmap = plt.cm.get_cmap('jet')
-
-    WB = WordBlot(S, T, **WB_kw)
-    subst = (1 - gap) * (1 - subst)
-    for rec in WB.similar_segments(K_min=K, p_min=subst):
-        segment, scores, p_hat = rec['segment'], rec['scores'], rec['p']
-        (d_min, d_max), (a_min, a_max) = segment
-        log('homologous segment: %s, scores = %.2f, %.2f, p = %.2f' %
-            (str(segment), scores[0], scores[1], p_hat))
-        color = cmap(p_hat)[:3]
-        plot_similar_segment(ax, segment, color=color, alpha=.3, lw=10)
-
-    norm = matplotlib.colors.Normalize(vmin=0, vmax=1)
-    plot_seeds(ax, WB.seeds())
-    adjust_pw_plot(ax, len(S), len(T))
-
-    matplotlib.colorbar.ColorbarBase(ax_colorbar, cmap=cmap, norm=norm,
-                                     orientation='vertical')
-
-    fig.suptitle('Conserved sequences with variable sequence similarity',
-                 fontsize=10)
-    fig.tight_layout()
-    savefig(fig, 'conserved_sequences.png')
-
-
 if __name__ == '__main__':
     exp_recombination()
     exp_repeat_regions()
-    exp_conserved_sequences()
