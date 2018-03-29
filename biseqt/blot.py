@@ -554,7 +554,7 @@ class WordBlotOverlap(WordBlot):
         idx = max(range(len(scored_seeds)), key=lambda i: scored_seeds[i]['p'])
         seed, rad = scored_seeds[idx]['seed'], scored_seeds[idx]['r']
         p_hat, overlap_len = scored_seeds[idx]['p'], scored_seeds[idx]['L']
-        d_band = seed[0] - rad, seed[1] + rad
+        d_band = seed[0] - rad, seed[0] + rad
         area = 2 * rad * overlap_len
         mu_H1, sd_H1 = H1_moments(len(self.alphabet), self.wordlen, area,
                                   overlap_len, p_hat)
