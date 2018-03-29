@@ -8,12 +8,12 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 from biseqt.blot import WordBlot
 from biseqt.sequence import Alphabet
 from biseqt.stochastics import rand_seq, MutationProcess
-from util import plot_seeds, plot_scored_seeds
+from util import plot_scored_seeds
 from util import plot_similar_segment, adjust_pw_plot
 from util import log, savefig
 
 
-def exp_recombination():
+def exp_rearrangement():
     K = 500
     wordlen = 8
     A = Alphabet('ACGT')
@@ -46,7 +46,6 @@ def exp_recombination():
 
     p_min = (1 - max(ps)) ** 2
     scored_seeds = WB.score_seeds(K)
-    # convert to ij coordinates and leave only the H1 score
     scored_seeds = [(WB.to_ij_coordinates(*rec['seed']), rec['p'])
                     for rec in scored_seeds]
     plot_scored_seeds(ax_seeds, scored_seeds, extent=[0, 1], threshold=p_min)
@@ -74,7 +73,7 @@ def exp_recombination():
     adjust_pw_plot(ax_seeds, len(S), len(T))
 
     fig.tight_layout()
-    savefig(fig, 'rearrangement_duplication.png')
+    savefig(fig, 'rearrangement.png')
 
 
 def exp_repeat_regions():
@@ -132,5 +131,5 @@ def exp_repeat_regions():
 
 
 if __name__ == '__main__':
-    exp_recombination()
+    exp_rearrangement()
     exp_repeat_regions()

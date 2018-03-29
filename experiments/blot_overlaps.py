@@ -292,11 +292,6 @@ def exp_sequencing_reads_overlap():
         dumpfile=dumpfile
     )
 
-    # HACK
-    sim_data['reads_path'] = reads_path
-    from util import pickle_dump
-    pickle_dump(sim_data, dumpfile)
-
     plot_sequencing_reads_overlap(sim_data, suffix=suffix)
 
 
