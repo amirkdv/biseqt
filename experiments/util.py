@@ -89,13 +89,14 @@ def with_dumpfile(func):
 # Real bio sequence and alignment helpers
 # =============================================================================
 # TODO this is really slow on large sequences
-def load_fasta(f):
+def load_fasta(f, num_seqs=-1):
     """Given file handle reads fasta sequences and yields tuples of (seq, name,
        pos) containing the raw sequence, its FASTA name, and its starting
        position in f.
     """
     cur_name = cur_seq = ''
     cur_pos = 0
+    cnt = 0
 
     # NOTE `for raw_line in f` uses a read-ahead buffer which makes `f.tell()`
     # useless for remembering where a sequence begins.
@@ -108,6 +109,9 @@ def load_fasta(f):
             if cur_seq:
                 assert cur_name
                 yield cur_seq, cur_name, cur_pos
+                cnt += 1
+                if num_seqs > 0 and cnt == num_seqs:
+                    break
                 cur_seq, cur_name = '', ''
             cur_name = line[1:].strip()
             cur_pos = f.tell() - len(raw_line)
@@ -116,8 +120,9 @@ def load_fasta(f):
             assert cur_name
             cur_seq += line
     if cur_seq:
-        assert cur_name
-        yield cur_seq, cur_name, cur_pos
+        if num_seqs < 0 or cnt < num_seqs:
+            assert cur_name
+            yield cur_seq, cur_name, cur_pos
 
 
 # NOTE sam alignments don't have substitutions, so outputs here are MID,
