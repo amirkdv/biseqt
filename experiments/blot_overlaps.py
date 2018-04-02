@@ -129,7 +129,7 @@ def sim_overlap_simulations(**kw):
 
         for key, (S, T) in seq_pairs.items():
             WB = WordBlotOverlap(S, T, **WB_kw)
-            res = WB.highest_scoring_overlap_band2(p_match * .95)
+            res = WB.highest_scoring_overlap_band(p_match * .95)
             sim_data['results'][key]['d_true'][K_idx, idx] = d_true
             sim_data['results'][key]['p'][K_idx, idx] = res['p']
             sim_data['results'][key]['p_true'][K_idx, idx] = p_true[key]
@@ -239,7 +239,7 @@ def sim_sequencing_reads_overlap(**kw):
         indic.progress()
         WB = WordBlotOverlap(reads[i], reads[j], **WB_kw)
 
-        res = WB.highest_scoring_overlap_band2(p_min=p_min)
+        res = WB.highest_scoring_overlap_band(p_min=p_min)
         sim_data['overlap_band'][(i, j)] = res
 
     indic.finish()
