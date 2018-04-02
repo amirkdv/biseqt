@@ -20,6 +20,11 @@ from util import opseq_path, plot_local_alignment
 from biseqt.pw import Aligner, STD_MODE, LOCAL
 
 
+# FIXME the algorihtm to find segments from seeds has been fixed (a_min and
+# a_max previously would give out of bound numbers). Double check that this
+# does not affect K_hat experiments (should be fine because we are far away
+# from the boundary).
+
 @with_dumpfile
 def sim_simulated_K_p(Ks, ps, n_samples, **kw):
     def _zero():
@@ -203,6 +208,7 @@ def sim_comp_aligned_genes(seqs, pws, **kw):
         log('tpr = %.2f' % sim_data['homologous_tpr'][(id1, id2)])
 
         # actual alignments
+        # FIXME is this affected by the correction in segment coordinates?
         for idx, seg_info in enumerate(sim_data['segments'][(id1, id2)]):
             seg = seg_info['segment']
             (i_start, i_end), (j_start, j_end) = WB.to_ij_coordinates_seg(seg)

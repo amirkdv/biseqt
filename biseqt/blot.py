@@ -18,11 +18,14 @@
     [(((-28, 7), (0, 99)), 1.1988215486845972, 0.7630903108462143)]
     >>>
 """
+import sys
 import warnings
 import numpy as np
 from scipy.special import erfcinv
 from scipy.spatial import cKDTree
 from .seeds import SeedIndex, SeedIndexMultiple
+from .kmers import as_kmer_seq
+from .util import Logger
 
 
 # so we can catch numpy warnings
@@ -200,6 +203,9 @@ def H1_moments(alphabet_len, wordlen, area, seglen, p_match):
     mu_H0, sd_H0 = H0_moments(alphabet_len, wordlen, area)
 
     p_H1 = p_match
+    if p_H1 == 1.:
+        # we can't let p_H1 == 1 because we get division by zero below
+        p_H1 = 1 - np.finfo(float).eps
     pw_H1 = p_H1 ** wordlen
 
     mu_H1 = mu_H0 + seglen * pw_H1
@@ -287,6 +293,7 @@ class WordBlot(SeedIndex):
         """
         a_min, a_max = a_band
         d_min, d_max = d_band
+        # FIXME verify a_min and a_max are acceptable values
         L = (a_max - a_min)
         # FIXME what to do with this?
         # K = (2. / (2 - self.gap_prob)) * L
@@ -327,7 +334,8 @@ class WordBlot(SeedIndex):
             match_p = 0
         return min(match_p, 1)
 
-    def find_all_neighbors(self, d_radius, a_radius):
+    @classmethod
+    def find_all_neighbors(cls, seeds, d_radius, a_radius):
         """For each seed finds all seeds in its neighborhood defined by:
 
         .. math::
@@ -346,8 +354,7 @@ class WordBlot(SeedIndex):
         d_coeff = 1. * a_radius / d_radius
         radius = a_radius
 
-        all_seeds = list(self.to_diagonal_coordinates(i, j)
-                         for i, j in self.seeds(exclude_trivial=True))
+        all_seeds = list(cls.to_diagonal_coordinates(i, j) for i, j in seeds)
         if not all_seeds:
             return []
         all_seeds_scaled = np.array([(d * d_coeff, a) for d, a in all_seeds])
@@ -378,7 +385,10 @@ class WordBlot(SeedIndex):
         """
         d_radius = int(np.ceil(self.band_radius(K)))
         a_radius = int(np.ceil(K / 2))
-        seeds_with_neighs = self.find_all_neighbors(d_radius, a_radius)
+
+        seeds_with_neighs = self.find_all_neighbors(
+            self.seeds(exclude_trivial=True), d_radius, a_radius
+        )
 
         def _p(d, a, n):
             d_band = (d - d_radius, d + d_radius)
@@ -389,7 +399,7 @@ class WordBlot(SeedIndex):
         return [{'seed': (d, a), 'neighs': neighs, 'p': _p(d, a, len(neighs))}
                 for (d, a), neighs in seeds_with_neighs]
 
-    def similar_segments(self, K_min, p_min, at_least_one=False):
+    def similar_segments(self, K_min, p_min, score=True, at_least_one=False):
         """Find all maximal local similarities of given minium length and match
         probability. Additionally for each segment, the match probability is
         estimated and H0/H1 scores are calculated.
@@ -399,11 +409,15 @@ class WordBlot(SeedIndex):
                 minimum required length of similarity.
             p_min (float):
                 Minimum required match probability at each position.
+            score (bool):
+                Whether to score the segment against H1 by counting seeds
+                inside.
 
         Yields:
-            tuple: coordinates of similar region in diagonal coordinates, with
-            a z-score, and estimated match probability:
-            ``((d_min, d_max), (a_min, a_max)), z_score, match_prob``.
+            dict: dictionary with keys: ``seeds`` (coordinates of similar
+            region in diagonal coordinates ``((d_min, d_max), (a_min,
+            a_max))``)), ``p`` the estimated match probability, and ``score``
+            the H1 z-score if keyword argument ``score`` is true.
         """
         self.log('finding local similarities between %s and %s' %
                  (self.S.content_id[:8], self.T.content_id[:8]))
@@ -414,15 +428,13 @@ class WordBlot(SeedIndex):
         def _update_seg(seg, seed):
             d, a = seed
             if seg is None:
-                d_band = (d - d_radius, d + d_radius)
-                a_band = (a - a_radius, a + a_radius)
-                return (d_band, a_band), True
-            (d_min, d_max), (a_min, a_max) = seg
-            updated = d > d_max or d < d_min or a > a_max or a < a_min
-            d_min, d_max = min(d, d_min), max(d, d_max)
-            a_min, a_max = min(a, a_min), max(a, a_max)
-            seg = (d_min, d_max), (a_min, a_max)
-            return seg, updated
+                d_min, d_max = d - d_radius, d + d_radius
+                a_min, a_max = a - a_radius, a + a_radius
+            else:
+                (d_min, d_max), (a_min, a_max) = seg
+                d_min, d_max = min(d, d_min), max(d, d_max)
+                a_min, a_max = min(a - a_radius, a_min), max(a + a_radius, a_max)
+            return (d_min, d_max), (a_min, a_max)
 
         avail = [rec['p'] >= p_min for rec in scored_seeds]
         if not any(avail) and at_least_one:
@@ -442,43 +454,46 @@ class WordBlot(SeedIndex):
             while stack:
                 idx = stack.pop()
                 ps_in_seg.append(scored_seeds[idx]['p'])
-                seg, _ = _update_seg(seg, scored_seeds[idx]['seed'])
+                seg = _update_seg(seg, scored_seeds[idx]['seed'])
                 for neigh in scored_seeds[idx]['neighs']:
                     if avail[neigh]:
                         stack.append(neigh)
                         avail[neigh] = False
             if seg is None:
                 break
-            n = self.seed_count(d_band=seg[0], a_band=seg[1])
+            else:
+                (d_min, d_max), (a_min, a_max) = seg
+                d_min = min(len(self.S), max(d_min, -len(self.T)))
+                d_max = min(len(self.S), max(d_max, -len(self.T)))
+                a_min = max(a_min, 0)
+                a_max = min(a_max, wall_to_wall_distance(
+                    len(self.S), len(self.T), (d_min + d_max) / 2
+                ))
+                seg = (d_min, d_max), (a_min, a_max)
             # NOTE the following is more justifiable but it matches the
             # average. TODO turn this in into an experiment to justify
             # p_hat = self.estimate_match_probability(
             #   n, d_band=seg[0], a_band=seg[1])
             p_hat = sum(ps_in_seg) / len(ps_in_seg)
-            K_hat = seg[1][1] - seg[1][0]
-            K_hat, area_hat = self.segment_dims(d_band=seg[0], a_band=seg[1])
-            scores = self.score_num_seeds(num_seeds=n, area=area_hat,
-                                          seglen=K_hat, p_match=p_hat)
-            yield {'segment': seg, 'p': p_hat, 'scores': scores}
+            res = {'segment': seg, 'p': p_hat}
+            if score:
+                n = self.seed_count(d_band=seg[0], a_band=seg[1])
+                K_hat = seg[1][1] - seg[1][0]
+                # FIXME double calculations, is segment_dims necessary?!
+                K_hat, area_hat = self.segment_dims(d_band=seg[0], a_band=seg[1])
+                scores = self.score_num_seeds(num_seeds=n, area=area_hat,
+                                              seglen=K_hat, p_match=p_hat)
+                res['scores'] = scores
+            yield res
 
 
 class WordBlotOverlap(WordBlot):
     """A specialized version of WordBlot for detecting overlap
     (suffix-prefix) similarities between sequences (e.g. in a sequencing
     context)."""
-
-    def band_radii(self, Ks):
-        """Wraps :func:`band_radii` with our mutation parameters and sequence
-        lengths.
-
-        Args:
-            K (int): expected alignment lengths of interest.
-
-        Returns:
-            int: radius of band for desired :attr:`sensitivity`.
-        """
-        return band_radii(Ks, self.g_max, self.sensitivity)
-
+    # FIXME get rid of p_min argument it's only affecting our alignment length
+    # estimates. If too worried about g_max being wild, can use wall to wall
+    # instead of expected_overlap_len!
     def score_seeds(self, p_min):
         """For each seed finds all seeds in its neighborhood defined by:
 
@@ -539,7 +554,7 @@ class WordBlotOverlap(WordBlot):
                  'p': _p(d, len(neighs))}
                 for (d, a), neighs in seeds_with_neighs]
 
-    def highest_scoring_overlap_band(self, p_min):
+    def highest_scoring_overlap_band(self, p_min, score=True):
         """Finds the highest scoring diagonal band according to probabiliy
         estimations of :func:`score_seeds`.
 
@@ -555,14 +570,102 @@ class WordBlotOverlap(WordBlot):
         seed, rad = scored_seeds[idx]['seed'], scored_seeds[idx]['r']
         p_hat, overlap_len = scored_seeds[idx]['p'], scored_seeds[idx]['L']
         d_band = seed[0] - rad, seed[0] + rad
-        area = 2 * rad * overlap_len
-        mu_H1, sd_H1 = H1_moments(len(self.alphabet), self.wordlen, area,
-                                  overlap_len, p_hat)
-        num_seeds = self.seed_count(d_band=d_band)
-        z_H1 = (num_seeds - mu_H1) / sd_H1
-        return {'d_band': d_band, 'p': p_hat, 'score': z_H1}
+        res = {'d_band': d_band, 'p': p_hat, 'len': overlap_len}
+        if score:
+            area = 2 * rad * overlap_len
+            mu_H1, sd_H1 = H1_moments(len(self.alphabet), self.wordlen, area,
+                                      overlap_len, p_hat)
+            num_seeds = self.seed_count(d_band=d_band)
+            z_H1 = (num_seeds - mu_H1) / sd_H1
+            res['score'] = z_H1
+        return res
 
 
+class WordBlotOverlapRef(WordBlotOverlap):
+    # allowed memory unit is in gigabytes
+    def __init__(self, ref, allowed_memory=1, **kw):
+        self.wordlen = kw['wordlen']
+        self.alphabet = kw['alphabet']
+        self.g_max = kw['g_max']
+        self.sensitivity = kw['sensitivity']
+        self.log_level = kw['log_level']
+        self.S = ref
+        num_kmers = len(self.alphabet) ** self.wordlen
+        mem_needed = sys.getsizeof(num_kmers) * num_kmers
+        mem_needed_gb = np.power(2, np.log2(mem_needed) - 30)
+        if mem_needed_gb > allowed_memory:
+            msg = 'not enough memory (max = %.2f GB) ' % allowed_memory
+            msg += 'to store %d-mers ' % self.wordlen
+            msg += '(%.2f GB needed)' % mem_needed_gb
+            raise MemoryError(msg)
+        self.kmer_hits = [[] for _ in range(num_kmers)]
+        for pos, kmer in enumerate(as_kmer_seq(ref, self.wordlen)):
+            self.kmer_hits[kmer].append(pos)
+        self.T = None
+        relpath = 'python-object'
+        log_header = '%d-mer cache (%s)' % (self.wordlen, relpath)
+        self._logger = Logger(log_level=self.log_level, header=log_header)
+
+    def seeds(self, exclude_trivial=True):
+        assert self.T is not None
+        for pos, kmer in enumerate(as_kmer_seq(self.T, self.wordlen)):
+            for pos_ref in self.kmer_hits[kmer]:
+                if self.S == self.T and exclude_trivial and pos == pos_ref:
+                    continue
+                yield pos_ref, pos
+
+    def score_seeds_(self, seq, p_min):
+        self.T = seq
+        return super(WordBlotOverlapRef, self).score_seeds(p_min)
+
+    def highest_scoring_overlap_band(self, seq, p_min):
+        self.T = seq
+        return super(WordBlotOverlapRef, self).highest_scoring_overlap_band(p_min, score=False)
+
+
+class WordBlotLocalRef(WordBlot):
+    def __init__(self, ref, allowed_memory=1, **kw):
+        self.wordlen = kw['wordlen']
+        self.alphabet = kw['alphabet']
+        self.g_max = kw['g_max']
+        self.sensitivity = kw['sensitivity']
+        self.log_level = kw['log_level']
+        self.S = ref
+        num_kmers = len(self.alphabet) ** self.wordlen
+        mem_needed = sys.getsizeof(num_kmers) * num_kmers
+        mem_needed_gb = np.power(2, np.log2(mem_needed) - 30)
+        if mem_needed_gb > allowed_memory:
+            msg = 'not enough memory (max = %.2f GB) ' % allowed_memory
+            msg += 'to store %d-mers ' % self.wordlen
+            msg += '(%.2f GB needed)' % mem_needed_gb
+            raise MemoryError(msg)
+        self.kmer_hits = [[] for _ in range(num_kmers)]
+        for pos, kmer in enumerate(as_kmer_seq(ref, self.wordlen)):
+            self.kmer_hits[kmer].append(pos)
+        self.T = None
+        relpath = 'python-object'
+        log_header = '%d-mer cache (%s)' % (self.wordlen, relpath)
+        self._logger = Logger(log_level=self.log_level, header=log_header)
+
+    def seeds(self, exclude_trivial=True):
+        assert self.T is not None
+        for pos, kmer in enumerate(as_kmer_seq(self.T, self.wordlen)):
+            for pos_ref in self.kmer_hits[kmer]:
+                if self.S == self.T and exclude_trivial and pos == pos_ref:
+                    continue
+                yield pos_ref, pos
+
+    def score_seeds_(self, seq, K):
+        self.T = seq
+        return super(WordBlotLocalRef, self).score_seeds(K)
+
+    def similar_segments(self, seq, K_min, p_min, at_least_one=False):
+        self.T = seq
+        for res in super(WordBlotLocalRef, self).similar_segments(K_min, p_min, score=False, at_least_one=at_least_one):
+            yield res
+
+
+# FIXME lots of code duplication here, can it be cleaned up?
 class WordBlotMultiple(SeedIndexMultiple):
     """A multiple sequence similarity finder based on m-dependent CLT
     statistics.
