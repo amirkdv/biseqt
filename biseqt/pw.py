@@ -100,17 +100,19 @@ END_ANCHORED_OVERLAP = lib.END_ANCHORED_OVERLAP
 of both sequences."""
 
 # banded alignment types:
-B_GLOBAL = lib.GLOBAL
+B_GLOBAL = lib.B_GLOBAL
 """Banded global alignment problem; may not be well-defined (end points of the
 table may not lie in band)."""
 B_OVERLAP = lib.B_OVERLAP
 """Banded suffix-prefix alignment problem in either direction including
 substring alignments."""
+B_LOCAL = lib.B_LOCAL
+"""Banded local alignment problem."""
 
 ALN_TYPES = {
     STD_MODE: [GLOBAL, LOCAL, START_ANCHORED, END_ANCHORED, OVERLAP,
                START_ANCHORED_OVERLAP, END_ANCHORED_OVERLAP],
-    BANDED_MODE: [B_GLOBAL, B_OVERLAP],
+    BANDED_MODE: [B_GLOBAL, B_OVERLAP, B_LOCAL],
 }
 
 

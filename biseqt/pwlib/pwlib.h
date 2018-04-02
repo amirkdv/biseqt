@@ -59,6 +59,7 @@ typedef enum {
 */
 typedef enum {
   B_GLOBAL, /**< Solve for banded global alignments.*/
+  B_LOCAL, /**< Solve for banded local alignments.*/
   B_OVERLAP, /**< Solve for banded suffix-prefix alignments of either direction
     (including substring alignments, if within band).*/
 } banded_alntype;

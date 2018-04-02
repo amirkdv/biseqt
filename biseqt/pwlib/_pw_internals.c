@@ -189,6 +189,10 @@ int _alnchoice_B(dptable *T, int x, int y, alnchoice* choice) {
       if (banded_type == B_OVERLAP && (x == 0 || y == 0)) {
         break;
       }
+      // local alignments can start anywhere
+      if (banded_type == B_LOCAL) {
+        break;
+      }
       // B not allowed otherwise:
       return -1;
     default:
@@ -381,6 +385,23 @@ intpair _banded_find_optimal(dptable* T) {
         T->cells[i][j].choices[0].score > max) {
         max = T->cells[i][j].choices[0].score;
         opt = (intpair) {i, j};
+      }
+    }
+    if (opt.i != -1 && opt.j != -1) {
+      return opt;
+    } else {
+      return (intpair) {-1, -1};
+    }
+  }
+  if (T->prob->banded_params->type == B_LOCAL) {
+    max = -INT_MAX;
+    for (i = 0; i < T->num_rows; i++){
+      for (j = 0; j < T->row_lens[i]; j++) {
+        if (T->cells[i][j].num_choices >= 1 &&
+            T->cells[i][j].choices[0].score > max) {
+          max = T->cells[i][j].choices[0].score;
+          opt = (intpair) {i, j};
+        }
       }
     }
     if (opt.i != -1 && opt.j != -1) {
