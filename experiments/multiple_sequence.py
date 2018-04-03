@@ -176,8 +176,8 @@ def exp_biological_multiple_sequences():
 
     ax_roc = plt.subplot(gs[1])
     plot_roc(ax_roc, pos, neg, color='k')
-    title = 'ROC for classifing exactly matching %d-mers (%d samples)\n' % \
-            (wordlen, len(pos) + len(neg))
+    title = 'ROC for classifing exactly matching %d-mers:' % wordlen
+    title += '%d(+) %d(-) samples\n' % (len(pos), len(neg))
     title += 'species: %s' % ', '.join(x.split('.')[0] for x in ids)
     ax_roc.set_title(title, fontsize=8)
 
