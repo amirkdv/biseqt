@@ -518,7 +518,11 @@ def empirical_cdf(sample):
     return _empirical_cdf
 
 
-def plot_cdf(ax, sample, num_points=1000, smooth_radius=None, **kwargs):
+def plot_cdf(ax, sample, **kw):
+    smooth_radius = kw.pop('smooth_radius', None)
+    num_points = kw.pop('num_points', 1000)
+    mark_threshold = kw.pop('mark_threshold', None)
+
     sample = np.sort(sample)
     F = empirical_cdf(sample)
     m, M = sample[0], sample[-1]
@@ -528,9 +532,11 @@ def plot_cdf(ax, sample, num_points=1000, smooth_radius=None, **kwargs):
         ys = F(xs)
     else:
         ys = gaussian_filter1d(F(xs), smooth_radius)
-    ax.plot(xs, ys, **kwargs)
+    ax.plot(xs, ys, **kw)
     ax.set_ylim([-.1, 1.1])
     ax.set_title('Cumulative Distribution')
+    if mark_threshold is not None:
+        ax.axvline(mark_threshold, c='b', ls='--', lw=3, alpha=.2)
 
 
 def roc(pos, neg, classifier='>', num_points=1000):
@@ -548,15 +554,19 @@ def roc(pos, neg, classifier='>', num_points=1000):
         return (xs, F_y(xs), F_x(xs))
 
 
-def plot_roc(ax, pos, neg, classifier='>', **kwargs):
+def plot_roc(ax, pos, neg, classifier='>', mark_threshold=None, **kw):
     ax.set_xlim([-.1, 1.1])
     ax.set_ylim([-.1, 1.1])
     ax.set_xlabel('False positive rate')
     ax.set_ylabel('True positive rate')
-    _, x, y = roc(pos, neg, classifier=classifier)
+    params, x, y = roc(pos, neg, classifier=classifier)
 
-    ax.plot(x, y, **kwargs)
+    ax.plot(x, y, **kw)
     ax.plot([0, 1], [0, 1], lw=2, ls='--', alpha=.2, c='k')
+
+    if mark_threshold is not None:
+        idx = bisect_left(params, mark_threshold)
+        ax.scatter([x[idx]], [y[idx]], c='b', s=100, lw=0, alpha=.3)
 
 
 def ppv(pos, neg, classifier='>', num_points=1000):
@@ -597,16 +607,23 @@ def npv(pos, neg, classifier='>', num_points=1000):
             return params, Nc_neg / (Nc_pos + Nc_pos)
 
 
-def plot_roc_pv(ax, pos, neg, classifier='>', num_points=1000, **kwargs):
+def plot_roc_pv(ax, pos, neg, classifier='>', **kw):
+    mark_threshold = kw.pop('mark_threshold', None)
+    num_points = kw.pop('num_points', 1000)
+
     params, npvs = npv(pos, neg, classifier=classifier, num_points=num_points)
     params, ppvs = ppv(pos, neg, classifier=classifier, num_points=num_points)
-    ax.plot(ppvs, npvs, **kwargs)
+    ax.plot(ppvs, npvs, **kw)
     ax.set_xlabel('Positive Predictive Value')
     ax.set_ylabel('Negative Predictive Value')
     ax.set_title('Predictive ROC')
+    if mark_threshold is not None:
+        idx = bisect_left(params, mark_threshold)
+        ax.scatter([ppvs[idx]], [npvs[idx]], c='b', s=100, lw=0, alpha=.3)
 
 
-def plot_classifier(path, pos, neg, labels=None, classifier='>', title=''):
+def plot_classifier(pos, neg, labels=None, classifier='>', title='',
+                    mark_threshold=None):
     if labels is None:
         labels = ['positive', 'negative']
     assert len(labels) == 2
@@ -618,25 +635,28 @@ def plot_classifier(path, pos, neg, labels=None, classifier='>', title=''):
     ax_p_roc = fig.add_subplot(grids[0, 1])
     ax_cdf = fig.add_subplot(grids[1, :])
 
-    plot_cdf(ax_cdf, pos, color='g', label=labels[0], lw=1.5)
-    plot_cdf(ax_cdf, neg, color='r', label=labels[1], lw=1.5)
+    plot_cdf(ax_cdf, pos, mark_threshold=mark_threshold, color='g',
+             label=labels[0], lw=1.5)
+    plot_cdf(ax_cdf, neg, mark_threshold=mark_threshold, color='r',
+             label=labels[1], lw=1.5)
     ax_cdf.legend(fontsize=12, loc='lower right')
 
     kw = {'lw': 1.5, 'c': 'k'}
-    plot_roc(ax_roc, pos, neg, classifier=classifier, **kw)
+    plot_roc(ax_roc, pos, neg, classifier=classifier,
+             mark_threshold=mark_threshold, **kw)
     roc_ticks = [i * .1 for i in range(11)]
     ax_roc.set_xticks(roc_ticks)
     ax_roc.set_yticks(roc_ticks)
 
-    plot_roc_pv(ax_p_roc, pos, neg, classifier=classifier, **kw)
+    plot_roc_pv(ax_p_roc, pos, neg, classifier=classifier,
+                mark_threshold=mark_threshold, **kw)
 
     for [ax, ax_title] in zip([ax_cdf, ax_roc, ax_p_roc],
                               ['Classifier statistic CDF',
-                               'ROC for %d(+), %d(-) samples)' %
+                               'ROC for %d(+), %d(-) samples' %
                                (len(pos), len(neg)),
                                'Predictive ROC']):
         ax.set_title(ax_title, fontsize=12)
         ax.tick_params(labelsize=12)
-    fig.suptitle(title, fontsize=12)
 
-    savefig(fig, path, comment='classifier plot')
+    return fig, [ax_cdf, ax_roc, ax_p_roc]

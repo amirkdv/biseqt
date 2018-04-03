@@ -506,9 +506,10 @@ def plot_comp_aligned_genes(sim_data, suffix='', naming_style=None):
     ax_K_aln.set_aspect('equal')
     ax_K_aln.set_title('Similarity length at identified segments')
 
-    plot_classifier('comp_aligned_genes[seed-classifier]%s.png' % suffix,
-                    sim_data['seed_pos'], sim_data['seed_neg'],
-                    labels=['homologous', 'non-homologous'])
+    fig, _ = plot_classifier(sim_data['seed_pos'], sim_data['seed_neg'],
+                             labels=['homologous', 'non-homologous'],
+                             mark_threshold=.8)
+    savefig(fig, 'comp_aligned_genes[seed-classifier]%s.png' % suffix)
 
     for fig in [fig_profiles, fig_p, fig_p_aln, fig_K_aln, fig_seeds,
                 fig_coord_classifier]:

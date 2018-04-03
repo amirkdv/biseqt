@@ -4,6 +4,7 @@ import logging
 import numpy as np
 from itertools import product
 from matplotlib import pyplot as plt
+from time import time
 
 from biseqt.util import ProgressIndicator
 from biseqt.blot import WordBlotOverlap, WordBlotOverlapRef
@@ -215,6 +216,8 @@ def sim_sequencing_reads_overlap(**kw):
         'p_min': p_min,
         'wordlen': wordlen,
         'reads_path': reads_path,
+        'avg_time': 0,
+        'avg_len': 0,
     }
     A = Alphabet('ACGT')
 
@@ -228,6 +231,9 @@ def sim_sequencing_reads_overlap(**kw):
     }
 
     reads, mappings = load_mapped_reads(reads_path)
+    sim_data['avg_len'] = int(
+        1. * sum(len(read) for read in reads) / len(reads)
+    )
 
     num_reads = len(reads)
     assert len(reads) == len(mappings)
@@ -235,13 +241,14 @@ def sim_sequencing_reads_overlap(**kw):
     log('finding all overlapping pairs of reads')
     indic = ProgressIndicator(num_total=num_total, percentage=False)
     indic.start()
+    t_start = time()
     for i in range(num_reads - 1):
         WB = WordBlotOverlapRef(reads[i], **WB_kw)
         for j in range(i + 1, num_reads):
             indic.progress()
             res = WB.highest_scoring_overlap_band(reads[j], p_min=p_min)
             sim_data['overlap_band'][(i, j)] = res
-
+    sim_data['avg_time'] = (time() - t_start) / num_total
     indic.finish()
     return sim_data
 
@@ -273,12 +280,15 @@ def plot_sequencing_reads_overlap(sim_data, suffix=''):
             neg.append(p_hat)
 
     labels = ['overlapping', 'non-overlapping']
-    plot_classifier('overlaps[roc]%s.png' % suffix, pos, neg, labels=labels)
+    fig, _ = plot_classifier(pos, neg, labels=labels, mark_threshold=.75)
+    fig.suptitle('avg length: %d nt, avg time to compare: %.2f s' %
+                 (sim_data['avg_len'], sim_data['avg_time']))
+    savefig(fig, 'overlaps[roc]%s.png' % suffix, comment='classifier plot')
 
 
 def exp_sequencing_reads_overlap():
-    hf_gap = .15
-    hf_subst = .15
+    hf_gap = .12
+    hf_subst = .1
     hf_match = (1 - hf_gap) * (1 - hf_subst)
 
     wordlen = 10
@@ -289,7 +299,7 @@ def exp_sequencing_reads_overlap():
 
     sim_data = sim_sequencing_reads_overlap(
         reads_path=reads_path, wordlen=wordlen, p_min=hf_match,
-        dumpfile=dumpfile, ignore_existing=True
+        dumpfile=dumpfile
     )
 
     plot_sequencing_reads_overlap(sim_data, suffix=suffix)
