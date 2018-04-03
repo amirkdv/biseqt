@@ -433,7 +433,8 @@ class WordBlot(SeedIndex):
             else:
                 (d_min, d_max), (a_min, a_max) = seg
                 d_min, d_max = min(d, d_min), max(d, d_max)
-                a_min, a_max = min(a - a_radius, a_min), max(a + a_radius, a_max)
+                a_min = min(a - a_radius, a_min)
+                a_max = max(a + a_radius, a_max)
             return (d_min, d_max), (a_min, a_max)
 
         avail = [rec['p'] >= p_min for rec in scored_seeds]
@@ -480,7 +481,8 @@ class WordBlot(SeedIndex):
                 n = self.seed_count(d_band=seg[0], a_band=seg[1])
                 K_hat = seg[1][1] - seg[1][0]
                 # FIXME double calculations, is segment_dims necessary?!
-                K_hat, area_hat = self.segment_dims(d_band=seg[0], a_band=seg[1])
+                K_hat, area_hat = self.segment_dims(d_band=seg[0],
+                                                    a_band=seg[1])
                 scores = self.score_num_seeds(num_seeds=n, area=area_hat,
                                               seglen=K_hat, p_match=p_hat)
                 res['scores'] = scores
@@ -620,7 +622,9 @@ class WordBlotOverlapRef(WordBlotOverlap):
 
     def highest_scoring_overlap_band(self, seq, p_min):
         self.T = seq
-        return super(WordBlotOverlapRef, self).highest_scoring_overlap_band(p_min, score=False)
+        return super(WordBlotOverlapRef, self).highest_scoring_overlap_band(
+            p_min, score=False
+        )
 
 
 class WordBlotLocalRef(WordBlot):
@@ -661,7 +665,9 @@ class WordBlotLocalRef(WordBlot):
 
     def similar_segments(self, seq, K_min, p_min, at_least_one=False):
         self.T = seq
-        for res in super(WordBlotLocalRef, self).similar_segments(K_min, p_min, score=False, at_least_one=at_least_one):
+        kw = {'score': False, 'at_least_one': at_least_one}
+        for res in super(WordBlotLocalRef, self).similar_segments(K_min, p_min,
+                                                                  **kw):
             yield res
 
 
