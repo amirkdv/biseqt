@@ -147,9 +147,9 @@ def sim_ig_genotyping(reads, genes, **kw):
                 ours_m = aln.transcript.count('M')
                 p_aln = mapped_genes[gene]['p_aln']
                 higher_p = p_aln >= min_igblast_p and \
-                           ours_m >= min_igblast_m - 2
+                    ours_m >= min_igblast_m - 2
                 higher_m = ours_m >= min_igblast_m and \
-                           p_aln >= min_igblast_p - .01
+                    p_aln >= min_igblast_p - .01
                 true_pos_forgiving = higher_p or higher_m
                 sys.stderr.write('      %s: %s(%s) ' %
                                  (gene_type,
@@ -171,8 +171,6 @@ def sim_ig_genotyping(reads, genes, **kw):
 
 def plot_ig_genotyping(sim_data, suffix=''):
     reads = sim_data['reads']
-    p_min = sim_data['p_min']
-    minlens = sim_data['minlens']
 
     comparison = {
         'p': {'V': [], 'D': [], 'J': []},
@@ -203,7 +201,7 @@ def plot_ig_genotyping(sim_data, suffix=''):
             # HACK to see what happens if we pick the best performing match;
             # result on first 1000 reads: % 86.86 (% 99.80)
             # mappings[gene_type] = dict(sorted(
-                # mappings[gene_type].items(), key=lambda x: x[1]['p']
+            #     mappings[gene_type].items(), key=lambda x: x[1]['p']
             # )[-1:])
 
             for gene, rec in mappings[gene_type].items():
@@ -222,21 +220,14 @@ def plot_ig_genotyping(sim_data, suffix=''):
                     num_agreements_forgiving += 1
                     color = 'g'
                 else:
-                    # p_aln, len_ = rec['p_aln'], rec['len_aln']
-                    # higher_p = p_aln >= min_igblast_p and \
-                               # len_ >= minlens[gene_type]
-                    # if ours_m >= min_igblast_m or higher_p:
-                        # num_agreements_forgiving += 1
-                        # color = 'g'
                     p_aln = rec['p_aln']
                     ours_m = rec['alignment'].transcript.count('M')
                     higher_p = p_aln >= min_igblast_p and \
-                               ours_m >= min_igblast_m - 2
+                        ours_m >= min_igblast_m - 2
                     higher_m = ours_m >= min_igblast_m and \
-                               p_aln >= min_igblast_p - .01
+                        p_aln >= min_igblast_p - .01
                     if higher_p or higher_m:
                         num_agreements_forgiving += 1
-                        # color = 'g'
                 comparison['p'][gene_type].append(
                     (rec['p_aln'], min_igblast_p, color)
                 )
@@ -251,7 +242,9 @@ def plot_ig_genotyping(sim_data, suffix=''):
             100. * num_agreements_strict / total_predictions
         accuracy['forgiving'][gene_type] = \
             100. * num_agreements_forgiving / total_predictions
-        print gene_type, accuracy['strict'][gene_type], accuracy['forgiving'][gene_type]
+        sys.stderr.write('%s %.2f %.2f' % (gene_type,
+                                           accuracy['strict'][gene_type],
+                                           accuracy['forgiving'][gene_type]))
 
     avg_time = sum(elapsed_times) / len(sim_data['mappings'])
     print 't', avg_time
