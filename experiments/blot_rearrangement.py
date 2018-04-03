@@ -63,8 +63,9 @@ def sim_ig_genotyping(reads, genes, **kw):
             gene_len = len(gene_rec['seq'])
 
             K_min = gene_len / 2
+            K_min = minlens[gene_type]
             similarities = list(
-                WB.similar_segments(gene_rec['seq'], K_min, .8)
+                WB.similar_segments(gene_rec['seq'], K_min, p_min)
             )
             if not similarities:
                 continue
@@ -120,8 +121,7 @@ def sim_ig_genotyping(reads, genes, **kw):
                 continue
             min_igblast_p = round(min(rec['p'] for rec in igblast.values()), 2)
             min_igblast_L = min(rec['length'] for rec in igblast.values())
-            min_igblast_m = round(min(rec['p'] * rec['length']
-                                  for rec in igblast.values()), 2)
+            min_igblast_m = min(rec['num_matches'] for rec in igblast.values())
             sim_data['mappings'][read_name][gene_type] = {
                 'min_igblast_p': min_igblast_p,
                 'min_igblast_L': min_igblast_L,
@@ -143,19 +143,21 @@ def sim_ig_genotyping(reads, genes, **kw):
                     + aln.projected_len(aln.transcript, on='origin')
 
                 true_pos = gene in reads[read_name]['igblast'][gene_type]
+
+                ours_m = aln.transcript.count('M')
                 p_aln = mapped_genes[gene]['p_aln']
-                len_aln = mapped_genes[gene]['len_aln']
-                if min_igblast_p <= p_aln and len_aln >= minlens[gene_type]:
-                    true_pos = True
-                if min_igblast_L <= len_aln and p_aln >= p_min:
-                    true_pos = True
-                sys.stderr.write('      %s: %s ' %
-                                 (gene_type, '+' if true_pos else '-'))
+                higher_p = p_aln >= min_igblast_p and \
+                           ours_m >= min_igblast_m - 2
+                higher_m = ours_m >= min_igblast_m and \
+                           p_aln >= min_igblast_p - .01
+                true_pos_forgiving = higher_p or higher_m
+                sys.stderr.write('      %s: %s(%s) ' %
+                                 (gene_type,
+                                  '+' if true_pos else '-',
+                                  '+' if true_pos_forgiving else '-'))
                 sys.stderr.write(
-                    '%s(%d,p_aln=%.2f,p_igblast=%.2f,L_igblast=%s)\n' %
-                    (gene, mapped_genes[gene]['len_aln'],
-                     mapped_genes[gene]['p_aln'],
-                     min_igblast_p, min_igblast_L)
+                    '%s match=%d (%d),p=%.2f(%.2f)\n' %
+                    (gene, ours_m, min_igblast_m, p_aln, min_igblast_p)
                 )
 
             start_pos = min(rec['end_pos']
@@ -177,20 +179,32 @@ def plot_ig_genotyping(sim_data, suffix=''):
         'K': {'V': [], 'D': [], 'J': []},
         'num_match': {'V': [], 'D': [], 'J': []},
     }
+    accuracy = {
+        'strict': {'V': 0, 'D': 0, 'J': 0},
+        'forgiving': {'V': 0, 'D': 0, 'J': 0},
+    }
 
-    num_agreements_strict = 0
-    num_agreements_forgiving = 0
-    total_predictions = 0
     elapsed_times = []
     for read, mappings in sim_data['mappings'].items():
         elapsed_times.append(mappings['time'])
-        for gene_type in 'VDJ':
+
+    for gene_type in 'VDJ':
+        num_agreements_strict = 0
+        num_agreements_forgiving = 0
+        total_predictions = 0
+        for read, mappings in sim_data['mappings'].items():
             if mappings[gene_type] is None:
                 continue
             # pop these metrics so we can iterate over genes
             min_igblast_p = mappings[gene_type].pop('min_igblast_p')
             min_igblast_L = mappings[gene_type].pop('min_igblast_L')
             min_igblast_m = mappings[gene_type].pop('min_igblast_m')
+
+            # HACK to see what happens if we pick the best performing match;
+            # result on first 1000 reads: % 86.86 (% 99.80)
+            # mappings[gene_type] = dict(sorted(
+                # mappings[gene_type].items(), key=lambda x: x[1]['p']
+            # )[-1:])
 
             for gene, rec in mappings[gene_type].items():
                 ours_m = rec['p_aln'] * rec['len_aln']
@@ -208,13 +222,21 @@ def plot_ig_genotyping(sim_data, suffix=''):
                     num_agreements_forgiving += 1
                     color = 'g'
                 else:
-                    p_aln, len_ = rec['p_aln'], rec['len_aln']
-                    if min_igblast_p <= p_aln and len_ >= minlens[gene_type]:
+                    # p_aln, len_ = rec['p_aln'], rec['len_aln']
+                    # higher_p = p_aln >= min_igblast_p and \
+                               # len_ >= minlens[gene_type]
+                    # if ours_m >= min_igblast_m or higher_p:
+                        # num_agreements_forgiving += 1
+                        # color = 'g'
+                    p_aln = rec['p_aln']
+                    ours_m = rec['alignment'].transcript.count('M')
+                    higher_p = p_aln >= min_igblast_p and \
+                               ours_m >= min_igblast_m - 2
+                    higher_m = ours_m >= min_igblast_m and \
+                               p_aln >= min_igblast_p - .01
+                    if higher_p or higher_m:
                         num_agreements_forgiving += 1
-                        color = 'g'
-                    elif min_igblast_L <= len_ and p_aln >= p_min:
-                        num_agreements_forgiving += 1
-                        color = 'g'
+                        # color = 'g'
                 comparison['p'][gene_type].append(
                     (rec['p_aln'], min_igblast_p, color)
                 )
@@ -225,15 +247,14 @@ def plot_ig_genotyping(sim_data, suffix=''):
                     (ours_m, min_igblast_m, color)
                 )
 
-    accuracy_strict = 100. * num_agreements_strict / total_predictions
-    accuracy_forgiving = 100. * num_agreements_forgiving / total_predictions
+        accuracy['strict'][gene_type] = \
+            100. * num_agreements_strict / total_predictions
+        accuracy['forgiving'][gene_type] = \
+            100. * num_agreements_forgiving / total_predictions
+        print gene_type, accuracy['strict'][gene_type], accuracy['forgiving'][gene_type]
+
     avg_time = sum(elapsed_times) / len(sim_data['mappings'])
-    print accuracy_strict, accuracy_forgiving, avg_time
-    # probability of ours vs igblast
-    fig = plt.figure(figsize=(12, 5))
-    ax_V = fig.add_subplot(1, 3, 1)
-    ax_D = fig.add_subplot(1, 3, 2)
-    ax_J = fig.add_subplot(1, 3, 3)
+    print 't', avg_time
 
     def _extract_with_noise(mode, gene_type_):
         mag = {'p': .005, 'K': .5, 'num_match': .5}[mode]
@@ -244,61 +265,84 @@ def plot_ig_genotyping(sim_data, suffix=''):
         colors = [rec[2] for rec in comparison[mode][gene_type_]]
         return xs, ys, colors
 
+    # probability of ours vs igblast
+    fig = plt.figure(figsize=(14, 5))
+    ax_V = fig.add_subplot(1, 3, 1)
+    ax_D = fig.add_subplot(1, 3, 2)
+    ax_J = fig.add_subplot(1, 3, 3)
     for gene_type, ax in zip('VDJ', [ax_V, ax_D, ax_J]):
         xs, ys, colors = _extract_with_noise('p', gene_type)
         ax.scatter(xs, ys, c=colors, alpha=.6, s=20, lw=0)
-        ax.set_title(gene_type)
+        ax.set_title('%s genes: \\%%%.2f (\\%%%.2f)' %
+                     (gene_type,
+                      accuracy['strict'][gene_type],
+                      accuracy['forgiving'][gene_type]))
         ax.set_xlabel('WordBlot similarity')
         ax.set_ylabel('IgBlast similarity')
-        ax.set_xlim(.5, 1.1)
-        ax.set_ylim(.5, 1.1)
+        # NOTE this can mislead if output is not checked already
+        ax.set_xlim(.7, 1.05)
+        ax.set_ylim(.7, 1.05)
+        ax.set_aspect('equal')
         ax.plot([0, 1], [0, 1], c='k', lw=3, ls='--', alpha=.2)
-    fig.suptitle('agreement: \\%%%.2f (\\%%%.2f), time per read: %.2f s' %
-                 (accuracy_forgiving, accuracy_strict, avg_time), fontsize=8)
+    fig.suptitle('time per read: %.2f s' % avg_time, fontsize=8)
     savefig(fig, 'ig_genotyping[p-hat]%s.png' % suffix)
 
     # aligned length of ours vs igblast
-    fig = plt.figure(figsize=(12, 5))
+    fig = plt.figure(figsize=(14, 5))
     ax_V = fig.add_subplot(1, 3, 1)
     ax_D = fig.add_subplot(1, 3, 2)
     ax_J = fig.add_subplot(1, 3, 3)
     for gene_type, ax in zip('VDJ', [ax_V, ax_D, ax_J]):
         xs, ys, colors = _extract_with_noise('K', gene_type)
-        ax.scatter(xs, ys, c=colors, alpha=.6, s=20, lw=0)
-        ax.set_title(gene_type)
+        ax.scatter(xs, ys, c=colors, alpha=.4, s=20, lw=0)
+        ax.set_title('%s genes: \\%%%.2f (\\%%%.2f)' %
+                     (gene_type,
+                      accuracy['strict'][gene_type],
+                      accuracy['forgiving'][gene_type]))
         ax.set_xlabel('WordBlot aligned length')
         ax.set_ylabel('IgBlast aligned length')
+        ax.set_aspect('equal')
+        x_range, y_range = ax.get_xlim(), ax.get_ylim()
+        xy_range = (min(x_range[0], y_range[0]), max(x_range[1], y_range[1]))
+        ax.set_xlim(*xy_range)
+        ax.set_ylim(*xy_range)
         ax.plot(ax.get_xlim(), ax.get_ylim(), c='k', lw=3, ls='--', alpha=.2)
-    fig.suptitle('agreement: \\%%%.2f (\\%%%.2f), time per read: %.2f s' %
-                 (accuracy_forgiving, accuracy_strict, avg_time), fontsize=8)
+    fig.suptitle('time per read: %.2f s' % avg_time, fontsize=8)
     savefig(fig, 'ig_genotyping[K-hat]%s.png' % suffix)
 
     # nt agreement of ours vs igblast
-    fig = plt.figure(figsize=(12, 5))
+    fig = plt.figure(figsize=(14, 5))
     ax_V = fig.add_subplot(1, 3, 1)
     ax_D = fig.add_subplot(1, 3, 2)
     ax_J = fig.add_subplot(1, 3, 3)
+    x_range, y_range = None, None
     for gene_type, ax in zip('VDJ', [ax_V, ax_D, ax_J]):
         xs, ys, colors = _extract_with_noise('num_match', gene_type)
-        ax.scatter(xs, ys, c=colors, alpha=.6, s=20, lw=0)
-        ax.set_title(gene_type)
-        ax.set_title(gene_type)
+        ax.scatter(xs, ys, c=colors, alpha=.4, s=20, lw=0)
+        ax.set_title('%s genes: \\%%%.2f (\\%%%.2f)' %
+                     (gene_type,
+                      accuracy['strict'][gene_type],
+                      accuracy['forgiving'][gene_type]))
         ax.set_xlabel('WordBlot matched nucleotides')
         ax.set_ylabel('IgBlast matched nucleotides')
+        ax.set_aspect('equal')
+        x_range, y_range = ax.get_xlim(), ax.get_ylim()
+        xy_range = (min(x_range[0], y_range[0]), max(x_range[1], y_range[1]))
+        ax.set_xlim(*xy_range)
+        ax.set_ylim(*xy_range)
         ax.plot(ax.get_xlim(), ax.get_ylim(), c='k', lw=3, ls='--', alpha=.2)
-    fig.suptitle('agreement: \\%%%.2f (\\%%%.2f), time per read: %.2f s' %
-                 (accuracy_forgiving, accuracy_strict, avg_time), fontsize=8)
+    fig.suptitle('time per read: %.2f s' % avg_time, fontsize=8)
     savefig(fig, 'ig_genotyping[matches]%s.png' % suffix)
 
 
 def exp_ig_genotyping():
-    p_min = .9
-    wordlens = {'J': 5, 'V': 8, 'D': 3}
+    p_min = .8
+    wordlens = {'J': 6, 'V': 8, 'D': 4}
     # cf. https://ncbiinsights.ncbi.nlm.nih.gov/tag/igblast/
     # https://www.ncbi.nlm.nih.gov/books/NBK279684/
     # note: I'm forcing these scores on blast as well:
     mismatch_scores = {'V': -1, 'D': -3, 'J': -2}
-    minlens = {'V': 100, 'D': 5, 'J': 10}
+    minlens = {'V': 100, 'D': 10, 'J': 10}
     gap_open_score = -5
     gap_extend_score = -2
     suffix = '_first_1000'
@@ -324,9 +368,11 @@ def exp_ig_genotyping():
             rec = dict(zip(['gene_type', 'read', 'gene', 'p', 'length'],
                            line.strip().split()))
             gene, gene_type, name = rec['gene'], rec['gene_type'], rec['read']
+            num_m, length = rec['length'].split('/')
             reads[name]['igblast'][gene_type][gene] = {
                 'p': float(rec['p']) / 100,
-                'length': int(rec['length'].split('/')[0]),
+                'length': int(length),
+                'num_matches': int(num_m),
             }
 
     genes = {'V': {}, 'D': {}, 'J': {}}
