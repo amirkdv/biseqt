@@ -6,7 +6,7 @@ from itertools import product
 from matplotlib import pyplot as plt
 
 from biseqt.util import ProgressIndicator
-from biseqt.blot import WordBlotOverlap
+from biseqt.blot import WordBlotOverlap, WordBlotOverlapRef
 from biseqt.sequence import Alphabet
 from biseqt.stochastics import rand_seq, MutationProcess, rand_read
 
@@ -209,7 +209,7 @@ def exp_overlap_simulations(**kw):
 
 @with_dumpfile
 def sim_sequencing_reads_overlap(**kw):
-    reads_path, p_min, wordlen = kw['reads_path'], kw['wordlen'], kw['p_min']
+    reads_path, wordlen, p_min = kw['reads_path'], kw['wordlen'], kw['p_min']
     sim_data = {
         'overlap_band': {},
         'p_min': p_min,
@@ -235,12 +235,12 @@ def sim_sequencing_reads_overlap(**kw):
     log('finding all overlapping pairs of reads')
     indic = ProgressIndicator(num_total=num_total, percentage=False)
     indic.start()
-    for i, j in combinations(range(num_reads), 2):
-        indic.progress()
-        WB = WordBlotOverlap(reads[i], reads[j], **WB_kw)
-
-        res = WB.highest_scoring_overlap_band(p_min=p_min)
-        sim_data['overlap_band'][(i, j)] = res
+    for i in range(num_reads - 1):
+        WB = WordBlotOverlapRef(reads[i], **WB_kw)
+        for j in range(i + 1, num_reads):
+            indic.progress()
+            res = WB.highest_scoring_overlap_band(reads[j], p_min=p_min)
+            sim_data['overlap_band'][(i, j)] = res
 
     indic.finish()
     return sim_data
@@ -281,15 +281,15 @@ def exp_sequencing_reads_overlap():
     hf_subst = .15
     hf_match = (1 - hf_gap) * (1 - hf_subst)
 
-    wordlen = 12
-    suffix = '[w=12]'
+    wordlen = 10
+    suffix = '[w=10]'
 
     reads_path = 'data/leishmenia/reads_mapped.fa'
     dumpfile = 'overlaps%s.txt' % suffix
 
     sim_data = sim_sequencing_reads_overlap(
         reads_path=reads_path, wordlen=wordlen, p_min=hf_match,
-        dumpfile=dumpfile
+        dumpfile=dumpfile, ignore_existing=True
     )
 
     plot_sequencing_reads_overlap(sim_data, suffix=suffix)

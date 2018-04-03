@@ -632,7 +632,8 @@ def plot_classifier(path, pos, neg, labels=None, classifier='>', title=''):
 
     for [ax, ax_title] in zip([ax_cdf, ax_roc, ax_p_roc],
                               ['Classifier statistic CDF',
-                               'ROC (%d/%d +/-samples)' % (len(pos), len(neg)),
+                               'ROC for %d(+), %d(-) samples)' %
+                               (len(pos), len(neg)),
                                'Predictive ROC']):
         ax.set_title(ax_title, fontsize=12)
         ax.tick_params(labelsize=12)
