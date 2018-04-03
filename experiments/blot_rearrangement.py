@@ -236,7 +236,7 @@ def plot_ig_genotyping(sim_data, suffix=''):
     ax_J = fig.add_subplot(1, 3, 3)
 
     def _extract_with_noise(mode, gene_type_):
-        mag = {'p': .01, 'K': 1, 'num_match': 1}[mode]
+        mag = {'p': .005, 'K': .5, 'num_match': .5}[mode]
         xs = [rec[0] for rec in comparison[mode][gene_type_]]
         xs += np.random.randn(len(comparison[mode][gene_type_])) * mag
         ys = [rec[1] for rec in comparison[mode][gene_type_]]
@@ -252,7 +252,7 @@ def plot_ig_genotyping(sim_data, suffix=''):
         ax.set_ylabel('IgBlast similarity')
         ax.set_xlim(.5, 1.1)
         ax.set_ylim(.5, 1.1)
-        ax.plot([0, 1], [0, 1], c='k', lw=3, ls='--', alpha=.1)
+        ax.plot([0, 1], [0, 1], c='k', lw=3, ls='--', alpha=.2)
     fig.suptitle('agreement: \\%%%.2f (\\%%%.2f), time per read: %.2f s' %
                  (accuracy_forgiving, accuracy_strict, avg_time), fontsize=8)
     savefig(fig, 'ig_genotyping[p-hat]%s.png' % suffix)
@@ -268,7 +268,7 @@ def plot_ig_genotyping(sim_data, suffix=''):
         ax.set_title(gene_type)
         ax.set_xlabel('WordBlot aligned length')
         ax.set_ylabel('IgBlast aligned length')
-        ax.plot(ax.get_xlim(), ax.get_ylim(), c='k', lw=3, ls='--', alpha=.1)
+        ax.plot(ax.get_xlim(), ax.get_ylim(), c='k', lw=3, ls='--', alpha=.2)
     fig.suptitle('agreement: \\%%%.2f (\\%%%.2f), time per read: %.2f s' %
                  (accuracy_forgiving, accuracy_strict, avg_time), fontsize=8)
     savefig(fig, 'ig_genotyping[K-hat]%s.png' % suffix)
@@ -285,7 +285,7 @@ def plot_ig_genotyping(sim_data, suffix=''):
         ax.set_title(gene_type)
         ax.set_xlabel('WordBlot matched nucleotides')
         ax.set_ylabel('IgBlast matched nucleotides')
-        ax.plot(ax.get_xlim(), ax.get_ylim(), c='k', lw=3, ls='--', alpha=.1)
+        ax.plot(ax.get_xlim(), ax.get_ylim(), c='k', lw=3, ls='--', alpha=.2)
     fig.suptitle('agreement: \\%%%.2f (\\%%%.2f), time per read: %.2f s' %
                  (accuracy_forgiving, accuracy_strict, avg_time), fontsize=8)
     savefig(fig, 'ig_genotyping[matches]%s.png' % suffix)
