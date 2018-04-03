@@ -36,8 +36,15 @@ def plot_scored_seeds_3d(fig, ax, scored_seeds, threshold=.5):
     fig.colorbar(m, shrink=.7)
 
 
+# segment is a list of 3 tuples (min, max of each coordinate)
+def plot_similar_segment_3d(ax, segment, color='k', **kw):
+    assert len(segment) == 3
+    assert all(len(range) == 2 for range in segment)
+    ax.plot(segment[0], segment[1], segment[2], c='k', alpha=.4, lw=10)
+
+
 def exp_three_syntehtic_sequences():
-    subst, gap = .15, .05
+    subst, gap = .05, .09
     wordlen = 6
     K = 2000
     A = Alphabet('ACGT')
@@ -46,9 +53,11 @@ def exp_three_syntehtic_sequences():
     T1, _ = M.mutate(S)
     T2, _ = M.mutate(S)
 
-    def junk(): return rand_seq(A, K / 2)
+    def junk(): return rand_seq(A, np.random.randint(K))
 
-    S, T1, T2 = junk() + S + junk(), junk() + T1 + junk(), junk() + T2 + junk()
+    S = junk() + S + junk()
+    T1 = junk() + T1 + junk()
+    T2 = junk() + T2 + junk()
     WB_kw = {'g_max': .2, 'sensitivity': .9, 'alphabet': A, 'wordlen': wordlen,
              'path': ':memory:'}
     WB = WordBlotMultiple(S, T1, T2, **WB_kw)
@@ -61,6 +70,11 @@ def exp_three_syntehtic_sequences():
     fig = plt.figure()
     ax = fig.gca(projection=Axes3D.name)
     plot_scored_seeds_3d(fig, ax, scored_seeds, threshold=p_min)
+    for res in WB.similar_segments(K_min=K / 2, p_min=p_min, score=False):
+        segment = res['segment']
+        std_ranges = WB.to_ij_coordinates_seg(res['segment'])
+        print res['p'], std_ranges
+        plot_similar_segment_3d(ax, std_ranges)
 
     for axis in 'xyz':
         ax.tick_params(axis=axis, labelsize=5)

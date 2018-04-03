@@ -216,6 +216,9 @@ def H1_moments(alphabet_len, wordlen, area, seglen, p_match):
     return mu_H1, sd_H1
 
 
+# FIXME the fact that we have organized our data as self.S and self.T is the
+# main blocker for merging pairwise and multiple sequence implementations.
+# Also involved: SeedIndexMultiple
 class WordBlot(SeedIndex):
     """A similarity finder based on m-dependent CLT statistics.
 
@@ -377,11 +380,11 @@ class WordBlot(SeedIndex):
                 neighborhood shapes and estimated match probabilities.
 
         Returns:
-            list: list of tuples ``((d, a), neighs, p)`` where ``(d, a)``
-              is the diagonal coordinates of the seed, ``neighs`` is a list
-              of integer indices of seeds in its diagonal/antidiagonal
-              neighborhood, and ``p`` is the estimated match probability of
-              a segment of length ``K`` centered at the seed.
+            list(dict): List of dictionaries with keys: ``seed`` (coordinates
+            of exactly matching kmer in diagonal coordinates), ``neighs`` (list
+            of indices of neighbors of this seed in the appropriate diagonal
+            strip), (a_min, a_max))``)), ``p`` the estimated match probability
+            of a segment centered at the seed.
         """
         d_radius = int(np.ceil(self.band_radius(K)))
         a_radius = int(np.ceil(K / 2))
@@ -414,7 +417,7 @@ class WordBlot(SeedIndex):
                 inside.
 
         Yields:
-            dict: dictionary with keys: ``seeds`` (coordinates of similar
+            dict: dictionary with keys: ``segment`` (coordinates of similar
             region in diagonal coordinates ``((d_min, d_max), (a_min,
             a_max))``)), ``p`` the estimated match probability, and ``score``
             the H1 z-score if keyword argument ``score`` is true.
@@ -671,7 +674,11 @@ class WordBlotLocalRef(WordBlot):
             yield res
 
 
-# FIXME lots of code duplication here, can it be cleaned up?
+# FIXME lots of code duplication here, can it be cleaned up? (cf. note above
+# WordBlot; the main issue is self.S and self.T being used everywhere there,
+# and presumably lots of hidden pairwise assumptions). The good news is:
+# every function implemented below should in principle work exactly as is for
+# pairwise.
 class WordBlotMultiple(SeedIndexMultiple):
     """A multiple sequence similarity finder based on m-dependent CLT
     statistics.
@@ -797,3 +804,113 @@ class WordBlotMultiple(SeedIndexMultiple):
         for idx, _ in enumerate(all_neighs):
             all_neighs[idx].remove(idx)
         return zip(all_seeds, all_neighs)
+
+    def similar_segments(self, K_min, p_min, score=True, at_least_one=False):
+        """Find all maximal local similarities of given minium length and match
+        probability. Additionally for each segment, the match probability is
+        estimated and H0/H1 scores are calculated.
+
+        Args:
+            K_min (int):
+                minimum required length of similarity.
+            p_min (float):
+                Minimum required match probability at each position.
+            score (bool):
+                Whether to score the segment against H1 by counting seeds
+                inside.
+
+        Yields:
+            dict: dictionary with keys: ``segment`` (coordinates of similar
+            region in diagonal coordinates ``((d_min, d_max), (a_min,
+            a_max))``)), ``p`` the estimated match probability, and ``score``
+            the H1 z-score if keyword argument ``score`` is true.
+        """
+        self.log('finding local similarities between %d sequences' %
+                 len(self.seqs))
+        d_radius = int(np.ceil(self.band_radius(K_min)))
+        a_radius = int(np.ceil(K_min / 2))
+        scored_seeds = self.score_seeds(K_min)
+
+        def _update_seg(seg, seed):
+            ds, a = seed
+            if seg is None:
+                d_ranges = [None] * (len(self.seqs) - 1)
+                for i in range(len(self.seqs) - 1):
+                    d_ranges[i] = ds[i] - d_radius, ds[i] + d_radius
+                a_range = a - a_radius, a + a_radius
+            else:
+                d_ranges, a_range = seg
+                assert all(len(r) == 2 for r in d_ranges)  # pairs of min, max
+                for i in range(len(self.seqs) - 1):
+                    d_min, d_max = seg[i]
+                    d_ranges[i] = (min(ds[i], d_ranges[i][0]),
+                                   max(ds[i], d_ranges[i][1]))
+                a_min, a_max = seg[-1]
+                a_range = (min(a - a_radius, a_range[0]),
+                           max(a + a_radius, a_range[1]))
+            return d_ranges, a_range
+
+        avail = [rec['p'] >= p_min for rec in scored_seeds]
+        if not any(avail) and at_least_one:
+            # we're obliged to return something, let the highest probability
+            # seed go through.
+            assert len(scored_seeds), 'no seeds found while at_least_one=True'
+            avail[np.argmax([rec['p'] for rec in scored_seeds])] = True
+        while True:
+            try:
+                seed_idx = avail.index(True)
+            except ValueError:
+                break
+            stack = [seed_idx]
+            avail[seed_idx] = False
+            ps_in_seg = [scored_seeds[seed_idx]['p']]
+            seg = None
+            while stack:
+                idx = stack.pop()
+                ps_in_seg.append(scored_seeds[idx]['p'])
+                seg = _update_seg(seg, scored_seeds[idx]['seed'])
+                for neigh in scored_seeds[idx]['neighs']:
+                    if avail[neigh]:
+                        stack.append(neigh)
+                        avail[neigh] = False
+            if seg is None:
+                break
+            else:
+                # clip overflowing values so translating back to standard
+                # coordinates gives meaningful numbers.
+                ds_range, a_range = seg
+                for idx in range(len(self.seqs) - 1):
+                    d_min, d_max = ds_range[idx]
+                    d_min = min(
+                        len(self.seqs[0]),
+                        max(d_min, -len(self.seqs[idx + 1]))
+                    )
+                    d_max = min(
+                        len(self.seqs[0]),
+                        max(d_max, -len(self.seqs[idx + 1]))
+                    )
+                    ds_range[idx] = d_min, d_max
+                a_min, a_max = a_range
+                a_min = max(a_min, 0)
+                # FIXME what to do with this?
+                # a_max = min(a_max, wall_to_wall_distance(
+                #     len(self.S), len(self.T), (d_min + d_max) / 2
+                # ))
+                seg = ds_range, (a_min, a_max)
+            # NOTE the following is more justifiable but it matches the
+            # average. TODO turn this in into an experiment to justify
+            # p_hat = self.estimate_match_probability(
+            #   n, d_band=seg[0], a_band=seg[1])
+            p_hat = sum(ps_in_seg) / len(ps_in_seg)
+            res = {'segment': seg, 'p': p_hat}
+            if score:
+                raise NotImplementedError
+                n = self.seed_count(d_band=seg[0], a_band=seg[1])
+                K_hat = seg[1][1] - seg[1][0]
+                # FIXME double calculations, is segment_dims necessary?!
+                K_hat, area_hat = self.segment_dims(d_band=seg[0],
+                                                    a_band=seg[1])
+                scores = self.score_num_seeds(num_seeds=n, area=area_hat,
+                                              seglen=K_hat, p_match=p_hat)
+                res['scores'] = scores
+            yield res

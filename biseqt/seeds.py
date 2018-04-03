@@ -279,6 +279,27 @@ class SeedIndexMultiple(KmerDBWrapper):
         idxs = [diff + idx for idx in idxs_]
         return tuple(idxs)
 
+    @classmethod
+    def to_ij_coordinates_seg(cls, seg):
+        """Convert a segment in diagonal coordinates to standard coordinates
+        according to :func:`to_ij_coordinates`.
+
+        Args:
+            seg (tuple): :math:`(d_{min}, d_{max}), (a_{min}, a_{max})`
+        """
+        ds_range, a_range = seg
+        num_seqs = len(ds_range) + 1
+        seg_flat = ds_range + [a_range]
+        corners = [cls.to_ij_coordinates(ranges[:-1], ranges[-1])
+                   for ranges in product(*seg_flat)]
+        std_ranges = []
+        for idx in range(num_seqs):
+            std_ranges.append((
+                min(corner[idx] for corner in corners),
+                max(corner[idx] for corner in corners)
+            ))
+        return std_ranges
+
     def _table_exists(self):
         with self.connection() as conn:
             q = """
