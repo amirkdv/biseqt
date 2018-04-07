@@ -69,6 +69,7 @@ def sim_simulated_K_p(Ks, ps, n_samples, **kw):
             S_rel, T_rel = seq_pair(K, A, mutation_process=M)
             S_rel = rand_seq(A, K / 2) + S_rel + rand_seq(A, K / 2)
             T_rel = rand_seq(A, K / 2) + T_rel + rand_seq(A, K / 2)
+            # FIXME the unrelated sequences should have length 2*K
             S_urel, T_urel = rand_seq(A, K), rand_seq(A, K)
 
             for key, (S, T) in zip(['pos', 'neg'],
@@ -297,8 +298,8 @@ def plot_simulated_K_p(sim_data, select_Ks, select_ps, suffix=''):
                      color=color, label='p = %.2f' % p, **kw)
         plot_with_sd(ax_K, Ks, K_hats['neg'][:, p_idx, :], axis=1,
                      color=color, ls='--', **kw)
-        ax.set_xticks(Ks)
-        ax.set_xticklabels(Ks, rotation=90, fontsize=6)
+        ax_K.set_xticks(Ks)
+        ax_K.set_xticklabels(Ks, rotation=90, fontsize=6)
     ax_K.set_ylabel('estimated similarity length', fontsize=10)
     ax_K.set_xlabel('true similarity length', fontsize=10)
     ax_K.plot(Ks, Ks, ls='--', c='k', lw=3, alpha=.4)
@@ -312,8 +313,8 @@ def plot_simulated_K_p(sim_data, select_Ks, select_ps, suffix=''):
                      color=color, label='K = %d' % K, **kw)
         plot_with_sd(ax_p, ps, p_hats['neg'][K_idx, :, :], axis=1,
                      color=color, ls='--', **kw)
-        ax.set_xticks(ps)
-        ax.set_xticklabels(ps, rotation=90, fontsize=6)
+        ax_p.set_xticks(ps)
+        ax_p.set_xticklabels(ps, rotation=90, fontsize=6)
     ax_p.set_ylabel('estimated match probability', fontsize=10)
     ax_p.set_xlabel('true match probability', fontsize=10)
     ax_p.plot(ps, ps, ls='--', c='k', lw=3, alpha=.4)
@@ -331,7 +332,7 @@ def plot_simulated_K_p(sim_data, select_Ks, select_ps, suffix=''):
     d_hats = sim_data['d_hat']['pos']
     a_hats = sim_data['a_hat']['pos']
     r_hats = sim_data['r_hat']['pos']
-    fig_hat = plt.figure(figsize=(12, 4))
+    fig_hat = plt.figure(figsize=(13, 5))
     ax_r = fig_hat.add_subplot(1, 3, 1)
     ax_d = fig_hat.add_subplot(1, 3, 2)
     ax_a = fig_hat.add_subplot(1, 3, 3)
