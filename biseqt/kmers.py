@@ -281,7 +281,7 @@ class KmerDBWrapper(object):
                 'Database %s is not writable' % self.path
             relpath = os.path.relpath(self.path, os.getcwd())
 
-        log_header = '%d-mer cache (%s)' % (self.wordlen, relpath)
+        log_header = '%d-mer (%s)' % (self.wordlen, relpath)
         self._logger = Logger(log_level=log_level, header=log_header)
         self.log_level = log_level
         self._connection = None
@@ -462,6 +462,10 @@ class KmerIndex(KmerDBWrapper):
                      (self.wordlen, seq.content_id[:8], len(seq)))
             cursor = conn.cursor()
             q = 'SELECT seqid FROM %s WHERE seq = ?' % self.log_table
+            # FIXME if the two sequences are identical in content we trip over
+            # this and not index the "trivial" kmers. How should we respect
+            # this when hits are recalled? Or is the responsibility of
+            # SeedIndex to deal with this?
             for seqid in cursor.execute(q, (seq.content_id,)):
                 self.log('sequence %s already indexed, skipping.' %
                          seq.content_id[:8])
