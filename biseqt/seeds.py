@@ -20,6 +20,8 @@ from itertools import groupby, product
 from .kmers import KmerIndex, KmerDBWrapper
 
 
+# FIXME get rid of d_ and self.d0 we don't need it anymore because we are not
+# using d_ as an index of a large list anymore.
 class SeedIndex(KmerDBWrapper):
     """An index for seeds in diagonal coordinates.
 
@@ -235,7 +237,7 @@ class SeedIndexMultiple(KmerDBWrapper):
         self.kmer_cache = kw.get('kmer_cache', None)
         self.self_comp = len(seqs) == 2 and seqs[0] == seqs[1]
         self.seqs = seqs
-        self.d0s = [len(T) - 1 for T in seqs[1:]]
+        self.d_cols = ['d_%d' % (idx + 1) for idx in range(len(self.seqs) - 1)]
 
         if self._table_exists():
             self.log('Seeds for %s already indexed, skipping' % name)
@@ -314,13 +316,15 @@ class SeedIndexMultiple(KmerDBWrapper):
 
     # idempotent operation
     def _index_seeds(self):
+        d_col_defs = ', '.join(col + ' INTEGER' for col in self.d_cols)
+        init_query = """
+            CREATE TABLE %s (
+              %s,               -- diagonal positions
+              'a'  INTEGER      -- antidiagonal position
+            );
+        """ % (self.seeds_table, d_col_defs)
         with self.connection() as conn:
-            conn.cursor().execute("""
-                CREATE TABLE %s (
-                  'ds' VARCHAR,     -- comma separated diagonal positions
-                  'a'  INTEGER      -- antidiagonal position
-                );
-            """ % self.seeds_table)
+            conn.cursor().execute(init_query)
 
         kmer_index_name = '%d_%s' % (self.wordlen, self.name)
         kmer_index = KmerIndex(path=self.path, name=kmer_index_name,
@@ -351,15 +355,15 @@ class SeedIndexMultiple(KmerDBWrapper):
                 for idxs in product(*hits.values()):
                     # NOTE we're storing d values and not d_
                     ds, a = self.to_diagonal_coordinates(*idxs)
-                    yield ','.join(str(d) for d in ds), a
+                    yield tuple(list(ds) + [a])
 
+        d_cols = ', '.join(self.d_cols)
         with self.connection() as conn:
             cursor = conn.cursor()
-            query = 'INSERT INTO %s (ds, a) VALUES (?, ?)' % self.seeds_table
+            q_marks = ', '.join(['?'] * len(self.seqs))
+            query = 'INSERT INTO %s (%s, a) VALUES (%s)' % \
+                    (self.seeds_table, d_cols, q_marks)
             cursor.executemany(query, _records())
-            self.log('Creating SQL index for table %s.' % self.seeds_table)
-            cursor.execute('CREATE INDEX %s_diagonal ON %s(ds);' %
-                           (self.seeds_table, self.seeds_table))
 
     def seeds(self):
         """Yields all seeds in diagonal coordinates.
@@ -368,10 +372,51 @@ class SeedIndexMultiple(KmerDBWrapper):
             tuple:
                 seeds coordinates :math:`(d_1, \ldots, d_{n-1}, a)`.
         """
-        query = 'SELECT ds, a FROM %s' % self.seeds_table
+        query = 'SELECT %s, a FROM %s' % \
+                (', '.join(self.d_cols), self.seeds_table)
         with self.connection() as conn:
             cursor = conn.cursor()
             cursor.execute(query)
-            for ds, a in cursor:
-                ds = [int(i) for i in ds.split(',')]
-                yield ds, a
+            for rec in cursor:
+                ds = [int(i) for i in rec[:-1]]
+                yield ds, rec[-1]
+
+    def seed_count(self, ds_band=None, a_band=None):
+        """Counts the number of seeds either in the whole table or in the
+        specified diagonal band.
+
+        Args:
+            ds_band (List|None):
+                If specified a list of ``(d_min, d_max)`` tuples restricting
+                the seed count to a diagonal band.
+
+        Returns:
+            int: Number of seeds found in the entire table or in the specified
+            diagonal band.
+        """
+        query = 'SELECT COUNT(*) FROM %s' % self.seeds_table
+        conds = []
+        if ds_band is not None:
+            assert len(ds_band) == len(self.seqs) - 1
+            for idx, d_band in enumerate(ds_band):
+                if d_band is None:
+                    continue
+                assert len(d_band) == 2
+                d_min, d_max = d_band
+                cond = '%s BETWEEN %d AND %d' % \
+                       (self.d_cols[idx], d_min, d_max)
+                conds.append(cond)
+
+        if a_band is not None:
+            assert len(a_band) == 2, 'need a 2-tuple for antidiagonal band'
+            conds.append('a BETWEEN %d AND %d' % a_band)
+
+        if conds:
+            query += ' WHERE ' + ' AND '.join(conds)
+
+        with self.connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(query)
+            for row in cursor:
+                return row[0]
+            return 0
