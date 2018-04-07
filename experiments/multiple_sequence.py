@@ -478,7 +478,7 @@ def plot_simulated_K_p(sim_data, select_Ks, select_ps, suffix=''):
     ax_t_K = fig_t.add_subplot(1, 2, 1)
     ax_t_p = fig_t.add_subplot(1, 2, 2)
 
-    kw = {'alpha': .3, 'lw': 1, 'marker': 'o', 'markersize': 2}
+    kw = {'alpha': .5, 'lw': 1, 'marker': 'o', 'markersize': 2}
 
     # times as a function of p for select Ks
     colors = color_code(select_Ks)
@@ -487,12 +487,10 @@ def plot_simulated_K_p(sim_data, select_Ks, select_ps, suffix=''):
         label = 'K = %d (wordlen = %d)' % (K, int(np.ceil(np.log(K))))
         plot_with_sd(ax_t_p, ps, 1000 * sim_data['time']['pos'][K_idx, :, :],
                      axis=1, color=color, ls='-', label=label, **kw)
-        plot_with_sd(ax_t_p, ps, 1000 * sim_data['time']['neg'][K_idx, :, :],
-                     axis=1, color=color, ls='--', **kw)
     ax_t_p.set_xticks(ps)
     ax_t_p.set_xticklabels(ps, rotation=90, fontsize=6)
-    # make room for legend
-    ax_t_p.set_ylim(None, 1000 * max(sim_data['time']['pos'].flatten()) * 1.2)
+    # NOTE make room for legend manually
+    ax_t_p.set_ylim(None, 400)
     ax_t_p.set_ylabel('time (ms) to score all seeds', fontsize=10)
     ax_t_p.set_xlabel('true match probability', fontsize=10)
     ax_t_p.legend(loc='upper left', fontsize=8)
@@ -504,14 +502,12 @@ def plot_simulated_K_p(sim_data, select_Ks, select_ps, suffix=''):
         label = 'p = %.2f' % p_match
         plot_with_sd(ax_t_K, Ks, 1000 * sim_data['time']['pos'][:, p_idx, :],
                      axis=1, color=color, ls='-', label=label, **kw)
-        plot_with_sd(ax_t_K, Ks, 1000 * sim_data['time']['neg'][:, p_idx, :],
-                     axis=1, color=color, ls='--', **kw)
     ax_t_K.set_xticks(Ks)
     ax_t_K.set_xticklabels(Ks, rotation=90, fontsize=6)
-    # make room for legend
-    ax_t_K.set_ylim(None, 1000 * max(sim_data['time']['pos'].flatten()) * 1.2)
+    # NOTE make room for legend manually
+    ax_t_K.set_ylim(None, 400)
     ax_t_K.set_ylabel('time (ms) to score all seeds', fontsize=10)
-    ax_t_K.set_xlabel('true similarity length', fontsize=10)
+    ax_t_K.set_xlabel('similarity lengths (half sequence length)', fontsize=10)
     ax_t_K.legend(loc='upper left', fontsize=8)
 
     fig_t.suptitle('no. seqs = %d, no. samples = %d' % (n_seqs, n_samples),
