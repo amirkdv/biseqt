@@ -428,6 +428,7 @@ class WordBlot(SeedIndex):
         a_radius = int(np.ceil(K_min / 2))
         scored_seeds = self.score_seeds(K_min)
 
+        # FIXME fixed the padding of d_radius; re-run experiments
         def _update_seg(seg, seed):
             d, a = seed
             if seg is None:
@@ -435,7 +436,8 @@ class WordBlot(SeedIndex):
                 a_min, a_max = a - a_radius, a + a_radius
             else:
                 (d_min, d_max), (a_min, a_max) = seg
-                d_min, d_max = min(d, d_min), max(d, d_max)
+                d_min = min(d - d_radius, d_min)
+                d_max = max(d + d_radius, d_max)
                 a_min = min(a - a_radius, a_min)
                 a_max = max(a + a_radius, a_max)
             return (d_min, d_max), (a_min, a_max)
@@ -708,6 +710,15 @@ class WordBlotMultiple(SeedIndexMultiple):
         """
         return band_radius(K, self.g_max, self.sensitivity)
 
+    def wall_to_wall_distance(self, ds):
+        """Wall to wall distance :math:`L` for a diagonal position :math:`d_1,
+        \ldots, d_{n-1}`.
+
+        The distance :math:`L` is the largest possible value of the
+        antidiagonal coordinate once all diagonal coordinates are fixed.
+        """
+        raise NotImplementedError
+
     def estimate_match_probability(self, num_seeds, K, volume):
         """Estimate the edit path match probability given the provided observed
         number of seeds in given sigment.
@@ -735,7 +746,7 @@ class WordBlotMultiple(SeedIndexMultiple):
         if num_seeds > 0:
             word_p = (num_seeds - volume * word_p_null) / K
             try:
-                match_p = np.exp(np.log(word_p) / power)
+                match_p = np.exp(np.log(word_p) / self.wordlen)
             except Warning:
                 # presumably this happened because word_p was too small for log
                 match_p = 0
@@ -786,6 +797,7 @@ class WordBlotMultiple(SeedIndexMultiple):
             list: tuples ``((ds, a), neighs)`` where ``neighs`` is a list of
                   neighbor indices.
         """
+        self.log('finding all neighbors using a kD-tree')
         # normalize the two diameters so we can use a standard L∞ neighborhood.
         # typically a_diam is larger, so scale up d values proportionally
         d_coeff = 1. * a_radius / d_radius
@@ -805,6 +817,54 @@ class WordBlotMultiple(SeedIndexMultiple):
             all_neighs[idx].remove(idx)
         return zip(all_seeds, all_neighs)
 
+    def score_num_seeds(self, num_seeds, **kw):
+        """The exrtension of :func:`WordBlot.score_num_seeds` to multiple
+        sequence comparisons.
+
+        Keyword Args:
+            num_seeds (int):
+                Number of observed seed in the ROI.
+            volume (int|float):
+                Area of the ROI.
+            seglen (int):
+                Similar segment length in H1 model.
+            p_match (float):
+                Expected match probability at any given position.
+
+        Returns:
+            tuple (float): z-scores in H0 and H1 models
+        """
+        p_match = kw['p_match']
+        seglen = kw['seglen']
+        volume = kw['volume']
+        if volume == 0:
+            return float('-inf'), float('-inf')
+        if p_match == 1.:
+            # we can't let p_H1 == 1 because we get division by zero below
+            p_match = 1 - np.finfo(float).eps
+
+        p_H0 = (1. / len(self.alphabet)) ** (len(self.seqs) - 1)
+        pw_H0 = p_H0 ** self.wordlen
+
+        mu_H0 = volume * pw_H0
+        sd_H0 = np.sqrt(volume * (
+            (1 - pw_H0) * (pw_H0 + 2 * p_H0 * pw_H0 / (1 - p_H0)) -
+            2 * self.wordlen * pw_H0 ** 2
+        ))
+
+        p_H1 = p_match
+        pw_H1 = p_H1 ** self.wordlen
+
+        mu_H1 = mu_H0 + seglen * pw_H1
+        sd_H1 = np.sqrt(sd_H0 ** 2 + seglen * (
+            (1 - pw_H1) * (pw_H1 + 2 * p_H1 * pw_H1 / (1 - p_H1)) -
+            2 * self.wordlen * pw_H1 ** 2
+        ))
+
+        z_H0 = (num_seeds - mu_H0) / sd_H0  # score under H0
+        z_H1 = (num_seeds - mu_H1) / sd_H1  # score under H1
+        return z_H0, z_H1
+
     def similar_segments(self, K_min, p_min, score=True, at_least_one=False):
         """Find all maximal local similarities of given minium length and match
         probability. Additionally for each segment, the match probability is
@@ -821,33 +881,36 @@ class WordBlotMultiple(SeedIndexMultiple):
 
         Yields:
             dict: dictionary with keys: ``segment`` (coordinates of similar
-            region in diagonal coordinates ``((d_min, d_max), (a_min,
-            a_max))``)), ``p`` the estimated match probability, and ``score``
-            the H1 z-score if keyword argument ``score`` is true.
+            region in diagonal coordinates, ``p`` the estimated match
+            probability, and ``score`` the H1 z-score if keyword argument
+            ``score`` is true.
         """
-        self.log('finding local similarities between %d sequences' %
-                 len(self.seqs))
         d_radius = int(np.ceil(self.band_radius(K_min)))
         a_radius = int(np.ceil(K_min / 2))
         scored_seeds = self.score_seeds(K_min)
+        self.log('finding local similarities between %d sequences' %
+                 len(self.seqs))
 
+        # FIXME double check that we are find the correct box in the end
+        # and make sure this and the one for multiple are
+        # the same.
         def _update_seg(seg, seed):
             ds, a = seed
             if seg is None:
                 d_ranges = [None] * (len(self.seqs) - 1)
                 for i in range(len(self.seqs) - 1):
                     d_ranges[i] = ds[i] - d_radius, ds[i] + d_radius
+                # HACK make it smaller for good measure (observation based)
                 a_range = a - a_radius, a + a_radius
             else:
                 d_ranges, a_range = seg
                 assert all(len(r) == 2 for r in d_ranges)  # pairs of min, max
                 for i in range(len(self.seqs) - 1):
-                    d_min, d_max = seg[i]
-                    d_ranges[i] = (min(ds[i], d_ranges[i][0]),
-                                   max(ds[i], d_ranges[i][1]))
+                    d_min, d_max = d_ranges[i]
+                    d_ranges[i] = (min(ds[i], d_min),
+                                   max(ds[i], d_max))
                 a_min, a_max = seg[-1]
-                a_range = (min(a - a_radius, a_range[0]),
-                           max(a + a_radius, a_range[1]))
+                a_range = (min(a, a_min), max(a, a_max))
             return d_ranges, a_range
 
         avail = [rec['p'] >= p_min for rec in scored_seeds]
@@ -892,10 +955,9 @@ class WordBlotMultiple(SeedIndexMultiple):
                     ds_range[idx] = d_min, d_max
                 a_min, a_max = a_range
                 a_min = max(a_min, 0)
-                # FIXME what to do with this?
-                # a_max = min(a_max, wall_to_wall_distance(
-                #     len(self.S), len(self.T), (d_min + d_max) / 2
-                # ))
+                # FIXME implement n-d wall to wall distance
+                # L = self.wall_to_wall_distance(ds)
+                # a_max = min(a_max, L)
                 seg = ds_range, (a_min, a_max)
             # NOTE the following is more justifiable but it matches the
             # average. TODO turn this in into an experiment to justify
@@ -904,13 +966,13 @@ class WordBlotMultiple(SeedIndexMultiple):
             p_hat = sum(ps_in_seg) / len(ps_in_seg)
             res = {'segment': seg, 'p': p_hat}
             if score:
-                raise NotImplementedError
-                n = self.seed_count(d_band=seg[0], a_band=seg[1])
-                K_hat = seg[1][1] - seg[1][0]
-                # FIXME double calculations, is segment_dims necessary?!
-                K_hat, area_hat = self.segment_dims(d_band=seg[0],
-                                                    a_band=seg[1])
-                scores = self.score_num_seeds(num_seeds=n, area=area_hat,
+                ds_band, a_band = seg
+                n = self.seed_count(ds_band=ds_band, a_band=a_band)
+                K_hat = a_band[1] - a_band[0]
+                volume = a_band[1] - a_band[0]
+                for d_band in ds_band:
+                    volume *= d_band[1] - d_band[0]
+                scores = self.score_num_seeds(num_seeds=n, volume=volume,
                                               seglen=K_hat, p_match=p_hat)
                 res['scores'] = scores
             yield res
