@@ -275,6 +275,15 @@ class Aligner(object):
             return None
         return score
 
+    def table_scores(self):
+        """Returns a 2D array of scores calculated by :func:`solve()`."""
+        if self.alnmode != STD_MODE:
+            raise NotImplementedError
+        scores = [[self.c_dptable.cells[i][j].choices[0].score
+                   for j in range(*self.mutant_range)]
+                  for i in range(*self.origin_range)]
+        return scores
+
     def traceback(self):
         """Traces back the optimal alignment identified by :func:`solve`. This
         function has to be called within the context and after :func:`solve`.

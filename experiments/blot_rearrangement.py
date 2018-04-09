@@ -3,14 +3,15 @@ import sys
 import matplotlib.gridspec as gridspec
 import matplotlib
 import logging
+from time import time
 from matplotlib import pyplot as plt
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 
-from biseqt.pw import Aligner, BANDED_MODE, B_LOCAL
+from biseqt.pw import Aligner, BANDED_MODE, B_LOCAL, STD_MODE, LOCAL
 from biseqt.blot import WordBlot, WordBlotLocalRef
 from biseqt.sequence import Alphabet
 from biseqt.stochastics import rand_seq, MutationProcess
-from util import plot_scored_seeds
+from util import plot_scored_seeds, plot_seeds
 from util import plot_similar_segment, adjust_pw_plot
 from util import log, savefig
 from util import fill_in_unknown
@@ -29,7 +30,6 @@ def sim_ig_genotyping(reads, genes, **kw):
     WB_kw = {'g_max': .5, 'sensitivity': .9, 'alphabet': A,
              'log_level': logging.WARN}
 
-    from time import time
     sim_data = {
         'genes': genes,
         'wordlens': wordlens,
@@ -389,63 +389,96 @@ def exp_ig_genotyping():
 
 
 def exp_rearrangement():
-    K = 500
-    wordlen = 8
+    # NOTE we are running whole table DP later here; be careful with size
+    K = 200
+    wordlen = 6
     A = Alphabet('ACGT')
 
-    # NOTE I can drive sensitivity to 0 and get decent results
     WB_kw = {'g_max': .2, 'sensitivity': .9, 'alphabet': A, 'wordlen': wordlen,
              'path': ':memory:', 'log_level': logging.INFO}
 
-    homs = [rand_seq(A, i) for i in [i * K for i in range(1, 5)]]
-    ps = [.01, .06, .12, .18]
-    Ms = [MutationProcess(A, subst_probs=p, ge_prob=p, go_prob=p) for p in ps]
+    # homologies
+    Hs = [rand_seq(A, i) for i in [i * K for i in range(1, 4)]]
+    ps = [.95, .85, .75]
+    Ms = []
+    for p_match in ps:
+        subst = gap = 1 - np.sqrt(p_match)
+        print subst, gap
+        Ms.append(
+            MutationProcess(A, subst_probs=subst, ge_prob=gap, go_prob=gap)
+        )
 
-    def junk(): return rand_seq(A, np.random.randint(K / 2, K))
+    # connector junk
+    def J(): return rand_seq(A, 2 * K)
 
-    S = junk() + homs[0] + junk() + homs[1] + junk() + homs[3] + \
-        junk() + homs[2] + junk() + homs[0] + junk()
-    homs = [M.mutate(hom)[0] for hom, M in zip(homs, Ms)]
-    T = junk() + homs[3] + junk() + homs[2] + junk() + homs[0] + \
-        junk() + homs[1] + junk() + homs[2] + junk()
+    S = J() + Hs[0] + J() + Hs[1] + J() + Hs[2] + J() + Hs[0] + J()
+    Hs = [M.mutate(hom)[0] for hom, M in zip(Hs, Ms)]
+    T = J() + Hs[0] + J() + Hs[2] + J() + Hs[1] + J() + Hs[2] + J()
 
     fig = plt.figure(figsize=(9, 6))
     gs = gridspec.GridSpec(1, 2, width_ratios=[3, 1])
     ax_seeds = plt.subplot(gs[0])
     ax_mapping = plt.subplot(gs[1])
 
-    ax_mapping.plot([1, 1], [0, len(S)], lw=2, c='k', alpha=.8)
-    ax_mapping.plot([2, 2], [0, len(T)], lw=2, c='k', alpha=.8)
-
     WB = WordBlot(S, T, **WB_kw)
 
-    p_min = (1 - max(ps)) ** 2
+    p_min = .95 * min(ps)
     scored_seeds = WB.score_seeds(K)
     scored_seeds = [(WB.to_ij_coordinates(*rec['seed']), rec['p'])
                     for rec in scored_seeds]
-    plot_scored_seeds(ax_seeds, scored_seeds, extent=[0, 1], threshold=p_min)
+    plot_seeds(ax_seeds, [x[0] for x in scored_seeds])
 
-    cmap = plt.cm.get_cmap('jet')
-    for rec in WB.similar_segments(K_min=K, p_min=p_min):
+    cmap = plt.cm.get_cmap('plasma')
+    sim_segments = list(WB.similar_segments(K_min=K, p_min=p_min))
+    min_p_obs = min(rec['p'] for rec in sim_segments)
+    max_p_obs = max(rec['p'] for rec in sim_segments)
+    for rec in sim_segments:
+        print rec
         seg = rec['segment']
         (i_start, i_end), (j_start, j_end) = WB.to_ij_coordinates_seg(seg)
         i_ctr, j_ctr = (i_start + i_end) / 2, (j_start + j_end) / 2
-        color = cmap((rec['p'] - p_min) / (1 - p_min))[:3]
-        plot_similar_segment(ax_seeds, seg, lw=5, alpha=.4, c=color)
-        ax_mapping.plot([1, 1], [i_start, i_end], lw=10, c=color, alpha=.3)
-        ax_mapping.plot([2, 2], [j_start, j_end], lw=10, c=color, alpha=.3)
-        ax_mapping.plot([1, 2], [i_ctr, j_ctr], lw=1, c=color, alpha=.7)
+        color = cmap((rec['p'] - min_p_obs) / (max_p_obs - min_p_obs))[:3]
+        plot_similar_segment(ax_seeds, seg, lw=5, alpha=.1, c='k')
+        ax_mapping.plot([1, 1], [i_start, i_end], lw=3, c=color, alpha=.7)
+        ax_mapping.plot([2, 2], [j_start, j_end], lw=3, c=color, alpha=.7)
+        ax_mapping.plot([1, 2], [i_ctr, j_ctr], marker='o', markersize=7, lw=2,
+                        c=color, alpha=.4)
 
     ax_mapping.set_xticks([1, 2])
-    ax_mapping.set_xticklabels(['sequence 1', 'sequence 2'], fontsize=8)
+    ax_mapping.set_xticklabels(['S', 'T'])
     ax_mapping.set_xlim(0, 3)
+    ax_mapping.set_ylim(0, None)
     ax_c = make_axes_locatable(ax_mapping).append_axes('right', size='4%',
                                                        pad=0.05)
-    norm = matplotlib.colors.Normalize(vmin=p_min, vmax=1)
+    norm = matplotlib.colors.Normalize(vmin=min_p_obs, vmax=max_p_obs)
     matplotlib.colorbar.ColorbarBase(ax_c, cmap=cmap, norm=norm,
                                      orientation='vertical')
 
+    aligner_kw = {
+        'match_score': 1 / p_min - 1,
+        'mismatch_score': -1,
+        'ge_score': -1,
+        'go_score': 0,
+        'alnmode': STD_MODE,
+        'alntype': LOCAL,
+    }
+
+    print len(S), len(T)
+    with Aligner(S, T, **aligner_kw) as aligner:
+        aligner.solve()
+        scores = np.array(aligner.table_scores())
+        min_score = min(scores.flatten())
+        max_score = max(scores.flatten())
+        ax_seeds.imshow(scores, cmap='plasma', alpha=.3)
+        ax_c = make_axes_locatable(ax_seeds).append_axes('right', size='4%',
+                                                         pad=0.05)
+        norm = matplotlib.colors.Normalize(vmin=min_score, vmax=max_score)
+        matplotlib.colorbar.ColorbarBase(ax_c, cmap='plasma', norm=norm,
+                                         orientation='vertical')
+
     adjust_pw_plot(ax_seeds, len(S), len(T))
+    ax_seeds.set_xlabel('T')
+    ax_seeds.set_ylabel('S')
 
     fig.tight_layout()
     savefig(fig, 'rearrangement.png')
