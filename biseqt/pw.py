@@ -427,6 +427,26 @@ class Alignment(object):
                     i = i + num
         return score
 
+    def truncate_to_match(self):
+        tx_start = 0
+        origin_start, mutant_start = self.origin_start, self.mutant_start
+        tx_end = len(self.transcript) - 1
+        while self.transcript[tx_start] != 'M':
+            tx_start += 1
+            if self.transcript[tx_start] in 'DS':
+                origin_start += 1
+            if self.transcript[tx_start] in 'IS':
+                mutant_start += 1
+        while self.transcript[tx_end] != 'M':
+            tx_end -= 1
+        if tx_start < tx_end:
+            tx = self.transcript[tx_start:tx_end + 1]
+            return Alignment(self.origin, self.mutant, tx,
+                             origin_start=origin_start,
+                             mutant_start=mutant_start)
+        else:
+            return None
+
     def render_term(self, term_width=120, margin=0, colored=True):
         """Renders a textual representation of the alignment.
 
@@ -449,7 +469,7 @@ class Alignment(object):
                               ['pos', 'o_idx', 'm_idx', 'o_line', 'm_line'])
 
         term_color = {'M': 'green', 'S': 'red'}
-        term_on_color = {'I': 'on_red', 'D': 'on_red'}
+        term_on_color = {}
 
         # In the rest: o_X and m_X mean X for origin and mutatnt, resp.
 
