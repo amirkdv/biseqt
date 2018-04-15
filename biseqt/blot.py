@@ -329,6 +329,9 @@ class WordBlot(SeedIndex):
         """
         K, area = self.segment_dims(d_band=d_band, a_band=a_band)
         word_p_null = (1./len(self.alphabet)) ** self.wordlen
+        # NOTE K effectively has become the projected alignment length not the
+        # full length. This is REALLY important in interpretation but I think
+        # must things are currently consistent (TODO full review needed).
         word_p = (num_seeds - area * word_p_null) / K
         try:
             match_p = np.exp(np.log(word_p) / self.wordlen)

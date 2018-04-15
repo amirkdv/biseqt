@@ -81,6 +81,8 @@ class SeedIndex(KmerDBWrapper):
         return (i, j)
 
     @classmethod
+    # FIXME document the fact that we might slightly overflow and we cannot fix
+    # it because we don't have sequence lengths here.
     def to_ij_coordinates_seg(cls, seg):
         """Convert a segment in diagonal coordinates to standard coordinates
         according to :func:`to_ij_coordinates`.
@@ -300,6 +302,7 @@ class SeedIndexMultiple(KmerDBWrapper):
                 min(corner[idx] for corner in corners),
                 max(corner[idx] for corner in corners)
             ))
+        # FIXME make sure we're not overflowing
         return std_ranges
 
     def _table_exists(self):
