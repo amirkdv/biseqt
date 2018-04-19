@@ -411,9 +411,9 @@ def exp_rearrangement():
     # connector junk
     def J(): return rand_seq(A, 2 * K)
 
-    S = J() + Hs[0] + J() + Hs[1] + J() + Hs[2] + J() + Hs[0] + J()
+    S = J() + Hs[0] + J() + Hs[1] + J() + Hs[2] + J()
     Hs = [M.mutate(hom)[0] for hom, M in zip(Hs, Ms)]
-    T = J() + Hs[0] + J() + Hs[2] + J() + Hs[1] + J() + Hs[2] + J()
+    T = J() + Hs[0] + J() + Hs[0] + Hs[2] + J() + Hs[1] + J()
 
     fig = plt.figure(figsize=(9, 6))
     gs = gridspec.GridSpec(1, 2, width_ratios=[3, 1])

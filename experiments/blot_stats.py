@@ -3,6 +3,7 @@ from matplotlib import pyplot as plt
 from itertools import product
 from scipy.ndimage.filters import gaussian_filter1d
 
+import sys
 import logging
 
 from biseqt.blot import WordBlot, find_peaks, band_radii, band_radius
@@ -17,7 +18,9 @@ from util import plot_global_alignment, adjust_pw_plot
 from util import estimate_match_probs_in_opseq, fill_in_unknown
 from util import plot_scored_seeds, seeds_from_opseq
 from util import opseq_path, plot_local_alignment
-from biseqt.pw import Aligner, STD_MODE, LOCAL
+from util import plot_cdf
+from util import estimate_gap_probs_in_opseq
+from biseqt.pw import Aligner, BANDED_MODE, B_GLOBAL
 
 
 # FIXME the algorihtm to find segments from seeds has been fixed (a_min and
@@ -59,8 +62,9 @@ def sim_simulated_K_p(Ks, ps, n_samples, **kw):
 
     for (K_idx, K), (p_idx, p_match) in product(enumerate(Ks), enumerate(ps)):
         log('simulating (%d samples) K = %d, p = %.2f' %
-            (n_samples, K, p_match))
+            (n_samples, K, p_match), newline=False)
         for idx in range(n_samples):
+            sys.stderr.write('.')
             # distribute p_match evenly over gap and subst
             subst = gap = 1 - np.sqrt(p_match)
             assert abs((1 - gap) * (1 - subst) - p_match) < 1e-3
@@ -79,27 +83,28 @@ def sim_simulated_K_p(Ks, ps, n_samples, **kw):
                 # calculate H0/H1 scores with perfect information:
                 band_r = WB.band_radius(K)
                 num_seeds = WB.seed_count(d_band=(-band_r, band_r),
-                                          a_band=(K / 2, 3 * K / 2))
+                                          a_band=(K, 3 * K))
                 s0, s1 = WB.score_num_seeds(num_seeds=num_seeds,
                                             area=2 * band_r * K,
                                             seglen=K, p_match=p_match)
                 sim_data['scores']['H0'][key][K_idx, p_idx, idx] = s0
                 sim_data['scores']['H1'][key][K_idx, p_idx, idx] = s1
 
-                def _len(seg): return seg[1][1] - seg[1][0]
-
                 results = list(WB.similar_segments(K_min, p_min,
                                                    at_least_one=True))
                 # pick the longest detected homology
-                hom = max(results, key=lambda rec: _len(rec['segment']))
+                hom = max(
+                    results,
+                    key=lambda r: r['segment'][1][1] - r['segment'][1][0]
+                )
                 (d_min, d_max), (a_min, a_max) = hom['segment']
-                K_hat = _len(hom['segment'])
-                sim_data['K_hat'][key][K_idx, p_idx, idx] = K_hat
+                sim_data['K_hat'][key][K_idx, p_idx, idx] = (a_max - a_min) / 2
                 sim_data['p_hat'][key][K_idx, p_idx, idx] = hom['p']
                 sim_data['d_hat'][key][K_idx, p_idx, idx] = (d_min + d_max) / 2
                 sim_data['a_hat'][key][K_idx, p_idx, idx] = (a_min + a_max) / 2
                 sim_data['r_hat'][key][K_idx, p_idx, idx] = (d_max - d_min) / 2
 
+        sys.stderr.write('\n')
     return sim_data
 
 
@@ -108,26 +113,24 @@ def sim_comp_aligned_genes(seqs, pws, **kw):
     A = Alphabet('ACGT')
     wordlen, K_min, p_min = kw['wordlen'], kw['K_min'], kw['p_min']
     WB_kw = {
-        'g_max': kw.get('g_max', .6),
+        'g_max': kw.get('g_max', .3),
         'sensitivity': kw.get('sensitivity', .99),
         'wordlen': wordlen,
         'alphabet': A,
         'path': kw.get('db_path', ':memory:'),
         'log_level': kw.get('log_level', logging.WARNING),
-        # HACK mask CG-rich and homopolymeric regions
-        # 'mask': [set(x) for x in [[0], [1], [2], [3], [1, 2], [0, 3]]],
     }
-    qM = 1
+    qM = 1 / p_min - 1
     qS = qG = -1
+
+    # qM, qS, qG = 1, 0, -1
     aligner_kw = {
         'match_score': qM,
         'mismatch_score': qS,
         'ge_score': qG,
         'go_score': 0,
-        'alnmode': STD_MODE,
-        'alntype': LOCAL,
-        # 'alnmode': BANDED_MODE,
-        # 'alntype': B_GLOBAL,
+        'alnmode': BANDED_MODE,
+        'alntype': B_GLOBAL,
     }
 
     similar_segments_kw = {'K_min': K_min, 'p_min': p_min}
@@ -163,6 +166,7 @@ def sim_comp_aligned_genes(seqs, pws, **kw):
                              sim_data['WB_kw']['sensitivity'])
         in_band = np.zeros((len(S), len(T)))
         opseq_seeds = list(seeds_from_opseq(opseq, wordlen))
+        sim_data['opseq_seeds'][(id1, id2)] = opseq_seeds
         for _, seed in opseq_seeds:
             d, a = WB.to_diagonal_coordinates(*seed)
             for d_ in range(d - band_r, d + band_r):
@@ -171,7 +175,6 @@ def sim_comp_aligned_genes(seqs, pws, **kw):
                     i_, j_ = WB.to_ij_coordinates(d_, a_)
                     if 0 <= i_ < len(S) and 0 <= j_ < len(T):
                         in_band[i_, j_] = 1
-        sim_data['opseq_seeds'][(id1, id2)] = opseq_seeds
 
         for seed, p in sim_data['seeds'][(id1, id2)].items():
             if in_band[seed[0], seed[1]]:
@@ -206,28 +209,46 @@ def sim_comp_aligned_genes(seqs, pws, **kw):
         true_positive = np.sum(in_band_segs * hom_coords)
         positive = np.sum(hom_coords)
         sim_data['homologous_tpr'][(id1, id2)] = true_positive / positive
+        # FIXME report a global (over all pairs) TPR too
         log('tpr = %.2f' % sim_data['homologous_tpr'][(id1, id2)])
 
-        # actual alignments
-        # FIXME is this affected by the correction in segment coordinates?
+        # run DP alignment on found segments
         for idx, seg_info in enumerate(sim_data['segments'][(id1, id2)]):
             seg = seg_info['segment']
             (i_start, i_end), (j_start, j_end) = WB.to_ij_coordinates_seg(seg)
+            # to_ij_coordinates_seg might overflow; fix it
+            i_end = min(sim_data['seqlens'][id1] - 1, i_end)
+            j_end = min(sim_data['seqlens'][id2] - 1, j_end)
+            # allow longer alignments to be found
+            start_shift = min(i_start, j_start, 2 * wordlen)
+            end_shift = min(len(seqs[id1]) - i_end,
+                            len(seqs[id2]) - j_end, 2 * wordlen)
+            i_start, j_start = i_start - start_shift, j_start - start_shift
+            i_end, j_end = i_end + end_shift, j_end + end_shift
             S_ = S[i_start: i_end]
             T_ = T[j_start: j_end]
+            rad = (seg[0][1] - seg[0][0]) / 2
+            rad = min(len(S_), len(T_), max(rad, abs(len(S_) - len(T_)) + 2))
+            aligner_kw['diag_range'] = (-rad, rad)
             aligner = Aligner(S_, T_, **aligner_kw)
             with aligner:
                 aligner.solve()
                 alignment = aligner.traceback()
+                len_orig = alignment.projected_len(alignment.transcript)
+                alignment = alignment.truncate_to_match()
                 sim_data['segments'][(id1, id2)][idx]['alignment'] = alignment
                 sim_data['segments'][(id1, id2)][idx]['frame'] = \
                     (i_start, i_end), (j_start, j_end)
-                # if alignment is not None:
-                #     tx = alignment.transcript
-                #     print seg_info['p'], 1. * tx.count('M') / len(tx)
+                if alignment is not None:
+                    tx = alignment.transcript
+                    proj_len = alignment.projected_len(tx)
+                    print round(seg_info['p'], 3), \
+                        round(1. * tx.count('M') / proj_len, 3), \
+                        proj_len, len_orig
     return sim_data
 
 
+# FIXME make sure the definition of p_hat and p_true is the same.
 def plot_simulated_K_p(sim_data, select_Ks, select_ps, suffix=''):
     Ks, ps = sim_data['Ks'], sim_data['ps']
     wordlen = sim_data['WB_kw']['wordlen']
@@ -252,7 +273,7 @@ def plot_simulated_K_p(sim_data, select_Ks, select_ps, suffix=''):
         ax.set_ylabel('%s score' % mode, fontsize=10)
         ax.set_xlabel('similarity length', fontsize=10)
         ax.set_xticks(Ks)
-        ax.set_xticklabels(Ks, rotation=90, fontsize=6)
+        ax.set_xticklabels(Ks, fontsize=10)
     ax_H0.legend(loc='best', fontsize=10)
     ax_H1.legend(loc='best', fontsize=10)
     fig_by_K.suptitle('w = %d, no. samples = %d' % (wordlen, n_samples),
@@ -262,7 +283,7 @@ def plot_simulated_K_p(sim_data, select_Ks, select_ps, suffix=''):
 
     # ======================================
     # varying p for select Ks
-    fig_by_p = plt.figure(figsize=(11, 5))
+    fig_by_p = plt.figure(figsize=(14, 5))
     ax_H0 = fig_by_p.add_subplot(1, 2, 1)
     ax_H1 = fig_by_p.add_subplot(1, 2, 2)
     for mode, ax in zip(['H0', 'H1'], [ax_H0, ax_H1]):
@@ -366,7 +387,7 @@ def plot_simulated_K_p(sim_data, select_Ks, select_ps, suffix=''):
     ax_d.legend(loc='best', fontsize=8)
     ax_d.set_ylim(-min(Ks) / 2, min(Ks) / 2)
 
-    ax_a.plot(Ks, Ks, **truth_kw)
+    ax_a.plot(Ks, [2 * K for K in Ks], **truth_kw)
     ax_a.set_xlabel('similarity length')
     ax_a.set_ylabel('estimated antidiagonal position of similarity')
     ax_a.legend(loc='best', fontsize=8)
@@ -378,26 +399,24 @@ def plot_comp_aligned_genes(sim_data, suffix='', naming_style=None):
     seqlens = sim_data['seqlens']
     pws = sim_data['pws']
     K_min = sim_data['similar_segments_kw']['K_min']
+    p_min = sim_data['similar_segments_kw']['p_min']
     fig_num = int(np.ceil(np.sqrt(len(pws))))
 
     fig_seeds = plt.figure(figsize=(6 * fig_num, 5 * fig_num))
     fig_profiles = plt.figure(figsize=(8 * fig_num, 4 * fig_num))
     fig_p = plt.figure(figsize=(6, 4))
-    fig_p_aln = plt.figure(figsize=(6, 4))
+    fig_p_aln = plt.figure(figsize=(10, 4))
     fig_K_aln = plt.figure(figsize=(6, 4))
     fig_coord_classifier = plt.figure(figsize=(6, 4))
 
     ax_coord_classifier = fig_coord_classifier.add_subplot(1, 1, 1)
-
     ax_p = fig_p.add_subplot(1, 1, 1)
-
-    ax_p_aln = fig_p_aln.add_subplot(1, 1, 1)
-
+    ax_p_aln = fig_p_aln.add_subplot(1, 2, 1)
+    ax_p_aln_cdf = fig_p_aln.add_subplot(1, 2, 2)
     ax_K_aln = fig_K_aln.add_subplot(1, 1, 1)
 
-    p_min = sim_data['similar_segments_kw']['p_min']
-
     labels = []
+    p_alns = []
     for idx, ((id1, id2), opseq) in enumerate(pws.items()):
         key = (id1, id2)
 
@@ -427,19 +446,20 @@ def plot_comp_aligned_genes(sim_data, suffix='', naming_style=None):
 
         ps_hat_pos, ps_hat = [], []
         for pos, seed in sim_data['opseq_seeds'][key]:
-            if seed not in sim_data['seeds'][key]:
-                # some seeds are masked
-                continue
             if ps_true[pos] == 0:
                 # flanking zero regions in estimated gap probabilities
                 continue
             ps_hat.append(sim_data['seeds'][key][seed])
             ps_hat_pos.append(pos)
         ax_profiles.scatter(ps_hat_pos, ps_hat, lw=0, c='k', s=4, alpha=.4)
-
-        ax_p.scatter([ps_hat[i] for i in range(len(ps_hat))],
-                     [ps_true[ps_hat_pos[i]] for i in range(len(ps_hat))],
-                     lw=0, color='g', s=4, alpha=.2)
+        # ps_true is calculated from the alignment and is against alignment
+        # length; whereas our p_hat is estimated againsted the projected
+        # length. Correct ps_true to be against projected length too.
+        gs_true = estimate_gap_probs_in_opseq(opseq, radius)
+        ps_true_proj = [
+            (1 / (1 - gs_true[ps_hat_pos][i])) * ps_true[ps_hat_pos[i]]
+            for i in range(len(ps_hat))]
+        ax_p.scatter(ps_hat, ps_true_proj, lw=0, color='g', s=4, alpha=.2)
 
         # =============
         # Dot Plots
@@ -459,20 +479,21 @@ def plot_comp_aligned_genes(sim_data, suffix='', naming_style=None):
         for seg_info in sim_data['segments'][key]:
             p_hat = seg_info['p']
             alignment = seg_info['alignment']
-            K_hat = seg_info['segment'][1][1] - seg_info['segment'][1][0]
+            K_hat = (seg_info['segment'][1][1] - seg_info['segment'][1][0]) / 2
             if alignment is None:
                 p_aln = 0
                 K_aln = 0
             else:
                 transcript = alignment.transcript
-                p_aln = 1. * transcript.count('M') / len(transcript)
+                K_aln = alignment.projected_len(transcript)
+                p_aln = 1. * transcript.count('M') / K_aln
                 plot_local_alignment(ax_seeds, transcript,
                                      seg_info['frame'][0][0],
                                      seg_info['frame'][1][0],
                                      lw=7, alpha=.2, color='b')
-                K_aln = len(transcript)
-            ax_p_aln.scatter([p_hat], [p_aln], lw=0, color='b', s=10, alpha=.5)
-            ax_K_aln.scatter([K_hat], [K_aln], lw=0, color='b', s=10, alpha=.5)
+            p_alns.append(p_aln)
+            ax_p_aln.scatter([p_hat], [p_aln], lw=0, color='k', s=4, alpha=.6)
+            ax_K_aln.scatter([K_hat], [K_aln], lw=0, color='k', s=10, alpha=.6)
 
     tprs = [sim_data['homologous_tpr'][key_] for key_ in pws]
     ax_coord_classifier.bar(range(len(labels)), tprs, color='g', alpha=.9,
@@ -491,7 +512,12 @@ def plot_comp_aligned_genes(sim_data, suffix='', naming_style=None):
     ax_p.set_aspect('equal')
     ax_p.set_title('Match probability at homologous seeds')
 
-    ax_p_aln.plot([0, 1], [0, 1], lw=1, ls='--', alpha=.8, c='k')
+    plot_cdf(ax_p_aln_cdf, p_alns, c='k', lw=1, alpha=.7, smooth_radius=.5)
+    ax_p_aln_cdf.axvline(x=p_min, c='k', alpha=.3, lw=3)
+    ax_p_aln_cdf.set_xlabel('local alignment match probability')
+    ax_p_aln_cdf.set_xlim(0.4, 1.1)
+    ax_p_aln.plot([0, 1], [0, 1], lw=1, ls='--', alpha=.6, c='k')
+    ax_p_aln.plot([0, 1], [p_min, p_min], lw=1, ls='--', alpha=.6, c='k')
     ax_p_aln.set_xlabel('estimated match probability', fontsize=8)
     ax_p_aln.set_ylabel('local alignment match probability', fontsize=8)
     ax_p_aln.set_xlim(-.1, 1.1)
@@ -531,47 +557,47 @@ def exp_simulated_K_p():
     ps = [round(1 - .06 * i, 2) for i in range(1, 8)]
     select_ps = ps[0], ps[3], ps[5]
 
-    n_samples = 100
+    n_samples = 50
     wordlen = 5
 
     suffix = ''
     dumpfile = 'simulations%s.txt' % suffix
     sim_data = sim_simulated_K_p(
         Ks, ps, n_samples, wordlen=wordlen,
-        dumpfile=dumpfile, ignore_existing=False)
+        dumpfile=dumpfile, ignore_existing=True)
     plot_simulated_K_p(sim_data, select_Ks, select_ps, suffix=suffix)
 
 
 def exp_comp_aligned_genes():
     A = Alphabet('ACGT')
 
-    p_min = .8
-    # p_min = .6
-    wordlen = 5
-    K_min = 100
-    style = 'ucsc'
-    suffix = '[actb][p=%.2f]' % p_min
-    dumpfile = 'comp_aligned_genes%s.txt' % suffix
-    seqs_path = 'data/actb/actb-7vet.fa'
-    pws_path = 'data/actb/actb-7vet-pws.fa'
-
-    # p_min = .6
-    # wordlen = 8
-    # K_min = 100
-    # style = 'ensembl'
-    # suffix = '[irx1][p=%.2f]' % p_min
+    # FIXME seed plots seem weird (seeds above threshold without segments).
+    # FIXME the homologous classifier ROC needs work to justify (whasn't this
+    # the point of including irx1?). Also, I think we can get rid of TPR plot.
+    # p_min = .5
+    # K_min = 200
+    # wordlen = 6
+    # style = 'ucsc'
+    # suffix = '[actb][p=%.2f]' % p_min
     # dumpfile = 'comp_aligned_genes%s.txt' % suffix
-    # seqs_path = 'data/irx1/irx1-vert-amniota-indiv.fa'
-    # pws_path = 'data/irx1/irx1-vert-amniota-pws.fa'
+    # seqs_path = 'data/actb/actb-7vet.fa'
+    # pws_path = 'data/actb/actb-7vet-pws.fa'
+
+    p_min = .8
+    wordlen = 8
+    K_min = 100
+    style = 'ensembl'
+    suffix = '[irx1][p=%.2f]' % p_min
+    dumpfile = 'comp_aligned_genes%s.txt' % suffix
+    seqs_path = 'data/irx1/irx1-vert-amniota-indiv.fa'
+    pws_path = 'data/irx1/irx1-vert-amniota-pws.fa'
 
     with open(seqs_path) as f:
         seqs = {name: A.parse(fill_in_unknown(seq.upper(), A))
-                # for seq, name, _ in load_fasta(f) if name in names}
                 for seq, name, _ in load_fasta(f)}
     with open(pws_path) as f:
         pws = {tuple(name.split(':')): seq for seq, name, _ in load_fasta(f)}
-        pws = {key: value for key, value in pws.items()
-               if key[0] in seqs and key[1] in seqs}
+        pws = {key: value for key, value in pws.items()}
     sim_data = sim_comp_aligned_genes(
         seqs, pws, wordlen=wordlen, p_min=p_min, K_min=K_min,
         dumpfile=dumpfile, ignore_existing=False)

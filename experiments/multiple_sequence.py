@@ -17,9 +17,10 @@ from util import log, get_seqs_from_mse, with_dumpfile
 from util import color_code, savefig, plot_roc, plot_with_sd
 
 
+# seeds are assumed to be in standard coordinates
 def plot_scored_seeds_3d(fig, ax, scored_seeds, threshold=.5):
     idx_S, idx_T1, idx_T2, cs, ss = [], [], [], [], []
-    cmap = plt.cm.get_cmap('jet')
+    cmap = plt.cm.get_cmap('Greys')
     scores = [score for _, score in scored_seeds]
     max_score = max(scores)
     for (i, j, k), score in scored_seeds:
@@ -40,6 +41,7 @@ def plot_scored_seeds_3d(fig, ax, scored_seeds, threshold=.5):
 
 
 # segment is a list of 3 tuples (min, max of each coordinate)
+# NOTE util.plot_similar_segment for pw takes segments in diagonal coordinates!
 def plot_similar_segment_3d(ax, segment, color='k', **kw):
     assert len(segment) == 3
     assert all(len(range) == 2 for range in segment)
@@ -80,6 +82,7 @@ def exp_three_syntehtic_sequences():
     for res in WB.similar_segments(K_min=K, p_min=p_min, score=True):
         std_ranges = WB.to_ij_coordinates_seg(res['segment'])
         plot_similar_segment_3d(ax, std_ranges)
+        print K, std_ranges[0][1] - std_ranges[0][0]
 
     for axis in 'xyz':
         ax.tick_params(axis=axis, labelsize=5)
@@ -251,8 +254,12 @@ def sim_simulated_K_p(Ks, ps, **kw):
     assert p_min <= min(ps)
 
     for (K_idx, K), (p_idx, p_match) in product(enumerate(Ks), enumerate(ps)):
-        log('simulating (%d samples) K = %d, p = %.2f' %
-            (n_samples, K, p_match))
+        # HACK adjusted wordlens
+        wordlen = int(np.ceil(np.log(K)))
+        WB_kw['wordlen'] = wordlen
+
+        log('simulating (%d samples) K = %d (w=%d), p = %.2f' %
+            (n_samples, K, WB_kw['wordlen'], p_match), newline=False)
         for idx in range(n_samples):
             sys.stderr.write('.')
             # distribute p_match evenly over all sequences
@@ -272,10 +279,6 @@ def sim_simulated_K_p(Ks, ps, **kw):
             seqs_unrel = [rand_seq(A, 2 * K) for _ in range(n_seqs)]
 
             for key, seqs in zip(['pos', 'neg'], [seqs_rel, seqs_unrel]):
-                # HACK adjusted wordlens
-                wordlen = int(np.ceil(np.log(K)))
-                WB_kw['wordlen'] = wordlen
-
                 t_start = time()
                 WB = WordBlotMultiple(*seqs, **WB_kw)
 
@@ -283,8 +286,10 @@ def sim_simulated_K_p(Ks, ps, **kw):
                 band_r = WB.band_radius(K)
                 ds_band = [(-band_r, band_r)] * (n_seqs - 1)
                 volume = K * (2 * band_r) ** (n_seqs - 1)
-                num_seeds = WB.seed_count(ds_band=ds_band,
-                                          a_band=(K / 2, 3 * K / 2))
+                num_seeds = WB.seed_count(
+                    ds_band=ds_band,
+                    a_band=(n_seqs * K / 2, 3 * n_seqs * K / 2)
+                )
                 s0, s1 = WB.score_num_seeds(num_seeds=num_seeds,
                                             volume=volume,
                                             seglen=K, p_match=p_match)
@@ -292,7 +297,7 @@ def sim_simulated_K_p(Ks, ps, **kw):
                 sim_data['scores']['H1'][key][K_idx, p_idx, idx] = s1
                 sim_data['time'][key][K_idx, p_idx, idx] = time() - t_start
 
-                def _len(seg): return seg[1][1] - seg[1][0]
+                def _len(seg): return (seg[1][1] - seg[1][0]) / n_seqs
 
                 # NOTE for multiple sequences it's too much to ask for
                 # at_least_one=True because unrelated sequences can have no
@@ -322,6 +327,7 @@ def sim_simulated_K_p(Ks, ps, **kw):
     return sim_data
 
 
+# FIXME make sure the definition of p_hat and p_true is the same.
 def plot_simulated_K_p(sim_data, select_Ks, select_ps, suffix=''):
     Ks, ps = sim_data['Ks'], sim_data['ps']
     n_samples = sim_data['scores']['H0']['pos'].shape[2]
@@ -464,7 +470,7 @@ def plot_simulated_K_p(sim_data, select_Ks, select_ps, suffix=''):
     ax_d.legend(loc='best', fontsize=8)
     ax_d.set_ylim(-min(Ks) / 2, min(Ks) / 2)
 
-    ax_a.plot(Ks, Ks, **truth_kw)
+    ax_a.plot(Ks, [n_seqs * K for K in Ks], **truth_kw)
     ax_a.set_xlabel('similarity length')
     ax_a.set_ylabel('estimated antidiagonal position of similarity')
     ax_a.legend(loc='best', fontsize=8)
@@ -523,7 +529,7 @@ def exp_simulated_K_p():
     ps = [round(1 - .06 * i, 2) for i in range(1, 8)]
     select_ps = ps[0], ps[3], ps[5]
 
-    n_samples = 100
+    n_samples = 50
     n_seqs = 6
 
     suffix = ''
@@ -602,7 +608,6 @@ def plot_rearranged_sequences(sim_data):
     fig = plt.figure(figsize=(width, height))
     ax = fig.add_subplot(1, 1, 1)
 
-    from util import color_code
     colors = color_code(range(len(sim_data['segments'])), cmap='tab20')
 
     for color, rec in zip(colors, sim_data['segments']):

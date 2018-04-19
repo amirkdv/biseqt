@@ -22,7 +22,8 @@ plt.rc('text', usetex=True)
 def log(msg, newline=True):
     wrapper = TextWrapper(initial_indent='* ', subsequent_indent='  ',
                           width=120)
-    sys.stderr.write('\n'.join(wrapper.wrap(msg)) + '\n' if newline else '')
+    sys.stderr.write('\n'.join(wrapper.wrap(msg)) + ('\n' if newline else ''))
+    sys.stderr.flush()
 
 
 def _make_absolute(path):
@@ -216,7 +217,11 @@ def pws_from_mse(mse_path, fmt='maf'):
             if let1 == '-':
                 return 'D'
             if let0 == let1:
-                return 'M'
+                if let0 == 'N':
+                    # unknown nucleotides shouldn't match with each other.
+                    return 'S'
+                else:
+                    return 'M'
             else:
                 return 'S'
         opseq = ''.join(_let_pair_to_op(*full_alignment[:, idx])
@@ -307,7 +312,8 @@ def estimate_gap_probs_in_opseq(opseq, radius):
 
 
 # if projection is either of 1 or 2, the positions are projected on either of
-# the first sequences; if None positions are against the opseq
+# the first or second sequence (origin or mutatnt); if None positions are
+# against the opseq.
 def estimate_match_probs_in_opseq(opseq, radius, projection=None):
     assert isinstance(radius, int)
     assert all(op in 'MSID' for op in opseq)
@@ -323,6 +329,7 @@ def estimate_match_probs_in_opseq(opseq, radius, projection=None):
             n_M += 1
 
     assert len(probs) == len(opseq)
+
     if projection is not None:
         probs_proj = np.zeros(len(opseq))  # guaranteed upper bound for length
         assert projection in [1, 2]
@@ -453,6 +460,7 @@ def plot_scored_seeds(ax, scored_seeds, threshold=5, extent=None, **kw):
                                      orientation='vertical')
 
 
+# NOTE hardcodes coordinate conversion logic
 def plot_similar_segment(ax, segment, color='k', **kw):
     (d_min, d_max), (a_min, a_max) = segment
     seg_ds = [d_min, d_min, d_max, d_max]
@@ -463,6 +471,7 @@ def plot_similar_segment(ax, segment, color='k', **kw):
     for i in range(4):
         d, a = seg_ds[i], seg_as[i]
         x, y = (a + max(d, 0), a - min(d, 0))
+        x, y = (a + d) / 2, (a - d) / 2
         # x and y is flipped between matrix notation and plotting
         seg_xs[i], seg_ys[i] = y, x
 
