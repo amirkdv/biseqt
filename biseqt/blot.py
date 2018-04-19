@@ -584,7 +584,13 @@ class WordBlotOverlap(WordBlot):
 
 
 class WordBlotOverlapRef(WordBlotOverlap):
-    # allowed memory unit is in gigabytes
+    """An in-memory, SQL-free version of :class:`WordBlotOverlap` for faster
+    comparisons.  Due to implementation details the word length is constrained
+    above by the available memory.
+
+    Attributes:
+        allowed_memory (int|float): allocatable memory in GB for kmers index.
+    """
     def __init__(self, ref, allowed_memory=1, **kw):
         self.wordlen = kw['wordlen']
         self.alphabet = kw['alphabet']
@@ -595,7 +601,9 @@ class WordBlotOverlapRef(WordBlotOverlap):
         num_kmers = len(self.alphabet) ** self.wordlen
         mem_needed = sys.getsizeof(num_kmers) * num_kmers
         mem_needed_gb = np.power(2, np.log2(mem_needed) - 30)
-        if mem_needed_gb > allowed_memory:
+        assert allowed_memory > 0, 'allowed memory must be positive'
+        self.allowed_memory = allowed_memory
+        if mem_needed_gb > self.allowed_memory:
             msg = 'not enough memory (max = %.2f GB) ' % allowed_memory
             msg += 'to store %d-mers ' % self.wordlen
             msg += '(%.2f GB needed)' % mem_needed_gb
@@ -628,6 +636,13 @@ class WordBlotOverlapRef(WordBlotOverlap):
 
 
 class WordBlotLocalRef(WordBlot):
+    """An in-memory, SQL-free version of :class:`WordBlot` for faster
+    comparisons. Due to implementation details the word length is constrained
+    above by the available memory.
+
+    Attributes:
+        allowed_memory (int|float): allocatable memory in GB for kmers index.
+    """
     def __init__(self, ref, allowed_memory=1, **kw):
         self.wordlen = kw['wordlen']
         self.alphabet = kw['alphabet']
@@ -638,7 +653,9 @@ class WordBlotLocalRef(WordBlot):
         num_kmers = len(self.alphabet) ** self.wordlen
         mem_needed = sys.getsizeof(num_kmers) * num_kmers
         mem_needed_gb = np.power(2, np.log2(mem_needed) - 30)
-        if mem_needed_gb > allowed_memory:
+        assert allowed_memory > 0, 'allowed memory must be positive'
+        self.allowed_memory = allowed_memory
+        if mem_needed_gb > self.allowed_memory:
             msg = 'not enough memory (max = %.2f GB) ' % allowed_memory
             msg += 'to store %d-mers ' % self.wordlen
             msg += '(%.2f GB needed)' % mem_needed_gb
