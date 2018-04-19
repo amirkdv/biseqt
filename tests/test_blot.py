@@ -8,7 +8,8 @@ from biseqt.blot import find_peaks
 from biseqt.blot import band_radius
 from biseqt.blot import expected_overlap_len
 from biseqt.blot import band_radii
-from biseqt.blot import WordBlot, WordBlotOverlap
+from biseqt.blot import WordBlot, WordBlotLocalRef, WordBlotMultiple
+from biseqt.blot import WordBlotOverlap, WordBlotOverlapRef
 
 
 def test_find_peaks():
@@ -122,18 +123,31 @@ def test_local_similarity(wordlen, K, n):
     hom = rand_seq(A, K)
     S = A.parse(str(hom) + str(rand_seq(A, n - K)))
     T = A.parse(str(M.mutate(hom)[0]) + str(rand_seq(A, n-K)))
-    WB = WordBlot(S, T, **WB_kw)
 
     p_match = (1 - gap) * (1 - subst) * .9
 
-    found_homs = list(WB.similar_segments(K, p_match))
-    assert len(found_homs) == 1, 'Only one similar segment should be found'
-    rec = found_homs[0]
-    ((d_min, d_max), (a_min, a_max)) = rec['segment']
-    assert d_min < 10 and d_max > -10 and a_min < K, \
-        'The coordinates of the similar segment must be correct'
-    assert 0.8 * p_match <= rec['p'] <= 1.2 * p_match, \
-        'estimated match prob should be roughly close to true value'
+    found_homs = {}
+    for mode in ['standard', 'ref']:
+        if mode == 'standard':
+            WB = WordBlot(S, T, **WB_kw)
+            found_homs[mode] = list(WB.similar_segments(K, p_match))
+        elif mode == 'ref':
+            if wordlen > 12:
+                with pytest.raises(MemoryError):
+                    WordBlotLocalRef(S, allowed_memory=1, **WB_kw)
+            else:
+                WB_ref = WordBlotLocalRef(S, allowed_memory=1, **WB_kw)
+                found_homs[mode] = list(WB_ref.similar_segments(T, K, p_match))
+
+    for mode, homs in found_homs.items():
+        assert len(homs) == 1, \
+            'Only one similar segment should be found (mode: %s)' % mode
+        rec = homs[0]
+        ((d_min, d_max), (a_min, a_max)) = rec['segment']
+        assert d_min < 10 and d_max > -10 and a_min < K, \
+            'similar segment coordinates must be correct (mode: %s)' % mode
+        assert 0.8 * p_match <= rec['p'] <= 1.2 * p_match, \
+            'estimated match prob should be close to truth (mode: %s)' % mode
 
 
 @pytest.mark.parametrize('wordlen', [8, 15],
@@ -153,14 +167,27 @@ def test_overlap_detection(wordlen, K, n):
     overlap = rand_seq(A, K)
     S = rand_seq(A, n - K) + overlap
     T = M.mutate(overlap)[0] + rand_seq(A, n - K)
-    WBO = WordBlotOverlap(S, T, **WB_kw)
-    rec = WBO.highest_scoring_overlap_band(p_match)
-    d_min, d_max = rec['d_band']
-    p_hat = rec['p']
-    assert d_min * .9 < n - K < 1.1 * d_max, \
-        'correct overlap must be detected'
-    assert p_hat > .9 * p_match, \
-        'the match probability must be correctly detected'
+    recs = {}
+    for mode in ['standard', 'ref']:
+        if mode == 'standard':
+            WBO = WordBlotOverlap(S, T, **WB_kw)
+            rec = WBO.highest_scoring_overlap_band(p_match)
+            recs[mode] = rec
+        elif mode == 'ref':
+            if wordlen > 12:
+                with pytest.raises(MemoryError):
+                    WBO_ref = WordBlotOverlapRef(S, allowed_memory=1, **WB_kw)
+            else:
+                WBO_ref = WordBlotOverlapRef(S, allowed_memory=1, **WB_kw)
+                rec = WBO_ref.highest_scoring_overlap_band(T, p_match)
+                recs[mode] = rec
+    for mode, rec in recs.items():
+        d_min, d_max = rec['d_band']
+        p_hat = rec['p']
+        assert d_min * .9 < n - K < 1.1 * d_max, \
+            'correct overlap must be detected (mode: %s)' % mode
+        assert p_hat > .9 * p_match, \
+            'match probability must be correctly detected (mode: %s)' % mode
 
     S = rand_seq(A, n - K) + overlap + rand_seq(A, n)
     T = rand_seq(A, n) + M.mutate(overlap)[0] + rand_seq(A, n - K)
@@ -170,3 +197,31 @@ def test_overlap_detection(wordlen, K, n):
     p_hat = rec['p']
     assert p_hat < p_match, \
         'non-overlap similarities must not confuse overlap detection'
+
+
+@pytest.mark.parametrize('K', [100, 500],
+                         ids=['K=500', 'K=1000'])
+@pytest.mark.parametrize('n_seqs', [3, 5],
+                         ids=['N=3', 'N=5'])
+def test_local_similarity_multiple(K, n_seqs):
+    gap, subst = .01, .01
+    A = Alphabet('ACGT')
+    M = MutationProcess(A, subst_probs=subst, ge_prob=gap, go_prob=gap)
+    WB_kw = {'g_max': .2, 'sensitivity': .99, 'alphabet': A,
+             'wordlen': 5, 'path': ':memory:'}
+
+    hom = rand_seq(A, K)
+    seqs = [M.mutate(hom)[0] + rand_seq(A, K) for _ in range(n_seqs)]
+    WB = WordBlotMultiple(*seqs, **WB_kw)
+
+    p_match = (1 - gap) * (1 - subst) * .9
+
+    found_homs = list(WB.similar_segments(K, p_match))
+    assert len(found_homs) == 1, 'Only one similar segment should be found'
+    rec = found_homs[0]
+    d_ranges, (a_min, a_max) = rec['segment']
+    for d_min, d_max in d_ranges:
+        assert d_min < 10 and d_max > -10 and a_min < K, \
+            'The coordinates of the similar segment must be correct'
+    assert 0.8 * p_match <= rec['p'] <= 1.2 * p_match, \
+        'estimated match prob should be roughly close to true value'

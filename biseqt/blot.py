@@ -21,6 +21,7 @@
 import sys
 import warnings
 import numpy as np
+import logging
 from scipy.special import erfcinv
 from scipy.spatial import cKDTree
 from .seeds import SeedIndex, SeedIndexMultiple
@@ -296,13 +297,9 @@ class WordBlot(SeedIndex):
         """
         a_min, a_max = a_band
         d_min, d_max = d_band
-        # FIXME verify a_min and a_max are acceptable values
-        L = (a_max - a_min)
-        # FIXME what to do with this?
-        # K = (2. / (2 - self.gap_prob)) * L
-        K = L
-        area = K * (d_max - d_min)
-        return K, area
+        K = (a_max - a_min) / 2
+        A = (d_max - d_min) * K
+        return K, A
 
     def estimate_match_probability(self, num_seeds, d_band=None, a_band=None):
         """Estimate the edit path match probability given the provided observed
@@ -390,7 +387,7 @@ class WordBlot(SeedIndex):
             of a segment centered at the seed.
         """
         d_radius = int(np.ceil(self.band_radius(K)))
-        a_radius = int(np.ceil(K / 2))
+        a_radius = K
 
         seeds_with_neighs = self.find_all_neighbors(
             self.seeds(exclude_trivial=True), d_radius, a_radius
@@ -428,10 +425,9 @@ class WordBlot(SeedIndex):
         self.log('finding local similarities between %s and %s' %
                  (self.S.content_id[:8], self.T.content_id[:8]))
         d_radius = int(np.ceil(self.band_radius(K_min)))
-        a_radius = int(np.ceil(K_min / 2))
+        a_radius = K_min
         scored_seeds = self.score_seeds(K_min)
 
-        # FIXME fixed the padding of d_radius; re-run experiments
         def _update_seg(seg, seed):
             d, a = seed
             if seg is None:
@@ -474,10 +470,8 @@ class WordBlot(SeedIndex):
                 (d_min, d_max), (a_min, a_max) = seg
                 d_min = min(len(self.S), max(d_min, -len(self.T)))
                 d_max = min(len(self.S), max(d_max, -len(self.T)))
-                a_min = max(a_min, 0)
-                a_max = min(a_max, wall_to_wall_distance(
-                    len(self.S), len(self.T), (d_min + d_max) / 2
-                ))
+                a_min = max(a_min + a_radius, 0)
+                a_max = min(a_max - a_radius, len(self.S) + len(self.T))
                 seg = (d_min, d_max), (a_min, a_max)
             # NOTE the following is more justifiable but it matches the
             # average. TODO turn this in into an experiment to justify
@@ -487,8 +481,6 @@ class WordBlot(SeedIndex):
             res = {'segment': seg, 'p': p_hat}
             if score:
                 n = self.seed_count(d_band=seg[0], a_band=seg[1])
-                K_hat = seg[1][1] - seg[1][0]
-                # FIXME double calculations, is segment_dims necessary?!
                 K_hat, area_hat = self.segment_dims(d_band=seg[0],
                                                     a_band=seg[1])
                 scores = self.score_num_seeds(num_seeds=n, area=area_hat,
@@ -598,7 +590,7 @@ class WordBlotOverlapRef(WordBlotOverlap):
         self.alphabet = kw['alphabet']
         self.g_max = kw['g_max']
         self.sensitivity = kw['sensitivity']
-        self.log_level = kw['log_level']
+        self.log_level = kw.get('log_level', logging.INFO)
         self.S = ref
         num_kmers = len(self.alphabet) ** self.wordlen
         mem_needed = sys.getsizeof(num_kmers) * num_kmers
@@ -641,7 +633,7 @@ class WordBlotLocalRef(WordBlot):
         self.alphabet = kw['alphabet']
         self.g_max = kw['g_max']
         self.sensitivity = kw['sensitivity']
-        self.log_level = kw['log_level']
+        self.log_level = kw.get('log_level', logging.INFO)
         self.S = ref
         num_kmers = len(self.alphabet) ** self.wordlen
         mem_needed = sys.getsizeof(num_kmers) * num_kmers
@@ -774,7 +766,7 @@ class WordBlotMultiple(SeedIndexMultiple):
                   a segment of length ``K`` centered at the seed.
         """
         d_radius = int(np.ceil(self.band_radius(K)))
-        a_radius = int(np.ceil(K / 2))
+        a_radius = int(np.ceil(len(self.seqs) * K / 2.))
         seeds_with_neighs = self.find_all_neighbors(d_radius, a_radius)
         volume = (2 * d_radius) ** (len(self.seqs) - 1) * 2 * a_radius
 
@@ -889,21 +881,17 @@ class WordBlotMultiple(SeedIndexMultiple):
             ``score`` is true.
         """
         d_radius = int(np.ceil(self.band_radius(K_min)))
-        a_radius = int(np.ceil(K_min / 2))
+        a_radius = int(np.ceil(len(self.seqs) * K_min / 2.))
         scored_seeds = self.score_seeds(K_min)
         self.log('finding local similarities between %d sequences' %
                  len(self.seqs))
 
-        # FIXME double check that we are find the correct box in the end
-        # and make sure this and the one for multiple are
-        # the same.
         def _update_seg(seg, seed):
             ds, a = seed
             if seg is None:
                 d_ranges = [None] * (len(self.seqs) - 1)
                 for i in range(len(self.seqs) - 1):
                     d_ranges[i] = ds[i] - d_radius, ds[i] + d_radius
-                # HACK make it smaller for good measure (observation based)
                 a_range = a - a_radius, a + a_radius
             else:
                 d_ranges, a_range = seg
@@ -913,7 +901,7 @@ class WordBlotMultiple(SeedIndexMultiple):
                     d_ranges[i] = (min(ds[i], d_min),
                                    max(ds[i], d_max))
                 a_min, a_max = seg[-1]
-                a_range = (min(a, a_min), max(a, a_max))
+                a_range = (min(a - a_radius, a_min), max(a + a_radius, a_max))
             return d_ranges, a_range
 
         avail = [rec['p'] >= p_min for rec in scored_seeds]
@@ -958,9 +946,7 @@ class WordBlotMultiple(SeedIndexMultiple):
                     ds_range[idx] = d_min, d_max
                 a_min, a_max = a_range
                 a_min = max(a_min, 0)
-                # FIXME implement n-d wall to wall distance
-                # L = self.wall_to_wall_distance(ds)
-                # a_max = min(a_max, L)
+                a_max = min(a_max, sum(len(seq) for seq in self.seqs))
                 seg = ds_range, (a_min, a_max)
             # NOTE the following is more justifiable but it matches the
             # average. TODO turn this in into an experiment to justify
@@ -971,7 +957,8 @@ class WordBlotMultiple(SeedIndexMultiple):
             if score:
                 ds_band, a_band = seg
                 n = self.seed_count(ds_band=ds_band, a_band=a_band)
-                K_hat = a_band[1] - a_band[0]
+                a_radius = int(np.ceil(len(self.seqs) * K_min / 2.))
+                K_hat = np.ceil((a_band[1] - a_band[0]) / len(self.seqs))
                 volume = a_band[1] - a_band[0]
                 for d_band in ds_band:
                     volume *= d_band[1] - d_band[0]

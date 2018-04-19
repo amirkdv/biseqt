@@ -23,8 +23,7 @@ def test_kmer_as_int_limitations():
 @pytest.mark.parametrize('alphabet',
                          [Alphabet('ACGT'), Alphabet(['00', '01', '11'])],
                          ids=['one-letter alphabet', 'two-letter alphabet'])
-@pytest.mark.parametrize('wordlen', [3, 6, 9],
-                         ids=['w = %d' % i for i in [3, 6, 9]])
+@pytest.mark.parametrize('wordlen', [3, 6, 9], ids=['w=3', 'w=6', 'w=9'])
 def test_kmer_as_int(alphabet, wordlen):
     kmers = product(range(len(alphabet)), repeat=wordlen)
     as_ints = [kmer_as_int(kmer, alphabet) for kmer in kmers]
@@ -35,8 +34,7 @@ def test_kmer_as_int(alphabet, wordlen):
 @pytest.mark.parametrize('alphabet',
                          [Alphabet('ACGT'), Alphabet(['00', '01', '11'])],
                          ids=['one-letter alphabet', 'two-letter alphabet'])
-@pytest.mark.parametrize('wordlen', [3, 6, 9],
-                         ids=['w = %d' % i for i in [3, 6, 9]])
+@pytest.mark.parametrize('wordlen', [3, 6, 9], ids=['w=3', 'w=6', 'w=9'])
 def test_kmer_as_int_masked(alphabet, wordlen):
     S = Sequence(alphabet, contents=tuple([0] * 10))
     mask = [set([0])]
