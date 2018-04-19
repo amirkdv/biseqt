@@ -432,11 +432,11 @@ class Alignment(object):
         origin_start, mutant_start = self.origin_start, self.mutant_start
         tx_end = len(self.transcript) - 1
         while self.transcript[tx_start] != 'M':
-            tx_start += 1
             if self.transcript[tx_start] in 'DS':
                 origin_start += 1
             if self.transcript[tx_start] in 'IS':
                 mutant_start += 1
+            tx_start += 1
         while self.transcript[tx_end] != 'M':
             tx_end -= 1
         if tx_start < tx_end:

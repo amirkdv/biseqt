@@ -34,6 +34,13 @@ def test_alignment_std_basic(alphabet):
         aligner.solve()
         assert aligner.traceback().transcript == 'M' * len(S), \
             'default mode is standard global alignment'
+        scores = aligner.table_scores()
+        assert len(scores) == len(S) and \
+            all([len(row) == len(S) for row in scores]), \
+            'scores array should have the correct shape'
+        assert max(max(row) for row in scores) == scores[-1][-1], \
+            'max score shouldbe at the bottom right corner'
+
     with Aligner(S, S[:len(S) / 2]) as aligner:
         aligner.solve()
         alignment = aligner.traceback()
@@ -131,6 +138,20 @@ def test_alignment_std_global(err):
         mut_len = Alignment.projected_len(alignment.transcript, on='mutant')
         assert ori_len == len(S) and mut_len == len(T), \
             'Global alignments cover the entirety of both sequences'
+
+
+def test_pw_truncate_to_matches():
+    A = Alphabet('ACGT')
+    S = A.parse('A' * 10 + 'T' * 10 + 'A' * 10)
+    T = A.parse('T' * 30)
+    tx = 'S' * 10 + 'M' * 10 + 'S' * 10
+    aln = Alignment(S, T, tx)
+    aln_truncated = aln.truncate_to_match()
+    assert aln_truncated.transcript == 'M' * 10, \
+        'truncated alignment for %s is %s' % (aln.transcript, 'M' * 10)
+    assert aln_truncated.origin_start == 10 and\
+        aln_truncated.mutant_start == 10, \
+        'truncated alignment should start at (10, 10)'
 
 
 @pytest.mark.parametrize('err', noise_levels,
