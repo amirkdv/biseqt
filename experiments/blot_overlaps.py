@@ -1,4 +1,3 @@
-import os
 from itertools import combinations
 import logging
 import numpy as np
@@ -9,37 +8,10 @@ from time import time
 from biseqt.util import ProgressIndicator
 from biseqt.blot import WordBlotOverlap, WordBlotOverlapRef
 from biseqt.sequence import Alphabet
-from biseqt.stochastics import rand_seq, MutationProcess, rand_read
+from biseqt.stochastics import rand_seq, MutationProcess
 
 from util import plot_classifier, log, with_dumpfile, plot_cdf, savefig
-from util import DATA_DIR
 from util import plot_with_sd
-
-
-# M is the mutation process to insert noise to each read, note that when
-# comparing two reads later they have both suffered mutations at the rate
-# dictated by M and hence are "twice" furhter apart as they are from the
-# original genome.
-def create_simulated_reads(M, path, gap=None, subst=None,
-                           genome_size=10000, read_len=2000, num_reads=40):
-    log('simulating %d sequencing reads of %d bp for genome of %d bp.' %
-        (num_reads, read_len, genome_size))
-    A = Alphabet('ACGT')
-    M = MutationProcess(A, subst_probs=subst, ge_prob=gap, go_prob=gap)
-    genome = rand_seq(A, genome_size)
-    indic = ProgressIndicator(num_total=num_reads)
-    indic.start()
-    reads, mappings = [], []
-    for read, start in rand_read(genome, len_mean=read_len, num=num_reads):
-        indic.progress()
-        reads.append(M.mutate(read)[0])
-        mappings.append((start, start + len(read)))
-    indic.finish()
-
-    path = os.path.join(DATA_DIR, path)
-    with open(path, 'w') as f:
-        for m, read in zip(mappings, reads):
-            f.write('> + %d:%d\n%s\n' % (m[0], m[1], str(read)))
 
 
 def load_mapped_reads(path, max_num=100):
@@ -193,6 +165,7 @@ def plot_overlap_simulations(sim_data):
 
 
 def exp_overlap_simulations(**kw):
+    """Explanation..."""
     wordlen = 6
     gap = .1
     subst = .1
@@ -306,9 +279,5 @@ def exp_sequencing_reads_overlap():
 
 
 if __name__ == '__main__':
-    # mut_gap = .08
-    # mut_subst = .05
-    # create_simulated_reads(M, 'reads_sim.fa', gap=mut_gap, subst=mut_subst)
-
     exp_overlap_simulations()
     exp_sequencing_reads_overlap()
