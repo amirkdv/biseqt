@@ -68,8 +68,6 @@ sys.path.insert(0, os.path.abspath('..'))
 # Add any Sphinx extension module names here, as strings. They can be
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
 # ones.
-
-# sys.path.append('/var/shelf/book01/projects/biseqt/env/local/lib/python2.7/site-packages/breathe')
 extensions = [
     'sphinx.ext.autodoc',
     'sphinx.ext.napoleon',
@@ -79,6 +77,11 @@ extensions = [
     'sphinxcontrib.wiki',
     'breathe',
 ]
+
+# version requirements
+needs_extensions = {
+    'sphinxcontrib.wiki': '0.5.0',
+}
 
 # Breathe configuration
 breathe_projects = {"biseqt": "doxygen/xml"}
@@ -209,7 +212,7 @@ html_static_path = ['_static']
 
 # Custom sidebar templates, maps document names to template names.
 #html_sidebars = {}
-html_sidebars = {'*': ['searchbox.html', 'localtoc.html', 'navigation.html']}
+html_sidebars = {'*': ['searchbox.html', 'navigation.html']}
 
 # Additional templates that should be rendered to pages, maps page names to
 # template names.

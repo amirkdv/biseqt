@@ -56,7 +56,7 @@ setup(
             'sphinx',
             'pycparser', # for generating C component docs index, cf. cdocs.py
             'alabaster', # our theme
-            'sphinxcontrib-wiki', # for breaking down doc pages to sections
+            'sphinxcontrib-wiki>=0.5.0', # for breaking down doc pages to sections
             'breathe',   # for doxygen integration
             'mock',      # for rtfd.org to skip installing system dependencies
         ],

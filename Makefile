@@ -43,6 +43,12 @@ DOCS_OUT = _build
 docs: $(LIBDIR)/pwlib.so docs/doxygen
 	rm -rf docs/$(DOCS_OUT)
 	# sphinx-apidoc -e -o $@ biseqt/
+	# sphinx-apidoc -o $@ experiments/
+	# manually clean up docs/experiments.rst:
+	# 1. remove :undoc-members: lines (so only documented functions appear)
+	# 2. remove module contents (there is none)
+	# 3. remove unwanted scripts
+	# 4. clean up subheading titles
 	docs/doxygen-glue.py $(LIBDIR)/pwlib.h > docs/biseqt.pwlib.rst
 	cd $@ && sphinx-build -b html . $(DOCS_OUT)
 	cd $@ && sphinx-build -b latex . $(DOCS_OUT)

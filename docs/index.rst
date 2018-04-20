@@ -6,17 +6,11 @@
 
 ``BiSeqt`` is a biological sequence analysis tool.
 
+.. include:: wiki.rst
+
 .. toctree::
-  :hidden:
+   :hidden:
 
-  API Reference <modules>
-
-------------
-
-.. wikipage:: overview
-    :title: Overview
-
-------------
-
-.. wikipage:: dev
-    :title: Developer Notes
+   API Reference <modules>
+   Experiments <experiments>
+   Wiki <wiki>
