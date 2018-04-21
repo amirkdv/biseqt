@@ -22,13 +22,12 @@ def time_in_band(K, g, r):
 def sample_edit_sequences(K, g, n_samples, bio=False):
     if bio:
         pws_path = 'data/actn2/actn2-7vet-pws.fa'
-        # pws_path = 'data/irx1/irx1-vert-amniota-pws.fa'
         opseq = ''
         with open(pws_path) as f:
             for seq, name, _ in load_fasta(f):
                 opseq += seq
-        opseq = re.sub('D{8,}', 'D', opseq)
-        opseq = re.sub('I{8,}', 'I', opseq)
+        opseq = re.sub('D{10,}', 'D', opseq)
+        opseq = re.sub('I{10,}', 'I', opseq)
         return sample_opseq(opseq, K, n_samples, g)
     else:
         return (''.join(np.random.choice(list('MID'),
@@ -113,7 +112,7 @@ def plot_time_in_band(sim_data, cutoff_epsilon, path=None):
 
             r_eff = rs[bisect_left(vs, 1 - cutoff_epsilon)]
             in_band_eff = sim_data['in_band'][key][g_idx, r_eff, :].mean()
-            label = 'time in band: \%%%d' % int(100 * in_band_eff)
+            label = 'out of band: \%%%.2f' % (100 * (1 - in_band_eff))
 
             plot_with_sd(ax, rs, res, axis=1, y_max=1, color=color, lw=1.5,
                          label=label)
@@ -133,20 +132,33 @@ def plot_time_in_band(sim_data, cutoff_epsilon, path=None):
 
 
 def exp_time_in_band():
-    """Pairwise alignment time spent in diagonal band calculated and compared:
+    """Plots proportion of alignment time (i.e. number of edit operations)
+    spent within diagonal band for:
 
-        * Simulated edit operations,
-        * Biological edit operations obtained from real aligned genomes,
-        * Full probabilistic model (expected amount of time spent in band),
-        * Approximated probabilistic model (probability of last step in band).
+    * Simulated edit operations,
+    * Biological edit operations obtained from real aligned genomes,
+    * Full probabilistic model (expected amount of time spent in band),
+    * Approximated probabilistic model (probability of last step in band).
 
-        .. figure::
-            https://www.dropbox.com/s/93cg9t4oh0h2guh/band_radius.png?raw=1
-           :target:
-            https://www.dropbox.com/s/93cg9t4oh0h2guh/band_radius.png?raw=1
-           :alt: lightbox
+    .. figure::
+        https://www.dropbox.com/s/93cg9t4oh0h2guh/band_radius.png?raw=1
+       :target:
+        https://www.dropbox.com/s/93cg9t4oh0h2guh/band_radius.png?raw=1
+       :alt: lightbox
 
-           This is the caption of the figure.
+       Predicted proportion of time spent in diagonal band (left) in
+       alignments of total length K=500 according to full (dashed)
+       and approximate (solid) probabilistic model and for two values of
+       gap probabilities. Horizontal lines indicate the calculated band
+       radius for %.01 accuracy. Empericial observations (n=500 samples)
+       for proportion of time spent in band based on simulated edit sequences
+       (top right) and real biological data (bottom right) are shown, and in
+       each case the empirical percentage of time spent outside of band is
+       reported.  Biological alignments are chosen from projected pairwise
+       alignments of *Actinin 2* for 7 vertebrates obtained from UCSC genome
+       browser. Each sample biological edit sequence is chosen such that it has
+       the desired length and gap probability; gaps of length more than 10
+       nucleotides are removed to avoid nonstationary gap probabilities.
     """
     K = 500
     gs = [.05, .15]
