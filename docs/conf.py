@@ -45,7 +45,12 @@ if os.environ.get('READTHEDOCS', None) == 'True':
     html_context = {
         'css_files': [
             '_static/theme_hacks.css',
+            '_static/lightbox.min.css',
         ],
+        'js_files': [
+            '_static/lightbox-plus-jquery.min.js',
+            '_static/js_hacks.js',
+        ]
       }
 else:
     def setup(app):
