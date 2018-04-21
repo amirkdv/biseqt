@@ -7,7 +7,7 @@ from bisect import bisect_left
 from textwrap import TextWrapper
 from matplotlib import pyplot as plt
 import matplotlib
-import matplotlib.gridspec as gridspec
+from matplotlib import gridspec
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from Bio import AlignIO
 from itertools import combinations

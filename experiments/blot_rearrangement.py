@@ -1,5 +1,5 @@
 import numpy as np
-import matplotlib.gridspec as gridspec
+from matplotlib import gridspec
 import matplotlib
 import logging
 from matplotlib import pyplot as plt

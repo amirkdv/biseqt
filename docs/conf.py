@@ -28,10 +28,17 @@ if os.environ.get('READTHEDOCS', None) == 'True':
         def __getattr__(cls, name):
             return Mock()
 
-    MOCK_MODULES = ['cffi', 'igraph', 'numpy', 'apsw', 'pysam',
+    MOCK_MODULES = ['cffi', 'igraph', 'numpy', 'apsw', 'pysam', 'Bio',
         'matplotlib', 'matplotlib.figure', 'matplotlib.backends.backend_agg',
-        'scipy', 'scipy.special', 'scipy.stats', 'scipy.spatial']
-    sys.modules.update((mod_name, Mock()) for mod_name in MOCK_MODULES)
+        'mpl_toolkits.axes_grid1', 'mpl_toolkits.mplot3d',
+        'scipy', 'scipy.special', 'scipy.stats', 'scipy.spatial',
+        'scipy.ndimage',
+    ]
+
+    for mod_name in MOCK_MODULES:
+        sys.modules[mod_name] = Mock()
+
+    autodoc_mock_imports = MOCK_MODULES
 
     # Call doxygen
     root = os.path.dirname(os.path.dirname(__file__))

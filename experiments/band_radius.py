@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 import numpy as np
-import matplotlib.gridspec as gridspec
+from matplotlib import gridspec
 from matplotlib import pyplot as plt
 from bisect import bisect_left
 from scipy.special import erf

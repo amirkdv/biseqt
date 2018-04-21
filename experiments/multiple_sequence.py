@@ -5,7 +5,7 @@ import logging
 from itertools import product
 import matplotlib
 from matplotlib import pyplot as plt
-import matplotlib.gridspec as gridspec
+from matplotlib import gridspec
 from mpl_toolkits.mplot3d import Axes3D
 from Bio import AlignIO
 from time import time
