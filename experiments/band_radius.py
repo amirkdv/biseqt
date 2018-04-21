@@ -4,9 +4,11 @@ import matplotlib.gridspec as gridspec
 from matplotlib import pyplot as plt
 from bisect import bisect_left
 from scipy.special import erf
+import re
 
 from util import log, color_code, plot_with_sd, with_dumpfile, savefig
-from util import estimate_gap_probs_in_opseq
+from util import sample_opseq, estimate_gap_probs_in_opseq
+from util import load_fasta
 
 from biseqt.blot import band_radius
 
@@ -19,14 +21,19 @@ def time_in_band(K, g, r):
 
 def sample_edit_sequences(K, g, n_samples, bio=False):
     if bio:
-        opseqs_path = 'data/acta2/acta2-7vet-opseqs.fa'
-        with open(opseqs_path) as f:
-            opseq = f.read().strip()
-        return sample_opseq(opseq, K, g, n_samples)
+        pws_path = 'data/actn2/actn2-7vet-pws.fa'
+        # pws_path = 'data/irx1/irx1-vert-amniota-pws.fa'
+        opseq = ''
+        with open(pws_path) as f:
+            for seq, name, _ in load_fasta(f):
+                opseq += seq
+        opseq = re.sub('D{8,}', 'D', opseq)
+        opseq = re.sub('I{8,}', 'I', opseq)
+        return sample_opseq(opseq, K, n_samples, g)
     else:
-        return [''.join(np.random.choice(list('MID'),
+        return (''.join(np.random.choice(list('MID'),
                         p=[1-g, g / 2, g / 2], size=K))
-                for _ in range(n_samples)]
+                for _ in range(n_samples))
 
 
 @with_dumpfile
@@ -68,11 +75,10 @@ def plot_time_in_band(sim_data, cutoff_epsilon, path=None):
     gs = sim_data['gs']
     rs = sim_data['rs']
     K = sim_data['K']
-    n_samples = sim_data['in_band']['simulated'].shape[2]
 
-    fig = plt.figure(figsize=(12, 7))
+    fig = plt.figure(figsize=(10, 6))
 
-    grids = gridspec.GridSpec(2, 2, width_ratios=[1.2, 1])
+    grids = gridspec.GridSpec(2, 2, width_ratios=[1.5, 1])
 
     ax_mod = fig.add_subplot(grids[:, 0])  # model
     ax_sim = fig.add_subplot(grids[0, 1])  # simulation
@@ -107,7 +113,7 @@ def plot_time_in_band(sim_data, cutoff_epsilon, path=None):
 
             r_eff = rs[bisect_left(vs, 1 - cutoff_epsilon)]
             in_band_eff = sim_data['in_band'][key][g_idx, r_eff, :].mean()
-            label = '\%% of time in band: %d' % int(100 * in_band_eff)
+            label = 'time in band: \%%%d' % int(100 * in_band_eff)
 
             plot_with_sd(ax, rs, res, axis=1, y_max=1, color=color, lw=1.5,
                          label=label)
@@ -120,8 +126,9 @@ def plot_time_in_band(sim_data, cutoff_epsilon, path=None):
             ax.set_ylabel('proportion of time in band', fontsize=8)
             ax.legend(loc='lower right', fontsize=8)
 
-    fig.suptitle('$K = %d$, no. samples = $%d$' % (K, n_samples))
-    fig.tight_layout(rect=[0, 0.03, 1, 0.95])
+    # n_samples = sim_data['in_band']['simulated'].shape[2]
+    # fig.suptitle('$K = %d$, no. samples = $%d$' % (K, n_samples))
+    # fig.tight_layout(rect=[0, 0.03, 1, 0.95])
     savefig(fig, path, comment='time in band simulation')
 
 
@@ -133,17 +140,19 @@ def exp_time_in_band():
         * Full probabilistic model (expected amount of time spent in band),
         * Approximated probabilistic model (probability of last step in band).
 
-        .. figure:: https://www.dropbox.com/s/93cg9t4oh0h2guh/band_radius.png?raw=1
-           :target: https://www.dropbox.com/s/93cg9t4oh0h2guh/band_radius.png?raw=1
+        .. figure::
+            https://www.dropbox.com/s/93cg9t4oh0h2guh/band_radius.png?raw=1
+           :target:
+            https://www.dropbox.com/s/93cg9t4oh0h2guh/band_radius.png?raw=1
            :alt: lightbox
 
            This is the caption of the figure.
     """
     K = 500
     gs = [.05, .15]
-    n_samples = 1000
+    n_samples = 500
     rs = range(0, 400)
-    cutoff_epsilon = 1e-6  # for vertical lines showing calculated cutoff
+    cutoff_epsilon = 1e-4  # for vertical lines showing calculated cutoff
 
     dumpfile = 'band_radius.txt'
     plot_path = 'band_radius.png'

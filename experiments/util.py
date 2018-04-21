@@ -296,6 +296,31 @@ def seq_pair(n, alphabet, mutation_process=None):
     return S, T
 
 
+def sample_opseq(opseq, K, n_samples, gap=None, match=None,
+                 resolution=1e-3):
+    radius = K / 2
+    cands = []
+    if match is None:
+        matches = []
+    else:
+        matches = estimate_match_probs_in_opseq(opseq, radius)
+    if gap is None:
+        gaps = []
+    else:
+        gaps = estimate_gap_probs_in_opseq(opseq, radius)
+
+    for idx in range(len(opseq) - radius):
+        if match is not None and abs(matches[idx] - match) >= resolution:
+            continue
+        if gap is not None and abs(gaps[idx] - gap) >= resolution:
+            continue
+        cands.append(idx)
+    assert len(cands) > n_samples, 'not enough samples found'
+    samples = np.random.choice(cands, size=n_samples)
+    for pos in samples:
+        yield opseq[pos - radius:pos + radius]
+
+
 def estimate_gap_probs_in_opseq(opseq, radius):
     assert isinstance(radius, int)
     assert len(opseq) > 2 * radius
