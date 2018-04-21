@@ -59,17 +59,13 @@ blockquote {
   padding: 1em;
 }
 
-/**
- * Broken lower left menu on readthedocs.rog
- */
-div.rst-versions.rst-badge {
-  display: none;
+/* Turn off italic serif for function and class arguments. */
+code.descname ~ em {
+  font-family: monospace !important;
+  font-style: normal !important;
 }
 
-/**
- *  TODO This shouldn't be needed with sphinx 1.5, cf. docs/doxygen-glue.py
- */
-img[src*="graphviz"] {
-  display: block;
-  margin: auto;
+/* Broken lower left menu on readthedocs.rog */
+div.rst-versions.rst-badge {
+  display: none;
 }

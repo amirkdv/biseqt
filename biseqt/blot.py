@@ -188,7 +188,7 @@ def H0_moments(alphabet_len, wordlen, area):
 
 def H1_moments(alphabet_len, wordlen, area, seglen, p_match):
     """The mean and standrad deviation of the limiting normal distribution under
-    the :math:`H_0` (related) model given by:
+    the :math:`H_1` (related) model given by:
 
     .. math::
         \\begin{aligned}
@@ -383,7 +383,7 @@ class WordBlot(SeedIndex):
             list(dict): List of dictionaries with keys: ``seed`` (coordinates
             of exactly matching kmer in diagonal coordinates), ``neighs`` (list
             of indices of neighbors of this seed in the appropriate diagonal
-            strip), (a_min, a_max))``)), ``p`` the estimated match probability
+            strip), ``p`` the estimated match probability
             of a segment centered at the seed.
         """
         d_radius = int(np.ceil(self.band_radius(K)))

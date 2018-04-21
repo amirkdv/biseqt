@@ -78,12 +78,17 @@ Data Structures
 ---------------
 %s
 """
-    # TODO with the next relase of sphinx (1.5) we can center align graphviz
+    # the :align: option needs sphinx >= 1.5
     # cf. https://github.com/sphinx-doc/sphinx/commit/1d17475a
-    # currently this is hacked to work in CSS, cf. docs/_static/theme_hacks.css
+    # otherwise use the following in css:
+    # img[src*="graphviz"] {
+      # display: block;
+      # margin: auto;
+    # }
     struct_tpl = '\n' + \
             '\n.. doxygenstruct:: %s' + \
-            '\n.. graphviz:: %s/struct%%s__coll__graph.dot' % DOXY_RELDIR
+            '\n.. graphviz:: %s/struct%%s__coll__graph.dot' % DOXY_RELDIR + \
+            '\n   :align: center'
     structs = structs % ''.join(struct_tpl % (s, s.replace('_', '__'))
                                 for s in d.collected['struct'])
 
