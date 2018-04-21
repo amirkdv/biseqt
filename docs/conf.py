@@ -20,6 +20,11 @@ import subprocess
 from mock import Mock as MagicMock
 # Since Python 3.3 this can be done via:
 # from unittest.mock import MagicMock
+def setup(app):
+    app.add_stylesheet('theme_hacks.css')
+    app.add_stylesheet('lightbox.min.css')
+    app.add_javascript('lightbox-plus-jquery.min.js')
+    app.add_javascript('js_hacks.js')
 
 # Hacks to make it work on readthedocs.org
 if os.environ.get('READTHEDOCS', None) == 'True':
@@ -28,7 +33,7 @@ if os.environ.get('READTHEDOCS', None) == 'True':
         def __getattr__(cls, name):
             return Mock()
 
-    MOCK_MODULES = ['cffi', 'igraph', 'numpy', 'apsw', 'pysam', 'Bio',
+    MOCK_MODULES = ['cffi', 'numpy', 'apsw', 'pysam', 'termcolor', 'Bio',
         'matplotlib', 'matplotlib.figure', 'matplotlib.backends.backend_agg',
         'mpl_toolkits.axes_grid1', 'mpl_toolkits.mplot3d',
         'scipy', 'scipy.special', 'scipy.stats', 'scipy.spatial',
@@ -44,27 +49,6 @@ if os.environ.get('READTHEDOCS', None) == 'True':
     root = os.path.dirname(os.path.dirname(__file__))
     cmd = 'cd %s && rm -rf docs/_build && make docs/doxygen' % root
     subprocess.call(cmd, shell=True)
-    # Mock classes that require "arbitrary" binaries for building on rtfd.org
-    MOCK_MODULES = ['cffi', 'igraph', 'numpy', 'scipy', 'pysqlite', 'termcolor']
-    sys.modules.update((mod_name, Mock()) for mod_name in MOCK_MODULES)
-
-    # add theme hacks, cf. http://stackoverflow.com/a/32898444
-    html_context = {
-        'css_files': [
-            '_static/theme_hacks.css',
-            '_static/lightbox.min.css',
-        ],
-        'js_files': [
-            '_static/lightbox-plus-jquery.min.js',
-            '_static/js_hacks.js',
-        ]
-      }
-else:
-    def setup(app):
-        app.add_stylesheet('theme_hacks.css')
-        app.add_stylesheet('lightbox.min.css')
-        app.add_javascript('lightbox-plus-jquery.min.js')
-        app.add_javascript('js_hacks.js')
 
 # If extensions (or modules to document with autodoc) are in another directory,
 # add these directories to sys.path here. If the directory is relative to the
