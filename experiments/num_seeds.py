@@ -1,12 +1,13 @@
 #!/usr/bin/env python
 from matplotlib import pyplot as plt
+from matplotlib import gridspec
 import sys
 from time import time
 import numpy as np
 from biseqt.sequence import Alphabet
 from biseqt.stochastics import rand_seq, MutationProcess
 from biseqt.seeds import SeedIndex
-from biseqt.blot import band_radius, H0_moments, H1_moments
+from biseqt.blot import band_radius, band_radii, H0_moments, H1_moments
 from util import seq_pair, color_code
 from util import plot_with_sd, with_dumpfile, log, savefig
 from logging import WARN
@@ -192,23 +193,37 @@ def plot_count_seeds_segment(sim_data, suffix=''):
 
     kw = {'marker': 'o', 'markersize': 3, 'lw': 1, 'alpha': .6}
 
-    fig = plt.figure(figsize=(6, 4))
-    ax = fig.add_subplot(1, 1, 1)
+    fig = plt.figure(figsize=(9, 4))
+    grids = gridspec.GridSpec(1, 2, width_ratios=[5, 3])
+    ax_p = fig.add_subplot(grids[0])
+    ax_rad = fig.add_subplot(grids[1])
 
+    pad = min(Ks) / 3
     colors = color_code(g_radii)
+    arrow_kw = {'marker': '>', 'c': 'k', 'markevery': 2, 'markersize': 2,
+                'lw': 1, 'alpha': .8}
+    ax_p.plot([Ks[0] - .2 * pad, Ks[0] - .9 * pad], [match, match], **arrow_kw)
+    ax_p.plot([Ks[0] - .2 * pad, Ks[0] - .9 * pad], [.25, .25], ls='--',
+              **arrow_kw)
     for g_idx, (g_max, color) in enumerate(zip(g_radii, colors)):
+        label = '$g_{\max} = %.2f$' % g_max
         pos = sim_data['p_hat']['pos'][:, g_idx, :]
         neg = sim_data['p_hat']['neg'][:, g_idx, :]
-        plot_with_sd(ax, Ks, neg, axis=1, color=color, ls='--', **kw)
-        plot_with_sd(ax, Ks, pos, axis=1, color=color,
-                     label='$g_{\max} = %.2f$' % g_max, **kw)
+        plot_with_sd(ax_p, Ks, neg, axis=1, color=color, ls='--', **kw)
+        plot_with_sd(ax_p, Ks, pos, axis=1, color=color, label=label, **kw)
+        ax_rad.plot(Ks, band_radii(Ks, g_max, 1 - 1e-4), color=color,
+                    label=label, **kw)
 
-    ax.set_xlabel('homology length', fontsize=10)
-    ax.set_xticks(Ks)
-    ax.set_xticklabels(Ks, fontsize=6)
-    ax.legend(loc='best', fontsize=6)
-    ax.set_ylim(-.2, 1.1)
-    ax.set_ylabel('estimated match probability')
+    ax_p.set_ylim(-.2, 1.1)
+    for ax in [ax_p, ax_rad]:
+        ax.set_xlim(Ks[0] - pad, Ks[-1] + pad)
+        ax.set_xscale('log')
+        ax.set_xlabel('homology length', fontsize=10)
+        ax.set_xticks(Ks)
+        ax.set_xticklabels(Ks, fontsize=6, rotation=90)
+        ax.legend(loc='best', fontsize=6)
+    ax_p.set_ylabel('estimated match probability')
+    ax_rad.set_ylabel('diagonal band radius')
 
     n_samples = pos.shape[1]
     fig.suptitle('no. samples = %d, match = %.2f' % (n_samples, match),
@@ -217,7 +232,7 @@ def plot_count_seeds_segment(sim_data, suffix=''):
 
 
 def exp_count_seeds_segment():
-    Ks = [100 * i for i in range(1, 21)]
+    Ks = [200 * 2 ** i for i in range(8)]
     g_radii = [.05, .1, .2, .4]
     gap = .1
     subst = .15
