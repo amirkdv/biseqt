@@ -50,10 +50,9 @@ if os.environ.get('READTHEDOCS', None) == 'True':
 else:
     def setup(app):
         app.add_stylesheet('theme_hacks.css')
-
-autodoc_member_order = 'bysource'
-autoclass_content = 'both' # appends `__init__.__doc__` to class docstring.
-wiki_enabled = True
+        app.add_stylesheet('lightbox.min.css')
+        app.add_javascript('lightbox-plus-jquery.min.js')
+        app.add_javascript('js_hacks.js')
 
 # If extensions (or modules to document with autodoc) are in another directory,
 # add these directories to sys.path here. If the directory is relative to the
@@ -82,6 +81,12 @@ extensions = [
 needs_extensions = {
     'sphinxcontrib.wiki': '0.5.0',
 }
+
+autodoc_member_order = 'bysource'
+autoclass_content = 'both' # appends `__init__.__doc__` to class docstring.
+
+# wiki configuration
+wiki_enabled = True
 
 # Breathe configuration
 breathe_projects = {"biseqt": "doxygen/xml"}

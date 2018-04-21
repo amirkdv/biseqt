@@ -7,7 +7,6 @@ from scipy.special import erf
 
 from util import log, color_code, plot_with_sd, with_dumpfile, savefig
 from util import estimate_gap_probs_in_opseq
-from real_homologies import sample_opseq
 
 from biseqt.blot import band_radius
 
@@ -127,6 +126,19 @@ def plot_time_in_band(sim_data, cutoff_epsilon, path=None):
 
 
 def exp_time_in_band():
+    """Pairwise alignment time spent in diagonal band calculated and compared:
+
+        * Simulated edit operations,
+        * Biological edit operations obtained from real aligned genomes,
+        * Full probabilistic model (expected amount of time spent in band),
+        * Approximated probabilistic model (probability of last step in band).
+
+        .. figure:: https://www.dropbox.com/s/93cg9t4oh0h2guh/band_radius.png?raw=1
+           :target: https://www.dropbox.com/s/93cg9t4oh0h2guh/band_radius.png?raw=1
+           :alt: lightbox
+
+           This is the caption of the figure.
+    """
     K = 500
     gs = [.05, .15]
     n_samples = 1000
