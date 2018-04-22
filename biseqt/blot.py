@@ -22,6 +22,7 @@ import sys
 import warnings
 import numpy as np
 import logging
+from itertools import groupby, product
 from scipy.special import erfcinv
 from scipy.spatial import cKDTree
 from .seeds import SeedIndex, SeedIndexMultiple
@@ -827,6 +828,7 @@ class WordBlotMultiple(SeedIndexMultiple):
         # always contains the seed itself (i.e always: i in neighs[i])
         for idx, _ in enumerate(all_neighs):
             all_neighs[idx].remove(idx)
+        self.log('found all neighbors')
         return zip(all_seeds, all_neighs)
 
     def score_num_seeds(self, num_seeds, **kw):
@@ -983,3 +985,51 @@ class WordBlotMultiple(SeedIndexMultiple):
                                               seglen=K_hat, p_match=p_hat)
                 res['scores'] = scores
             yield res
+
+
+class WordBlotMultipleFast(WordBlotMultiple):
+    """An in-memory, SQL-free version of :class:`WordBlotOverlapMultiple` for
+    faster comparisons. Due to implementation details the word length is
+    constrained above by the available memory.
+
+    Attributes:
+        allowed_memory (int|float): allocatable memory in GB for kmers index,
+            default is 1.
+    """
+    def __init__(self, *seqs, **kw):
+        name = '_'.join(S.content_id[:8] for S in seqs)
+        self.name = name
+        self.wordlen = kw['wordlen']
+        self.alphabet = kw['alphabet']
+        self.g_max = kw['g_max']
+        self.sensitivity = kw['sensitivity']
+        self.log_level = kw.get('log_level', logging.INFO)
+        self.seqs = seqs
+        self.allowed_memory = kw.get('allowed_memory', 1)
+        assert self.allowed_memory > 0, 'allowed memory must be positive'
+        num_kmers = len(self.alphabet) ** self.wordlen
+        mem_needed = sys.getsizeof(num_kmers) * num_kmers
+        mem_needed_gb = np.power(2, np.log2(mem_needed) - 30)
+        if mem_needed_gb > self.allowed_memory:
+            msg = 'not enough memory (max = %.2f GB) ' % self.allowed_memory
+            msg += 'to store %d-mers ' % self.wordlen
+            msg += '(%.2f GB needed)' % mem_needed_gb
+            raise MemoryError(msg)
+        self.kmer_hits = [[] for _ in range(num_kmers)]
+        for idx, seq in enumerate(self.seqs):
+            for pos, kmer in enumerate(as_kmer_seq(seq, self.wordlen)):
+                self.kmer_hits[kmer].append((idx, pos))
+        log_header = '%d-mer word-blot (python-object)' % self.wordlen
+        self._logger = Logger(log_level=self.log_level, header=log_header)
+
+    def seeds(self):
+        for hits in self.kmer_hits:
+            hits = {seqid: [c[1] for c in seq_hits]
+                    for seqid, seq_hits in groupby(hits,
+                                                   key=lambda c: c[0])}
+            # only consider kmers present in all sequences
+            if len(hits) < len(self.seqs):
+                continue
+            for idxs in product(*hits.values()):
+                ds, a = self.to_diagonal_coordinates(*idxs)
+                yield list(ds), a
