@@ -85,6 +85,7 @@ def plot_count_seeds_moments(sim_data, K=None, suffix=''):
                  label='related', **kw)
 
     # average no. of seeds
+    kw['alpha'] = .9
     pos = sim_data['n_seeds']['pos']
     neg = sim_data['n_seeds']['neg']
     ax_mu.plot(ns, neg.mean(axis=1), c='r', label='unrelated', **kw)
@@ -115,12 +116,49 @@ def plot_count_seeds_moments(sim_data, K=None, suffix=''):
     ax_t.set_ylabel('time to find matching %d-mers (ms)' % wordlen)
 
     n_samples = pos.shape[1]
-    fig.suptitle('no. samples = %d, match = %.2f' % (n_samples, match),
-                 fontsize=8)
+    # fig.suptitle('no. samples = %d, match = %.2f' % (n_samples, match),
+                 # fontsize=8)
     savefig(fig, 'num_seeds_moments%s.png' % suffix)
 
 
 def exp_count_seeds():
+    """Shows theoretical and simulation results for the mean and variance of
+    the number of exactly matching kmers between related and unrelated
+    sequences as a function of sequence length. Theoretical predictions are
+    based on m-dependent Central Limit Theorem and suggest a limiting Normal
+    distribution.
+
+    **Supported Claims**
+
+    * The theoretical calculations of mean and variance for the number of
+      seeds, given by :func:`biseqt.blot.H0_moments` and
+      :func:`biseqt.blot.H1_moments` agree with simulations at least upto 25kbp
+      sequence lengths.
+    * Although the expected number of seeds is technically quadratic, the
+      highest order coefficient is so small that it can be considered
+      effectively linear in sequence length. Furthermore, we note that word
+      length provides expoenentially strong control on the number of seeds as
+      sequence lengths increase; hence maintaining a small quadratic
+      coefficient across biologically relevant sequence lengths (up to 1 Gbp)
+      is feasible with reasonable word lenghts (up to 30)
+
+    .. figure::
+        https://www.dropbox.com/s/fkd6u6gec6rzrjm/num_seeds_moments.png?raw=1
+       :target:
+        https://www.dropbox.com/s/fkd6u6gec6rzrjm/num_seeds_moments.png?raw=1
+       :alt: lightbox
+
+       Time to find all exactly matching 8-mers (*left*) for related (*green*)
+       and unrelated (*red*) sequences of varying lengths (n=50 samples for
+       each length; shaded regions show one standard deviation). Related
+       sequences are mutations of each other with substitution and gap
+       probabilities both equal to 0.1. For the same simulations, mean
+       (*middle*) and standard deviation (*right*) of the number of seeds as a
+       function of sequence length are shown (solid lines) with theoretical
+       predictions for each case (dashed lines). All axes are in log scale, and
+       the dotted black lines in the left and middle plots are y=x lines for
+       comparison.
+    """
     ns = [200 * 2 ** i for i in range(8)]
     gap = .1
     subst = .1
@@ -218,7 +256,7 @@ def plot_count_seeds_segment(sim_data, suffix=''):
     for ax in [ax_p, ax_rad]:
         ax.set_xlim(Ks[0] - pad, Ks[-1] + pad)
         ax.set_xscale('log')
-        ax.set_xlabel('homology length', fontsize=10)
+        ax.set_xlabel('sequence length', fontsize=10)
         ax.set_xticks(Ks)
         ax.set_xticklabels(Ks, fontsize=6, rotation=90)
         ax.legend(loc='best', fontsize=6)
@@ -226,12 +264,44 @@ def plot_count_seeds_segment(sim_data, suffix=''):
     ax_rad.set_ylabel('diagonal band radius')
 
     n_samples = pos.shape[1]
-    fig.suptitle('no. samples = %d, match = %.2f' % (n_samples, match),
-                 fontsize=8)
+    # fig.suptitle('no. samples = %d, match = %.2f' % (n_samples, match),
+                 # fontsize=8)
     savefig(fig, 'num_seeds_segment%s.png' % suffix)
 
 
 def exp_count_seeds_segment():
+    """Shows simulation results for alignment-free estimated match probability
+    for globally homologous sequence pairs of length up to 25kbp.
+
+    **Supported Claims**
+
+    * The match probability estimator provided by
+      :func:`biseqt.blot.WordBlot.estimate_match_probability` using the band
+      radius provided by :func:`biseqt.blot.band_radius` are accurate for
+      similarities of lengths up to 25kbp regardless of gap probability upper
+      bound. Therefore, we can justify using generous overestimates of gap
+      probability (e.g. :math:`g_{\max}=0.4`) in typical contexts.
+    * For unrelated sequences our estimator reports a number close to .25 (one
+      standard deviation range :math:`[0, .4]`).
+
+    .. figure::
+        https://www.dropbox.com/s/gnvb8eiiezyysuq/num_seeds_segment.png?raw=1
+       :target:
+        https://www.dropbox.com/s/gnvb8eiiezyysuq/num_seeds_segment.png?raw=1
+       :alt: lightbox
+
+       For multiple values of maximum allowed gap probability :math:`g_{\max}`
+       (which dictates diagonal band radius), estimated match probability is
+       shown as a function of sequence length (*left*) for globally homologous
+       sequences (solid lines) and unrelated sequences (dashed lines), n=50
+       samples, shaded regions show one standard deviation. Homologous
+       sequences were simulated by mutations with gap probability 0.1 and
+       substitution probability 0.15 (hence a match probability of 0.77
+       indicated by a solid arrow, the dashed arrow shows the 0.25 point).  For
+       each value of :math:`g_{\max}`, the corresponding band radius is shown
+       as a function of similarity length (right). Horizontal axes in both
+       plots is in log scale.
+    """
     Ks = [200 * 2 ** i for i in range(8)]
     g_radii = [.05, .1, .2, .4]
     gap = .1
@@ -243,7 +313,7 @@ def exp_count_seeds_segment():
     sim_data = sim_count_seeds_segment(
         Ks=Ks, g_radii=g_radii, n_samples=n_samples,
         gap=gap, subst=subst, wordlen=wordlen,
-        dumpfile=dumpfile, ignore_existing=False)
+        dumpfile=dumpfile)
     plot_count_seeds_segment(sim_data, suffix=suffix)
 
 
