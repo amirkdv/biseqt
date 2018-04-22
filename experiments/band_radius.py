@@ -4,6 +4,7 @@ from matplotlib import gridspec
 from matplotlib import pyplot as plt
 from bisect import bisect_left
 from scipy.special import erf
+from scipy.ndimage.filters import gaussian_filter1d
 import re
 
 from util import log, color_code, plot_with_sd, with_dumpfile, savefig
@@ -132,13 +133,24 @@ def plot_time_in_band(sim_data, cutoff_epsilon, path=None):
 
 
 def exp_time_in_band():
-    """Plots proportion of alignment time (i.e. number of edit operations)
+    """Shows proportion of alignment time (i.e. number of edit operations)
     spent within diagonal band for:
 
     * Simulated edit operations,
     * Biological edit operations obtained from real aligned genomes,
     * Full probabilistic model (expected amount of time spent in band),
     * Approximated probabilistic model (probability of last step in band).
+
+    **Supported Claims**
+
+    * The random walk model for capturing the probability distribution of
+      diagonal positions is accurate.
+    * Calculating the band radius such that the *endpoint* of an alignment is
+      within diagonal band with probability at least :math:`1 - \epsilon` is a
+      good approximation for desired band radius such that *expected
+      proportion* of time spend in alignment is at least :math:`1 - \epsilon`.
+    * Calculated band radii are accurate and reliable when applied to
+      simulated as well as biological data.
 
     .. figure::
         https://www.dropbox.com/s/93cg9t4oh0h2guh/band_radius.png?raw=1
@@ -153,12 +165,13 @@ def exp_time_in_band():
        radius for %.01 accuracy. Empericial observations (n=500 samples)
        for proportion of time spent in band based on simulated edit sequences
        (top right) and real biological data (bottom right) are shown, and in
-       each case the empirical percentage of time spent outside of band is
-       reported.  Biological alignments are chosen from projected pairwise
-       alignments of *Actinin 2* for 7 vertebrates obtained from UCSC genome
-       browser. Each sample biological edit sequence is chosen such that it has
-       the desired length and gap probability; gaps of length more than 10
-       nucleotides are removed to avoid nonstationary gap probabilities.
+       each case the empirical percentage of time spent *outside* of band is
+       reported; shaded regions indicate one standard deviation.  Biological
+       alignments are chosen from projected pairwise alignments of *Actinin 2*
+       for 7 vertebrates obtained from UCSC genome browser. Each sample
+       biological edit sequence is chosen such that it has the desired
+       length and gap probability; gaps of length more than 10 nucleotides
+       are removed to avoid nonstationary gap probabilities.
     """
     K = 500
     gs = [.05, .15]

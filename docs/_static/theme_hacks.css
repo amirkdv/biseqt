@@ -21,7 +21,7 @@ span.viewcode-link {
 
 dl.function, dl.class, dl.struct{
   padding-top: 2em !important;
-  border-top: #ddd solid 2px !important;
+  border-top: #aaa solid 2px !important;
 }
 
 div.highlight > pre {
@@ -55,7 +55,7 @@ div.sphinxsidebarwrapper h3 {
 }
 
 blockquote {
-  background-color: #f8fbff !important;
+  /* background-color: #f8fbff !important; */
   padding: 1em;
 }
 
@@ -68,4 +68,26 @@ code.descname ~ em {
 /* Broken lower left menu on readthedocs.rog */
 div.rst-versions.rst-badge {
   display: none;
+}
+
+/* contains lightbox image */
+div.lb-outerContainer {
+  float: left !important;
+  margin: 1em !important;
+  width: 70% !important;
+}
+img.lb-image {
+  width: 100% !important;
+  height: auto !important;
+}
+/* contains lightbox caption */
+div.lb-dataContainer {
+  float: left !important;
+  width: 20% !important;
+  margin: 1em !important;
+}
+span.lb-caption {
+  white-space: normal !important;
+  font-size: 1em !important;
+  line-height: 1.3em !important;
 }
