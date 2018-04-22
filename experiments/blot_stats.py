@@ -7,7 +7,7 @@ from scipy.ndimage.filters import gaussian_filter1d
 import sys
 import logging
 
-from biseqt.blot import WordBlot, find_peaks, band_radii, band_radius
+from biseqt.blot import WordBlot, find_peaks, band_radius
 from biseqt.sequence import Alphabet
 from biseqt.stochastics import rand_seq, MutationProcess
 
@@ -121,7 +121,7 @@ def plot_simulated_K_p(sim_data, select_Ks, select_ps, suffix=''):
     # ======================================
     # score by varying K for select ps
     # score varying p for select Ks
-    fig_scores = plt.figure(figsize=(8, 8))
+    fig_scores = plt.figure(figsize=(8, 7))
     ax_H0_K = fig_scores.add_subplot(2, 2, 1)
     ax_H0_p = fig_scores.add_subplot(2, 2, 2)
     ax_H1_K = fig_scores.add_subplot(2, 2, 3)
@@ -135,12 +135,12 @@ def plot_simulated_K_p(sim_data, select_Ks, select_ps, suffix=''):
                 label = '' if case == 'neg' else 'p = %.2f' % p
                 plot_with_sd(ax, Ks, scores[mode][case][:, p_idx, :], axis=1,
                              color=color, ls=ls, label=label, **kw)
-        ax.set_ylabel('%s score' % mode, fontsize=10)
-        ax.set_xlabel('similarity length', fontsize=10)
+        ax.set_ylabel('%s score' % mode)
+        ax.set_xlabel('similarity length')
         ax.set_xscale('log')
         ax.set_xticks(Ks)
-        ax.set_xticklabels(Ks, fontsize=10)
-        ax.legend(loc='best', fontsize=10)
+        ax.set_xticklabels(Ks)
+        ax.legend(loc='best')
 
     for mode, ax in zip(['H0', 'H1'], [ax_H0_p, ax_H1_p]):
         colors = color_code(select_Ks)
@@ -154,7 +154,7 @@ def plot_simulated_K_p(sim_data, select_Ks, select_ps, suffix=''):
         ax.set_xlabel('similarity match probability')
         ax.set_xticks(ps)
         ax.set_xticklabels(ps)
-        ax.legend(loc='best', fontsize=10)
+        ax.legend(loc='best')
     savefig(fig_scores, 'simulations[scores]%s.png' % suffix)
 
     # =====================================
@@ -216,8 +216,6 @@ def plot_simulated_K_p(sim_data, select_Ks, select_ps, suffix=''):
         plot_with_sd(ax_d, Ks, d_mins[:, p_idx, :], axis=1, label=label, **kw)
         plot_with_sd(ax_d, Ks, d_maxs[:, p_idx, :], axis=1, **kw)
         plot_with_sd(ax_a, Ks, a_hats[:, p_idx, :], axis=1, label=label, **kw)
-        ax_d.plot(Ks, band_radii(Ks, g_max, sensitivity), **truth_kw)
-        ax_d.plot(Ks, -band_radii(Ks, g_max, sensitivity), **truth_kw)
         for ax in [ax_d, ax_a]:
             ax.set_xscale('log')
             ax.set_xticks(Ks)
@@ -225,11 +223,11 @@ def plot_simulated_K_p(sim_data, select_Ks, select_ps, suffix=''):
             ax.set_xlabel('similarity length')
         ax_a.set_yscale('log')
 
-    ax_d.set_ylabel('estimated diagonal position of similarity')
+    ax_d.set_ylabel('estimated diagonal position')
     ax_d.legend(loc='best', fontsize=8)
 
     ax_a.plot(Ks, [2 * K for K in Ks], **truth_kw)
-    ax_a.set_ylabel('estimated antidiagonal position of similarity')
+    ax_a.set_ylabel('estimated antidiagonal position')
     ax_a.legend(loc='best', fontsize=8)
 
     savefig(fig_hats, 'simulations[estimates]%s.png' % suffix)
