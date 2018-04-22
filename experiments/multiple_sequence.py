@@ -13,7 +13,8 @@ from time import time
 from biseqt.sequence import Alphabet
 from biseqt.stochastics import rand_seq, MutationProcess
 from biseqt.blot import WordBlotMultiple, band_radius
-from util import log, get_seqs_from_mse, with_dumpfile
+from biseqt.blot import WordBlotMultipleFast
+from util import log, get_seqs_from_mse, with_dumpfile, fill_in_unknown
 from util import color_code, savefig, plot_roc, plot_with_sd
 
 
@@ -42,71 +43,26 @@ def plot_scored_seeds_3d(fig, ax, scored_seeds, threshold=.5):
 
 # segment is a list of 3 tuples (min, max of each coordinate)
 # NOTE util.plot_similar_segment for pw takes segments in diagonal coordinates!
-def plot_similar_segment_3d(ax, segment, color='k', **kw):
+def plot_similar_segment_3d(ax, segment, **kw):
     assert len(segment) == 3
     assert all(len(range) == 2 for range in segment)
-    ax.plot(segment[0], segment[1], segment[2], c='m', alpha=.4, lw=2)
-
-
-# ========================================================
-# Mostly for debugging purposes, 3d plot for simulated MSE
-# ========================================================
-def exp_three_syntehtic_sequences():
-    subst, gap = .05, .09
-    wordlen = 6
-    K = 2000
-    A = Alphabet('ACGT')
-    M = MutationProcess(A, subst_probs=subst, ge_prob=gap, go_prob=gap)
-    S = rand_seq(A, K)
-    T1, _ = M.mutate(S)
-    T2, _ = M.mutate(S)
-
-    def junk(): return rand_seq(A, np.random.randint(K))
-
-    S = junk() + S + junk()
-    T1 = junk() + T1 + junk()
-    T2 = junk() + T2 + junk()
-
-    WB_kw = {'g_max': .2, 'sensitivity': .9, 'alphabet': A, 'wordlen': wordlen,
-             'path': ':memory:'}
-    WB = WordBlotMultiple(S, T1, T2, **WB_kw)
-
-    p_min = (1-gap) * (1-subst)
-    p_min = .9 * p_min
-    scored_seeds = [(WB.to_ij_coordinates(*rec['seed']), rec['p'])
-                    for rec in WB.score_seeds(K)]
-
-    fig = plt.figure()
-    ax = fig.gca(projection=Axes3D.name)
-    plot_scored_seeds_3d(fig, ax, scored_seeds, threshold=p_min)
-    for res in WB.similar_segments(K_min=K, p_min=p_min, score=True):
-        std_ranges = WB.to_ij_coordinates_seg(res['segment'])
-        plot_similar_segment_3d(ax, std_ranges)
-        print K, std_ranges[0][1] - std_ranges[0][0]
-
-    for axis in 'xyz':
-        ax.tick_params(axis=axis, labelsize=5)
-    ax.set_xlabel('Sequence 1')
-    ax.set_ylabel('Sequence 2')
-    ax.set_zlabel('Sequence 3')
-
-    ax.set_title('estimated similarity at exactly matching %d-mers' % wordlen)
-
-    fig.tight_layout()
-    savefig(fig, 'multiple-sequence.png', dpi=300)
+    ax.plot(segment[0], segment[1], segment[2], **kw)
 
 
 # ========================================================
 # Biological data: compare aligned genomes
 # ========================================================
-def seeds_from_maf(maf_path, wordlen, ids_of_interest=[]):
-    alignments = list(AlignIO.parse(maf_path, 'maf'))
+def seeds_from_maf(mse_path, wordlen, fmt='maf', ids=None):
+    alignments = list(AlignIO.parse(mse_path, fmt))
     # NOTE trust the first alignment to have all the ids
-    ids = set()
+    all_ids = set()
     for alignment in alignments:
-        ids = ids.union(set(rec.id for rec in alignment))
-    assert all(id_ in ids for id_ in ids_of_interest)
-    ids = ids_of_interest if ids_of_interest else ids
+        all_ids = all_ids.union(set(rec.id for rec in alignment))
+    if ids is None:
+        ids = all_ids
+    else:
+        assert set(ids).issubset(all_ids)
+    assert len(ids)
     seqs = {id_: '' for id_ in ids}
     for alignment in alignments:
         updated = {id_: False for id_ in ids}
@@ -136,60 +92,115 @@ def seeds_from_maf(maf_path, wordlen, ids_of_interest=[]):
 
 
 def exp_biological_multiple_sequences():
-    maf_path = 'data/actb/actb-7vet.maf'
-    wordlen = 6
+    """Multiple sequence similarities with Word-Blot on *biological data*.
+
+    **Supported Claimes**
+
+    * Word-Blot estimated match probabilities are good classifiers for
+      homologous and non-homologous seeds in multiple sequences.
+
+    .. figure::
+        https://www.dropbox.com/s/qhgl9vtomhfzomx/
+        multiple-sequence%5Bactb%5D.png?raw=1
+       :target:
+        https://www.dropbox.com/s/qhgl9vtomhfzomx/
+        multiple-sequence%5Bactb%5D.png?raw=1
+       :alt: lightbox
+
+       Multiple sequence comparison on *Beta Actin (ACTB)* gene on the 7
+       vertebrate USCS dataset (excluding *monodelphis domestica* in which the
+       gene is split between chromosomes 1 and 6) with word length 6, minimum
+       similarity length 100nt, and minimum match probability 0.75. For an
+       arbitrary group of 3 sequences a dot plot similar to those of pairwise
+       comparisons is shown (*left*). Seeds are color coded by intensity to
+       represent their estimated match probability, blue ligns show local
+       similarities identified by Word-Blot. The performance of estimated match
+       probabilities in the full data set to discriminate between homologous
+       and non-homologous seeds is shown by an ROC curve (*right*).
+
+    .. figure::
+        https://www.dropbox.com/s/96xf8p42gbazjyw/
+        multiple-sequence%5Birx1%5D.png?raw=1
+       :target:
+        https://www.dropbox.com/s/96xf8p42gbazjyw/
+        multiple-sequence%5Birx1%5D.png?raw=1
+       :alt: lightbox
+
+       Same as figure above but with the *IRX1* data set from Ensembl
+       (excluding *rattus norvegicus* whose gene copy is much shorter than the
+       rest) with word length 10.
+    """
+    # mse_path = 'data/actb/actb-7vet.maf'
+    # gene = 'ACTB'
+    # mse_fmt = 'maf'
+    # mse_names = 'ucsc'
+    # suffix = '[%s]' % gene.lower()
+    # wordlen = 6
+    # ids_to_exclude = ['monDom5.chr1', 'monDom5.chr6']  # split gene
+    # scatter_ids = ['hg38.chr7', 'panTro4.chr7', 'canFam3.chr6']
+
+    mse_path = 'data/irx1/irx1-vert-amniota.aln'
+    gene = 'IRX1'
+    mse_fmt = 'clustal'
+    mse_names = 'ensembl'
+    wordlen = 10
+    ids_to_exclude = ['rattus_norvegicus/1-10720']  # much shorter than rest
+    scatter_ids = ['homo_sapiens/1-10720', 'canis_familiaris/1-10720',
+                   'bos_taurus/1-10720']
+
+    p_min = .75
+    K_min = 100
+
     A = Alphabet('ACGT')
     WB_kw = {'g_max': .4, 'sensitivity': .9, 'alphabet': A,
              'wordlen': wordlen, 'path': ':memory:'}
 
     # 3 sequences for scatter plot
-    ids = ['hg38.chr7',
-           'panTro4.chr7',
-           'canFam3.chr6',
-           ]
-    seqs = [A.parse(seq.upper())
-            for id_, seq in get_seqs_from_mse(maf_path, fmt='maf')
-            if id_ in ids]
-    WB = WordBlotMultiple(*seqs, **WB_kw)
-    p_min = .8
+    assert len(scatter_ids) == 3
+    seqs = {id_: A.parse(fill_in_unknown(seq.upper(), A))
+            for id_, seq in get_seqs_from_mse(mse_path, fmt=mse_fmt)
+            if id_ not in ids_to_exclude}
+    ids = seqs.keys()
+    WB = WordBlotMultipleFast(*[seq for id_, seq in seqs.items()
+                                if id_ in scatter_ids], **WB_kw)
     scored_seeds = [(WB.to_ij_coordinates(*rec['seed']), rec['p'])
-                    for rec in WB.score_seeds(50)]
-    log('found %d seeds for %d sequences' % (len(scored_seeds), len(ids)))
+                    for rec in WB.score_seeds(K_min)]
+    log('found %d seeds for 3 sequences' % len(scored_seeds))
 
-    fig = plt.figure(figsize=(10, 5))
-    gs = gridspec.GridSpec(1, 2, width_ratios=[2, 2])
+    fig = plt.figure(figsize=(8, 5))
+    gs = gridspec.GridSpec(1, 2, width_ratios=[2, 1.3])
     ax_scatter = plt.subplot(gs[0], projection=Axes3D.name)
     plot_scored_seeds_3d(fig, ax_scatter, scored_seeds, threshold=p_min)
     for axis in 'xyz':
         ax_scatter.tick_params(axis=axis, labelsize=4)
-    ax_scatter.set_xlabel(ids[0].split('.')[0])
-    ax_scatter.set_ylabel(ids[1].split('.')[0])
-    ax_scatter.set_zlabel(ids[2].split('.')[0])
-    ax_scatter.set_title('estimated similarity at exactly matching %d-mers' %
-                         wordlen, fontsize=8)
+
+    if mse_names == 'ucsc':
+        ax_scatter.set_xlabel(scatter_ids[0].split('.')[0])
+        ax_scatter.set_ylabel(scatter_ids[1].split('.')[0])
+        ax_scatter.set_zlabel(scatter_ids[2].split('.')[0])
+    if mse_names == 'ensembl':
+        ax_scatter.set_xlabel(scatter_ids[0].split('/')[0].replace('_', ' '))
+        ax_scatter.set_ylabel(scatter_ids[1].split('/')[0].replace('_', ' '))
+        ax_scatter.set_zlabel(scatter_ids[2].split('/')[0].replace('_', ' '))
+    ax_scatter.set_title('Estimated similarity at %d ' % len(scored_seeds) +
+                         'seeds in 3 copiees of %s' % gene, fontsize=8)
+
+    for res in WB.similar_segments(K_min=K_min, p_min=p_min, score=False):
+        std_ranges = WB.to_ij_coordinates_seg(res['segment'])
+        plot_similar_segment_3d(ax_scatter, std_ranges, c='b', lw=1, zorder=10)
 
     # ============================
     # hom/non-hom seed classifier
     # ============================
-    ids = ['hg38.chr7',
-           'panTro4.chr7',
-           'canFam3.chr6',
-           'mm10.chr5',
-           'rheMac3.chr3',
-           'rn5.chr12',
-           ]
-
-    real_seeds = list(seeds_from_maf(maf_path, wordlen, ids_of_interest=ids))
+    real_seeds = list(seeds_from_maf(mse_path, wordlen, fmt=mse_fmt, ids=ids))
     real_seeds = list(tuple(int(x) for x in seed) for seed in real_seeds)
     log('found %d homologous seeds for %d sequences' %
         (len(real_seeds), len(ids)))
 
-    seqs = [A.parse(seq.upper())
-            for id_, seq in get_seqs_from_mse(maf_path, fmt='maf')
-            if id_ in ids]
-    WB = WordBlotMultiple(*seqs, **WB_kw)
+    WB = WordBlotMultipleFast(*[seq for id_, seq in seqs.items()
+                                if id_ in ids], **WB_kw)
     scored_seeds = [(WB.to_ij_coordinates(*rec['seed']), rec['p'])
-                    for rec in WB.score_seeds(50)]
+                    for rec in WB.score_seeds(K_min)]
     log('found %d seeds for %d sequences' % (len(scored_seeds), len(ids)))
     pos, neg = [], []
     for coords, p_hat in scored_seeds:
@@ -199,14 +210,14 @@ def exp_biological_multiple_sequences():
             neg.append(p_hat)
 
     ax_roc = plt.subplot(gs[1])
-    plot_roc(ax_roc, pos, neg, color='k')
-    title = 'ROC for classifing exactly matching %d-mers:' % wordlen
-    title += '%d(+) %d(-) samples\n' % (len(pos), len(neg))
-    title += 'species: %s' % ', '.join(x.split('.')[0] for x in ids)
+    plot_roc(ax_roc, pos, neg, color='k', lw=1)
+    avg_len = sum(len(seq) for seq in seqs.values()) / len(seqs)
+    title = 'Classifing %d(+) and %d(-) seeds\n' % (len(pos), len(neg))
+    title += 'in %d copies of %s (avg. len. %dnt)' % (len(ids), gene, avg_len)
     ax_roc.set_title(title, fontsize=8)
 
     fig.tight_layout()
-    savefig(fig, 'multiple-sequence[bio].png')
+    savefig(fig, 'multiple-sequence[%s].png' % gene.lower())
 
 
 # ========================================================
@@ -654,7 +665,6 @@ def exp_rearrangement():
 
 
 if __name__ == '__main__':
-    exp_three_syntehtic_sequences()
     exp_biological_multiple_sequences()
     exp_rearrangement()
     exp_simulated_K_p()
