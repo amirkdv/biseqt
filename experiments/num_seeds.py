@@ -123,9 +123,9 @@ def exp_count_seeds():
     """Shows theoretical and simulation results for the mean and variance of
     the number of exactly matching kmers between related and unrelated
     sequences as a function of sequence length. Theoretical predictions are
-    based on *m-dependent Central Limit Theorem* which suggests a limiting Normal
-    distribution with mean and variance given by :func:`biseqt.blot.H0_moments`
-    and :func:`biseqt.blot.H1_moments`.
+    based on *m-dependent Central Limit Theorem* which suggests a limiting
+    Normal distribution with mean and variance given by
+    :func:`biseqt.blot.H0_moments` and :func:`biseqt.blot.H1_moments`.
 
     **Supported Claims**
 

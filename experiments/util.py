@@ -488,6 +488,7 @@ def plot_scored_seeds(ax, scored_seeds, threshold=5, extent=None, **kw):
 # NOTE hardcodes coordinate conversion logic
 def plot_similar_segment(ax, segment, color='k', **kw):
     (d_min, d_max), (a_min, a_max) = segment
+
     seg_ds = [d_min, d_min, d_max, d_max]
     seg_as = [a_min, a_max, a_max, a_min]
 
@@ -495,7 +496,6 @@ def plot_similar_segment(ax, segment, color='k', **kw):
     seg_ys = [0, 0, 0, 0]
     for i in range(4):
         d, a = seg_ds[i], seg_as[i]
-        x, y = (a + max(d, 0), a - min(d, 0))
         x, y = (a + d) / 2, (a - d) / 2
         # x and y is flipped between matrix notation and plotting
         seg_xs[i], seg_ys[i] = y, x
@@ -568,7 +568,6 @@ def plot_cdf(ax, sample, **kw):
         ys = gaussian_filter1d(F(xs), smooth_radius)
     ax.plot(xs, ys, **kw)
     ax.set_ylim([-.1, 1.1])
-    ax.set_title('Cumulative Distribution')
     if mark_threshold is not None:
         ax.axvline(mark_threshold, c='b', ls='--', lw=3, alpha=.2)
 
@@ -662,7 +661,7 @@ def plot_classifier(pos, neg, labels=None, classifier='>', title='',
         labels = ['positive', 'negative']
     assert len(labels) == 2
 
-    fig = plt.figure(figsize=(12, 8))
+    fig = plt.figure(figsize=(9, 6))
 
     grids = gridspec.GridSpec(2, 2, height_ratios=[2.5, 1])
     ax_roc = fig.add_subplot(grids[0, 0])

@@ -192,10 +192,10 @@ def exp_time_in_band():
        (*bottom right*), and in each case the empirical percentage of time
        spent *outside* of band is reported; shaded regions indicate one
        standard deviation.  Biological alignments are chosen from projected
-       pairwise alignments of *Actinin 2* for 7 vertebrates obtained from
-       UCSC genome browser. Each sample biological edit sequence is chosen
-       such that it has the desired length and gap probability; gaps of
-       length more than 10 nucleotides are removed to avoid nonstationary
+       pairwise alignments of *alpha-Actinin 2 (ACTN2)* for 7 vertebrates
+       obtained from UCSC genome browser. Each sample biological edit sequence
+       is chosen such that it has the desired length and gap probability; gaps
+       of length more than 10 nucleotides are removed to avoid nonstationary
        gap probabilities.
     """
     K = 500

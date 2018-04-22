@@ -1,5 +1,6 @@
 import numpy as np
 from matplotlib import pyplot as plt
+from matplotlib import gridspec
 from itertools import product
 from scipy.ndimage.filters import gaussian_filter1d
 
@@ -112,8 +113,6 @@ def sim_simulated_K_p(Ks, ps, n_samples, **kw):
 
 def plot_simulated_K_p(sim_data, select_Ks, select_ps, suffix=''):
     Ks, ps = sim_data['Ks'], sim_data['ps']
-    wordlen = sim_data['WB_kw']['wordlen']
-    # n_samples = sim_data['scores']['H0']['pos'].shape[2]
     scores = sim_data['scores']
 
     kw = {'marker': 'o', 'markersize': 3, 'alpha': .7, 'lw': 1}
@@ -174,9 +173,6 @@ def plot_simulated_K_p(sim_data, select_Ks, select_ps, suffix=''):
         p_idx = ps.index(p)
         plot_with_sd(ax_K, Ks, K_hats['pos'][:, p_idx, :], axis=1,
                      color=color, label='p = %.2f' % p, **kw)
-        # plot_with_sd(ax_K, Ks,
-                     # np.maximum(K_hats['neg'][:, p_idx, :], 2 * wordlen),
-                     # axis=1, color=color, ls='--', **kw)
         ax_K.set_xscale('log')
         ax_K.set_yscale('log')
         ax_K.set_xticks(Ks)
@@ -192,8 +188,6 @@ def plot_simulated_K_p(sim_data, select_Ks, select_ps, suffix=''):
         K_idx = Ks.index(K)
         plot_with_sd(ax_p, ps, p_hats['pos'][K_idx, :, :], axis=1,
                      color=color, label='K = %d' % K, **kw)
-        # plot_with_sd(ax_p, ps, p_hats['neg'][K_idx, :, :], axis=1,
-                     # color=color, ls='--', **kw)
         ax_p.set_xticks(ps)
         ax_p.set_xticklabels(ps, rotation=90)
     ax_p.set_ylabel('estimated match probability')
@@ -243,7 +237,7 @@ def plot_simulated_K_p(sim_data, select_Ks, select_ps, suffix=''):
 
 def exp_simulated_K_p():
     """Performance of Word-Blot and associated statistical scores for pairwise
-    local similarity search:
+    local similarity search in *simulations*:
 
     * z-scores assigned to diagonal strips with and without
       similarities under the corresponding limiting Normal distributions
@@ -334,7 +328,6 @@ def sim_comp_aligned_genes(seqs, pws, **kw):
     qM = 1 / p_min - 1
     qS = qG = -1
 
-    # qM, qS, qG = 1, 0, -1
     aligner_kw = {
         'match_score': qM,
         'mismatch_score': qS,
@@ -352,7 +345,6 @@ def sim_comp_aligned_genes(seqs, pws, **kw):
         'seed_neg': [],
         'seeds': {key: {} for key in pws},
         'opseq_seeds': {key: [] for key in pws},
-        'homologous_tpr': {key: 0 for key in pws},
         'segments': {key: {} for key in pws},
         'WB_kw': WB_kw,
         'similar_segments_kw': similar_segments_kw,
@@ -381,7 +373,6 @@ def sim_comp_aligned_genes(seqs, pws, **kw):
         for _, seed in opseq_seeds:
             d, a = WB.to_diagonal_coordinates(*seed)
             for d_ in range(d - band_r, d + band_r):
-                # FIXME what should the range be?
                 for a_ in range(a - band_r, a + band_r):
                     i_, j_ = WB.to_ij_coordinates(d_, a_)
                     if 0 <= i_ < len(S) and 0 <= j_ < len(T):
@@ -409,19 +400,6 @@ def sim_comp_aligned_genes(seqs, pws, **kw):
             for aln_pos in range(start, end + 1):
                 i, j = xs[aln_pos], ys[aln_pos]
                 hom_coords[i, j] = 1
-
-        in_band_segs = np.zeros((len(S) + 1, len(T) + 1))
-        for seg_info in sim_data['segments'][(id1, id2)]:
-            (d_min, d_max), (a_min, a_max) = seg_info['segment']
-            for d, a in product(range(d_min, d_max), range(a_min, a_max)):
-                i, j = WB.to_ij_coordinates(d, a)
-                if 0 <= i < len(S) and 0 <= j < len(T):
-                    in_band_segs[i, j] = 1
-        true_positive = np.sum(in_band_segs * hom_coords)
-        positive = np.sum(hom_coords)
-        sim_data['homologous_tpr'][(id1, id2)] = true_positive / positive
-        # FIXME report a global (over all pairs) TPR too
-        log('tpr = %.2f' % sim_data['homologous_tpr'][(id1, id2)])
 
         # run DP alignment on found segments
         for idx, seg_info in enumerate(sim_data['segments'][(id1, id2)]):
@@ -459,25 +437,27 @@ def sim_comp_aligned_genes(seqs, pws, **kw):
     return sim_data
 
 
-def plot_comp_aligned_genes(sim_data, suffix='', naming_style=None):
+def plot_comp_aligned_genes(sim_data, suffix='', example_pair=None,
+                            naming_style=None):
     seqlens = sim_data['seqlens']
     pws = sim_data['pws']
     K_min = sim_data['similar_segments_kw']['K_min']
     p_min = sim_data['similar_segments_kw']['p_min']
-    fig_num = int(np.ceil(np.sqrt(len(pws))))
 
+    # dims of plot containing subplots for all pairs of sequences; these plots
+    # are there just for posterity
+    fig_num = int(np.ceil(np.sqrt(len(pws))))
     fig_seeds = plt.figure(figsize=(6 * fig_num, 5 * fig_num))
     fig_profiles = plt.figure(figsize=(8 * fig_num, 4 * fig_num))
-    fig_p = plt.figure(figsize=(6, 4))
-    fig_p_aln = plt.figure(figsize=(10, 4))
-    fig_K_aln = plt.figure(figsize=(6, 4))
-    fig_coord_classifier = plt.figure(figsize=(6, 4))
 
-    ax_coord_classifier = fig_coord_classifier.add_subplot(1, 1, 1)
-    ax_p = fig_p.add_subplot(1, 1, 1)
-    ax_p_aln = fig_p_aln.add_subplot(1, 2, 1)
-    ax_p_aln_cdf = fig_p_aln.add_subplot(1, 2, 2)
-    ax_K_aln = fig_K_aln.add_subplot(1, 1, 1)
+    fig_main = plt.figure(figsize=(13, 7))
+    grids = gridspec.GridSpec(2, 6, height_ratios=[3, 1.3])
+
+    ax_seeds_ex = fig_main.add_subplot(grids[0, :2])
+    ax_p = fig_main.add_subplot(grids[0, 2:4])
+    ax_p_aln = fig_main.add_subplot(grids[0, 4:])
+    ax_profile_ex = fig_main.add_subplot(grids[1, :3])
+    ax_p_cdf = fig_main.add_subplot(grids[1, 3:])
 
     labels = []
     p_alns = []
@@ -498,16 +478,8 @@ def plot_comp_aligned_genes(sim_data, suffix='', naming_style=None):
         # ============================
         radius = K_min / 2
 
-        ax_profiles = fig_profiles.add_subplot(fig_num, fig_num, idx + 1)
         ps_true = estimate_match_probs_in_opseq(opseq, radius)
-        # smooth for ease of visual inspection
         ps_true_smooth = gaussian_filter1d(ps_true, 10)
-        ax_profiles.plot(range(len(ps_true)), ps_true_smooth, c='g', alpha=.8,
-                         lw=1)
-        ax_profiles.set_title('%s vs %s' % (id1, id2))
-        ax_profiles.set_xlabel('position along global alignment', fontsize=4)
-        ax_profiles.set_ylabel('match probability', fontsize=4)
-
         ps_hat_pos, ps_hat = [], []
         for pos, seed in sim_data['opseq_seeds'][key]:
             if ps_true[pos] == 0:
@@ -515,7 +487,19 @@ def plot_comp_aligned_genes(sim_data, suffix='', naming_style=None):
                 continue
             ps_hat.append(sim_data['seeds'][key][seed])
             ps_hat_pos.append(pos)
-        ax_profiles.scatter(ps_hat_pos, ps_hat, lw=0, c='k', s=4, alpha=.4)
+
+        ax_profile = fig_profiles.add_subplot(fig_num, fig_num, idx + 1)
+        axes_profile = [ax_profile]
+        if key == example_pair:
+            axes_profile.append(ax_profile_ex)
+
+        for ax in axes_profile:
+            ax.plot(range(len(ps_true)), ps_true_smooth, c='g', alpha=.8, lw=1)
+            ax.set_title('similarity profile (%s vs. %s)' % (id1, id2))
+            ax.set_xlabel('position along global alignment')
+            ax.set_ylabel('match probability')
+            ax.scatter(ps_hat_pos, ps_hat, lw=0, c='k', s=7, alpha=.4)
+
         # ps_true is calculated from the alignment and is against alignment
         # length; whereas our p_hat is estimated againsted the projected
         # length. Correct ps_true to be against projected length too.
@@ -523,19 +507,22 @@ def plot_comp_aligned_genes(sim_data, suffix='', naming_style=None):
         ps_true_proj = [
             (1 / (1 - gs_true[ps_hat_pos][i])) * ps_true[ps_hat_pos[i]]
             for i in range(len(ps_hat))]
-        ax_p.scatter(ps_hat, ps_true_proj, lw=0, color='g', s=4, alpha=.2)
+        ax_p.scatter(ps_hat, ps_true_proj, lw=0, color='g', s=3, alpha=.5)
 
         # =============
         # Dot Plots
         # =============
         ax_seeds = fig_seeds.add_subplot(fig_num, fig_num, idx + 1)
-        plot_scored_seeds(ax_seeds,
-                          sim_data['seeds'][key].items(),
-                          threshold=p_min, alpha=.7, zorder=9)
-        plot_global_alignment(ax_seeds, opseq, lw=7, alpha=.4, color='g')
-        adjust_pw_plot(ax_seeds, seqlens[key[0]], seqlens[key[1]])
-        ax_seeds.set_ylabel(id1, fontsize=10)
-        ax_seeds.set_xlabel(id2, fontsize=10)
+        axes_seeds = [ax_seeds]
+        if key == example_pair:
+            axes_seeds.append(ax_seeds_ex)
+        for ax in axes_seeds:
+            plot_scored_seeds(ax, sim_data['seeds'][key].items(),
+                              threshold=p_min, alpha=.7, zorder=9)
+            plot_global_alignment(ax, opseq, lw=5, alpha=.2, color='g')
+            adjust_pw_plot(ax, seqlens[key[0]], seqlens[key[1]])
+            ax.set_ylabel(id1)
+            ax.set_xlabel(id2)
 
         # ================================
         # match probability estimation vs local alignments
@@ -543,83 +530,150 @@ def plot_comp_aligned_genes(sim_data, suffix='', naming_style=None):
         for seg_info in sim_data['segments'][key]:
             p_hat = seg_info['p']
             alignment = seg_info['alignment']
-            K_hat = (seg_info['segment'][1][1] - seg_info['segment'][1][0]) / 2
             if alignment is None:
                 p_aln = 0
-                K_aln = 0
             else:
                 transcript = alignment.transcript
                 K_aln = alignment.projected_len(transcript)
                 p_aln = 1. * transcript.count('M') / K_aln
-                plot_local_alignment(ax_seeds, transcript,
-                                     seg_info['frame'][0][0],
-                                     seg_info['frame'][1][0],
-                                     lw=7, alpha=.2, color='b')
+                for ax in axes_seeds:
+                    plot_local_alignment(ax, transcript,
+                                         seg_info['frame'][0][0],
+                                         seg_info['frame'][1][0],
+                                         lw=1, alpha=.9, color='b', zorder=10)
             p_alns.append(p_aln)
-            ax_p_aln.scatter([p_hat], [p_aln], lw=0, color='k', s=4, alpha=.6)
-            ax_K_aln.scatter([K_hat], [K_aln], lw=0, color='k', s=10, alpha=.6)
+            ax_p_aln.scatter([p_hat], [p_aln], lw=0, color='b', s=10, alpha=.3)
 
-    tprs = [sim_data['homologous_tpr'][key_] for key_ in pws]
-    ax_coord_classifier.bar(range(len(labels)), tprs, color='g', alpha=.9,
-                            align='center', width=.4)
-    ax_coord_classifier.set_xticks(range(len(pws)))
-    ax_coord_classifier.set_xticklabels([' vs. '.join(x) for x in labels],
-                                        rotation=30, fontsize=4, ha='right')
-    ax_coord_classifier.set_ylabel('true positive rate')
-    ax_coord_classifier.set_title('homologous coordinates in similar segments')
+    for ax in [ax_p, ax_p_aln]:
+        ax.plot([0, 1], [0, 1], lw=2, ls='--', alpha=.6, c='k')
+        ax.set_xlabel('estimated match probability')
+        ax.set_ylabel('true match probability')
+        ax.set_xlim(-.1, 1.1)
+        ax.set_ylim(-.1, 1.1)
+        ax.set_aspect('equal')
+    ax_p.set_title('homologous seeds')
+    ax_p_aln.set_title('similar segments')
+    ax_p_aln.plot([0, 1], [p_min, p_min], lw=2, ls='--', alpha=.6, c='k')
 
-    ax_p.plot([0, 1], [0, 1], lw=1, ls='--', alpha=.8, c='k')
-    ax_p.set_xlabel('estimated match probability')
-    ax_p.set_ylabel('global alignment match probability')
-    ax_p.set_xlim(-.1, 1.1)
-    ax_p.set_ylim(-.1, 1.1)
-    ax_p.set_aspect('equal')
-    ax_p.set_title('Match probability at homologous seeds')
+    plot_cdf(ax_p_cdf, p_alns, c='b', lw=1, alpha=.9, smooth_radius=.5)
+    ax_p_cdf.axvline(x=p_min, ls='--', lw=2, c='k', alpha=.6)
+    ax_p_cdf.set_xlabel('local alignment match probability')
+    ax_p_cdf.set_ylabel('cumulative distribution')
+    ax_p_cdf.set_xlim(0.4, 1)
 
-    plot_cdf(ax_p_aln_cdf, p_alns, c='k', lw=1, alpha=.7, smooth_radius=.5)
-    ax_p_aln_cdf.axvline(x=p_min, c='k', alpha=.3, lw=3)
-    ax_p_aln_cdf.set_xlabel('local alignment match probability')
-    ax_p_aln_cdf.set_xlim(0.4, 1.1)
-    ax_p_aln.plot([0, 1], [0, 1], lw=1, ls='--', alpha=.6, c='k')
-    ax_p_aln.plot([0, 1], [p_min, p_min], lw=1, ls='--', alpha=.6, c='k')
-    ax_p_aln.set_xlabel('estimated match probability', fontsize=8)
-    ax_p_aln.set_ylabel('local alignment match probability', fontsize=8)
-    ax_p_aln.set_xlim(-.1, 1.1)
-    ax_p_aln.set_ylim(-.1, 1.1)
-    ax_p_aln.set_aspect('equal')
-    ax_p_aln.set_title('Match probability at identified segments')
+    for ax in [ax_p_cdf, ax_profile_ex]:
+        ticks = [i * .1 for i in range(11)]
+        ax.set_yticks(ticks)
+        ax.set_yticklabels(ticks, fontsize=6)
+    ax_profile_ex.axhline(y=p_min, ls='--', lw=2, c='k', alpha=.6)
 
-    min_K, max_K = ax_K_aln.get_xlim()
-    ax_K_aln.plot([min_K, max_K], [min_K, max_K], lw=1, ls='--', alpha=.8,
-                  c='k')
-    ax_K_aln.set_xlabel('estimated similarity length', fontsize=8)
-    ax_K_aln.set_ylabel('local alignment length', fontsize=8)
-    ax_K_aln.set_aspect('equal')
-    ax_K_aln.set_title('Similarity length at identified segments')
+    for fig in [fig_main, fig_seeds, fig_profiles]:
+        fig.tight_layout()
+    savefig(fig_main, 'comp_aligned_genes[estimates]%s.png' % suffix)
+    savefig(fig_seeds, 'comp_aligned_genes[seeds]%s.png' % suffix)
+    savefig(fig_profiles, 'comp_aligned_genes[profiles]%s.png' % suffix)
 
     fig, _ = plot_classifier(sim_data['seed_pos'], sim_data['seed_neg'],
                              labels=['homologous', 'non-homologous'],
-                             mark_threshold=.8)
-    savefig(fig, 'comp_aligned_genes[seed-classifier]%s.png' % suffix)
-
-    for fig in [fig_profiles, fig_p, fig_p_aln, fig_K_aln, fig_seeds,
-                fig_coord_classifier]:
-        fig.tight_layout()
-    savefig(fig_profiles, 'comp_aligned_genes[profiles]%s.png' % suffix)
-    savefig(fig_p, 'comp_aligned_genes[p-hat]%s.png' % suffix)
-    savefig(fig_p_aln, 'comp_aligned_genes[p-hat-aln]%s.png' % suffix)
-    savefig(fig_K_aln, 'comp_aligned_genes[K-hat-aln]%s.png' % suffix)
-    savefig(fig_seeds, 'comp_aligned_genes[seeds]%s.png' % suffix)
-    savefig(fig_coord_classifier,
-            'comp_aligned_genes[coords-classifier]%s.png' % suffix)
+                             mark_threshold=p_min)
+    savefig(fig, 'comp_aligned_genes[classifier]%s.png' % suffix)
 
 
 def exp_comp_aligned_genes():
+    """Performance of Word-Blot and associated statistical scores for pairwise
+    local similarity search on *biological data*. Given aligned copies of a
+    gene in multiple species we consider the following for each pair:
+
+    * estimated match probability :math:`\hat{p}` at *homologous seeds* (i.e.
+      those exactly matching kmers that lie on the known global pairwise
+      alignment) compared to local match probability of said global alignment.
+    * discrimination power of :math:`\hat{p}` to separate homologous seeds from
+      non-homologous seeds.
+    * all identified similar segments between the two sequences verified by
+      comparison to banded dynamic programming alignment in the identified
+      diagonal strip.
+
+    **Supported Claims**
+
+    * Word-Blot accurately estimates match probabilities, length, and
+      coordinates of local similarities in biological data.
+    * estimated match probabilities :math:`\hat{p}` are effective statistics to
+      separate homologous and non-homologous seeds.
+    * Dynamic programming alignment confirms that Word-Blot correctly
+      identifies local similarities, even those that are inevitably missed by
+      global alignments.
+
+    .. figure::
+        https://www.dropbox.com/s/8ajed2uo0qobyjw/
+        comp_aligned_genes%5Bestimates%5D%5Birx1%5D%5Bp%3D0.80%5D.png?raw=1
+       :target:
+        https://www.dropbox.com/s/8ajed2uo0qobyjw/
+        comp_aligned_genes%5Bestimates%5D%5Birx1%5D%5Bp%3D0.80%5D.png?raw=1
+       :alt: lightbox
+
+       Word-Blot performance in identifying local similarities among *Iroquois
+       homeobox protein 1 (IRX1)* genes for 10 amniota obtain from Ensembl with
+       word length 8, minimum match probability 0.8, and minimum similarity
+       length 200nt. An example pairwise comparison (*top left*) shows seeds
+       (grey) color coded by intensity according to their estimated match
+       probability with those exceeding the threshold shown larger for clarity.
+       Known global alignment is shown in green and aligned local similarities
+       identified by Word-Blot are shown in blue. Estimated similarity profile
+       for the same example pair (*bottom left*) is shown at positions
+       exceeding the match probability minimum (black dots) and compared to the
+       profile obtained from the known global alignment (green). For all
+       pairwise comparisons estimated and true match probability at homologous
+       seeds are shown (*top middle*, green), the diagonal shows ground truth
+       for comparison (dotted black).  Similarly for all identified similar
+       segments, estimated match probability and true probability obtained from
+       banded global alignment are shown (*top right*, blue), the diagonal
+       showing ground truth (dotted black) and the horizontal line shows the
+       cutoff used by Word-Blot (dotted black).
+
+    .. figure::
+        https://www.dropbox.com/s/2mc1rlnazodeu6l/
+        comp_aligned_genes%5Bclassifier%5D%5Birx1%5D%5Bp%3D0.80%5D.png?raw=1
+       :target:
+        https://www.dropbox.com/s/2mc1rlnazodeu6l/
+        comp_aligned_genes%5Bclassifier%5D%5Birx1%5D%5Bp%3D0.80%5D.png?raw=1
+       :alt: lightbox
+
+       Performance of Word-Blot estimated match probability at discriminating
+       between homologous and non-homologous seeds in the same context as the
+       figure above. The cumulative distribution of estimated match probability
+       in each case (*bottom*), the resulting ROC curve (*top left*) and the
+       predictive ROC curve (*top right*). The threshold 0.8 is indicated in
+       blue in all three plots.
+
+
+    .. figure::
+        https://www.dropbox.com/s/38xgx8gbvziq126/
+        comp_aligned_genes%5Bestimates%5D%5Bactb%5D%5Bp%3D0.50%5D.png?raw=1
+       :target:
+        https://www.dropbox.com/s/38xgx8gbvziq126/
+        comp_aligned_genes%5Bestimates%5D%5Bactb%5D%5Bp%3D0.50%5D.png?raw=1
+       :alt: lightbox
+
+       Word-Blot performance in identifying local similarities among *Beta
+       Actin (ACTB)* genes for 7 vertebrates obtain from UCSC genome browser
+       with word length 6, minimum match probability 0.5, and minimum
+       similarity length 200nt. All subplots are similar to those of *IRX1*
+       experiment shown above.
+
+    .. figure::
+        https://www.dropbox.com/s/t5pff0nk54m8swr/
+        comp_aligned_genes%5Bclassifier%5D%5Bactb%5D%5Bp%3D0.50%5D.png?raw=1
+       :target:
+        https://www.dropbox.com/s/t5pff0nk54m8swr/
+        comp_aligned_genes%5Bclassifier%5D%5Bactb%5D%5Bp%3D0.50%5D.png?raw=1
+       :alt: lightbox
+
+       Performance of Word-Blot estimated match probability at discriminating
+       between homologous and non-homologous seeds in the same context as the
+       figure above.
+    """
     A = Alphabet('ACGT')
 
-    # FIXME seed plots seem weird (seeds above threshold without segments).
-    # FIXME the homologous classifier ROC needs work to justify (whasn't this
-    # the point of including irx1?). Also, I think we can get rid of TPR plot.
     # p_min = .5
     # K_min = 200
     # wordlen = 6
@@ -628,15 +682,17 @@ def exp_comp_aligned_genes():
     # dumpfile = 'comp_aligned_genes%s.txt' % suffix
     # seqs_path = 'data/actb/actb-7vet.fa'
     # pws_path = 'data/actb/actb-7vet-pws.fa'
+    # example_pair = ('hg38.chr7', 'mm10.chr5')
 
     p_min = .8
     wordlen = 8
-    K_min = 100
+    K_min = 200
     style = 'ensembl'
     suffix = '[irx1][p=%.2f]' % p_min
     dumpfile = 'comp_aligned_genes%s.txt' % suffix
     seqs_path = 'data/irx1/irx1-vert-amniota-indiv.fa'
     pws_path = 'data/irx1/irx1-vert-amniota-pws.fa'
+    example_pair = ('homo_sapiens/1-10720', 'bos_taurus/1-10720')
 
     with open(seqs_path) as f:
         seqs = {name: A.parse(fill_in_unknown(seq.upper(), A))
@@ -647,7 +703,8 @@ def exp_comp_aligned_genes():
     sim_data = sim_comp_aligned_genes(
         seqs, pws, wordlen=wordlen, p_min=p_min, K_min=K_min,
         dumpfile=dumpfile, ignore_existing=False)
-    plot_comp_aligned_genes(sim_data, suffix=suffix, naming_style=style)
+    plot_comp_aligned_genes(sim_data, suffix=suffix, example_pair=example_pair,
+                            naming_style=style)
 
 
 if __name__ == '__main__':
