@@ -74,7 +74,7 @@ div.rst-versions.rst-badge {
 div.lb-outerContainer {
   float: left !important;
   margin: 1em !important;
-  width: 70% !important;
+  width: 75% !important;
 }
 img.lb-image {
   width: 100% !important;
@@ -88,6 +88,6 @@ div.lb-dataContainer {
 }
 span.lb-caption {
   white-space: normal !important;
-  font-size: 1em !important;
-  line-height: 1.3em !important;
+  font-size: .9em !important;
+  line-height: 1.2em !important;
 }
