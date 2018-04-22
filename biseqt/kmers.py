@@ -492,6 +492,7 @@ class KmerIndex(KmerDBWrapper):
                 CREATE INDEX IF NOT EXISTS idx_%s ON %s (kmer);
             """ % (self.kmers_table, self.kmers_table)
             conn.cursor().execute(q)
+        self.log('Created SQL index for table %s.' % self.kmers_table)
 
     def hits(self, kmer):
         """Returns all hits of a given kmer in indexed sequences.

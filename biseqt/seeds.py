@@ -42,6 +42,8 @@ class SeedIndex(KmerDBWrapper):
             self.log('Indexing seeds for %s (%d) and %s (%d).' %
                      (S.content_id[:8], len(S), T.content_id[:8], len(T)))
             self._index_seeds()
+            self.log('Indexed seeds for %s (%d) and %s (%d).' %
+                     (S.content_id[:8], len(S), T.content_id[:8], len(T)))
 
     @property
     def seeds_table(self):
@@ -147,6 +149,7 @@ class SeedIndex(KmerDBWrapper):
                     d, a = self.to_diagonal_coordinates(pos0, pos1)
                     yield d, a
 
+        self.log('Indexing seeds for %s.' % self.name)
         with self.connection() as conn:
             cursor = conn.cursor()
             cursor.executemany(
@@ -247,7 +250,6 @@ class SeedIndexMultiple(KmerDBWrapper):
         if self._table_exists():
             self.log('Seeds for %s already indexed, skipping' % name)
         else:
-            self.log('Indexing seeds for %s.' % name)
             self._index_seeds()
 
     @property
@@ -358,10 +360,10 @@ class SeedIndexMultiple(KmerDBWrapper):
                 if len(hits) < len(self.seqs):
                     continue
                 for idxs in product(*hits.values()):
-                    # NOTE we're storing d values and not d_
                     ds, a = self.to_diagonal_coordinates(*idxs)
                     yield tuple(list(ds) + [a])
 
+        self.log('Indexing seeds for %s.' % self.name)
         d_cols = ', '.join(self.d_cols)
         with self.connection() as conn:
             cursor = conn.cursor()
