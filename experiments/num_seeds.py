@@ -115,9 +115,7 @@ def plot_count_seeds_moments(sim_data, K=None, suffix=''):
     ax_mu.set_ylabel('average no. of matching %d-mers' % wordlen)
     ax_t.set_ylabel('time to find matching %d-mers (ms)' % wordlen)
 
-    n_samples = pos.shape[1]
-    # fig.suptitle('no. samples = %d, match = %.2f' % (n_samples, match),
-                 # fontsize=8)
+    # n_samples = pos.shape[1]
     savefig(fig, 'num_seeds_moments%s.png' % suffix)
 
 
@@ -125,8 +123,9 @@ def exp_count_seeds():
     """Shows theoretical and simulation results for the mean and variance of
     the number of exactly matching kmers between related and unrelated
     sequences as a function of sequence length. Theoretical predictions are
-    based on m-dependent Central Limit Theorem and suggest a limiting Normal
-    distribution.
+    based on *m-dependent Central Limit Theorem* which suggests a limiting Normal
+    distribution with mean and variance given by :func:`biseqt.blot.H0_moments`
+    and :func:`biseqt.blot.H1_moments`.
 
     **Supported Claims**
 
@@ -143,9 +142,11 @@ def exp_count_seeds():
       is feasible with reasonable word lenghts (up to 30)
 
     .. figure::
-        https://www.dropbox.com/s/fkd6u6gec6rzrjm/num_seeds_moments.png?raw=1
+        https://www.dropbox.com/s/fkd6u6gec6rzrjm/
+        num_seeds_moments%5Bw%3D8%5D.png?raw=1
        :target:
-        https://www.dropbox.com/s/fkd6u6gec6rzrjm/num_seeds_moments.png?raw=1
+        https://www.dropbox.com/s/fkd6u6gec6rzrjm/
+        num_seeds_moments%5Bw%3D8%5D.png?raw=1
        :alt: lightbox
 
        Time to find all exactly matching 8-mers (*left*) for related (*green*)
@@ -263,9 +264,7 @@ def plot_count_seeds_segment(sim_data, suffix=''):
     ax_p.set_ylabel('estimated match probability')
     ax_rad.set_ylabel('diagonal band radius')
 
-    n_samples = pos.shape[1]
-    # fig.suptitle('no. samples = %d, match = %.2f' % (n_samples, match),
-                 # fontsize=8)
+    # n_samples = pos.shape[1]
     savefig(fig, 'num_seeds_segment%s.png' % suffix)
 
 
@@ -285,22 +284,24 @@ def exp_count_seeds_segment():
       standard deviation range :math:`[0, .4]`).
 
     .. figure::
-        https://www.dropbox.com/s/gnvb8eiiezyysuq/num_seeds_segment.png?raw=1
+        https://www.dropbox.com/s/gnvb8eiiezyysuq/
+        num_seeds_segment%5Bw%3D6%5D.png?raw=1
        :target:
-        https://www.dropbox.com/s/gnvb8eiiezyysuq/num_seeds_segment.png?raw=1
+        https://www.dropbox.com/s/gnvb8eiiezyysuq/
+        num_seeds_segment%5Bw%3D6%5D.png?raw=1
        :alt: lightbox
 
        For multiple values of maximum allowed gap probability :math:`g_{\max}`
-       (which dictates diagonal band radius), estimated match probability is
-       shown as a function of sequence length (*left*) for globally homologous
-       sequences (solid lines) and unrelated sequences (dashed lines), n=50
-       samples, shaded regions show one standard deviation. Homologous
-       sequences were simulated by mutations with gap probability 0.1 and
-       substitution probability 0.15 (hence a match probability of 0.77
-       indicated by a solid arrow, the dashed arrow shows the 0.25 point).  For
-       each value of :math:`g_{\max}`, the corresponding band radius is shown
-       as a function of similarity length (right). Horizontal axes in both
-       plots is in log scale.
+       (which dictates diagonal band radius), estimated match probability
+       (using word length 6) is shown as a function of sequence length (*left*)
+       for globally homologous sequences (solid lines) and unrelated sequences
+       (dashed lines), n=50 samples, shaded regions show one standard
+       deviation. Homologous sequences were simulated by mutations with gap
+       probability 0.1 and substitution probability 0.15 (hence a match
+       probability of 0.77 indicated by a solid arrow, the dashed arrow shows
+       the 0.25 point).  For each value of :math:`g_{\max}`, the corresponding
+       band radius is shown as a function of similarity length (right).
+       Horizontal axes in both plots is in log scale.
     """
     Ks = [200 * 2 ** i for i in range(8)]
     g_radii = [.05, .1, .2, .4]

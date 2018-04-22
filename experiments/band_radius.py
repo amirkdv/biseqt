@@ -9,7 +9,6 @@ import re
 
 from util import log, color_code, plot_with_sd, with_dumpfile, savefig
 from util import sample_opseq, estimate_gap_probs_in_opseq
-from util import plot_global_alignment, adjust_pw_plot
 from util import load_fasta, opseq_path
 
 from biseqt.seeds import SeedIndex
@@ -80,7 +79,7 @@ def plot_time_in_band(sim_data, cutoff_epsilon):
 
     fig = plt.figure(figsize=(10, 8))
 
-    grids = gridspec.GridSpec(3, 2 , height_ratios=[1, 1, 1])
+    grids = gridspec.GridSpec(3, 2, height_ratios=[1, 1, 1])
 
     ax_mod = fig.add_subplot(grids[:2, 0])  # model
     ax_sim = fig.add_subplot(grids[2, 0])  # simulated data
@@ -121,10 +120,9 @@ def plot_time_in_band(sim_data, cutoff_epsilon):
                   for x, y in zip(xs, ys)]
             ax_rw.plot(range(K + 1), ds, **kw)
 
-        as_ = np.arange(0, 2 * K)
         for eps, lw, alpha, label in zip([1e-1, 1e-6], [2, 3], [.7, .3],
-                                     ['$\epsilon=10^{-1}$',
-                                      '$\epsilon=10^{-6}$']):
+                                         ['$\epsilon=10^{-1}$',
+                                          '$\epsilon=10^{-6}$']):
 
             def radius_(k): return erfcinv(eps) * np.sqrt(2 * g) * np.sqrt(k)
 
@@ -207,7 +205,7 @@ def exp_time_in_band():
     cutoff_epsilon = 1e-4  # for vertical lines showing calculated cutoff
 
     dumpfile = 'band_radius.txt'
-    sim_data = sim_time_in_band(K, gs, rs, n_samples, dumpfile=dumpfile, ignore_existing=True)
+    sim_data = sim_time_in_band(K, gs, rs, n_samples, dumpfile=dumpfile)
     plot_time_in_band(sim_data, cutoff_epsilon)
 
 
