@@ -70,6 +70,9 @@ div.rst-versions.rst-badge {
   display: none;
 }
 
+div.figure{
+  background: #e8e9f8 !important;
+}
 /* contains lightbox image */
 div.lb-outerContainer {
   float: left !important;

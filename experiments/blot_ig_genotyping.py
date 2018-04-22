@@ -323,6 +323,23 @@ def plot_ig_genotyping(sim_data, suffix=''):
 
 
 def exp_ig_genotyping():
+    """
+    .. figure::
+        https://www.dropbox.com/s/ivihbrqkqq8taiq/
+        ig_genotyping%5BK-hat%5D_first_1000.png?raw=1
+       :target:
+        https://www.dropbox.com/s/ivihbrqkqq8taiq/
+        ig_genotyping%5BK-hat%5D_first_1000.png?raw=1
+       :alt: lightbox
+
+    .. figure::
+        https://www.dropbox.com/s/qs0vy07iaqukr3e/
+        ig_genotyping%5Bp-hat%5D_first_1000.png?raw=1
+       :target:
+        https://www.dropbox.com/s/qs0vy07iaqukr3e/
+        ig_genotyping%5Bp-hat%5D_first_1000.png?raw=1
+       :alt: lightbox
+    """
     p_min = .8
     wordlens = {'J': 6, 'V': 8, 'D': 4}
     # cf. https://ncbiinsights.ncbi.nlm.nih.gov/tag/igblast/

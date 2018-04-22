@@ -15,6 +15,13 @@ from util import log, savefig
 
 
 def exp_rearrangement():
+    """
+    .. figure::
+        https://www.dropbox.com/s/nsvsf5gaui6t9ww/rearrangement.png?raw=1
+       :target:
+        https://www.dropbox.com/s/nsvsf5gaui6t9ww/rearrangement.png?raw=1
+       :alt: lightbox
+    """
     # NOTE we are running whole table DP later here; be careful with size
     K = 200
     wordlen = 6

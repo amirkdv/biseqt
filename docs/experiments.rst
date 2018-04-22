@@ -15,22 +15,22 @@ Experiments
 .. automodule:: experiments.band_radius
     :members:
 
-(§3) Word-Blot Performance (pairwise)
+(§3) Basic Word-Blot Usage Experiments
+--------------------------------------
+
+.. automodule:: experiments.blot_rearrangement
+    :members:
+
+(§4) Word-Blot Performance (pairwise)
 -------------------------------------
 
 .. automodule:: experiments.blot_stats
     :members:
 
-(§4) Overlap Discovery Experiments
+(§5) Overlap Discovery Experiments
 ----------------------------------
 
 .. automodule:: experiments.blot_overlaps
-    :members:
-
-(§5) Basic Word-Blot Usage Experiments
---------------------------------------
-
-.. automodule:: experiments.blot_rearrangement
     :members:
 
 (§6) Immunoglobin VDJ Genotyping

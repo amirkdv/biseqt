@@ -165,7 +165,15 @@ def plot_overlap_simulations(sim_data):
 
 
 def exp_overlap_simulations(**kw):
-    """Explanation..."""
+    """
+    .. figure::
+        https://www.dropbox.com/s/91amhsoyep99204/
+        overlaps_simulations%5Bd%2Cp-hat%5D.png?raw=1
+       :target:
+        https://www.dropbox.com/s/91amhsoyep99204/
+        overlaps_simulations%5Bd%2Cp-hat%5D.png?raw=1
+       :alt: lightbox
+    """
     wordlen = 6
     gap = .1
     subst = .1
@@ -260,6 +268,15 @@ def plot_sequencing_reads_overlap(sim_data, suffix=''):
 
 
 def exp_sequencing_reads_overlap():
+    """
+    .. figure::
+        https://www.dropbox.com/s/8cmsnr5x0oe5bbt/
+        overlaps%5Broc%5D%5Bw%3D10%5D.png?raw=1
+       :target:
+        https://www.dropbox.com/s/8cmsnr5x0oe5bbt/
+        overlaps%5Broc%5D%5Bw%3D10%5D.png?raw=1
+       :alt: lightbox
+    """
     hf_gap = .12
     hf_subst = .1
     hf_match = (1 - hf_gap) * (1 - hf_subst)
