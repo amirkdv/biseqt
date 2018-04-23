@@ -192,14 +192,7 @@ def plot_ig_genotyping(sim_data, suffix=''):
             min_igblast_L = mappings[gene_type].pop('min_igblast_L')
             min_igblast_m = mappings[gene_type].pop('min_igblast_m')
 
-            # HACK to see what happens if we pick the best performing match;
-            # result on first 1000 reads: % 86.86 (% 99.80)
-            # mappings[gene_type] = dict(sorted(
-            #     mappings[gene_type].items(), key=lambda x: x[1]['p']
-            # )[-1:])
-
             for gene, rec in mappings[gene_type].items():
-                ours_m = rec['p_aln'] * rec['len_aln']
                 total_predictions += 1
 
                 # NOTE we're duplicating this logic to allow reevaluating
@@ -217,19 +210,17 @@ def plot_ig_genotyping(sim_data, suffix=''):
                     p_aln = rec['p_aln']
                     ours_m = rec['alignment'].transcript.count('M')
                     higher_p = p_aln >= min_igblast_p and \
-                        ours_m >= min_igblast_m - 2
+                        ours_m >= min_igblast_m - 1
                     higher_m = ours_m >= min_igblast_m and \
                         p_aln >= min_igblast_p - .01
                     if higher_p or higher_m:
                         num_agreements_forgiving += 1
+                        color = 'g'
                 comparison['p'][gene_type].append(
                     (rec['p_aln'], min_igblast_p, color)
                 )
                 comparison['K'][gene_type].append(
                     (rec['len_aln'], min_igblast_L, color)
-                )
-                comparison['num_match'][gene_type].append(
-                    (ours_m, min_igblast_m, color)
                 )
 
         accuracy['strict'][gene_type] = \
@@ -253,11 +244,15 @@ def plot_ig_genotyping(sim_data, suffix=''):
         return xs, ys, colors
 
     # probability of ours vs igblast
-    fig = plt.figure(figsize=(14, 5))
-    ax_V = fig.add_subplot(1, 3, 1)
-    ax_D = fig.add_subplot(1, 3, 2)
-    ax_J = fig.add_subplot(1, 3, 3)
-    for gene_type, ax in zip('VDJ', [ax_V, ax_D, ax_J]):
+    fig = plt.figure(figsize=(11, 8))
+    ax_p_V = fig.add_subplot(2, 3, 1)
+    ax_p_D = fig.add_subplot(2, 3, 2)
+    ax_p_J = fig.add_subplot(2, 3, 3)
+    ax_K_V = fig.add_subplot(2, 3, 4)
+    ax_K_D = fig.add_subplot(2, 3, 5)
+    ax_K_J = fig.add_subplot(2, 3, 6)
+
+    for gene_type, ax in zip('VDJ', [ax_p_V, ax_p_D, ax_p_J]):
         xs, ys, colors = _extract_with_noise('p', gene_type)
         ax.scatter(xs, ys, c=colors, alpha=.6, s=20, lw=0)
         ax.set_title('%s genes: \\%%%.2f (\\%%%.2f)' %
@@ -270,22 +265,13 @@ def plot_ig_genotyping(sim_data, suffix=''):
         ax.set_xlim(.7, 1.05)
         ax.set_ylim(.7, 1.05)
         ax.set_aspect('equal')
-        ax.plot([0, 1], [0, 1], c='k', lw=3, ls='--', alpha=.2)
-    fig.suptitle('time per read: %.2f s' % avg_time, fontsize=8)
-    savefig(fig, 'ig_genotyping[p-hat]%s.png' % suffix)
+        ax.plot([0, 1], [0, 1], c='k', lw=1, ls='--', alpha=.6)
 
-    # aligned length of ours vs igblast
-    fig = plt.figure(figsize=(14, 5))
-    ax_V = fig.add_subplot(1, 3, 1)
-    ax_D = fig.add_subplot(1, 3, 2)
-    ax_J = fig.add_subplot(1, 3, 3)
-    for gene_type, ax in zip('VDJ', [ax_V, ax_D, ax_J]):
+    print 'avg time', avg_time
+
+    for gene_type, ax in zip('VDJ', [ax_K_V, ax_K_D, ax_K_J]):
         xs, ys, colors = _extract_with_noise('K', gene_type)
         ax.scatter(xs, ys, c=colors, alpha=.4, s=20, lw=0)
-        ax.set_title('%s genes: \\%%%.2f (\\%%%.2f)' %
-                     (gene_type,
-                      accuracy['strict'][gene_type],
-                      accuracy['forgiving'][gene_type]))
         ax.set_xlabel('WordBlot aligned length')
         ax.set_ylabel('IgBlast aligned length')
         ax.set_aspect('equal')
@@ -293,52 +279,70 @@ def plot_ig_genotyping(sim_data, suffix=''):
         xy_range = (min(x_range[0], y_range[0]), max(x_range[1], y_range[1]))
         ax.set_xlim(*xy_range)
         ax.set_ylim(*xy_range)
-        ax.plot(ax.get_xlim(), ax.get_ylim(), c='k', lw=3, ls='--', alpha=.2)
-    fig.suptitle('time per read: %.2f s' % avg_time, fontsize=8)
-    savefig(fig, 'ig_genotyping[K-hat]%s.png' % suffix)
+        ax.plot(ax.get_xlim(), ax.get_ylim(), c='k', lw=1, ls='--', alpha=.6)
 
-    # nt agreement of ours vs igblast
-    fig = plt.figure(figsize=(14, 5))
-    ax_V = fig.add_subplot(1, 3, 1)
-    ax_D = fig.add_subplot(1, 3, 2)
-    ax_J = fig.add_subplot(1, 3, 3)
-    x_range, y_range = None, None
-    for gene_type, ax in zip('VDJ', [ax_V, ax_D, ax_J]):
-        xs, ys, colors = _extract_with_noise('num_match', gene_type)
-        ax.scatter(xs, ys, c=colors, alpha=.4, s=20, lw=0)
-        ax.set_title('%s genes: \\%%%.2f (\\%%%.2f)' %
-                     (gene_type,
-                      accuracy['strict'][gene_type],
-                      accuracy['forgiving'][gene_type]))
-        ax.set_xlabel('WordBlot matched nucleotides')
-        ax.set_ylabel('IgBlast matched nucleotides')
-        ax.set_aspect('equal')
-        x_range, y_range = ax.get_xlim(), ax.get_ylim()
-        xy_range = (min(x_range[0], y_range[0]), max(x_range[1], y_range[1]))
-        ax.set_xlim(*xy_range)
-        ax.set_ylim(*xy_range)
-        ax.plot(ax.get_xlim(), ax.get_ylim(), c='k', lw=3, ls='--', alpha=.2)
-    fig.suptitle('time per read: %.2f s' % avg_time, fontsize=8)
-    savefig(fig, 'ig_genotyping[matches]%s.png' % suffix)
+    savefig(fig, 'ig_genotyping%s.png' % suffix)
 
 
 def exp_ig_genotyping():
-    """
-    .. figure::
-        https://www.dropbox.com/s/ivihbrqkqq8taiq/
-        ig_genotyping%5BK-hat%5D_first_1000.png?raw=1
-       :target:
-        https://www.dropbox.com/s/ivihbrqkqq8taiq/
-        ig_genotyping%5BK-hat%5D_first_1000.png?raw=1
-       :alt: lightbox
+    """Shows the performance of Word-Blot in genotyping Immunoglobin heavy
+    chain genotyping. A thousand reads (average length 240nt) covering the
+    mature VDJ region of chromosome 14 from the stanford S22 dataset are
+    genotyped by Word-Blot against the IMGT list of Immunoglobin heavy chain
+    genes:
+
+    * 358 genes and variants for V with average length 292nt,
+    * 44 genes and variants for D with average length 24nt,
+    * 13 genes and variants for J with average length 53nt.
+
+    For each read and each gene type (V, D, or J) 3 candidates are offered by
+    Word-Blot which are then compared against the same output of IgBlast.
+
+    For each gene type we consider two measures of accuracy:
+
+    * the percentage of Word-Blot top 3 candidates that are also IgBlast
+      top 3 candidates.
+    * a more forgiving measure which accepts the following candidates as "at
+      least as good as IgBlast candidates":
+
+        * those genes reported by Word-Blot that have a *longer* alignment than
+          the shortest IgBlast candidate alignment while their percent identity
+          is at most 1 point below that of the worst IgBlast candidate,
+        * those genes with a *higher percent identity* than the worst IgBlast
+          candidate with an aligned length at most 2 nucleotides shorter than
+          the shortest IgBlast candidate.
+
+      The relevant measures for Word-Blot candidates (exact value for percent
+      identity and aligned length) are obtained by *banded local* alignment in
+      the diagonal strip suggested by Word-Blot. To ensure comparability of
+      results the same alignment scores are used as those of IgBlast (gap open
+      -5, gap extend -2, and mismatch -1, -3, and -2 for V, D, and J
+      respectively).
+
+    **Supported Claims**
+
+    * Despite relying on statistical properties of kmers, by using short word
+      lengths Word-Blot performs well and acceptably fast even for small
+      sequence lengths and for discriminating highly similar sequences.
 
     .. figure::
-        https://www.dropbox.com/s/qs0vy07iaqukr3e/
-        ig_genotyping%5Bp-hat%5D_first_1000.png?raw=1
+        https://www.dropbox.com/s/k69jw7w8mwh2biv/
+        ig_genotyping_first_1000.png?raw=1
        :target:
-        https://www.dropbox.com/s/qs0vy07iaqukr3e/
-        ig_genotyping%5Bp-hat%5D_first_1000.png?raw=1
+        https://www.dropbox.com/s/k69jw7w8mwh2biv/
+        ig_genotyping_first_1000.png?raw=1
        :alt: lightbox
+
+       For each of the gene types, V (*left*, word length 8), D (*middle*, word
+       length 4), and J (*right*, word length 6),
+       alignment lengths (*top*) and match probabilities (*bottom*) of top 3
+       candidates reported by Word-Blot and IgBlast are compared. For each
+       Word-Blot candidate the corresponding IgBlast coordinate is that of the
+       worst of the three reported by IgBlast for the same read. The two
+       measures of accuracy for each gene type are shown (more forgiving
+       measure in parentheses). Each gene mapping is color coded, greens are
+       those that are in some way "at least as good as IgBlast candidates" and
+       reds are the rest. Average mapping time for each read is 0.7 second.
     """
     p_min = .8
     wordlens = {'J': 6, 'V': 8, 'D': 4}
@@ -388,13 +392,13 @@ def exp_ig_genotyping():
                 genes[key][name] = {
                     'seq': seq,
                 }
-    log('running experiment')
+    log('running Ig genotyping...')
     sim_data = sim_ig_genotyping(
         reads, genes, wordlens=wordlens, p_min=p_min, minlens=minlens,
         mismatch_scores=mismatch_scores,
         gap_open_score=gap_open_score,
         gap_extend_score=gap_extend_score,
-        dumpfile=dumpfile
+        dumpfile=dumpfile, ignore_existing=False
     )
     plot_ig_genotyping(sim_data, suffix)
 
