@@ -39,12 +39,12 @@ div.document {
 }
 
 div.sphinxsidebar {
-  width: 20em !important; /* should match the left margin of div.bodywrapper */
+  width: 27% !important; /* should match the left margin of div.bodywrapper */
   font-size: .9em !important;
 }
 
 div.bodywrapper {
-  margin: 0 0 0 20em !important; /* left margin should match width of sidebar */
+  margin: 0 0 0 27% !important; /* left margin should match width of sidebar */
   border-left: #ddd solid 2px !important;
 }
 
@@ -53,7 +53,7 @@ div.sphinxsidebarwrapper {
   border-bottom: #ddd solid 2px !important;
   position: fixed !important;
   top: 20% !important;
-  width: 20em !important
+  width: 19% !important
 }
 
 blockquote {
