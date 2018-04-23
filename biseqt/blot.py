@@ -494,10 +494,7 @@ class WordBlotOverlap(WordBlot):
     """A specialized version of WordBlot for detecting overlap
     (suffix-prefix) similarities between sequences (e.g. in a sequencing
     context)."""
-    # FIXME get rid of p_min argument it's only affecting our alignment length
-    # estimates. If too worried about g_max being wild, can use wall to wall
-    # instead of expected_overlap_len!
-    def score_seeds(self, p_min):
+    def score_seeds(self):
         """For each seed finds all seeds in its neighborhood defined by:
 
         .. math::
@@ -517,11 +514,10 @@ class WordBlotOverlap(WordBlot):
                   respect to H1), and ``r`` (band radius at the seed's
                   coordinates).
         """
-        # use 1 - p_min as an overestimate of gap prob
-        gap_prob = 1 - p_min
-
         def _len(d):
-            return expected_overlap_len(len(self.S), len(self.T), d, gap_prob)
+            return expected_overlap_len(
+                len(self.S), len(self.T), d, self.g_max
+            )
 
         def _rad(d):
             return np.ceil(self.band_radius(_len(d)))
@@ -530,7 +526,7 @@ class WordBlotOverlap(WordBlot):
                          for i, j in self.seeds(exclude_trivial=True))
         if not all_seeds:
             return []
-        all_seeds_scaled = np.array([(d / _rad(d), a / _len(d))
+        all_seeds_scaled = np.array([(d / _rad(d), a / (2 * _len(d)))
                                      for d, a in all_seeds])
         quad_tree = cKDTree(all_seeds_scaled)
         all_neighs = quad_tree.query_ball_tree(quad_tree, 1, p=float('inf'))
@@ -557,7 +553,7 @@ class WordBlotOverlap(WordBlot):
                  'p': _p(d, len(neighs))}
                 for (d, a), neighs in seeds_with_neighs]
 
-    def highest_scoring_overlap_band(self, p_min, score=True):
+    def highest_scoring_overlap_band(self, score=True):
         """Finds the highest scoring diagonal band according to probabiliy
         estimations of :func:`score_seeds`.
 
@@ -566,7 +562,7 @@ class WordBlotOverlap(WordBlot):
                   output of :func:`score_seeds` for the highest scoring
                   diagonal band.
         """
-        scored_seeds = self.score_seeds(p_min)
+        scored_seeds = self.score_seeds()
         if not scored_seeds:
             return None
         idx = max(range(len(scored_seeds)), key=lambda i: scored_seeds[i]['p'])
@@ -625,14 +621,14 @@ class WordBlotOverlapRef(WordBlotOverlap):
                     continue
                 yield pos_ref, pos
 
-    def score_seeds_(self, seq, p_min):
+    def score_seeds_(self, seq):
         self.T = seq
-        return super(WordBlotOverlapRef, self).score_seeds(p_min)
+        return super(WordBlotOverlapRef, self).score_seeds()
 
-    def highest_scoring_overlap_band(self, seq, p_min):
+    def highest_scoring_overlap_band(self, seq):
         self.T = seq
         return super(WordBlotOverlapRef, self).highest_scoring_overlap_band(
-            p_min, score=False
+            score=False
         )
 
 
@@ -1033,3 +1029,15 @@ class WordBlotMultipleFast(WordBlotMultiple):
             for idxs in product(*hits.values()):
                 ds, a = self.to_diagonal_coordinates(*idxs)
                 yield list(ds), a
+
+    def seed_count(self, ds_band=None, a_band=None):
+        cnt = 0
+        for ds, a in self.seeds():
+            if ds_band:
+                if not all(ds_band[i][0] <= d <= ds_band[i][1]
+                           for i, d in enumerate(ds)):
+                    continue
+            if a_band and not a_band[0] <= a <= a_band[1]:
+                continue
+            cnt += 1
+        return cnt

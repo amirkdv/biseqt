@@ -599,6 +599,7 @@ def plot_roc(ax, pos, neg, classifier='>', mark_threshold=None, **kw):
 
     if mark_threshold is not None:
         idx = bisect_left(params, mark_threshold)
+        print 'fpr, tpr at threshold', x[idx], y[idx]
         ax.scatter([x[idx]], [y[idx]], c='b', s=100, lw=0, alpha=.3)
 
 
@@ -652,6 +653,7 @@ def plot_roc_pv(ax, pos, neg, classifier='>', **kw):
     ax.set_title('Predictive ROC')
     if mark_threshold is not None:
         idx = bisect_left(params, mark_threshold)
+        print 'ppv, npv at threshold', ppvs[idx], npvs[idx]
         ax.scatter([ppvs[idx]], [npvs[idx]], c='b', s=100, lw=0, alpha=.3)
 
 
@@ -669,27 +671,26 @@ def plot_classifier(pos, neg, labels=None, classifier='>', title='',
     ax_cdf = fig.add_subplot(grids[1, :])
 
     plot_cdf(ax_cdf, pos, mark_threshold=mark_threshold, color='g',
-             label=labels[0], lw=1.5)
+             label=labels[0])
     plot_cdf(ax_cdf, neg, mark_threshold=mark_threshold, color='r',
-             label=labels[1], lw=1.5)
-    ax_cdf.legend(fontsize=12, loc='lower right')
+             label=labels[1])
+    ax_cdf.legend(fontsize=10, loc='lower right')
 
-    kw = {'lw': 1.5, 'c': 'k'}
-    plot_roc(ax_roc, pos, neg, classifier=classifier,
-             mark_threshold=mark_threshold, **kw)
+    plot_roc(ax_roc, pos, neg, classifier=classifier, color='k',
+             mark_threshold=mark_threshold)
     roc_ticks = [i * .1 for i in range(11)]
     ax_roc.set_xticks(roc_ticks)
     ax_roc.set_yticks(roc_ticks)
 
-    plot_roc_pv(ax_p_roc, pos, neg, classifier=classifier,
-                mark_threshold=mark_threshold, **kw)
+    plot_roc_pv(ax_p_roc, pos, neg, classifier=classifier, color='k',
+                mark_threshold=mark_threshold)
 
     for [ax, ax_title] in zip([ax_cdf, ax_roc, ax_p_roc],
                               ['Classifier statistic CDF',
                                'ROC for %d(+), %d(-) samples' %
                                (len(pos), len(neg)),
                                'Predictive ROC']):
-        ax.set_title(ax_title, fontsize=12)
-        ax.tick_params(labelsize=12)
+        ax.set_title(ax_title, fontsize=10)
+        ax.tick_params(labelsize=10)
 
     return fig, [ax_cdf, ax_roc, ax_p_roc]
