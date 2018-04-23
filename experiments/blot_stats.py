@@ -26,9 +26,7 @@ from biseqt.pw import Aligner, BANDED_MODE, B_GLOBAL
 
 @with_dumpfile
 def sim_simulated_K_p(Ks, ps, n_samples, **kw):
-    def _zero():
-        shape = (len(Ks), len(ps), n_samples)
-        return {'pos': np.zeros(shape), 'neg': np.zeros(shape)}
+    shape = (len(Ks), len(ps), n_samples)
 
     A = Alphabet('ACGT')
     wordlen = kw['wordlen']
@@ -41,12 +39,13 @@ def sim_simulated_K_p(Ks, ps, n_samples, **kw):
         'log_level': kw.get('log_level', logging.WARNING),
     }
     sim_data = {
-        'scores': {'H0': _zero(), 'H1': _zero()},
-        'K_hat': _zero(),
-        'p_hat': _zero(),
-        'a_hat': _zero(),
-        'd_min': _zero(),
-        'd_max': _zero(),
+        'scores': {'H0': {'pos': np.zeros(shape), 'neg': np.zeros(shape)},
+                   'H1': {'pos': np.zeros(shape), 'neg': np.zeros(shape)}},
+        'K_hat': np.zeros(shape),
+        'p_hat': np.zeros(shape),
+        'a_hat': np.zeros(shape),
+        'd_min': np.zeros(shape),
+        'd_max': np.zeros(shape),
         'WB_kw': WB_kw,
         'Ks': Ks,
         'ps': ps,
@@ -88,16 +87,19 @@ def sim_simulated_K_p(Ks, ps, n_samples, **kw):
                 results = list(WB.similar_segments(K_min, p_min,
                                                    at_least_one=True))
 
+                if key == 'neg':
+                    continue
+
                 # sum of K_hat, average of a_hat, d_min, d_max
-                sim_data['K_hat'][key][K_idx, p_idx, idx] = sum(
+                sim_data['K_hat'][K_idx, p_idx, idx] = sum(
                     r['segment'][1][1] - r['segment'][1][0]
                     for r in results) / 2
-                sim_data['a_hat'][key][K_idx, p_idx, idx] = sum(
+                sim_data['a_hat'][K_idx, p_idx, idx] = sum(
                     (r['segment'][1][1] + r['segment'][1][0]) / 2
                     for r in results) / len(results)
-                sim_data['d_min'][key][K_idx, p_idx, idx] = sum(
+                sim_data['d_min'][K_idx, p_idx, idx] = sum(
                     r['segment'][0][0] for r in results) / len(results)
-                sim_data['d_max'][key][K_idx, p_idx, idx] = sum(
+                sim_data['d_max'][K_idx, p_idx, idx] = sum(
                     r['segment'][0][1] for r in results) / len(results)
 
                 # pick the longest detected homology for p_hat
@@ -166,12 +168,16 @@ def plot_simulated_K_p(sim_data, select_Ks, select_ps, suffix=''):
 
     K_hats = sim_data['K_hat']
     p_hats = sim_data['p_hat']
+    # wordblot p_hats are with respect to projected alignment lengths whereas
+    # p_true which is a property of MutationProcess is with respect to
+    # alignment length; correction via p_hats *= (K/L) = (1 - g/2)
+    p_hats *= (1 + p_hats) / 2
 
     # estimated Ks for select ps
     colors = color_code(select_ps)
     for p, color in zip(select_ps, colors):
         p_idx = ps.index(p)
-        plot_with_sd(ax_K, Ks, K_hats['pos'][:, p_idx, :], axis=1,
+        plot_with_sd(ax_K, Ks, K_hats[:, p_idx, :], axis=1,
                      color=color, label='p = %.2f' % p, **kw)
         ax_K.set_xscale('log')
         ax_K.set_yscale('log')
@@ -186,7 +192,7 @@ def plot_simulated_K_p(sim_data, select_Ks, select_ps, suffix=''):
     colors = color_code(select_Ks)
     for K, color in zip(select_Ks, colors):
         K_idx = Ks.index(K)
-        plot_with_sd(ax_p, ps, p_hats['pos'][K_idx, :, :], axis=1,
+        plot_with_sd(ax_p, ps, p_hats[K_idx, :, :], axis=1,
                      color=color, label='K = %d' % K, **kw)
         ax_p.set_xticks(ps)
         ax_p.set_xticklabels(ps, rotation=90)
@@ -199,12 +205,9 @@ def plot_simulated_K_p(sim_data, select_Ks, select_ps, suffix=''):
     # ======================================
     # estimated diagonal and antidiagonal position and band radius for select
     # match probabilities (select_ps), as a function of K
-    d_mins = sim_data['d_min']['pos']
-    d_maxs = sim_data['d_max']['pos']
-    a_hats = sim_data['a_hat']['pos']
-
-    g_max = sim_data['WB_kw']['g_max']
-    sensitivity = sim_data['WB_kw']['sensitivity']
+    d_mins = sim_data['d_min']
+    d_maxs = sim_data['d_max']
+    a_hats = sim_data['a_hat']
 
     colors = color_code(select_ps)
     for p, color in zip(select_ps, colors):
@@ -212,9 +215,8 @@ def plot_simulated_K_p(sim_data, select_Ks, select_ps, suffix=''):
         kw = {'color': color, 'alpha': .6, 'lw': 1,
               'marker': 'o', 'markersize': 3}
         p_idx = ps.index(p)
-
-        plot_with_sd(ax_d, Ks, d_mins[:, p_idx, :], axis=1, label=label, **kw)
-        plot_with_sd(ax_d, Ks, d_maxs[:, p_idx, :], axis=1, **kw)
+        d_ctrs = (d_mins[:, p_idx, :] + d_maxs[:, p_idx, :]) / 2
+        plot_with_sd(ax_d, Ks, d_ctrs, axis=1, label=label, **kw)
         plot_with_sd(ax_a, Ks, a_hats[:, p_idx, :], axis=1, label=label, **kw)
         for ax in [ax_d, ax_a]:
             ax.set_xscale('log')
@@ -622,11 +624,11 @@ def exp_comp_aligned_genes():
        profile obtained from the known global alignment (green). For all
        pairwise comparisons estimated and true match probability at homologous
        seeds are shown (*top middle*, green), the diagonal shows ground truth
-       for comparison (dotted black).  Similarly for all identified similar
+       for comparison (dashed black).  Similarly for all identified similar
        segments, estimated match probability and true probability obtained from
        banded global alignment are shown (*top right*, blue), the diagonal
-       showing ground truth (dotted black) and the horizontal line shows the
-       cutoff used by Word-Blot (dotted black).
+       showing ground truth (dashed black) and the horizontal line shows the
+       cutoff used by Word-Blot (dashed black).
 
     .. figure::
         https://www.dropbox.com/s/2mc1rlnazodeu6l/
