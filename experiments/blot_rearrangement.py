@@ -15,12 +15,25 @@ from util import log, savefig
 
 
 def exp_rearrangement():
-    """
+    """Example demonstrating of Word-Blot for pairwise local similarity search on
+    two randomly generated sequencees with motif sequences violating
+    collinearity :math:`S=M_1M_2M_3, T=M'_1M'_1M'_3M'_2` where motif pairs
+    :math:`(M_i, M'_i)_{i=1,2,3}` have lengths 200, 400, 600 and are related by
+    match probabilities 0.95, 0.85, and 0.75, respectively.
+
     .. figure::
         https://www.dropbox.com/s/nsvsf5gaui6t9ww/rearrangement.png?raw=1
        :target:
         https://www.dropbox.com/s/nsvsf5gaui6t9ww/rearrangement.png?raw=1
        :alt: lightbox
+
+       Dynamic programming scores of the forward pass of Smith Waterman are
+       shown in color code (*left*) with seeds (word length 6) grey intensity
+       coded according to the local match probability assigned by Word-Blot
+       (minimum similarity length 200). Similar segments reported by Word-Blot
+       are shown as grey diagonal strips (*left*) and schematically (*right*)
+       color coded by their Word-Blot estimated match probabilities (note
+       agreement with true match probabilities).
     """
     # NOTE we are running whole table DP later here; be careful with size
     K = 200

@@ -159,7 +159,8 @@ def plot_time_in_band(sim_data, cutoff_epsilon):
 
 def exp_time_in_band():
     """Shows theoretical and empirical results for proportion of alignment time
-    (i.e. number of edit operations) spent within diagonal band.
+    (i.e. number of edit operations) spent within diagonal bands of varying
+    radius.
 
     **Supported Claims**
 
@@ -167,10 +168,10 @@ def exp_time_in_band():
       diagonal positions is accurate.
     * Calculating the band radius such that the *endpoint* of an alignment is
       within diagonal band with probability at least :math:`1 - \epsilon` is a
-      good approximation for desired band radius such that *expected
-      proportion* of time spend in alignment is at least :math:`1 - \epsilon`.
+      good approximation the more reasonable requirement that the *average
+      proportion* of time spent in band is at least :math:`1 - \epsilon`.
     * Calculated band radii are accurate and reliable when applied to
-      simulated as well as biological data.
+      simulated as well as biological edit sequences.
 
     .. figure::
         https://www.dropbox.com/s/93cg9t4oh0h2guh/band_radius.png?raw=1
@@ -227,15 +228,15 @@ def exp_gap_probs():
        :alt: lightbox
 
        Gap probability variability along alignments (length K=1200) in
-       simulated (black) and biological edit sequences, before (left) and after
-       (right) removing long indel stretches (deletion or insertion stretches
-       of length at least 10) from biological samples; n=50 samples in both
-       cases. Local gap probabilites are calculated in a window of radius 100
-       nt.  Simulated edit sequences (black) are generated using stationary gap
-       probability (i.e constant along alignment) of 0.15.  Biological edit
-       sequences are sampled from projected pairwise alignments of *Actinin 2*
-       for 7 vertebrates obtained from UCSC genome browser such that the
-       overall gap probability (i.e over K=1200 operations) is 0.15.
+       simulated (black) and biological edit sequences (green), before (left)
+       and after (right) removing long indel stretches (deletion or insertion
+       stretches of length at least 10) from biological samples; n=50 samples
+       in both cases. Local gap probabilites are calculated in a window of
+       radius 100 nt.  Simulated edit sequences (black) are generated using
+       stationary gap probability (i.e constant along alignment) of 0.15.
+       Biological edit sequences are sampled from projected pairwise alignments
+       of *Actinin 2* for 7 vertebrates obtained from UCSC genome browser such
+       that the overall gap probability (i.e over K=1200 operations) is 0.15.
     """
     pws_path = 'data/actn2/actn2-7vet-pws.fa'
     full_opseq = ''

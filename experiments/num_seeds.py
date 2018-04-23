@@ -257,7 +257,7 @@ def plot_count_seeds_segment(sim_data, suffix=''):
     for ax in [ax_p, ax_rad]:
         ax.set_xlim(Ks[0] - pad, Ks[-1] + pad)
         ax.set_xscale('log')
-        ax.set_xlabel('sequence length', fontsize=10)
+        ax.set_xlabel('similarity length', fontsize=10)
         ax.set_xticks(Ks)
         ax.set_xticklabels(Ks, fontsize=6, rotation=90)
         ax.legend(loc='best', fontsize=6)
@@ -298,10 +298,11 @@ def exp_count_seeds_segment():
        (dashed lines), n=50 samples, shaded regions show one standard
        deviation. Homologous sequences were simulated by mutations with gap
        probability 0.1 and substitution probability 0.15 (hence a match
-       probability of 0.77 indicated by a solid arrow, the dashed arrow shows
-       the 0.25 point).  For each value of :math:`g_{\max}`, the corresponding
-       band radius is shown as a function of similarity length (right).
-       Horizontal axes in both plots is in log scale.
+       probability of 0.77 indicated by a solid arrow (note agreement with
+       Word-Blot estimation), the dashed arrow shows the 0.25 point). For each
+       value of :math:`g_{\max}`, the corresponding band radius is shown as a
+       function of similarity length (right).  Horizontal axes in both plots is
+       in log scale.
     """
     Ks = [200 * 2 ** i for i in range(8)]
     g_radii = [.05, .1, .2, .4]
