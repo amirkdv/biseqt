@@ -171,7 +171,7 @@ def test_overlap_detection(wordlen, K, n):
     for mode in ['standard', 'ref']:
         if mode == 'standard':
             WBO = WordBlotOverlap(S, T, **WB_kw)
-            rec = WBO.highest_scoring_overlap_band(p_match)
+            rec = WBO.highest_scoring_overlap_band()
             recs[mode] = rec
         elif mode == 'ref':
             if wordlen > 12:
@@ -179,7 +179,7 @@ def test_overlap_detection(wordlen, K, n):
                     WBO_ref = WordBlotOverlapRef(S, allowed_memory=1, **WB_kw)
             else:
                 WBO_ref = WordBlotOverlapRef(S, allowed_memory=1, **WB_kw)
-                rec = WBO_ref.highest_scoring_overlap_band(T, p_match)
+                rec = WBO_ref.highest_scoring_overlap_band(T)
                 recs[mode] = rec
     for mode, rec in recs.items():
         d_min, d_max = rec['d_band']
@@ -192,7 +192,7 @@ def test_overlap_detection(wordlen, K, n):
     S = rand_seq(A, n - K) + overlap + rand_seq(A, n)
     T = rand_seq(A, n) + M.mutate(overlap)[0] + rand_seq(A, n - K)
     WBO = WordBlotOverlap(S, T, **WB_kw)
-    rec = WBO.highest_scoring_overlap_band(p_match)
+    rec = WBO.highest_scoring_overlap_band()
     d_min, d_max = rec['d_band']
     p_hat = rec['p']
     assert p_hat < p_match, \
