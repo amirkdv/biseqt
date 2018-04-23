@@ -39,19 +39,21 @@ div.document {
 }
 
 div.sphinxsidebar {
-  width: 25% !important; /* should match the left margin of div.bodywrapper */
+  width: 20em !important; /* should match the left margin of div.bodywrapper */
   font-size: .9em !important;
 }
 
 div.bodywrapper {
-  margin: 0 0 0 25% !important; /* left margin should match width of sidebar */
+  margin: 0 0 0 20em !important; /* left margin should match width of sidebar */
   border-left: #ddd solid 2px !important;
 }
 
-div.sphinxsidebarwrapper h3 {
+div.sphinxsidebarwrapper {
   border-top: #ddd solid 2px !important;
-  margin-top: 20px !important;
-  padding-top: 10px !important;
+  border-bottom: #ddd solid 2px !important;
+  position: fixed !important;
+  top: 20% !important;
+  width: 20em !important
 }
 
 blockquote {
