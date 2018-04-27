@@ -6,14 +6,11 @@ jobs:
       CIRCLE_ARTIFACTS: /tmp/circleci-artifacts
       CIRCLE_TEST_REPORTS: /tmp/circleci-test-results
     docker:
-    - image: amirkdv/science-py-env
+    - image: amirkdv/biseqt-base
     steps:
     - checkout
     - run: mkdir -p $CIRCLE_ARTIFACTS $CIRCLE_TEST_REPORTS
-    - run: make docker_build
-    - run: |
-        docker run -it -v $PWD:/biseqt amirkdv/biseqt-base
-        sh -c '. $SCI_PY_ENV/bin/activate && cd /biseqt && ./deps.sh && make docs tests COVERAGE_BADGE=/biseqt/coverage.svg'
+    - run: sh -c '. $SCI_PY_ENV/bin/activate && cd /biseqt && ./deps.sh && make docs tests COVERAGE_BADGE=/biseqt/coverage.svg'
     - run: cp coverage.svg $CIRCLE_ARTIFACTS/
     - store_test_results:
         path: /tmp/circleci-test-results
