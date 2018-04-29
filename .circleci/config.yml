@@ -3,15 +3,17 @@ jobs:
   build:
     working_directory: ~/amirkdv/biseqt
     environment:
-      CIRCLE_ARTIFACTS: /tmp/circleci-artifacts
-      CIRCLE_TEST_REPORTS: /tmp/circleci-test-results
+      CIRCLE_ARTIFACTS: /tmp/circleci-artifacts/
+      CIRCLE_TEST_REPORTS: /tmp/circleci-test-results/
     docker:
     - image: amirkdv/biseqt-base
     steps:
     - checkout
     - run: mkdir -p $CIRCLE_ARTIFACTS $CIRCLE_TEST_REPORTS
-    - run: sh -c '. $SCI_PY_ENV/bin/activate && cd /biseqt && ./deps.sh && make docs tests COVERAGE_BADGE=/biseqt/coverage.svg'
-    - run: cp coverage.svg $CIRCLE_ARTIFACTS/
+    - run: |
+        sh -c '. $SCI_PY_ENV/bin/activate &&
+               .circleci/tests.sh > $CIRCLE_ARTIFACTS/report.log &&
+               cp tests/coverage.svg $CIRCLE_ARTIFACTS/'
     - store_test_results:
         path: /tmp/circleci-test-results
     - store_artifacts:

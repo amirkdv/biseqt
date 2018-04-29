@@ -19,18 +19,25 @@ FLAKE8_EXCLUDE =
 flake8:
 	flake8 $(FLAKE8_INCLUDE) --exclude=$(FLAKE8_EXCLUDE)
 
-PYTEST_OPTS=--cov biseqt --capture=no --cov-report=term-missing --verbose
-COVERAGE_BADGE=coverage.svg  # relative to tests/
+COVERAGE_BADGE=coverage.svg  # absolute or relative to tests/
+PYTEST_REPORT=report.log # absolute or relative to tests
+PYTEST=py.test --cov biseqt --capture=no --cov-report=term-missing --verbose
+# NOTE run CI=true make tests to reproduce CI behavior
 tests: $(LIBDIR)/pwlib.so flake8
 	rm -f tests/$(COVERAGE_BADGE)
-	cd tests && PYTHONPATH=.. py.test $(PYTEST_OPTS) && coverage-badge -o $(COVERAGE_BADGE)
+ifeq ($(CI),true)
+	cd tests && PYTHONPATH=.. $(PYTEST) | tee $(PYTEST_REPORT)
+else
+	cd tests && PYTHONPATH=.. $(PYTEST)
+endif
+	cd tests && coverage-badge -o $(COVERAGE_BADGE)
 
 EXPERIMENTS = band_radius.py num_seeds.py blot_local_alignment.py blot_overlaps.py blot_stats.py
 experiments:
 	cd $@ && for exp in $(EXPERIMENTS); do PYTHONPATH=.. python $$exp; done
 
 loc:
-	find biseqt tests -type f -regex '.*\(\.py\|\.c\|\.h\)' | grep -v __pycache__ | xargs wc -l
+	find biseqt tests experiments -type f -regex '.*\(\.py\|\.c\|\.h\)' | grep -v __pycache__ | xargs wc -l
 
 todo:
 	find biseqt Makefile *.mk *.py -type f -regex '.*\(\.py\|\.c\|\.h\|Makefile\|\.mk\)' | xargs grep -A2 -nP --color 'FIXME|TODO|BUG'
@@ -68,7 +75,7 @@ docs/doxygen:
 
 DOCKER_IMG=amirkdv/biseqt-base
 docker_build:
-	cat Dockerfile | docker build -t $(DOCKER_IMG) -
+	cat Dockerfile | docker build --no-cache -t $(DOCKER_IMG) -
 
 
 .PHONY: clean tests *.pdf loc docs todo experiments docs/doxygen flake8
