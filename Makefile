@@ -20,16 +20,11 @@ flake8:
 	flake8 $(FLAKE8_INCLUDE) --exclude=$(FLAKE8_EXCLUDE)
 
 COVERAGE_BADGE=coverage.svg  # absolute or relative to tests/
-PYTEST_REPORT=report.log # absolute or relative to tests
 PYTEST=py.test --cov biseqt --capture=no --cov-report=term-missing --verbose
 # NOTE run CI=true make tests to reproduce CI behavior
 tests: $(LIBDIR)/pwlib.so flake8
 	rm -f tests/$(COVERAGE_BADGE)
-ifeq ($(CI),true)
-	cd tests && PYTHONPATH=.. $(PYTEST) | tee $(PYTEST_REPORT)
-else
 	cd tests && PYTHONPATH=.. $(PYTEST)
-endif
 	cd tests && coverage-badge -o $(COVERAGE_BADGE)
 
 EXPERIMENTS = band_radius.py num_seeds.py blot_local_alignment.py blot_overlaps.py blot_stats.py

@@ -12,7 +12,7 @@ jobs:
     - run: mkdir -p $CIRCLE_ARTIFACTS $CIRCLE_TEST_REPORTS
     - run: |
         sh -c '. $SCI_PY_ENV/bin/activate &&
-               .circleci/tests.sh > $CIRCLE_ARTIFACTS/report.log &&
+               .circleci/tests.sh 2>&1 | tee $CIRCLE_TEST_REPORTS/report.log &&
                cp tests/coverage.svg $CIRCLE_ARTIFACTS/'
     - store_test_results:
         path: /tmp/circleci-test-results
