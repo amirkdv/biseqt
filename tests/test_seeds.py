@@ -43,7 +43,6 @@ def test_coordinate_change_multiple():
         (1, 1, 1): ((0, 0), 3),
     }
     for std, diag in pairs.items():
-        print std, diag
         assert SeedIndexMultiple.to_diagonal_coordinates(*std) == diag, \
             '(%s) standard == %s diagonal' % (str(std), str(diag))
         assert SeedIndexMultiple.to_ij_coordinates(*diag) == std, \

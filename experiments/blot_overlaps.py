@@ -126,7 +126,7 @@ def plot_overlap_simulations(sim_data):
         'incomplete overlap': 'm'
     }
 
-    fig = plt.figure(figsize=(14, 5))
+    fig = plt.figure(figsize=(12, 4))
     ax_p_hat = fig.add_subplot(1, 3, 1)
     ax_d_hat = fig.add_subplot(1, 3, 2)
     ax_cdf = fig.add_subplot(1, 3, 3)
@@ -207,7 +207,7 @@ def exp_overlap_simulations():
        known truth is shown in thick dashed lines of corresponding color.
        Estimated diagonal position in each trial is shown in each of the three
        cases where similarities exist (*middle*), true diagonal position is the
-       dashed grey diagonal. For each of case the cumulative probability
+       dashed grey diagonal. For each case the cumulative probability
        distribution of the match probability reported by Word-Blot is shown
        (*right*), the clear separation of which indicates that Word-Blot is
        capable of detecting overlaps of a certain quality with high accuracy.

@@ -473,9 +473,9 @@ def plot_simulated_K_p(sim_data, select_Ks, select_ps, suffix=''):
     # ======================
     # time to score seeds as a function of K (for select ps) and p (for select
     # Ks)
-    fig_t = plt.figure(figsize=(8, 4))
-    ax_t_K = fig_t.add_subplot(1, 2, 1)
-    ax_t_p = fig_t.add_subplot(1, 2, 2)
+    fig_t = plt.figure(figsize=(4, 8))
+    ax_t_K = fig_t.add_subplot(2, 1, 1)
+    ax_t_p = fig_t.add_subplot(2, 1, 2)
 
     kw = {'alpha': .5, 'lw': 1, 'marker': 'o', 'markersize': 2}
 

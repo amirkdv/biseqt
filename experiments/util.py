@@ -663,7 +663,7 @@ def plot_classifier(pos, neg, labels=None, classifier='>', title='',
         labels = ['positive', 'negative']
     assert len(labels) == 2
 
-    fig = plt.figure(figsize=(9, 6))
+    fig = plt.figure(figsize=(8, 5))
 
     grids = gridspec.GridSpec(2, 2, height_ratios=[2.5, 1])
     ax_roc = fig.add_subplot(grids[0, 0])

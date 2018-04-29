@@ -16,9 +16,9 @@ from biseqt.blot import band_radius
 
 
 def time_in_band(K, gap, radius):
-    area = radius / (np.sqrt(2 * gap * K))
-    return erf(area) + area * (2 / np.sqrt(np.pi) * np.exp(-area ** 2) -
-                               4 * area * (1 - erf(area)))
+    alpha = radius / (np.sqrt(2 * gap * K))
+    return erf(alpha) + alpha * (2 / np.sqrt(np.pi) * np.exp(-alpha ** 2) -
+                                 4 * alpha * (1 - erf(alpha)))
 
 
 def sample_edit_sequences(K, g, n_samples, bio=False):
@@ -168,7 +168,7 @@ def exp_time_in_band():
       diagonal positions is accurate.
     * Calculating the band radius such that the *endpoint* of an alignment is
       within diagonal band with probability at least :math:`1 - \epsilon` is a
-      good approximation the more reasonable requirement that the *average
+      good approximation for the more reasonable requirement that the *average
       proportion* of time spent in band is at least :math:`1 - \epsilon`.
     * Calculated band radii are accurate and reliable when applied to
       simulated as well as biological edit sequences.

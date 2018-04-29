@@ -195,8 +195,8 @@ def H1_moments(alphabet_len, wordlen, area, seglen, p_match):
         \\begin{aligned}
             \mu_1 & = \mu_0 + Kp^w \\\\
             \sigma_1^2 & = \sigma_0^2
-                + K(1 - p^w)\left(p^w + \\frac{2p^{w+1}}{1 - p}\\right)
-                - 2wp^{2w}
+                + K[(1 - p^w)\left(p^w + \\frac{2p^{w+1}}{1 - p}\\right)
+                - 2wp^{2w}]
         \\end{aligned}
 
     where :math:`w` is the word length, :math:`K` is the similarity length, and
@@ -927,6 +927,8 @@ class WordBlotMultiple(SeedIndexMultiple):
             avail[np.argmax([rec['p'] for rec in scored_seeds])] = True
         while True:
             try:
+                # TODO grab the highest probability so we yield in decreasing
+                # order of quality
                 seed_idx = avail.index(True)
             except ValueError:
                 break

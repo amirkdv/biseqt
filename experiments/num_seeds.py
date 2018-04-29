@@ -59,8 +59,6 @@ def plot_count_seeds_moments(sim_data, K=None, suffix=''):
     ns, wordlen = sim_data['ns'], sim_data['seed_index_kw']['wordlen']
     match = sim_data['match']
 
-    kw = {'marker': 'o', 'markersize': 3, 'lw': 1.5, 'alpha': .5}
-
     mus_H0, sds_H0 = [], []
     mus_H1, sds_H1 = [], []
     for n in ns:
@@ -73,19 +71,20 @@ def plot_count_seeds_moments(sim_data, K=None, suffix=''):
         mus_H1.append(mu_H1)
         sds_H1.append(sd_H1)
 
-    fig = plt.figure(figsize=(14, 5))
+    fig = plt.figure(figsize=(10, 4))
     ax_t = fig.add_subplot(1, 3, 1)
     ax_mu = fig.add_subplot(1, 3, 2)
     ax_sd = fig.add_subplot(1, 3, 3)
 
     # time to find all seeds
+    kw = {'marker': 'o', 'markersize': 4, 'lw': 1, 'alpha': .8}
     plot_with_sd(ax_t, ns, 1000 * sim_data['time']['neg'], axis=1, color='r',
                  label='unrelated', **kw)
     plot_with_sd(ax_t, ns, 1000 * sim_data['time']['pos'], axis=1, color='g',
                  label='related', **kw)
 
+    kw = {'marker': 'o', 'markersize': 5, 'lw': 3, 'alpha': .5}
     # average no. of seeds
-    kw['alpha'] = .9
     pos = sim_data['n_seeds']['pos']
     neg = sim_data['n_seeds']['neg']
     ax_mu.plot(ns, neg.mean(axis=1), c='r', label='unrelated', **kw)
@@ -106,10 +105,10 @@ def plot_count_seeds_moments(sim_data, K=None, suffix=''):
     for ax in [ax_sd, ax_mu, ax_t]:
         ax.set_xscale('log')
         ax.set_yscale('log')
-        ax.set_xlabel('sequence length', fontsize=10)
+        ax.set_xlabel('sequence length')
         ax.set_xticks(ns)
-        ax.set_xticklabels(ns, fontsize=10)
-        ax.legend(loc='best', fontsize=10)
+        ax.set_xticklabels(ns, rotation=90)
+        ax.legend(loc='best')
 
     ax_sd.set_ylabel('standard deviation of no. of matching %d-mers' % wordlen)
     ax_mu.set_ylabel('average no. of matching %d-mers' % wordlen)
@@ -230,9 +229,7 @@ def plot_count_seeds_segment(sim_data, suffix=''):
     Ks, g_radii = sim_data['Ks'], sim_data['g_radii']
     match = sim_data['match']
 
-    kw = {'marker': 'o', 'markersize': 3, 'lw': 1, 'alpha': .6}
-
-    fig = plt.figure(figsize=(9, 4))
+    fig = plt.figure(figsize=(10, 4))
     grids = gridspec.GridSpec(1, 2, width_ratios=[5, 3])
     ax_p = fig.add_subplot(grids[0])
     ax_rad = fig.add_subplot(grids[1])
@@ -244,23 +241,25 @@ def plot_count_seeds_segment(sim_data, suffix=''):
     ax_p.plot([Ks[0] - .2 * pad, Ks[0] - .9 * pad], [match, match], **arrow_kw)
     ax_p.plot([Ks[0] - .2 * pad, Ks[0] - .9 * pad], [.25, .25], ls='--',
               **arrow_kw)
+    kw_rad = {'marker': 'o', 'markersize': 3, 'lw': 1, 'alpha': .8}
+    kw_p = {'marker': 'o', 'markersize': 5, 'lw': 3, 'alpha': .5}
     for g_idx, (g_max, color) in enumerate(zip(g_radii, colors)):
         label = '$g_{\max} = %.2f$' % g_max
         pos = sim_data['p_hat']['pos'][:, g_idx, :]
         neg = sim_data['p_hat']['neg'][:, g_idx, :]
-        plot_with_sd(ax_p, Ks, neg, axis=1, color=color, ls='--', **kw)
-        plot_with_sd(ax_p, Ks, pos, axis=1, color=color, label=label, **kw)
+        plot_with_sd(ax_p, Ks, neg, axis=1, color=color, ls='--', **kw_p)
+        plot_with_sd(ax_p, Ks, pos, axis=1, color=color, label=label, **kw_p)
         ax_rad.plot(Ks, band_radii(Ks, g_max, 1 - 1e-4), color=color,
-                    label=label, **kw)
+                    label=label, **kw_rad)
 
     ax_p.set_ylim(-.2, 1.1)
     for ax in [ax_p, ax_rad]:
         ax.set_xlim(Ks[0] - pad, Ks[-1] + pad)
         ax.set_xscale('log')
-        ax.set_xlabel('similarity length', fontsize=10)
+        ax.set_xlabel('similarity length')
         ax.set_xticks(Ks)
-        ax.set_xticklabels(Ks, fontsize=6, rotation=90)
-        ax.legend(loc='best', fontsize=6)
+        ax.set_xticklabels(Ks)
+        ax.legend(loc='best')
     ax_p.set_ylabel('estimated match probability')
     ax_rad.set_ylabel('diagonal band radius')
 
