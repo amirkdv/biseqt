@@ -216,7 +216,7 @@ def test_local_similarity_multiple(K, n_seqs):
 
     p_match = (1 - gap) * (1 - subst) * .9
 
-    found_homs = list(WB.similar_segments(K, p_match))
+    found_homs = list(WB.similar_segments(K / 2, p_match))
     assert len(found_homs) == 1, 'Only one similar segment should be found'
     rec = found_homs[0]
     d_ranges, (a_min, a_max) = rec['segment']
