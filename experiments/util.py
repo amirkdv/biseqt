@@ -599,7 +599,7 @@ def plot_roc(ax, pos, neg, classifier='>', mark_threshold=None, **kw):
 
     if mark_threshold is not None:
         idx = bisect_left(params, mark_threshold)
-        print 'fpr, tpr at threshold', x[idx], y[idx]
+        print 'fpr, tpr at threshold %.2f' % mark_threshold, x[idx], y[idx]
         ax.scatter([x[idx]], [y[idx]], c='b', s=100, lw=0, alpha=.3)
 
 
@@ -653,7 +653,8 @@ def plot_roc_pv(ax, pos, neg, classifier='>', **kw):
     ax.set_title('Predictive ROC')
     if mark_threshold is not None:
         idx = bisect_left(params, mark_threshold)
-        print 'ppv, npv at threshold', ppvs[idx], npvs[idx]
+        print 'ppv, npv at threshold %.2f' % mark_threshold, \
+            ppvs[idx], npvs[idx]
         ax.scatter([ppvs[idx]], [npvs[idx]], c='b', s=100, lw=0, alpha=.3)
 
 
@@ -663,12 +664,12 @@ def plot_classifier(pos, neg, labels=None, classifier='>', title='',
         labels = ['positive', 'negative']
     assert len(labels) == 2
 
-    fig = plt.figure(figsize=(8, 5))
+    fig = plt.figure(figsize=(10, 5))
 
-    grids = gridspec.GridSpec(2, 2, height_ratios=[2.5, 1])
-    ax_roc = fig.add_subplot(grids[0, 0])
+    grids = gridspec.GridSpec(2, 2, width_ratios=[1, 1.25])
+    ax_roc = fig.add_subplot(grids[:, 0])
     ax_p_roc = fig.add_subplot(grids[0, 1])
-    ax_cdf = fig.add_subplot(grids[1, :])
+    ax_cdf = fig.add_subplot(grids[1, 1])
 
     plot_cdf(ax_cdf, pos, mark_threshold=mark_threshold, color='g',
              label=labels[0])
@@ -676,13 +677,13 @@ def plot_classifier(pos, neg, labels=None, classifier='>', title='',
              label=labels[1])
     ax_cdf.legend(fontsize=10, loc='lower right')
 
-    plot_roc(ax_roc, pos, neg, classifier=classifier, color='k',
+    plot_roc(ax_roc, pos, neg, classifier=classifier, color='k', lw=1,
              mark_threshold=mark_threshold)
     roc_ticks = [i * .1 for i in range(11)]
     ax_roc.set_xticks(roc_ticks)
     ax_roc.set_yticks(roc_ticks)
 
-    plot_roc_pv(ax_p_roc, pos, neg, classifier=classifier, color='k',
+    plot_roc_pv(ax_p_roc, pos, neg, classifier=classifier, color='k', lw=1,
                 mark_threshold=mark_threshold)
 
     for [ax, ax_title] in zip([ax_cdf, ax_roc, ax_p_roc],

@@ -575,7 +575,7 @@ def plot_comp_aligned_genes(sim_data, suffix='', example_pair=None,
 
     fig, _ = plot_classifier(sim_data['seed_pos'], sim_data['seed_neg'],
                              labels=['homologous', 'non-homologous'],
-                             mark_threshold=p_min)
+                             mark_threshold=.8)
     savefig(fig, 'comp_aligned_genes[classifier]%s.png' % suffix)
 
 
@@ -641,7 +641,7 @@ def exp_comp_aligned_genes():
        Performance of Word-Blot estimated match probability at discriminating
        between homologous and non-homologous seeds in the same context as the
        figure above. The cumulative distribution of estimated match probability
-       in each case (*bottom*), the resulting ROC curve (*top left*) and the
+       in each case (*bottom right*), the resulting ROC curve (*left*) and the
        predictive ROC curve (*top right*). The threshold 0.8 is indicated in
        blue in all three plots.
 
