@@ -39,7 +39,13 @@ Experiments
 .. automodule:: experiments.blot_ig_genotyping
     :members:
 
-(§7) Word-Blot Performance (multiple)
+(§7) Structrual Variant Calling
+-------------------------------
+
+.. automodule:: experiments.blot_sv
+    :members:
+
+(§8) Word-Blot Performance (multiple)
 -------------------------------------
 
 .. automodule:: experiments.multiple_sequence
