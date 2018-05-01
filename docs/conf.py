@@ -36,7 +36,7 @@ if os.environ.get('READTHEDOCS', None) == 'True':
     MOCK_MODULES = ['cffi', 'numpy', 'apsw', 'pysam', 'termcolor', 'Bio',
         'matplotlib', 'matplotlib.figure', 'matplotlib.backends.backend_agg',
         'mpl_toolkits.axes_grid1', 'mpl_toolkits.mplot3d',
-        'scipy', 'scipy.special', 'scipy.stats', 'scipy.spatial',
+        'scipy', 'scipy.special', 'scipy.stats', 'scipy.spatial', 'igraph',
         'scipy.ndimage',
     ]
 
