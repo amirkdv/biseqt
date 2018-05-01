@@ -526,8 +526,7 @@ class WordBlotOverlap(WordBlot):
                          for i, j in self.seeds(exclude_trivial=True))
         if not all_seeds:
             return []
-        all_seeds_scaled = np.array([(d / _rad(d), a / (2 * _len(d)))
-                                     for d, a in all_seeds])
+        all_seeds_scaled = np.array([(d / _rad(d), ) for d, a in all_seeds])
         quad_tree = cKDTree(all_seeds_scaled)
         all_neighs = quad_tree.query_ball_tree(quad_tree, 1, p=float('inf'))
         # all_neighs[i] is the indices of the neighbors of all_seeds[i]; this

@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 from itertools import combinations
 import logging
 import numpy as np
@@ -14,7 +15,7 @@ from util import plot_classifier, log, with_dumpfile, plot_cdf, savefig
 from util import plot_with_sd
 
 
-def load_mapped_reads(path, max_num=100):
+def load_mapped_reads(path, max_num=-1):
     A = Alphabet('ACGT')
     reads, mappings = [], []
     log('loading sequencing reads from %s' % path)
@@ -41,8 +42,9 @@ def sim_overlap_simulations(**kw):
     A = Alphabet('ACGT')
     wordlen, gap, subst, Ks = kw['wordlen'], kw['gap'], kw['subst'], kw['Ks']
     n_samples = kw['n_samples']
+    g_max = 2 * gap
     WB_kw = {
-        'g_max': .3,
+        'g_max': g_max,
         'sensitivity': .99,
         'alphabet': A,
         'wordlen': wordlen,
@@ -67,6 +69,7 @@ def sim_overlap_simulations(**kw):
         'n_samples': n_samples,
         'WB_kw': WB_kw,
     }
+
     M = MutationProcess(A, subst_probs=subst, ge_prob=gap, go_prob=gap)
     M_noisy = MutationProcess(
         A, subst_probs=subst * 2, ge_prob=gap * 2, go_prob=gap * 2
@@ -126,11 +129,13 @@ def plot_overlap_simulations(sim_data):
         'incomplete overlap': 'm'
     }
 
-    fig = plt.figure(figsize=(12, 4))
-    ax_p_hat = fig.add_subplot(1, 3, 1)
-    ax_d_hat = fig.add_subplot(1, 3, 2)
-    ax_cdf = fig.add_subplot(1, 3, 3)
+    fig = plt.figure(figsize=(8, 4))
+    ax_p_hat = fig.add_subplot(1, 2, 1)
+    ax_cdf = fig.add_subplot(1, 2, 2)
 
+    errors = {}
+
+    # simulation results
     for key, res in sim_data['results'].items():
         color = colors[key]
         plot_with_sd(ax_p_hat, Ks, res['p'], axis=1, alpha=.8, marker='o',
@@ -143,13 +148,13 @@ def plot_overlap_simulations(sim_data):
 
         if key != 'unrelated':
             color = colors[key]
-            ax_d_hat.scatter(res['d_true'], res['d'], color=color, s=5, lw=0,
-                             alpha=.6, label=key)
+            missed = (np.abs(res['d_true'] - res['d']) > res['r']).flatten()
+            errors[key] = 1. * np.sum(missed) / len(missed)
 
         plot_cdf(ax_cdf, res['p'].flatten(), color=color, smooth_radius=10,
                  label=key)
 
-    for ax in [ax_p_hat, ax_d_hat, ax_cdf]:
+    for ax in [ax_p_hat, ax_cdf]:
         ax.legend(loc='best', fontsize=8)
     ax_cdf.set_xlabel('estimated match probability')
     ax_cdf.set_ylabel('cumulative distribution')
@@ -158,14 +163,15 @@ def plot_overlap_simulations(sim_data):
     ax_p_hat.set_xlabel('overlap length')
     ax_p_hat.set_ylabel('estimated match probability')
 
-    ax_d_hat.set_aspect('equal')
-    ax_d_hat.plot([0, max(Ks)], [0, max(Ks)], lw=6, color='k', ls='--',
-                  alpha=.2)
-    ax_d_hat.set_xlabel('overlap diagonal position')
-    ax_d_hat.set_ylabel('estimated overlap diagonal position')
+    for key, res in sim_data['results'].items():
+        if key == 'unrelated':
+            continue
+        msg = 'missed diagonal band in %s pairs: %%%.2f' % \
+            (key, 100 * errors[key])
+        print msg
 
     fig.tight_layout()
-    savefig(fig, 'overlaps_simulations[d,p-hat].png')
+    savefig(fig, 'overlaps_simulations.png')
 
 
 def exp_overlap_simulations():
@@ -194,30 +200,28 @@ def exp_overlap_simulations():
       alignment.
 
     .. figure::
-        https://www.dropbox.com/s/91amhsoyep99204/
-        overlaps_simulations%5Bd%2Cp-hat%5D.png?raw=1
+        https://www.dropbox.com/s/ob4lv65l91o0tua/overlaps_simulations.png?raw=1
        :target:
-        https://www.dropbox.com/s/91amhsoyep99204/
-        overlaps_simulations%5Bd%2Cp-hat%5D.png?raw=1
+        https://www.dropbox.com/s/ob4lv65l91o0tua/overlaps_simulations.png?raw=1
        :alt: lightbox
 
        Highest overlap band match probability reported by Word-Blot
        (*left*) for each of the four cases; word length 6, n=20, shaded regions
        indicate one standard deviation. For overlap and noisy overlap pairs the
        known truth is shown in thick dashed lines of corresponding color.
-       Estimated diagonal position in each trial is shown in each of the three
-       cases where similarities exist (*middle*), true diagonal position is the
-       dashed grey diagonal. For each case the cumulative probability
-       distribution of the match probability reported by Word-Blot is shown
-       (*right*), the clear separation of which indicates that Word-Blot is
-       capable of detecting overlaps of a certain quality with high accuracy.
+       For each case the cumulative probability distribution of the match
+       probability reported by Word-Blot is shown (*right*), the clear
+       separation of which indicates that Word-Blot is capable of detecting
+       overlaps of a certain quality with high accuracy. Percentage of cases
+       where the correct diagonal is not contained in reported diagonal band:
+       %0.44 (noisy overlap), %0 (overlap), %0 (incomplete overlap).
     """
-    wordlen = 6
+    wordlen = 8
     gap = .1
     subst = .1
-    Ks = [i * 500 for i in range(1, 11)]
+    Ks = [i * 500 for i in range(2, 11)]
 
-    n_samples = 20
+    n_samples = 50
     dumpfile = 'overlap_simulations.txt'
 
     sim_data = sim_overlap_simulations(
@@ -298,19 +302,19 @@ def plot_sequencing_reads_overlap(sim_data, suffix=''):
             neg.append(p_hat)
 
     labels = ['overlapping', 'non-overlapping']
-    fig, _ = plot_classifier(pos, neg, labels=labels, mark_threshold=.75)
+    fig, _ = plot_classifier(pos, neg, labels=labels, mark_threshold=.8)
     print 'avg_time', sim_data['avg_time'], 'avg_len', sim_data['avg_len']
     savefig(fig, 'overlaps[roc]%s.png' % suffix, comment='classifier plot')
 
 
 def exp_overlap_sequencing_reads():
     """Performance of Word-Blot in overlap discovery on *Pac Bio sequencing*
-    reads. A thousand Pac Bio reads from chromosome 1 of Leishmenia Donovani
-    were mapped to a reference genome using BLASR which provides a ground truth
-    for classification of reads into overlapping and non-overlapping pairs.
-    Word-Blot overlap discovery is then applied to all pairs of reads and the
-    performance of the highest overlap band match probability as a classifier
-    is shown.
+    reads. Pac Bio reads from chromosome 1 of Leishmenia Donovani ($n=1055$
+    reads) were mapped to a reference genome using BLASR which provides a
+    ground truth for classification of reads into overlapping and
+    non-overlapping pairs.  Word-Blot overlap discovery is then applied to all
+    pairs of reads and the performance of the highest overlap band match
+    probability as a classifier is shown.
 
     **Supported Claims**
 
@@ -334,15 +338,15 @@ def exp_overlap_sequencing_reads():
        factors in overlap detection) and %45 sensitivity and %46 positive
        predictive value.
     """
-    wordlen = 9
-    suffix = '[w=9]'
+    wordlen = 10
+    suffix = '[w=%d]' % wordlen
 
     reads_path = 'data/leishmenia/reads_mapped.fa'
     dumpfile = 'overlaps%s.txt' % suffix
 
     sim_data = sim_overlap_sequencing_reads(
         reads_path=reads_path, wordlen=wordlen, g_max=.2,
-        dumpfile=dumpfile, ignore_existing=False
+        dumpfile=dumpfile, ignore_existing=False,
     )
     plot_sequencing_reads_overlap(sim_data, suffix=suffix)
 
