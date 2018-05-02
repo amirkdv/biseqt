@@ -285,9 +285,9 @@ def sim_structural_variants(**kw):
 
 def plot_structural_variants(sim_data, suffix=''):
     ps = sim_data['ps']
-    sv_types = ['insertion', 'deletion', 'duplication']
+    sv_types = ['duplication', 'deletion', 'insertion']
 
-    fig = plt.figure(figsize=(13, 5))
+    fig = plt.figure(figsize=(11, 4))
     ax_stats = {}
     # ax_coord = {}
     for idx, sv_type in enumerate(sv_types):
@@ -357,12 +357,13 @@ def exp_structural_variants():
        :alt: lightbox
 
        True positive rate (solid) and false positive rate (dashed) for
-       discriminating normal from reads containing SVs, insertions (*left*),
-       deletion (*middle*), duplication (*right*) using the simple algorithm
-       based on Word-Blot local similarities. SV length is 500nt, reference
-       sequence length is 2500nt, sequencing coverage is 10, word length is 8,
-       and each condition (match probability and SV type) is repeated n=5
-       times, average computation time for each read is 0.8 seconds.
+       discriminating normal reads from those containing evidence for SV,
+       duplications (*left*), deletion (*middle*), insertion (*right*) using
+       the simple algorithm based on Word-Blot local similarities. SV length is
+       500nt, reference sequence length is 2500nt, sequencing coverage is 10,
+       word length is 8, and each condition (match probability and SV type) is
+       repeated n=5 times, average computation time for each read is 0.8
+       seconds.
     """
 
     wordlen = 8  # kept in memory; don't go too high up
