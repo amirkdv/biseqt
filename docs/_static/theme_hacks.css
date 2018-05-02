@@ -56,6 +56,30 @@ dl dl pre {
     top: 0% !important;
     width: 19% !important;
   }
+
+  /* lightbox */
+  /* contains lightbox image */
+  div.lb-outerContainer {
+    float: left !important;
+    margin: 1em !important;
+    width: 75% !important;
+  }
+  img.lb-image {
+    width: 100% !important;
+    height: auto !important;
+  }
+  /* contains lightbox caption */
+  div.lb-dataContainer {
+    float: left !important;
+    width: 20% !important;
+    margin: 1em !important;
+  }
+  span.lb-caption {
+    white-space: normal !important;
+    font-size: 1em !important;
+    line-height: 1.3em !important;
+    font-weight: normal !important;
+  }
 }
 
 blockquote {
@@ -77,28 +101,7 @@ div.rst-versions.rst-badge {
 div.figure{
   background: #e8e9f8 !important;
 }
-/* contains lightbox image */
-div.lb-outerContainer {
-  float: left !important;
-  margin: 1em !important;
-  width: 75% !important;
-}
-img.lb-image {
-  width: 100% !important;
-  height: auto !important;
-}
-/* contains lightbox caption */
-div.lb-dataContainer {
-  float: left !important;
-  width: 20% !important;
-  margin: 1em !important;
-}
-span.lb-caption {
-  white-space: normal !important;
-  font-size: 1em !important;
-  line-height: 1.3em !important;
-  font-weight: normal !important;
-}
+
 
 li.current ul {
   padding-left: .5em !important;
