@@ -222,9 +222,9 @@ def exp_gap_probs():
       as stationary.
 
     .. figure::
-        https://www.dropbox.com/s/vplg0x22ykc47am/gap_probabilities.png?raw=1
+        https://www.dropbox.com/s/vplg0x22ykc47am/gap%20probabilities.png?raw=1
        :target:
-        https://www.dropbox.com/s/vplg0x22ykc47am/gap_probabilities.png?raw=1
+        https://www.dropbox.com/s/vplg0x22ykc47am/gap%20probabilities.png?raw=1
        :alt: lightbox
 
        Gap probability variability along alignments (length K=1200) in
