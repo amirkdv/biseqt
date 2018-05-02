@@ -34,26 +34,28 @@ dl dl pre {
   padding-left: 10px;
 }
 
-div.document {
-  width: 80% !important;
-}
 
-div.sphinxsidebar {
-  width: 27% !important; /* should match the left margin of div.bodywrapper */
-  font-size: .9em !important;
-}
+@media screen and (min-width: 875px) {
+  div.document {
+    width: 80% !important;
+  }
 
-div.bodywrapper {
-  margin: 0 0 0 27% !important; /* left margin should match width of sidebar */
-  border-left: #ddd solid 2px !important;
-}
+  div.sphinxsidebar {
+    width: 27% !important; /* should match the left margin of div.bodywrapper */
+    font-size: .9em !important;
+  }
 
-div.sphinxsidebarwrapper {
-  border-top: #ddd solid 2px !important;
-  border-bottom: #ddd solid 2px !important;
-  position: fixed !important;
-  top: 20% !important;
-  width: 19% !important
+  div.bodywrapper {
+    margin: 0 0 0 27% !important; /* left margin should match width of sidebar */
+    border-left: #ddd solid 2px !important;
+  }
+
+  div.sphinxsidebarwrapper {
+    border-bottom: #ddd solid 2px !important;
+    position: fixed !important;
+    top: 0% !important;
+    width: 19% !important;
+  }
 }
 
 blockquote {
@@ -96,4 +98,8 @@ span.lb-caption {
   font-size: 1em !important;
   line-height: 1.3em !important;
   font-weight: normal !important;
+}
+
+li.current ul {
+  padding-left: .5em !important;
 }
