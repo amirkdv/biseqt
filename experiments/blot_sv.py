@@ -61,7 +61,7 @@ def gen_data_set(**kw):
     return {'ref': ref, 'indiv': indiv, 'reads': reads, 'labels': labels}
 
 
-def overlap_paths_on_read(read, sims, **kw):
+def chain_paths_on_read(read, sims, **kw):
     margin = kw['margin']
     seg_graph = igraph.Graph()
     for sim in sims:
@@ -87,7 +87,7 @@ def overlap_paths_on_read(read, sims, **kw):
     return seg_graph.get_all_shortest_paths('start', to='end', mode='out')
 
 
-def overlap_paths_on_ref(read, sims, **kw):
+def chain_paths_on_ref(read, sims, **kw):
     margin = kw['margin']
     seg_graph = igraph.Graph()
     for sim in sims:
@@ -128,6 +128,37 @@ def sv_coords(sims, path, mode='read'):
 
 
 def call_svs(ref, reads, margin=50, K_min=200, p_min=.8, **WB_kw):
+    """Calls structural variants based on single read mappings. For each read,
+    the algorithm proceeds as follows:
+
+    .. figure::
+        https://www.dropbox.com/s/rjqobtkp60snte7/SV-schematic.png?raw=1
+       :target:
+        https://www.dropbox.com/s/rjqobtkp60snte7/SV-schematic.png?raw=1
+       :alt: lightbox
+
+       Schematic representation of the chain graphs used to call structural
+       variants. Each read (vertical axis) is compared against the reference
+       sequence (horizontal axis) and in each case two chain graphs are created
+       on each of the read and reference axes where two similar segments are
+       connected with an edge if their projections on the corresponding axis
+       can be consistently chained.
+
+    * all local similarities are found via Word-Blot
+      (:func:`biseqt.blot.WordBlotLocalRef.similar_segments` with given
+      :math:`K_{\min}, p_{\min}`).
+    * Two chain graphs are built based on the projections of similarities on
+      the read and on the reference genome, henceforth the *read graph* and the
+      *reference graph*.
+    * Reads containining SVs are identified using the following rules:
+        * Normal reads are characterized by a shortest path in both the read
+          and reference graphs with exactly two edges between the start and the
+          end of projections.
+        * deletions and duplications produce shortest paths with four edges in
+          the read graph.
+        * insertions produce shortest paths with four edges in the reference
+          graph.
+    """
     WB = WordBlotLocalRef(ref, **WB_kw)
     label_hats = [{'I': [False, []],  # insertion
                    'D': [False, []]}  # deletion / duplication
@@ -143,7 +174,7 @@ def call_svs(ref, reads, margin=50, K_min=200, p_min=.8, **WB_kw):
             sims[sim_idx]['ref'] = ref_pos
 
         # for duplication or deletion
-        d_paths = overlap_paths_on_read(read, sims, margin=margin)
+        d_paths = chain_paths_on_read(read, sims, margin=margin)
         if d_paths:
             d_path = d_paths[0]
             label_hats[read_idx]['D'][0] = len(d_path) > 3
@@ -151,7 +182,7 @@ def call_svs(ref, reads, margin=50, K_min=200, p_min=.8, **WB_kw):
                 label_hats[read_idx]['D'][1] = sv_coords(sims, d_path,
                                                          mode='read')
 
-        i_paths = overlap_paths_on_ref(read, sims, margin=margin)
+        i_paths = chain_paths_on_ref(read, sims, margin=margin)
         if i_paths:
             i_path = i_paths[0]
             label_hats[read_idx]['I'][0] = len(i_path) > 3
@@ -165,7 +196,7 @@ def call_svs(ref, reads, margin=50, K_min=200, p_min=.8, **WB_kw):
 
 
 @with_dumpfile
-def sim_structural_variant_calling(**kw):
+def sim_structural_variants(**kw):
     sv_len, ps, wordlen = kw['sv_len'], kw['ps'], kw['wordlen']
     n_samples, coverage, margin = kw['n_samples'], kw['coverage'], kw['margin']
     sv_types = ['insertion', 'deletion', 'duplication']
@@ -252,7 +283,7 @@ def sim_structural_variant_calling(**kw):
     return sim_data
 
 
-def plot_structural_variant_calling(sim_data, suffix=''):
+def plot_structural_variants(sim_data, suffix=''):
     ps = sim_data['ps']
     sv_types = ['insertion', 'deletion', 'duplication']
 
@@ -279,20 +310,21 @@ def plot_structural_variant_calling(sim_data, suffix=''):
         ax_stats[sv_type].set_xticklabels(ps)
 
     times = sim_data['times'].flatten()
-    print 'time: %.2f ms (%.2f)' % (times.mean(), np.sqrt(times.var()))
+    print 'time: %.2f s (%.2f)' % (times.mean(), np.sqrt(times.var()))
 
     savefig(fig, 'structural_variants%s.png' % suffix)
 
 
-def exp():
+def exp_structural_variants():
     """Performance of Word-Blot in detecting structural variations (SV) in
     *simulations*:
 
     * Given a single read containing part of a SV and a reference sequence, one
       can deduce the presence of a SV from the topological arrangement of local
       similarities. The simple algorithm used here, :func:`call_svs`, simply
-      pays attention to shortest paths in the directed graph of overlaps
-      between similar segments.
+      pays attention to shortest paths in either of two directed graphs
+      obtained by chaining projected similarities on either the reference or
+      the read sequences.
     * For each of three copy number variation SVs, *insertion, deletion,
       duplication*, similar segments detected by Word-Blot are used to detect
       whether each read contains an SV. In each case the true positive rate and
@@ -330,7 +362,7 @@ def exp():
        based on Word-Blot local similarities. SV length is 500nt, reference
        sequence length is 2500nt, sequencing coverage is 10, word length is 8,
        and each condition (match probability and SV type) is repeated n=5
-       times.
+       times, average computation time for each read is 0.8 seconds.
     """
 
     wordlen = 8  # kept in memory; don't go too high up
@@ -343,13 +375,13 @@ def exp():
     suffix = '[w=%d]' % wordlen
     dumpfile = 'sv_calling%s.txt' % suffix
 
-    sim_data = sim_structural_variant_calling(
+    sim_data = sim_structural_variants(
         sv_len=sv_len, ps=ps, wordlen=wordlen, n_samples=n_samples,
         margin=margin, coverage=coverage,
-        dumpfile=dumpfile, ignore_existing=True,
+        dumpfile=dumpfile, ignore_existing=False,
     )
-    plot_structural_variant_calling(sim_data, suffix=suffix)
+    plot_structural_variants(sim_data, suffix=suffix)
 
 
 if __name__ == '__main__':
-    exp()
+    exp_structural_variants()
