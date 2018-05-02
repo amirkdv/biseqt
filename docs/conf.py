@@ -22,9 +22,9 @@ from mock import Mock as MagicMock
 # from unittest.mock import MagicMock
 def setup(app):
     app.add_stylesheet('theme_hacks.css')
-    app.add_stylesheet('lightbox.min.css')
-    app.add_javascript('lightbox-plus-jquery.min.js')
     app.add_javascript('js_hacks.js')
+    app.add_stylesheet('lightbox.min.css')
+    app.add_javascript('lightbox.min.js')
 
 # Hacks to make it work on readthedocs.org
 if os.environ.get('READTHEDOCS', None) == 'True':
