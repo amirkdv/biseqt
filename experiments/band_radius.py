@@ -17,8 +17,9 @@ from biseqt.blot import band_radius
 
 def time_in_band(K, gap, radius):
     alpha = radius / (np.sqrt(2 * gap * K))
+
     return erf(alpha) + alpha * (2 / np.sqrt(np.pi) * np.exp(-alpha ** 2) -
-                                 4 * alpha * (1 - erf(alpha)))
+                                 2 * alpha * (1 - erf(alpha)))
 
 
 def sample_edit_sequences(K, g, n_samples, bio=False):
@@ -168,8 +169,9 @@ def exp_time_in_band():
       diagonal positions is accurate.
     * Calculating the band radius such that the *endpoint* of an alignment is
       within diagonal band with probability at least :math:`1 - \epsilon` is a
-      good approximation for the more reasonable requirement that the *average
-      proportion* of time spent in band is at least :math:`1 - \epsilon`.
+      good conservative estimate for the more reasonable requirement that the
+      *average proportion* of time spent in band is at least :math:`1 -
+      \epsilon`.
     * Calculated band radii are accurate and reliable when applied to
       simulated as well as biological edit sequences.
 
@@ -222,9 +224,9 @@ def exp_gap_probs():
       as stationary.
 
     .. figure::
-        https://www.dropbox.com/s/vplg0x22ykc47am/gap%20probabilities.png?raw=1
+        https://www.dropbox.com/s/vplg0x22ykc47am/gap_probabilities.png?raw=1
        :target:
-        https://www.dropbox.com/s/vplg0x22ykc47am/gap%20probabilities.png?raw=1
+        https://www.dropbox.com/s/vplg0x22ykc47am/gap_probabilities.png?raw=1
        :alt: lightbox
 
        Gap probability variability along alignments (length K=1200) in
@@ -289,7 +291,7 @@ def exp_gap_probs():
         ax.set_ylabel('gap probability')
         ax.set_ylim(-.05, .6)
 
-    savefig(fig, 'gap probabilities.png')
+    savefig(fig, 'gap_probabilities.png')
 
 
 if __name__ == '__main__':

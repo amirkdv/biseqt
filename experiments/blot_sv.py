@@ -342,11 +342,10 @@ def exp_structural_variants():
       (for insertion). This shows that Word-Blot accurately recovers local
       similarities at their maximal length without producing unnecessary
       fragmentation.
-    * Word-Blot accurately recovers local similarities to their maximal extent
-    * Since Word-Blot is a general purpose local similarity search and thus no
-      assumption of collinearity it can accurately identify simple SVs (copy
-      number variations) by simply looking at mapping of individual reads to a
-      reference sequence.
+    * Since Word-Blot is a general purpose local similarity search and thus
+      makes no assumption of collinearity it can accurately identify simple SVs
+      (copy number variations) by simply looking at mapping of individual reads
+      to a reference sequence.
 
     .. figure::
         https://www.dropbox.com/s/ase6z7wzlbc6dy0/
