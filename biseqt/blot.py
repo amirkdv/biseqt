@@ -394,10 +394,11 @@ class WordBlot(SeedIndex):
             self.seeds(exclude_trivial=True), d_radius, a_radius
         )
 
+        # n is the number of seeds in neighborhood excluding the center seed,
         def _p(d, a, n):
             d_band = (d - d_radius, d + d_radius)
             a_band = (a - a_radius, a + a_radius)
-            return self.estimate_match_probability(n, d_band=d_band,
+            return self.estimate_match_probability(n + 1, d_band=d_band,
                                                    a_band=a_band)
 
         return [{'seed': (d, a), 'neighs': neighs, 'p': _p(d, a, len(neighs))}
@@ -471,8 +472,8 @@ class WordBlot(SeedIndex):
                 (d_min, d_max), (a_min, a_max) = seg
                 d_min = min(len(self.S), max(d_min, -len(self.T)))
                 d_max = min(len(self.S), max(d_max, -len(self.T)))
-                a_min = max(a_min + a_radius, 0)
-                a_max = min(a_max - a_radius, len(self.S) + len(self.T))
+                a_min = max(a_min, 0)
+                a_max = min(a_max, len(self.S) + len(self.T))
                 seg = (d_min, d_max), (a_min, a_max)
             # NOTE the following is more justifiable but it matches the
             # average. TODO turn this in into an experiment to justify
@@ -535,12 +536,13 @@ class WordBlotOverlap(WordBlot):
             all_neighs[idx].remove(idx)
         seeds_with_neighs = zip(all_seeds, all_neighs)
 
+        # n excludes the center seed itself
         def _p(d, n):
             L = _len(d)
             d_radius = int(np.ceil(self.band_radius(L)))
             area = 2 * d_radius * L
             word_p_null = (1./len(self.alphabet)) ** self.wordlen
-            word_p = (n - area * word_p_null) / L
+            word_p = (n + 1 - area * word_p_null) / L
             try:
                 match_p = np.exp(np.log(word_p) / self.wordlen)
             except Warning:
@@ -783,8 +785,9 @@ class WordBlotMultiple(SeedIndexMultiple):
         seeds_with_neighs = self.find_all_neighbors(d_radius, a_radius)
         volume = (2 * d_radius) ** (len(self.seqs) - 1) * 2 * a_radius
 
+        # n excludes the center seed itself
         def _p(n):
-            return self.estimate_match_probability(n, K, volume)
+            return self.estimate_match_probability(n + 1, K, volume)
 
         return [{'seed': (ds, a), 'neighs': neighs, 'p': _p(len(neighs))}
                 for (ds, a), neighs in seeds_with_neighs]
