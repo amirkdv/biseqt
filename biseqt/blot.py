@@ -168,8 +168,8 @@ def H0_moments(alphabet_len, wordlen, area):
         \\begin{aligned}
             \mu_0 & = Ap^w \\\\
             \sigma_0^2 & =
-                A(1 - p^w)\left(p^w + \\frac{2p^{w+1}}{1 - p}\\right)
-                - 2wp^{2w}
+                A\\left[(1 - p^w)\left(p^w + \\frac{2p^{w+1}}{1 - p}\\right)
+                - 2wp^{2w}\\right]
         \\end{aligned}
 
     where :math:`w` is the word length, :math:`A` is the area of the ROI, and
@@ -195,8 +195,8 @@ def H1_moments(alphabet_len, wordlen, area, seglen, p_match):
         \\begin{aligned}
             \mu_1 & = \mu_0 + Kp^w \\\\
             \sigma_1^2 & = \sigma_0^2
-                + K[(1 - p^w)\left(p^w + \\frac{2p^{w+1}}{1 - p}\\right)
-                - 2wp^{2w}]
+                + 2K\\left[(1 - p^w)\left(p^w + \\frac{2p^{w+1}}{1 - p}\\right)
+                - 2wp^{2w}\\right]
         \\end{aligned}
 
     where :math:`w` is the word length, :math:`K` is the similarity length, and
