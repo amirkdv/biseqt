@@ -184,7 +184,7 @@ def exp_time_in_band():
        Predicted proportion of time spent in diagonal band (*top left*) in
        alignments of total length K=500 according to full (dashed) and
        approximate (solid) probabilistic model and for two values of gap
-       probabilities. Horizontal lines indicate the calculated band radius for
+       probabilities. Vertical lines indicate the calculated band radius for
        %.01 accuracy.
        Simulated alignments (n=500 samples) are drawn in diagonal coordinates
        as a function of alignment time for gap probability 0.05 (*right top*)
