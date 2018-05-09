@@ -783,7 +783,7 @@ class WordBlotMultiple(SeedIndexMultiple):
         d_radius = int(np.ceil(self.band_radius(K)))
         a_radius = int(np.ceil(len(self.seqs) * K / 2.))
         seeds_with_neighs = self.find_all_neighbors(d_radius, a_radius)
-        volume = (2 * d_radius) ** (len(self.seqs) - 1) * 2 * a_radius
+        volume = (2 * d_radius) ** (len(self.seqs) - 1) * K
 
         # n excludes the center seed itself
         def _p(n):
@@ -976,7 +976,6 @@ class WordBlotMultiple(SeedIndexMultiple):
             if score:
                 ds_band, a_band = seg
                 n = self.seed_count(ds_band=ds_band, a_band=a_band)
-                a_radius = int(np.ceil(len(self.seqs) * K_min / 2.))
                 K_hat = np.ceil((a_band[1] - a_band[0]) / len(self.seqs))
                 volume = a_band[1] - a_band[0]
                 for d_band in ds_band:

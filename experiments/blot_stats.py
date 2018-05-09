@@ -171,7 +171,6 @@ def plot_simulated_K_p(sim_data, select_Ks, select_ps, suffix=''):
     # p_true which is a property of MutationProcess is with respect to
     # alignment length; correction via p_hats *= (K/L) = (1 - g/2)
 
-    # p_hats *= (1 + p_hats) / 2
     p_hats = sim_data['p_hat']
     p_hats['pos'] *= (1 + p_hats['pos']) / 2
     p_hats['neg'] *= (1 + p_hats['neg']) / 2
@@ -317,14 +316,14 @@ def exp_simulated_K_p():
 
        Estimated length (*top left*), match probability (*bottom left*),
        diagonal position (*top right*) and antidiagonal position (*bottom
-       right*) of local similarities, n=20 samples, shaded regions indicate one
-       standard deviation. Dashed black lines are ground truth for comparison.
-       For length estimates both the sum of the lengths of all reported similar
-       segments (solid) and the length of the longest similar segment (dashed)
-       are shown. Estimated match probablity and Length estimates for unrelated
-       pairs are also shown (dotted). Estimated match probability, diagonal and
-       antidiagonal coordinates correspond to the longest local similarity.
-       reported segments.
+       right*) of local similarities, word length is 7, n=20 samples, shaded
+       regions indicate one standard deviation. Dashed black lines are ground
+       truth for comparison.  For length estimates both the sum of the lengths
+       of all reported similar segments (solid) and the length of the longest
+       similar segment (dashed) are shown. Estimated match probablity and
+       Length estimates for unrelated pairs are also shown (dotted). Estimated
+       match probability, diagonal and antidiagonal coordinates correspond to
+       the longest local similarity.
     """
     Ks = [100 * 2 ** i for i in range(1, 7)]
     select_Ks = Ks[1], Ks[3], Ks[5]

@@ -241,27 +241,25 @@ def sim_simulated_K_p(Ks, ps, **kw):
         'n_seqs': n_seqs,
         'scores': {'H0': {'pos': np.zeros(shape), 'neg': np.zeros(shape)},
                    'H1': {'pos': np.zeros(shape), 'neg': np.zeros(shape)}},
-        'K_hat': np.zeros(shape),
-        'p_hat': np.zeros(shape),
-        'a_hat': np.zeros(shape),
-        'd_min': np.zeros(shape),
-        'd_max': np.zeros(shape),
+        'K_hat': {'pos': {'sum': np.zeros(shape), 'max': np.zeros(shape)},
+                  'neg': {'sum': np.zeros(shape), 'max': np.zeros(shape)}},
+        'p_hat': {'pos': np.zeros(shape), 'neg': np.zeros(shape)},
+        'a_hat': {'pos': np.zeros(shape), 'neg': np.zeros(shape)},
+        'd_min': {'pos': np.zeros(shape), 'neg': np.zeros(shape)},
+        'd_max': {'pos': np.zeros(shape), 'neg': np.zeros(shape)},
         'time': {'pos': np.zeros(shape), 'neg': np.zeros(shape)},
         'WB_kw': WB_kw,
         'Ks': Ks,
+        'ws': [int(np.ceil(np.log(K))) + 1 for K in Ks],
         'ps': ps,
     }
-    # NOTE in multiple sequence case segments gets broken (along a) more easily
-    # (this is not fragmentation which is breaking along ds). We use K / 2
-    # instead.
-    # K_min = 100
-    # assert K_min <= min(Ks)
     K_min = 100
+    assert K_min <= min(Ks)
 
     for (K_idx, K), (p_idx, p_match) in product(enumerate(Ks), enumerate(ps)):
         p_min = p_match
         # adjusted wordlens
-        wordlen = int(np.ceil(np.log(K)))
+        wordlen = sim_data['ws'][K_idx]
         WB_kw['wordlen'] = wordlen
 
         log('simulating (%d samples) K = %d (w=%d), p = %.2f' %
@@ -303,17 +301,13 @@ def sim_simulated_K_p(Ks, ps, **kw):
                 sim_data['scores']['H1'][key][K_idx, p_idx, idx] = s1
                 sim_data['time'][key][K_idx, p_idx, idx] = time() - t_start
 
-                # we only need scores from negative cases
-                if key == 'neg':
-                    continue
-
                 def _len(seg): return (seg[1][1] - seg[1][0]) / n_seqs
 
                 # for multiple sequences it's too much to ask for
                 # at_least_one=True
                 results = list(WB.similar_segments(K_min, p_min))
                 if results:
-                    # pick the longest detected homology
+                    # pick longest detected homology for p_hat, d_hat, a_hat
                     hom = max(results, key=lambda rec: _len(rec['segment']))
                     sim_data['p_hat'][K_idx, p_idx, idx] = hom['p']
                 else:
@@ -323,19 +317,19 @@ def sim_simulated_K_p(Ks, ps, **kw):
                                 'p': 0}]
 
                 # sum of K_hat, average of a_hat, d_min, d_max
-                sim_data['K_hat'][K_idx, p_idx, idx] = sum(
-                    _len(r['segment']) for r in results)
-                sim_data['a_hat'][K_idx, p_idx, idx] = sum(
-                    (r['segment'][1][1] + r['segment'][1][0]) / 2
-                    for r in results) / len(results)
-                sim_data['d_min'][K_idx, p_idx, idx] = sum(
-                    d_range[0] for r in results
-                    for d_range in r['segment'][0]) \
-                    / (len(results) * (n_seqs - 1))
-                sim_data['d_max'][K_idx, p_idx, idx] = sum(
-                    d_range[1] for r in results
-                    for d_range in r['segment'][0]) \
-                    / (len(results) * (n_seqs - 1))
+                # sum of K_hat and longest K_hat
+                sim_data['K_hat'][key]['sum'][K_idx, p_idx, idx] = sum(
+                    _len(r['segment']) for r in results) / 2
+                sim_data['K_hat'][key]['max'][K_idx, p_idx, idx] = max(
+                    _len(r['segment']) for r in results) / 2
+
+                sim_data['a_hat'][key][K_idx, p_idx, idx] = \
+                    (hom['segment'][1][1] + hom['segment'][1][0]) / 2
+                sim_data['d_min'][key][K_idx, p_idx, idx] = \
+                    hom['segment'][0][0][0]
+                sim_data['d_max'][key][K_idx, p_idx, idx] = \
+                    hom['segment'][0][0][1]
+                sim_data['p_hat'][key][K_idx, p_idx, idx] = hom['p']
         sys.stderr.write('\n')
 
     return sim_data
@@ -400,44 +394,71 @@ def plot_simulated_K_p(sim_data, select_Ks, select_ps, suffix=''):
     ax_d = fig_hats.add_subplot(2, 2, 2)
     ax_a = fig_hats.add_subplot(2, 2, 4)
 
-    K_hats = sim_data['K_hat']
     p_hats = sim_data['p_hat']
-    p_hats *= (1 + p_hats) / 2
+    p_hats['pos'] *= (1 + p_hats['pos']) / 2
+    p_hats['neg'] *= (1 + p_hats['neg']) / 2
+
+    # estimated Ks for select ps
+    K_hats = [sim_data['K_hat']['pos']['sum'],
+              sim_data['K_hat']['pos']['max'],
+              sim_data['K_hat']['neg']['max']]
+    lss = ['-', '--', ':']
+    markers = ['o', 'o', 'x']
+    show_sds = [True, False, False]
 
     # estimated Ks for select ps
     colors = color_code(select_ps)
     for p, color in zip(select_ps, colors):
         p_idx = ps.index(p)
-        ax_K.plot(Ks, K_hats[:, p_idx, :].mean(axis=1), color=color,
-                  label='p = %.2f' % p, **kw)
+
+        kw_ = {'markersize': 3, 'alpha': .7, 'lw': 1, 'color': color,
+               'label': 'p = %.2f' % p}
+        labeled = False
+        for K_hat, ls, marker, sd in zip(K_hats, lss, markers, show_sds):
+            kw_['ls'], kw_['marker'] = ls, marker
+            if sd:
+                plot_with_sd(ax_K, Ks, K_hat[:, p_idx, :], axis=1, **kw_)
+            else:
+                ax_K.plot(Ks, K_hat[:, p_idx, :].mean(axis=1), **kw_)
+            if not labeled:
+                kw_.pop('label')
+                labeled = True
+
         ax_K.set_xscale('log')
-        ax_K.set_yscale('log')
+        ax_K.set_yscale('symlog')
         ax_K.set_xticks(Ks)
-        ax_K.set_xticklabels(Ks)
+        ax_K.set_xticklabels(Ks, rotation=90)
+
     ax_K.set_ylabel('estimated similarity length', fontsize=10)
     ax_K.set_xlabel('true similarity length', fontsize=10)
     ax_K.plot(Ks, Ks, **truth_kw)
-    ax_K.legend(loc='lower right', fontsize=8)
+    ax_K.legend(loc='upper left', fontsize=8)
 
     # estimated ps for select Ks
     colors = color_code(select_Ks)
+    kw_ = kw.copy()
+    kw_['ls'] = '--'
     for K, color in zip(select_Ks, colors):
         K_idx = Ks.index(K)
-        ax_p.plot(ps, p_hats[K_idx, :, :].mean(axis=1), color=color,
-                  label='K = %d' % K, **kw)
+        p_hats = sim_data['p_hat']['pos']
+        plot_with_sd(ax_p, ps, p_hats[K_idx, :, :], axis=1,
+                     color=color, label='K = %d' % K, **kw)
+
+        p_hats = sim_data['p_hat']['neg']
+        ax_p.plot(ps, p_hats[K_idx, :, :].mean(axis=1), color=color, **kw_)
         ax_p.set_xticks(ps)
         ax_p.set_xticklabels(ps)
     ax_p.set_ylabel('estimated match probability', fontsize=10)
     ax_p.set_xlabel('true match probability', fontsize=10)
     ax_p.plot(ps, ps, **truth_kw)
-    ax_p.legend(loc='lower right', fontsize=8)
+    ax_p.legend(loc='upper left', fontsize=8)
 
     # ======================================
     # estimated diagonal and antidiagonal position and band radius for select
     # match probabilities (select_ps), as a function of K
-    d_mins = sim_data['d_min']
-    d_maxs = sim_data['d_max']
-    a_hats = sim_data['a_hat']
+    d_mins = sim_data['d_min']['pos']
+    d_maxs = sim_data['d_max']['pos']
+    a_hats = sim_data['a_hat']['pos']
 
     colors = color_code(select_ps)
     for p, color in zip(select_ps, colors):
@@ -447,17 +468,17 @@ def plot_simulated_K_p(sim_data, select_Ks, select_ps, suffix=''):
         p_idx = ps.index(p)
 
         d_ctrs = (d_mins[:, p_idx, :] + d_maxs[:, p_idx, :]) / 2
-        ax_d.plot(Ks, d_ctrs.mean(axis=1), label=label, **kw)
-        ax_a.plot(Ks, a_hats[:, p_idx, :].mean(axis=1), label=label, **kw)
+        # ax_d.plot(Ks, d_ctrs.mean(axis=1), label=label, **kw)
+        plot_with_sd(ax_d, Ks, d_ctrs, axis=1, label=label, **kw)
+        plot_with_sd(ax_a, Ks, a_hats[:, p_idx, :], axis=1, label=label, **kw)
+        # ax_a.plot(Ks, a_hats[:, p_idx, :].mean(axis=1), label=label, **kw)
         for ax in [ax_d, ax_a]:
             ax.set_xscale('log')
             ax.set_xticks(Ks)
             ax.set_xticklabels(Ks)
             ax.set_xlabel('similarity length')
-        ax_a.set_yscale('log')
+        ax_a.set_yscale('symlog')
 
-    # FIXME manually set range
-    ax_d.set_ylim(-200, 200)
     ax_d.set_xlabel('similarity length')
     ax_d.set_ylabel('estimated diagonal positions')
     ax_d.plot(Ks, [0] * len(Ks), **truth_kw)
@@ -473,9 +494,9 @@ def plot_simulated_K_p(sim_data, select_Ks, select_ps, suffix=''):
     # ======================
     # time to score seeds as a function of K (for select ps) and p (for select
     # Ks)
-    fig_t = plt.figure(figsize=(4, 8))
-    ax_t_K = fig_t.add_subplot(2, 1, 1)
-    ax_t_p = fig_t.add_subplot(2, 1, 2)
+    fig_t = plt.figure(figsize=(8, 4))
+    ax_t_K = fig_t.add_subplot(1, 2, 1)
+    ax_t_p = fig_t.add_subplot(1, 2, 2)
 
     kw = {'alpha': .5, 'lw': 1, 'marker': 'o', 'markersize': 2}
 
@@ -504,10 +525,10 @@ def plot_simulated_K_p(sim_data, select_Ks, select_ps, suffix=''):
     ax_t_K.set_xticks(Ks)
     ax_t_K.set_xticklabels(Ks, rotation=90, fontsize=8)
     # NOTE make room for legend manually
-    ax_t_K.set_ylim(None, 1400)
+    ax_t_K.set_ylim(None, 1800)
     ax_t_K.set_ylabel('time (ms) to score all seeds')
     ax_t_K.set_xlabel('similarity lengths')
-    ax_t_K.legend(loc='upper left', fontsize=6)
+    ax_t_K.legend(loc='upper left')
 
     savefig(fig_t, 'simulations_multiple[times]%s.png' % suffix)
 
@@ -570,12 +591,14 @@ def exp_simulated_K_p():
 
        Estimated length (*top left*), match probability (*bottom left*),
        diagonal position (*top right*) and antidiagonal position (*bottom
-       right*) of multiple sequence (N=6) local similarities, n=50 samples,
-       diagonal positions are averaged over N-1 values. Dashed black lines are
-       ground truth for comparison. Length estimates are the sum of the
-       lengths of all reported similar segments. Diagonal and antidiagonal
-       coordinates are averaged over all reported segments. Match probability
-       is taken from the longest similar segment.
+       right*) of multiple (N=6) local similarities, word length is adapted to
+       sequence lengths, n=20 samples, shaded regions indicate one standard
+       deviation. Dashed black lines are ground truth for comparison.  For
+       length estimates both the sum of the lengths of all reported similar
+       segments (solid) and the length of the longest similar segment (dashed)
+       are shown. Estimated match probablity and Length estimates for unrelated
+       pairs are also shown (dotted). Estimated match probability, diagonal and
+       antidiagonal coordinates correspond to the longest local similarity.
 
     .. figure::
         https://www.dropbox.com/s/ticgyshozt6epi0/
