@@ -43,7 +43,13 @@ Experiments
 .. automodule:: experiments.blot_sv
     :members:
 
-(§8) Word-Blot Performance (multiple)
+(§8) Transposable Element Annotation
+------------------------------------
+
+.. automodule:: experiments.blot_te
+    :members:
+
+(§9) Word-Blot Performance (multiple)
 -------------------------------------
 
 .. automodule:: experiments.multiple_sequence
