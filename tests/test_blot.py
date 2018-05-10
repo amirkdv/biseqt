@@ -8,7 +8,8 @@ from biseqt.blot import find_peaks
 from biseqt.blot import band_radius
 from biseqt.blot import expected_overlap_len
 from biseqt.blot import band_radii
-from biseqt.blot import WordBlot, WordBlotLocalRef, WordBlotMultiple
+from biseqt.blot import WordBlot, WordBlotLocalRef
+from biseqt.blot import WordBlotMultiple, WordBlotMultipleFast
 from biseqt.blot import WordBlotOverlap, WordBlotOverlapRef
 
 
@@ -199,11 +200,13 @@ def test_overlap_detection(wordlen, K, n):
         'non-overlap similarities must not confuse overlap detection'
 
 
-@pytest.mark.parametrize('K', [100, 500],
+@pytest.mark.parametrize('K', [400, 800],
                          ids=['K=500', 'K=1000'])
 @pytest.mark.parametrize('n_seqs', [3, 5],
                          ids=['N=3', 'N=5'])
-def test_local_similarity_multiple(K, n_seqs):
+@pytest.mark.parametrize('WB_class', [WordBlotMultiple, WordBlotMultipleFast],
+                         ids=['seeds-in-sqlite', 'seeds-in-python'])
+def test_local_similarity_multiple(K, n_seqs, WB_class):
     gap, subst = .01, .01
     A = Alphabet('ACGT')
     M = MutationProcess(A, subst_probs=subst, ge_prob=gap, go_prob=gap)
@@ -212,7 +215,7 @@ def test_local_similarity_multiple(K, n_seqs):
 
     hom = rand_seq(A, K)
     seqs = [M.mutate(hom)[0] + rand_seq(A, K) for _ in range(n_seqs)]
-    WB = WordBlotMultiple(*seqs, **WB_kw)
+    WB = WB_class(*seqs, **WB_kw)
 
     p_match = (1 - gap) * (1 - subst) * .9
 
@@ -225,3 +228,11 @@ def test_local_similarity_multiple(K, n_seqs):
             'The coordinates of the similar segment must be correct'
     assert 0.8 * p_match <= rec['p'] <= 1.2 * p_match, \
         'estimated match prob should be roughly close to true value'
+
+    # test memory limit check for in-python seeds
+    WB_kw['wordlen'] = 15
+    if WB_class == WordBlotMultipleFast:
+        with pytest.raises(MemoryError):
+            WB_class(*seqs, **WB_kw)
+    else:
+        WB_class(*seqs, **WB_kw)

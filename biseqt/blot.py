@@ -404,7 +404,7 @@ class WordBlot(SeedIndex):
         return [{'seed': (d, a), 'neighs': neighs, 'p': _p(d, a, len(neighs))}
                 for (d, a), neighs in seeds_with_neighs]
 
-    def similar_segments(self, K_min, p_min, score=True, at_least_one=False):
+    def similar_segments(self, K_min, p_min, at_least_one=False):
         """Find all maximal local similarities of given minium length and match
         probability. Additionally for each segment, the match probability is
         estimated and H0/H1 scores are calculated.
@@ -481,13 +481,12 @@ class WordBlot(SeedIndex):
             #   n, d_band=seg[0], a_band=seg[1])
             p_hat = sum(ps_in_seg) / len(ps_in_seg)
             res = {'segment': seg, 'p': p_hat}
-            if score:
-                n = self.seed_count(d_band=seg[0], a_band=seg[1])
-                K_hat, area_hat = self.segment_dims(d_band=seg[0],
-                                                    a_band=seg[1])
-                scores = self.score_num_seeds(num_seeds=n, area=area_hat,
-                                              seglen=K_hat, p_match=p_hat)
-                res['scores'] = scores
+            n = self.seed_count(d_band=seg[0], a_band=seg[1])
+            K_hat, area_hat = self.segment_dims(d_band=seg[0],
+                                                a_band=seg[1])
+            scores = self.score_num_seeds(num_seeds=n, area=area_hat,
+                                          seglen=K_hat, p_match=p_hat)
+            res['scores'] = scores
             yield res
 
 
@@ -554,7 +553,7 @@ class WordBlotOverlap(WordBlot):
                  'p': _p(d, len(neighs))}
                 for (d, a), neighs in seeds_with_neighs]
 
-    def highest_scoring_overlap_band(self, score=True):
+    def highest_scoring_overlap_band(self):
         """Finds the highest scoring diagonal band according to probabiliy
         estimations of :func:`score_seeds`.
 
@@ -571,13 +570,12 @@ class WordBlotOverlap(WordBlot):
         p_hat, overlap_len = scored_seeds[idx]['p'], scored_seeds[idx]['L']
         d_band = seed[0] - rad, seed[0] + rad
         res = {'d_band': d_band, 'p': p_hat, 'len': overlap_len}
-        if score:
-            area = 2 * rad * overlap_len
-            mu_H1, sd_H1 = H1_moments(len(self.alphabet), self.wordlen, area,
-                                      overlap_len, p_hat)
-            num_seeds = self.seed_count(d_band=d_band)
-            z_H1 = (num_seeds - mu_H1) / sd_H1
-            res['score'] = z_H1
+        area = 2 * rad * overlap_len
+        mu_H1, sd_H1 = H1_moments(len(self.alphabet), self.wordlen, area,
+                                  overlap_len, p_hat)
+        num_seeds = self.seed_count(d_band=d_band)
+        z_H1 = (num_seeds - mu_H1) / sd_H1
+        res['score'] = z_H1
         return res
 
 
@@ -613,14 +611,35 @@ class WordBlotOverlapRef(WordBlotOverlap):
         relpath = 'python-object'
         log_header = '%d-mer cache (%s)' % (self.wordlen, relpath)
         self._logger = Logger(log_level=self.log_level, header=log_header)
+        self._seeds = {}
 
     def seeds(self, exclude_trivial=True):
         assert self.T is not None
-        for pos, kmer in enumerate(as_kmer_seq(self.T, self.wordlen)):
-            for pos_ref in self.kmer_hits[kmer]:
-                if self.S == self.T and exclude_trivial and pos == pos_ref:
-                    continue
-                yield pos_ref, pos
+        if self.T.content_id not in self._seeds:
+            self._seeds = {self.T.content_id: []}
+            for pos, kmer in enumerate(as_kmer_seq(self.T, self.wordlen)):
+                for pos_ref in self.kmer_hits[kmer]:
+                    if self.S == self.T and exclude_trivial and pos == pos_ref:
+                        continue
+                    self._seeds[self.T.content_id].append((pos_ref, pos))
+        return self._seeds[self.T.content_id]
+
+    def seed_count(self, d_band=None, a_band=None):
+        assert self.T is not None
+        seeds = self.seeds()
+        cnt = 0
+        if d_band:
+            d_min, d_max = d_band
+        if a_band:
+            a_min, a_max = a_band
+        for i, j in seeds:
+            d, a = self.to_diagonal_coordinates(i, j)
+            if d_band and not d_min <= d <= d_max:
+                continue
+            if a_band and not a_min <= a <= a_max:
+                continue
+            cnt += 1
+        return cnt
 
     def score_seeds_(self, seq):
         self.T = seq
@@ -628,9 +647,7 @@ class WordBlotOverlapRef(WordBlotOverlap):
 
     def highest_scoring_overlap_band(self, seq):
         self.T = seq
-        return super(WordBlotOverlapRef, self).highest_scoring_overlap_band(
-            score=False
-        )
+        return super(WordBlotOverlapRef, self).highest_scoring_overlap_band()
 
 
 class WordBlotLocalRef(WordBlot):
@@ -665,14 +682,35 @@ class WordBlotLocalRef(WordBlot):
         relpath = 'python-object'
         log_header = '%d-mer cache (%s)' % (self.wordlen, relpath)
         self._logger = Logger(log_level=self.log_level, header=log_header)
+        self._seeds = {}
 
     def seeds(self, exclude_trivial=True):
         assert self.T is not None
-        for pos, kmer in enumerate(as_kmer_seq(self.T, self.wordlen)):
-            for pos_ref in self.kmer_hits[kmer]:
-                if self.S == self.T and exclude_trivial and pos == pos_ref:
-                    continue
-                yield pos_ref, pos
+        if self.T.content_id not in self._seeds:
+            self._seeds = {self.T.content_id: []}
+            for pos, kmer in enumerate(as_kmer_seq(self.T, self.wordlen)):
+                for pos_ref in self.kmer_hits[kmer]:
+                    if self.S == self.T and exclude_trivial and pos == pos_ref:
+                        continue
+                    self._seeds[self.T.content_id].append((pos_ref, pos))
+        return self._seeds[self.T.content_id]
+
+    def seed_count(self, d_band=None, a_band=None):
+        assert self.T is not None
+        seeds = self.seeds()
+        cnt = 0
+        if d_band:
+            d_min, d_max = d_band
+        if a_band:
+            a_min, a_max = a_band
+        for i, j in seeds:
+            d, a = self.to_diagonal_coordinates(i, j)
+            if d_band and not d_min <= d <= d_max:
+                continue
+            if a_band and not a_min <= a <= a_max:
+                continue
+            cnt += 1
+        return cnt
 
     def score_seeds_(self, seq, K):
         self.T = seq
@@ -680,7 +718,7 @@ class WordBlotLocalRef(WordBlot):
 
     def similar_segments(self, seq, K_min, p_min, at_least_one=False):
         self.T = seq
-        kw = {'score': False, 'at_least_one': at_least_one}
+        kw = {'at_least_one': at_least_one}
         for res in super(WordBlotLocalRef, self).similar_segments(K_min, p_min,
                                                                   **kw):
             yield res
@@ -877,7 +915,7 @@ class WordBlotMultiple(SeedIndexMultiple):
         z_H1 = (num_seeds - mu_H1) / sd_H1  # score under H1
         return z_H0, z_H1
 
-    def similar_segments(self, K_min, p_min, score=True, at_least_one=False):
+    def similar_segments(self, K_min, p_min, at_least_one=False):
         """Find all maximal local similarities of given minium length and match
         probability. Additionally for each segment, the match probability is
         estimated and H0/H1 scores are calculated.
@@ -973,16 +1011,15 @@ class WordBlotMultiple(SeedIndexMultiple):
             #   n, d_band=seg[0], a_band=seg[1])
             p_hat = sum(ps_in_seg) / len(ps_in_seg)
             res = {'segment': seg, 'p': p_hat}
-            if score:
-                ds_band, a_band = seg
-                n = self.seed_count(ds_band=ds_band, a_band=a_band)
-                K_hat = np.ceil((a_band[1] - a_band[0]) / len(self.seqs))
-                volume = a_band[1] - a_band[0]
-                for d_band in ds_band:
-                    volume *= d_band[1] - d_band[0]
-                scores = self.score_num_seeds(num_seeds=n, volume=volume,
-                                              seglen=K_hat, p_match=p_hat)
-                res['scores'] = scores
+            ds_band, a_band = seg
+            n = self.seed_count(ds_band=ds_band, a_band=a_band)
+            K_hat = np.ceil((a_band[1] - a_band[0]) / len(self.seqs))
+            volume = a_band[1] - a_band[0]
+            for d_band in ds_band:
+                volume *= d_band[1] - d_band[0]
+            scores = self.score_num_seeds(num_seeds=n, volume=volume,
+                                          seglen=K_hat, p_match=p_hat)
+            res['scores'] = scores
             yield res
 
 
