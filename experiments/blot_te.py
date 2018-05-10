@@ -1,6 +1,7 @@
 #!/usr/bin/env python
-import logging
+import sys
 import os
+import logging
 import numpy as np
 import subprocess
 from time import time
@@ -60,6 +61,7 @@ def sim_transposable_elements(**kw):
     genome_file = os.path.join(DATA_DIR, 'TE/genome[%.2f].fa')
     blast_db = os.path.join(DATA_DIR, 'TE/blast/te.db')
     n_seqs, ps, wordlen = kw['n_seqs'], kw['ps'], kw['wordlen']
+    K_min, p_min = kw['K_min'], kw['p_min']
     A = Alphabet('ACGT')
     WB_kw = {'g_max': .2, 'sensitivity': .9, 'alphabet': A, 'wordlen': wordlen,
              'log_level': logging.WARN}
@@ -73,9 +75,6 @@ def sim_transposable_elements(**kw):
     except (OSError, KeyError, AssertionError) as e:
         log('failed on running: ' + ' '.join(args))
         raise e
-
-    K_min = 500
-    p_min = .6
 
     with open(TE_file) as f:
         TEs = {name: A.parse(seq) for seq, name, _ in load_fasta(f)}
@@ -180,6 +179,8 @@ def sim_transposable_elements(**kw):
             assert proc.returncode == 0
         except (OSError, KeyError, AssertionError) as e:
             log('failed on running: ' + ' '.join(args))
+            sys.stderr.write('STDOUT:\n  ' + '\n  '.join(out.split('\n')))
+            sys.stderr.write('STDERR:\n  ' + '\n  '.join(err.split('\n')))
             raise e
 
         for rec in out.strip().split('\n'):
@@ -308,7 +309,7 @@ def exp_transposable_elements():
         transposable_elements.png?raw=1
        :alt: lightbox
 
-       The sensitivity (*left*), specificity (*middle*) and computation time
+       Sensitivity (*left*), specificity (*middle*) and computation time
        (*right*) for Blast (blue), nhmmer (green), and Word-Blot (black) for
        varying similarities (horizontal axes) between simulated TEs and their
        occurences in simulated genomes.
@@ -321,12 +322,13 @@ def exp_transposable_elements():
     # gen_data_set(n_TE=n_TE, n_seqs=n_seqs, len_TE=len_TE, ps=ps,
     #              n_TE_per_seq=n_TE_per_seq)
 
-    wordlen = 8  # kept in memory; don't go too high up
+    K_min, p_min = 500, .6
     suffix = ''
+    wordlen = 8  # kept in memory; don't go too high up
     dumpfile = 'transposable_elements%s.txt' % suffix
 
     sim_data = sim_transposable_elements(
-        ps=ps, wordlen=wordlen, n_seqs=n_seqs,
+        K_min=K_min, p_min=p_min, ps=ps, wordlen=wordlen, n_seqs=n_seqs,
         dumpfile=dumpfile, ignore_existing=False,
     )
     plot_transposable_elements(sim_data, suffix=suffix)

@@ -110,6 +110,9 @@ def sim_simulated_K_p(Ks, ps, n_samples, **kw):
                 sim_data['d_max'][key][K_idx, p_idx, idx] = \
                     hom['segment'][0][1]
 
+        # H0_neg = sim_data['scores']['H0']['neg'][K_idx, p_idx, :].mean()
+        # H1_pos = sim_data['scores']['H1']['pos'][K_idx, p_idx, :].mean()
+        # sys.stderr.write('H0: %.2f, H1: %.2f' % (H0_neg, H1_pos))
         sys.stderr.write('\n')
     return sim_data
 
@@ -252,6 +255,8 @@ def plot_simulated_K_p(sim_data, select_Ks, select_ps, suffix=''):
             ax.set_xlabel('similarity length')
         ax_a.set_yscale('log')
 
+    max_d = np.sqrt(max(Ks))
+    ax_d.set_ylim(-max_d, max_d)
     ax_d.set_ylabel('estimated diagonal position')
     ax_d.legend(loc='upper left', fontsize=8)
 
@@ -329,7 +334,7 @@ def exp_simulated_K_p():
     select_Ks = Ks[1], Ks[3], Ks[5]
 
     ps = [round(1 - .06 * i, 2) for i in range(1, 8)]
-    select_ps = ps[0], ps[3], ps[5]
+    select_ps = ps[0], ps[2], ps[5]
 
     n_samples = 20
     wordlen = 7

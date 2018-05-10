@@ -359,6 +359,8 @@ def exp_ig_genotyping():
     A = Alphabet('ACGT')
 
     reads_file = 'data/igh-s22/s22%s.fa' % suffix
+    # TODO incorporate the commands in igblast_notes.md in here (as docs or
+    # automated code).
     igblast_file = 'data/igh-s22/igblast%s_clean.out' % suffix
 
     log('loading reads')
