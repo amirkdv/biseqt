@@ -31,7 +31,8 @@ def sim_count_seeds(**kw):
     }
     sim_data = {
         'time': {'pos': _zero(), 'neg': _zero()},
-        'n_seeds': {'pos': _zero(), 'neg': _zero()},
+        'n_seeds': {'all': {'pos': _zero(), 'neg': _zero()},
+                    'band': {'pos': _zero(), 'neg': _zero()}},
         'gap': gap,
         'match': (1 - gap) * (1 - subst),
         'ns': ns,
@@ -39,6 +40,8 @@ def sim_count_seeds(**kw):
     }
     M = MutationProcess(A, go_prob=gap, ge_prob=gap, subst_probs=subst)
     for n_idx, n in enumerate(ns):
+        radius = band_radius(n, .4, 1 - 1e-4)
+
         log('n = %d ' % n, newline=False)
         for idx in range(n_samples):
             sys.stderr.write('.')
@@ -50,7 +53,10 @@ def sim_count_seeds(**kw):
                 seed_index = SeedIndex(S, T, **seed_index_kw)
                 n_seeds = seed_index.seed_count()
                 sim_data['time'][key][n_idx][idx] = time() - t
-                sim_data['n_seeds'][key][n_idx][idx] = n_seeds
+                sim_data['n_seeds']['all'][key][n_idx][idx] = n_seeds
+
+                n_seeds = seed_index.seed_count(d_band=(-radius, radius))
+                sim_data['n_seeds']['band'][key][n_idx][idx] = n_seeds
         sys.stderr.write('\n')
     return sim_data
 
@@ -59,19 +65,26 @@ def plot_count_seeds_moments(sim_data, K=None, suffix=''):
     ns, wordlen = sim_data['ns'], sim_data['seed_index_kw']['wordlen']
     match = sim_data['match']
 
-    mus_H0, sds_H0 = [], []
-    mus_H1, sds_H1 = [], []
+    def _zero(): return {'all': [], 'band': []}
+
+    mus_H0, mus_H1, sds_H0, sds_H1 = _zero(), _zero(), _zero(), _zero()
     for n in ns:
-        area = n ** 2
-        mu_H0, sd_H0 = H0_moments(4, wordlen, area)
-        mus_H0.append(mu_H0)
-        sds_H0.append(sd_H0)
+        for mode in ['all', 'band']:
+            if mode == 'all':
+                area = n ** 2
+            else:
+                radius = band_radius(n, .4, 1 - 1e-4)
+                area = n * 2 * radius
 
-        mu_H1, sd_H1 = H1_moments(4, wordlen, area, n, match)
-        mus_H1.append(mu_H1)
-        sds_H1.append(sd_H1)
+            mu_H0, sd_H0 = H0_moments(4, wordlen, area)
+            mus_H0[mode].append(mu_H0)
+            sds_H0[mode].append(sd_H0)
 
-    fig = plt.figure(figsize=(10, 4))
+            mu_H1, sd_H1 = H1_moments(4, wordlen, area, n, match)
+            mus_H1[mode].append(mu_H1)
+            sds_H1[mode].append(sd_H1)
+
+    fig = plt.figure(figsize=(11, 5))
     ax_t = fig.add_subplot(1, 3, 1)
     ax_mu = fig.add_subplot(1, 3, 2)
     ax_sd = fig.add_subplot(1, 3, 3)
@@ -83,32 +96,45 @@ def plot_count_seeds_moments(sim_data, K=None, suffix=''):
     plot_with_sd(ax_t, ns, 1000 * sim_data['time']['pos'], axis=1, color='g',
                  label='related', **kw)
 
-    kw = {'marker': 'o', 'markersize': 5, 'lw': 3, 'alpha': .5}
-    # average no. of seeds
-    pos = sim_data['n_seeds']['pos']
-    neg = sim_data['n_seeds']['neg']
-    ax_mu.plot(ns, neg.mean(axis=1), c='r', label='unrelated', **kw)
-    ax_mu.plot(ns, mus_H0, color='r', ls='--', **kw)
-    ax_mu.plot(ns, pos.mean(axis=1), c='g', label='related', **kw)
-    ax_mu.plot(ns, mus_H1, color='g', ls='--', **kw)
+    kw = {'markersize': 3, 'lw': 1.2}
+    for mode, marker, alpha in zip(['all', 'band'], 'ox', [.7, .5]):
+        kw['alpha'] = alpha
+        kw['marker'] = marker
+        pos = sim_data['n_seeds'][mode]['pos']
+        neg = sim_data['n_seeds'][mode]['neg']
 
-    # std dev. of no of seeds
-    ax_sd.plot(ns, np.sqrt(neg.var(axis=1)), c='r', label='unrelated', **kw)
-    ax_sd.plot(ns, sds_H0, color='r', ls='--', **kw)
-    ax_sd.plot(ns, np.sqrt(pos.var(axis=1)), c='g', label='related', **kw)
-    ax_sd.plot(ns, sds_H1, color='g', ls='--', **kw)
+        # average no. of seeds
+        kw['color'] = 'r'
+        ax_mu.plot(ns, neg.mean(axis=1), label='unrelated (%s)' % mode, **kw)
+        ax_mu.plot(ns, mus_H0[mode], ls='--', **kw)
+
+        kw['color'] = 'g'
+        ax_mu.plot(ns, pos.mean(axis=1), label='related (%s)' % mode, **kw)
+        ax_mu.plot(ns, mus_H1[mode], ls='--', **kw)
+
+        # std dev. of no of seeds
+        kw['color'] = 'r'
+        sds_emp = np.sqrt(neg.var(axis=1))
+        ax_sd.plot(ns, sds_emp, label='unrelated (%s)' % mode, **kw)
+        ax_sd.plot(ns, sds_H0[mode], ls='--', **kw)
+
+        kw['color'] = 'g'
+        sds_emp = np.sqrt(pos.var(axis=1))
+        ax_sd.plot(ns, sds_emp, label='related (%s)' % mode, **kw)
+        ax_sd.plot(ns, sds_H1[mode], ls='--', **kw)
 
     _ns = np.arange(min(ns), max(ns))
     ax_mu.plot(_ns, _ns, color='k', alpha=.9, lw=.5, ls='--')
     ax_t.plot(_ns, _ns, color='k', alpha=.9, lw=.5, ls='--')
 
     for ax in [ax_sd, ax_mu, ax_t]:
+        # ax.set_xlim(None, 1.1 * max(ns))
         ax.set_xscale('log')
         ax.set_yscale('log')
         ax.set_xlabel('sequence length')
         ax.set_xticks(ns)
         ax.set_xticklabels(ns, rotation=90)
-        ax.legend(loc='best')
+        ax.legend(loc='lower right', fontsize=8)
 
     ax_sd.set_ylabel('standard deviation of no. of matching %d-mers' % wordlen)
     ax_mu.set_ylabel('average no. of matching %d-mers' % wordlen)
@@ -165,6 +191,7 @@ def exp_count_seeds():
     n_samples = 50
     wordlen = 8
     suffix = '[w=%d]' % wordlen
+
     dumpfile = 'num_seeds%s.txt' % suffix
     sim_data = sim_count_seeds(
         ns=ns, n_samples=n_samples, gap=gap, subst=subst,
