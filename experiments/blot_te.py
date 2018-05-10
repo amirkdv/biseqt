@@ -166,7 +166,11 @@ def sim_transposable_elements(**kw):
 
         # ============= BLAST ==================
         kw = {'stdout': subprocess.PIPE, 'stderr': subprocess.PIPE}
-        args = ['blastn',
+        # args = ['blastn',
+        # rmblast from
+        #   -> ftp://ftp.ncbi.nlm.nih.gov/blast/executables/rmblast/2.2.28
+        args = ['ncbi-rmblastn-2.2.28/bin/rmblastn',
+                '-gapextend', '2',  # necessary for rmblast to not crash!
                 '-db', blast_db, '-word_size', str(wordlen),
                 '-perc_identity', str(int(p_min * 100)),
                 '-evalue', str(1e3),
@@ -247,7 +251,7 @@ def plot_transposable_elements(sim_data, suffix=''):
         tpr = tp / (tp + fn)
         fpr = fp / (tn + fp)
 
-        label = 'blastn' if key == 'blast' else key
+        label = 'rmblast' if key == 'blast' else key
         kw = {'alpha': .6, 'lw': 1, 'color': color, 'marker': 'o',
               'markersize': 3, 'label': label}
         plot_with_sd(ax_tpr, ps, tpr, axis=1, **kw)
@@ -279,7 +283,8 @@ def exp_transposable_elements():
     properties is found between a genome and a TE. Example blastn command is::
 
         $ makeblastdb -dbtype nucl -in TE.fa -out blast/te.db
-        $ blastn -db blast/te.db \\
+        $ rmblast -gapextend 2 \\  # necessary for rmblast to not crash!
+                 -db blast/te.db \\
                  -word_size 8 \\
                  -evalue 1e3 \\
                  -outfmt '6 qseqid sseqid length pident' \\
@@ -294,10 +299,10 @@ def exp_transposable_elements():
 
     **Supported Claims**
 
-    * Word-Blot greatly outperforms blastn in sensitivity (with roughly 5x
-      time) while maintaining reasonable specificity (>%98) specifically when
-      identifying *distant* TE homologos sequences (between %40 and %70
-      identity).
+    * Word-Blot greatly outperforms rmblast (blastn tuned for RepeatMasker) in
+      sensitivity (with roughly 5x time) while maintaining reasonable
+      specificity (>%98) specifically when identifying *distant* TE homologos
+      sequences (between %40 and %70 identity).
     * Word-Blot outperforms nhmmer in speed (more than 2x) and to some extent
       in sensitivity (>%10) when identifying *distant* TEs.
 
